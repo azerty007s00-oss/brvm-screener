@@ -1,0 +1,2 @@
+libxm12-dev
+libxslt-dev
