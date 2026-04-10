@@ -1,0 +1,429 @@
+"""
+analysis.py — Analyse chartiste narrative et rapport complet pour un ticker BRVM.
+"""
+
+import logging
+from dataclasses import dataclass
+from typing import Optional
+
+import pandas as pd
+import numpy as np
+
+from indicators import TechnicalIndicators
+from scoring import ScoreResult
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class AnalyseComplete:
+    """Rapport d'analyse complet combinant indicateurs + score + narratif."""
+
+    ticker: str
+    nom_complet: str = ""
+
+    # Résumé une ligne
+    synthese_courte: str = ""
+
+    # Sections de l'analyse narrative
+    section_tendance: str = ""
+    section_momentum: str = ""
+    section_niveaux: str = ""
+    section_chartiste: str = ""
+    section_volume: str = ""
+    section_stochastic: str = ""
+    section_adx: str = ""
+    section_divergence: str = ""
+    section_actualites: str = ""
+
+    # Actualités scrappées
+    actualites: list[dict] = None
+
+    # Narrative complète
+    analyse_narrative: str = ""
+
+    # Alertes et points d'attention
+    alertes: list[str] = None
+
+    # Horizon recommandé
+    horizon: str = "Moyen terme (1–6 mois)"
+
+    def __post_init__(self):
+        if self.alertes is None:
+            self.alertes = []
+        if self.actualites is None:
+            self.actualites = []
+
+
+def build_analyse(
+    ind: TechnicalIndicators,
+    score: ScoreResult,
+    df: Optional[pd.DataFrame] = None,
+) -> AnalyseComplete:
+    """
+    Construit l'analyse narrative complète à partir des indicateurs et du score.
+
+    Args:
+        ind:   Indicateurs techniques calculés
+        score: Résultat du scoring
+        df:    DataFrame OHLCV brut (pour calculs supplémentaires)
+
+    Returns:
+        AnalyseComplete avec toutes les sections remplies
+    """
+    analyse = AnalyseComplete(ticker=ind.ticker)
+
+    # ── Section 1 : Tendance générale ─────────────────────────────────────────
+    analyse.section_tendance = _build_tendance(ind, df)
+
+    # ── Section 2 : Momentum ──────────────────────────────────────────────────
+    analyse.section_momentum = _build_momentum(ind)
+
+    # ── Section 3 : Niveaux clés ──────────────────────────────────────────────
+    analyse.section_niveaux = _build_niveaux(ind)
+
+    # ── Section 4 : Configuration chartiste ──────────────────────────────────
+    analyse.section_chartiste = _build_chartiste(ind)
+
+    # ── Section 5 : Volume ────────────────────────────────────────────────────
+    analyse.section_volume = _build_volume(ind)
+
+    # ── Section 6 : Stochastic ────────────────────────────────────────────────
+    analyse.section_stochastic = _build_stochastic(ind)
+
+    # ── Section 7 : ADX ───────────────────────────────────────────────────────
+    analyse.section_adx = _build_adx(ind)
+
+    # ── Section 8 : Divergence RSI ─────────────────────────────────────────
+    analyse.section_divergence = _build_divergence(ind)
+
+    # ── Alertes ───────────────────────────────────────────────────────────────
+    analyse.alertes = _build_alertes(ind, score)
+
+    # ── Synthèse courte (format one-liner) ───────────────────────────────────
+    analyse.synthese_courte = _build_synthese_courte(ind, score)
+
+    # ── Narrative complète ────────────────────────────────────────────────────
+    analyse.analyse_narrative = "\n".join([
+        f"📈 TENDANCE   : {analyse.section_tendance}",
+        f"⚡ MOMENTUM   : {analyse.section_momentum}",
+        f"🎯 NIVEAUX    : {analyse.section_niveaux}",
+        f"📊 CHARTISTE  : {analyse.section_chartiste}",
+        f"📦 VOLUME     : {analyse.section_volume}",
+        f"🔄 STOCHASTIC : {analyse.section_stochastic}",
+        f"💪 ADX        : {analyse.section_adx}",
+        f"🔀 DIVERGENCE : {analyse.section_divergence}",
+    ])
+
+    return analyse
+
+
+# ─── Sections narratives ──────────────────────────────────────────────────────
+
+def _build_tendance(ind: TechnicalIndicators, df: Optional[pd.DataFrame]) -> str:
+    """Décrit la tendance générale sur 3 mois."""
+
+    # Calcul de la pente de la MA50 sur 20 séances
+    slope_desc = ""
+    if "ma50" in ind.series and len(ind.series["ma50"]) >= 20:
+        ma50_series = list(ind.series["ma50"].values())
+        recent_ma50 = ma50_series[-20:]
+        slope = (recent_ma50[-1] - recent_ma50[0]) / recent_ma50[0] * 100
+        if slope > 2:
+            slope_desc = f"MA50 en progression (+{slope:.1f}% sur 20 séances)"
+        elif slope < -2:
+            slope_desc = f"MA50 en recul ({slope:.1f}% sur 20 séances)"
+        else:
+            slope_desc = f"MA50 quasi-stable ({slope:+.1f}% sur 20 séances)"
+
+    tendance_labels = {
+        "golden_cross": "haussière forte",
+        "bullish": "haussière modérée",
+        "bearish": "baissière modérée",
+        "death_cross": "baissière forte",
+        "neutre": "neutre/indéterminée",
+    }
+    tendance = tendance_labels.get(ind.ma_signal, "indéterminée")
+
+    perf_str = ""
+    if ind.perf_3m is not None:
+        perf_str = f" | Performance 3M : {ind.perf_3m:+.1f}%"
+    if ind.perf_1m is not None:
+        perf_str += f" | 1M : {ind.perf_1m:+.1f}%"
+
+    parts = [f"Tendance {tendance}"]
+    if slope_desc:
+        parts.append(slope_desc)
+    if perf_str:
+        parts.append(perf_str.strip(" |"))
+
+    return " — ".join(parts)
+
+
+def _build_momentum(ind: TechnicalIndicators) -> str:
+    """Décrit le momentum via RSI et MACD."""
+    parts = []
+
+    # RSI
+    if ind.rsi is not None:
+        rsi_interp = {
+            "survendu": f"RSI à {ind.rsi} → zone de survente, rebond potentiel",
+            "suracheté": f"RSI à {ind.rsi} → zone de surachat, prudence",
+            "neutre": f"RSI à {ind.rsi} → momentum neutre",
+        }
+        parts.append(rsi_interp.get(ind.rsi_signal, f"RSI={ind.rsi}"))
+
+        # Divergence RSI
+        if ind.rsi_divergence != "aucune":
+            div_labels = {
+                "haussiere_forte": "🟢 DIVERGENCE HAUSSIÈRE FORTE",
+                "haussiere": "🟢 Divergence haussière",
+                "baissiere_forte": "🔴 DIVERGENCE BAISSIÈRE FORTE",
+                "baissiere": "🔴 Divergence baissière",
+            }
+            label = div_labels.get(ind.rsi_divergence, "")
+            detail = ind.rsi_divergence_detail if ind.rsi_divergence_detail else ""
+            parts.append(f"{label} — {detail}" if detail else label)
+
+    # MACD
+    if ind.macd_line is not None and ind.macd_signal_line is not None:
+        diff = ind.macd_line - ind.macd_signal_line
+        direction = "haussier" if diff > 0 else "baissier"
+        strength = "faible" if abs(diff) < 0.001 else "marqué"
+        parts.append(f"MACD {direction} ({strength}, écart: {diff:+.4f})")
+    else:
+        parts.append("MACD non disponible")
+
+    return " | ".join(parts)
+
+
+def _build_niveaux(ind: TechnicalIndicators) -> str:
+    """Décrit les niveaux de support et résistance."""
+    parts = []
+
+    if ind.support:
+        dist_support = ((ind.cours_actuel - ind.support) / ind.cours_actuel * 100)
+        parts.append(f"Support: {ind.support:,.0f} FCFA ({dist_support:.1f}% sous le cours)")
+
+    if ind.resistance:
+        dist_resist = ((ind.resistance - ind.cours_actuel) / ind.cours_actuel * 100)
+        parts.append(f"Résistance: {ind.resistance:,.0f} FCFA ({dist_resist:.1f}% au-dessus)")
+
+    if ind.ma_lt:
+        ma_label = f"MA{ind.ma_lt_period}" if ind.ma_lt_period else "MA LT"
+        parts.append(f"{ma_label}: {ind.ma_lt:,.0f} FCFA (pivot long terme)")
+
+    if not parts:
+        return "Niveaux non calculables (données insuffisantes)"
+
+    return " | ".join(parts)
+
+
+def _build_chartiste(ind: TechnicalIndicators) -> str:
+    """Décrit la configuration chartiste détectée."""
+    configs = {
+        "canal_ascendant": (
+            "Canal ascendant — série de hauts et bas croissants sur 20 séances. "
+            "Tendance clairement haussière à court terme."
+        ),
+        "canal_descendant": (
+            "Canal descendant — série de hauts et bas décroissants sur 20 séances. "
+            "Pression vendeuse persistante."
+        ),
+        "range_lateral": (
+            "Range latéral — oscillation < 5% sur 20 séances. "
+            "Attendre une sortie de range pour prendre position."
+        ),
+        "squeeze_bollinger": (
+            "Squeeze Bollinger — bandes très resserrées. "
+            "Forte contraction de la volatilité, explosion imminente possible dans les deux sens."
+        ),
+        "indéterminé": "Configuration chartiste indéterminée sur la période d'analyse.",
+    }
+
+    base = configs.get(ind.config_chartiste, "Indéterminé")
+
+    # Complément Bollinger
+    bb_info = ""
+    if ind.bb_pct is not None:
+        if ind.bb_pct < 0.1:
+            bb_info = " Prix proche de la bande Bollinger basse → potentiel rebond."
+        elif ind.bb_pct > 0.9:
+            bb_info = " Prix proche de la bande Bollinger haute → zone de résistance."
+
+    return base + bb_info
+
+
+def _build_volume(ind: TechnicalIndicators) -> str:
+    """Décrit le comportement du volume."""
+    if ind.volume_actuel == 0 and ind.volume_moy20 == 0:
+        return "Données de volume non disponibles"
+
+    if ind.volume_moy20 == 0:
+        return f"Volume actuel : {ind.volume_actuel:,.0f} titres (moyenne non disponible)"
+
+    sign = "+" if ind.volume_relatif_pct >= 0 else ""
+    niveau = (
+        "volume très élevé → forte conviction des opérateurs"
+        if ind.volume_relatif_pct > 50
+        else "volume élevé → signal confirmé"
+        if ind.volume_relatif_pct > 20
+        else "volume faible → signal à confirmer"
+        if ind.volume_relatif_pct < -20
+        else "volume dans la norme"
+    )
+
+    return (
+        f"Volume actuel {ind.volume_actuel:,.0f} titres "
+        f"({sign}{ind.volume_relatif_pct:.0f}% vs moy. 20j) — {niveau}"
+    )
+
+
+def _build_alertes(ind: TechnicalIndicators, score: ScoreResult) -> list[str]:
+    """Génère des alertes spécifiques sur des situations particulières."""
+    alertes = []
+
+    if ind.rsi is not None:
+        if ind.rsi < 20:
+            alertes.append("⚠️ RSI extrêmement bas (< 20) — survente excessive, rebond technique probable")
+        elif ind.rsi > 80:
+            alertes.append("⚠️ RSI extrêmement haut (> 80) — surachat excessif, risque de correction")
+
+    # Divergence RSI
+    if ind.rsi_divergence in ("haussiere_forte", "baissiere_forte"):
+        emoji = "📈" if "haussiere" in ind.rsi_divergence else "📉"
+        alertes.append(f"{emoji} {ind.rsi_divergence_detail}")
+
+    if ind.bb_squeeze:
+        alertes.append("⚡ Squeeze Bollinger actif — explosion de volatilité imminente")
+
+    if ind.volume_relatif_pct > 100:
+        alertes.append(f"📊 Volume exceptionnel (+{ind.volume_relatif_pct:.0f}% vs moy20j) — surveiller la direction")
+
+    if ind.ma_signal == "golden_cross":
+        alertes.append("🚀 Golden Cross confirmé — signal d'achat fort")
+
+    if ind.ma_signal == "death_cross":
+        alertes.append("💀 Death Cross confirmé — signal de vente fort")
+
+    # Convergence RSI + Stochastic
+    if ind.rsi is not None and ind.stoch_k is not None:
+        if ind.rsi < 30 and ind.stoch_k < 20:
+            alertes.append("🔥 Double survente RSI + Stochastic — signal de rebond renforcé")
+        elif ind.rsi > 70 and ind.stoch_k > 80:
+            alertes.append("🔥 Double surachat RSI + Stochastic — signal de correction renforcé")
+
+    # ADX tendance forte
+    if ind.adx is not None and ind.adx > 40:
+        di_dir = "haussière" if (ind.plus_di or 0) > (ind.minus_di or 0) else "baissière"
+        alertes.append(f"💪 ADX très élevé ({ind.adx}) — tendance {di_dir} très forte")
+
+    if score.confiance == "faible":
+        alertes.append("ℹ️ Données partielles — signaux à confirmer avant toute décision")
+
+    if ind.perf_vs_index_1m and abs(ind.perf_vs_index_1m) > 10:
+        direction = "surperformance" if ind.perf_vs_index_1m > 0 else "sous-performance"
+        alertes.append(f"📈 {direction.capitalize()} importante vs BRVMC ({ind.perf_vs_index_1m:+.1f}% sur 1M)")
+
+    return alertes
+
+
+def _build_stochastic(ind: TechnicalIndicators) -> str:
+    """Décrit le Stochastic Oscillator."""
+    if ind.stoch_k is None:
+        return "Stochastic non disponible (données insuffisantes)"
+
+    k_str = f"%K={ind.stoch_k:.1f}"
+    d_str = f"%D={ind.stoch_d:.1f}" if ind.stoch_d is not None else ""
+
+    interp = {
+        "survendu": f"{k_str} / {d_str} → zone de survente (< 20), rebond potentiel",
+        "suracheté": f"{k_str} / {d_str} → zone de surachat (> 80), prudence",
+        "neutre": f"{k_str} / {d_str} → zone neutre",
+    }
+    base = interp.get(ind.stoch_signal, f"{k_str} / {d_str}")
+
+    # Croisement %K / %D
+    if ind.stoch_k is not None and ind.stoch_d is not None:
+        if ind.stoch_k > ind.stoch_d:
+            base += " | %K > %D (momentum haussier)"
+        else:
+            base += " | %K < %D (momentum baissier)"
+
+    return base
+
+
+def _build_adx(ind: TechnicalIndicators) -> str:
+    """Décrit l'ADX et la force de la tendance."""
+    if ind.adx is None:
+        return "ADX non disponible (données insuffisantes)"
+
+    adx_interp = {
+        "tendance_forte": f"ADX={ind.adx} → tendance forte (> 25)",
+        "tendance_moderee": f"ADX={ind.adx} → tendance modérée (20-25)",
+        "pas_de_tendance": f"ADX={ind.adx} → pas de tendance claire (< 20), marché range",
+    }
+    base = adx_interp.get(ind.adx_signal, f"ADX={ind.adx}")
+
+    if ind.plus_di is not None and ind.minus_di is not None:
+        if ind.plus_di > ind.minus_di:
+            base += f" | +DI({ind.plus_di}) > -DI({ind.minus_di}) → pression acheteuse"
+        else:
+            base += f" | -DI({ind.minus_di}) > +DI({ind.plus_di}) → pression vendeuse"
+
+    return base
+
+
+def _build_divergence(ind: TechnicalIndicators) -> str:
+    """Décrit la divergence RSI détectée."""
+    if ind.rsi_divergence == "aucune":
+        return "Pas de divergence RSI détectée"
+
+    labels = {
+        "haussiere_forte": "🟢 DIVERGENCE HAUSSIÈRE FORTE",
+        "haussiere": "🟢 Divergence haussière",
+        "baissiere_forte": "🔴 DIVERGENCE BAISSIÈRE FORTE",
+        "baissiere": "🔴 Divergence baissière",
+    }
+    label = labels.get(ind.rsi_divergence, "Divergence détectée")
+    detail = ind.rsi_divergence_detail or ""
+    return f"{label} — {detail}" if detail else label
+
+
+def _build_synthese_courte(ind: TechnicalIndicators, score: ScoreResult) -> str:
+    """
+    Synthèse ultra-concise format one-liner pour le tableau récapitulatif.
+    """
+    tendance_labels = {
+        "golden_cross": "Haussier fort",
+        "bullish": "Haussier",
+        "bearish": "Baissier",
+        "death_cross": "Baissier fort",
+        "neutre": "Neutre",
+    }
+    tendance = tendance_labels.get(ind.ma_signal, "—")
+
+    rsi_str = f"RSI={ind.rsi}" if ind.rsi else "RSI=N/D"
+    macd_str = f"MACD {ind.macd_signal}" if ind.macd_signal != "neutre" else ""
+    sr_str = (
+        f"S={ind.support:,.0f}/R={ind.resistance:,.0f}"
+        if ind.support and ind.resistance else ""
+    )
+    config_str = ind.config_chartiste.replace("_", " ").capitalize()
+    vol_str = f"Vol {ind.volume_relatif_pct:+.0f}%" if ind.volume_relatif_pct else ""
+
+    parts = [tendance, rsi_str]
+    if ind.rsi_divergence != "aucune":
+        div_short = {"haussiere_forte": "DivRSI↗↗", "haussiere": "DivRSI↗",
+                     "baissiere_forte": "DivRSI↘↘", "baissiere": "DivRSI↘"}
+        parts.append(div_short.get(ind.rsi_divergence, ""))
+    if macd_str:
+        parts.append(macd_str)
+    if sr_str:
+        parts.append(sr_str)
+    if config_str and config_str != "Indéterminé":
+        parts.append(config_str)
+    if vol_str:
+        parts.append(vol_str)
+
+    return " | ".join(parts)
