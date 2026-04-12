@@ -3,7 +3,9 @@
     "name": "Télina SORO",
     "email": "s.tielina.a@gmail.com",
     "reason": "Je suis le proprio",
-    "status": "pending",
-    "requested_at": "2026-04-12T18:39:49.552073"
+    "status": "approved",
+    "requested_at": "2026-04-12T18:39:49.552073",
+    "password_hash": "52f79c4260833d12bc4be0138d2199eb8b4d03eabcda5e4fee0422aab7721c8a",
+    "approved_at": "2026-04-12T18:40:47.170214"
   }
 }
