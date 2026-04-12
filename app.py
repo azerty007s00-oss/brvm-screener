@@ -1,5 +1,5 @@
 """
-app.py â Interface Streamlit du BRVM Stock Screener (Investment Pioneers)
+app.py — Interface Streamlit du BRVM Stock Screener (Investment Pioneers)
 
 Lancement : streamlit run app.py
 """
@@ -21,7 +21,7 @@ from scoring import compute_score
 from scraper import get_ohlcv, get_news, TickerNotFoundError, InsufficientDataError, SourceStructureChangedError
 from auth import check_auth, logout_button
 
-# âââ Logging ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ─── Logging ──────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
     level=logging.INFO,
@@ -31,16 +31,16 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# âââ Configuration Streamlit ââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ─── Configuration Streamlit ──────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="BRVM Screener â Investment Pioneers",
-    page_icon="ð",
+    page_title="BRVM Screener — Investment Pioneers",
+    page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# CSS personnalisÃ©
+# CSS personnalisé
 st.markdown("""
 <style>
     .signal-achat  { color: #0F6E56; font-weight: 600; font-size: 1.3rem; }
@@ -55,22 +55,22 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# âââ Sidebar ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 with st.sidebar:
     logout_button()
-    st.title("ð BRVM Screener")
+    st.title("📈 BRVM Screener")
     st.caption("Investment Pioneers")
     st.divider()
 
-    # ââ SÃ©lection des tickers âââââââââââââââââââââââââââââââââââââââââââââââââ
-    st.markdown("**SÃ©lection des titres**")
+    # ── Sélection des tickers ─────────────────────────────────────────────────
+    st.markdown("**Sélection des titres**")
 
-    # Construire les options avec noms publics, groupÃ©es
+    # Construire les options avec noms publics, groupées
     all_ticker_options = []
     for group, tickers_in_group in TICKER_GROUPS.items():
         for t in tickers_in_group:
-            label = f"{t} â {TICKER_NAMES.get(t, t)}"
+            label = f"{t} — {TICKER_NAMES.get(t, t)}"
             all_ticker_options.append((t, label, group))
 
     option_labels = [opt[1] for opt in all_ticker_options]
@@ -87,7 +87,7 @@ with st.sidebar:
 
     tickers_input_manual = st.text_input(
         "Ou saisir manuellement",
-        placeholder="ex: BICC, ONTBF (sÃ©parÃ©s par virgules)",
+        placeholder="ex: BICC, ONTBF (séparés par virgules)",
         label_visibility="visible",
     )
     tickers_from_manual = [t.strip().upper() for t in tickers_input_manual.split(",") if t.strip()]
@@ -95,7 +95,7 @@ with st.sidebar:
     # Fusion (multiselect prioritaire + saisie manuelle, sans doublon)
     tickers_combined = list(dict.fromkeys(tickers_from_select + tickers_from_manual))
 
-    # ââ Horizon d'analyse âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Horizon d'analyse ─────────────────────────────────────────────────────
     st.markdown("**Horizon d'analyse**")
     horizon_options = list(HORIZON_PROFILES.keys())
     horizon_labels = {k: f"{HORIZON_PROFILES[k]['emoji']} {HORIZON_PROFILES[k]['label']}" for k in horizon_options}
@@ -109,72 +109,72 @@ with st.sidebar:
     )
     profile = HORIZON_PROFILES[horizon]
 
-    # Info dynamique sur l'horizon sÃ©lectionnÃ©
+    # Info dynamique sur l'horizon sélectionné
     jours_min = profile["jours_min"]
     p = profile["periods"]
-    with st.expander("ð ParamÃ¨tres de l'horizon", expanded=False):
+    with st.expander("🔍 Paramètres de l'horizon", expanded=False):
         st.caption(
-            f"RSI({p['rsi']}) Â· MA{p['ma_short']}/{p['ma_mid']}/{p['ma_long']} Â· "
-            f"MACD({p['macd_fast']},{p['macd_slow']},{p['macd_signal']}) Â· "
-            f"Stoch({p['stoch_k']},{p['stoch_d']}) Â· ADX({p['adx']})"
+            f"RSI({p['rsi']}) · MA{p['ma_short']}/{p['ma_mid']}/{p['ma_long']} · "
+            f"MACD({p['macd_fast']},{p['macd_slow']},{p['macd_signal']}) · "
+            f"Stoch({p['stoch_k']},{p['stoch_d']}) · ADX({p['adx']})"
         )
         w = profile["weights"]
         active = [k for k, v in w.items() if v > 0]
         boosted = [k for k, v in w.items() if v > 1]
         disabled = [k for k, v in w.items() if v == 0]
         if boosted:
-            st.caption(f"ð¼ BoostÃ©s (Ã2) : {', '.join(boosted)}")
+            st.caption(f"🔼 Boostés (×2) : {', '.join(boosted)}")
         if disabled:
-            st.caption(f"â IgnorÃ©s : {', '.join(disabled)}")
-        st.caption(f"Seuil achat : â¥ {profile['seuil_achat']} | Seuil vente : â¤ {profile['seuil_vente']}")
+            st.caption(f"⛔ Ignorés : {', '.join(disabled)}")
+        st.caption(f"Seuil achat : ≥ {profile['seuil_achat']} | Seuil vente : ≤ {profile['seuil_vente']}")
 
     st.divider()
 
-    # ââ PÃ©riode de donnÃ©es ââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Période de données ────────────────────────────────────────────────────
     periodes_filtrees = {k: v for k, v in PERIODES_DISPONIBLES.items() if v >= jours_min}
     if not periodes_filtrees:
         periodes_filtrees = PERIODES_DISPONIBLES  # fallback
 
     periode_label = st.selectbox(
-        "PÃ©riode de donnÃ©es",
+        "Période de données",
         options=list(periodes_filtrees.keys()),
         index=len(periodes_filtrees) - 1,
-        help=f"Horizon sÃ©lectionnÃ© : {jours_min} jours min. recommandÃ©s"
+        help=f"Horizon sélectionné : {jours_min} jours min. recommandés"
     )
     days = periodes_filtrees[periode_label]
 
-    analyser_btn = st.button("ð Analyser", type="primary", use_container_width=True)
+    analyser_btn = st.button("🔍 Analyser", type="primary", use_container_width=True)
 
     st.divider()
-    with st.expander("â¹ï¸ Aide â Tickers BRVM"):
+    with st.expander("ℹ️ Aide — Tickers BRVM"):
         st.markdown("""
 **Exemples de tickers :**
-- `BICC` â Bici CÃ´te d'Ivoire
-- `SGBC` â SociÃ©tÃ© GÃ©nÃ©rale CI
-- `ONTBF` â Onatel Burkina Faso
-- `PALC` â Palm CI
-- `SNTS` â Sonatel SÃ©nÃ©gal
-- `ETIT` â Ecobank Transnational
+- `BICC` — Bici Côte d'Ivoire
+- `SGBC` — Société Générale CI
+- `ONTBF` — Onatel Burkina Faso
+- `PALC` — Palm CI
+- `SNTS` — Sonatel Sénégal
+- `ETIT` — Ecobank Transnational
 
-[Liste complÃ¨te sur sikafinance.com](https://www.sikafinance.com)
+[Liste complète sur sikafinance.com](https://www.sikafinance.com)
         """)
 
-    with st.expander("ð§ Cache"):
+    with st.expander("🔧 Cache"):
         stats = cache.stats()
-        st.caption(f"EntrÃ©es : {stats['entries']} | Taille : {stats['total_size_kb']} Ko")
+        st.caption(f"Entrées : {stats['entries']} | Taille : {stats['total_size_kb']} Ko")
         if st.button("Vider le cache", use_container_width=True):
             n = cache.clear_all()
-            st.success(f"{n} entrÃ©e(s) supprimÃ©e(s)")
+            st.success(f"{n} entrée(s) supprimée(s)")
 
 
-# âââ Logique principale âââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ─── Logique principale ───────────────────────────────────────────────────────
 
 def analyser_ticker(ticker: str, days: int, horizon: str = DEFAULT_HORIZON) -> Optional[dict]:
     """
-    Pipeline complet pour un ticker : scraping â indicateurs â score â analyse.
+    Pipeline complet pour un ticker : scraping → indicateurs → score → analyse.
     """
     try:
-        with st.spinner(f"Chargement des donnÃ©es pour {ticker}..."):
+        with st.spinner(f"Chargement des données pour {ticker}..."):
             df = get_ohlcv(ticker, days=days)
 
         # Indice BRVMC pour calcul alpha
@@ -184,36 +184,36 @@ def analyser_ticker(ticker: str, days: int, horizon: str = DEFAULT_HORIZON) -> O
         except Exception:
             logger.debug(f"Indice BRVMC non disponible pour {ticker}")
 
-        # Indicateurs â avec horizon
+        # Indicateurs — avec horizon
         with st.spinner(f"Calcul des indicateurs pour {ticker}..."):
             ind = compute_indicators(df, ticker, df_index=df_index, horizon=horizon)
 
-        # Scoring â avec horizon (lu depuis ind.horizon)
+        # Scoring — avec horizon (lu depuis ind.horizon)
         score = compute_score(ind)
 
         # Analyse narrative
         analyse = build_analyse(ind, score, df)
 
-        # ActualitÃ©s
+        # Actualités
         news = []
         try:
-            with st.spinner(f"Recherche d'actualitÃ©s pour {ticker}..."):
+            with st.spinner(f"Recherche d'actualités pour {ticker}..."):
                 news = get_news(ticker, max_items=5)
             analyse.actualites = news
         except Exception:
-            logger.debug(f"ActualitÃ©s non disponibles pour {ticker}")
+            logger.debug(f"Actualités non disponibles pour {ticker}")
 
         return {"df": df, "ind": ind, "score": score, "analyse": analyse, "news": news}
 
     except TickerNotFoundError as e:
-        st.error(f"â **{ticker}** : ticker introuvable sur toutes les sources.\n\n{e}")
+        st.error(f"❌ **{ticker}** : ticker introuvable sur toutes les sources.\n\n{e}")
     except InsufficientDataError as e:
-        st.warning(f"â ï¸ **{ticker}** : donnÃ©es insuffisantes.\n\n{e}")
+        st.warning(f"⚠️ **{ticker}** : données insuffisantes.\n\n{e}")
     except SourceStructureChangedError as e:
-        st.error(f"ð§ **{ticker}** : structure du site modifiÃ©e â mise Ã  jour du scraper requise.\n\n{e}")
+        st.error(f"🔧 **{ticker}** : structure du site modifiée — mise à jour du scraper requise.\n\n{e}")
     except Exception as e:
         logger.exception(f"Erreur inattendue pour {ticker}")
-        st.error(f"ð¥ **{ticker}** : erreur inattendue â {e}")
+        st.error(f"💥 **{ticker}** : erreur inattendue — {e}")
 
     return None
 
@@ -224,9 +224,9 @@ def render_signal_card(result: dict) -> None:
     ind = result["ind"]
     analyse = result["analyse"]
     horizon_label = HORIZON_PROFILES.get(ind.horizon, {}).get("label", ind.horizon)
-    horizon_emoji = HORIZON_PROFILES.get(ind.horizon, {}).get("emoji", "ð")
+    horizon_emoji = HORIZON_PROFILES.get(ind.horizon, {}).get("emoji", "📈")
 
-    # ââ En-tÃªte ticker ââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── En-tête ticker ────────────────────────────────────────────────────────
     col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
 
     with col1:
@@ -264,8 +264,8 @@ def render_signal_card(result: dict) -> None:
         if ind.adx is not None:
             st.caption(f"ADX: {ind.adx:.0f} ({'forte' if ind.adx > 25 else 'faible'})")
 
-    # ââ Scorecard dÃ©taillÃ©e âââââââââââââââââââââââââââââââââââââââââââââââââââ
-    with st.expander("ð Scorecard dÃ©taillÃ©e", expanded=True):
+    # ── Scorecard détaillée ───────────────────────────────────────────────────
+    with st.expander("📋 Scorecard détaillée", expanded=True):
         for critere in score.criteres:
             points_color = (
                 "#0F6E56" if critere.points > 0
@@ -276,7 +276,7 @@ def render_signal_card(result: dict) -> None:
             st.markdown(
                 f"<div class='critere-row'>"
                 f"<span style='color:{points_color};font-weight:600;min-width:28px;display:inline-block'>{points_str}</span> "
-                f"<b>{critere.nom}</b> : {critere.valeur} â "
+                f"<b>{critere.nom}</b> : {critere.valeur} — "
                 f"<span style='color:#666'>{critere.interpretation}</span>"
                 f"</div>",
                 unsafe_allow_html=True
@@ -286,8 +286,8 @@ def render_signal_card(result: dict) -> None:
             unsafe_allow_html=True
         )
 
-    # ââ Analyse narrative âââââââââââââââââââââââââââââââââââââââââââââââââââââ
-    with st.expander("ð Analyse complÃ¨te", expanded=True):
+    # ── Analyse narrative ─────────────────────────────────────────────────────
+    with st.expander("🔍 Analyse complète", expanded=True):
         col_a, col_b = st.columns(2)
 
         with col_a:
@@ -297,7 +297,7 @@ def render_signal_card(result: dict) -> None:
             st.markdown("<div class='section-label'>Momentum</div>", unsafe_allow_html=True)
             st.write(analyse.section_momentum)
 
-            st.markdown("<div class='section-label'>Niveaux clÃ©s</div>", unsafe_allow_html=True)
+            st.markdown("<div class='section-label'>Niveaux clés</div>", unsafe_allow_html=True)
             st.write(analyse.section_niveaux)
 
             st.markdown("<div class='section-label'>Stochastic</div>", unsafe_allow_html=True)
@@ -322,9 +322,9 @@ def render_signal_card(result: dict) -> None:
             for alerte in analyse.alertes:
                 st.markdown(f"<div class='alerte'>{alerte}</div>", unsafe_allow_html=True)
 
-    # ââ ActualitÃ©s ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Actualités ────────────────────────────────────────────────────────────
     news = result.get("news", [])
-    with st.expander(f"ð° ActualitÃ©s ({len(news)} article{'s' if len(news) != 1 else ''})", expanded=bool(news)):
+    with st.expander(f"📰 Actualités ({len(news)} article{'s' if len(news) != 1 else ''})", expanded=bool(news)):
         if news:
             for article in news:
                 titre = article.get("titre", "")
@@ -343,15 +343,15 @@ def render_signal_card(result: dict) -> None:
                 if source:
                     meta_parts.append(source)
                 if meta_parts:
-                    st.caption(" â ".join(meta_parts))
+                    st.caption(" — ".join(meta_parts))
                 if resume:
                     st.write(resume)
                 st.markdown("---")
         else:
-            st.info("Aucune actualitÃ© rÃ©cente trouvÃ©e pour ce titre.")
+            st.info("Aucune actualité récente trouvée pour ce titre.")
 
-    # ââ Graphiques ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-    with st.expander("ð Graphiques", expanded=True):
+    # ── Graphiques ────────────────────────────────────────────────────────────
+    with st.expander("📊 Graphiques", expanded=True):
         _render_charts(result)
 
 
@@ -362,7 +362,7 @@ def _render_charts(result: dict) -> None:
     series = ind.series
 
     if df is None or len(df) < 5:
-        st.warning("DonnÃ©es insuffisantes pour les graphiques")
+        st.warning("Données insuffisantes pour les graphiques")
         return
 
     fig = make_subplots(
@@ -373,7 +373,7 @@ def _render_charts(result: dict) -> None:
         subplot_titles=("Prix + Moyennes Mobiles + Bollinger", "RSI (14)", "Stochastic (14,3)", "Volume"),
     )
 
-    # ââ Chandelier ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Chandelier ────────────────────────────────────────────────────────────
     fig.add_trace(go.Candlestick(
         x=df.index,
         open=df["open"], high=df["high"],
@@ -422,7 +422,7 @@ def _render_charts(result: dict) -> None:
         fig.add_hline(y=ind.resistance, line_dash="dash", line_color="#A32D2D",
                       annotation_text=f"R {ind.resistance:,.0f}", row=1, col=1)
 
-    # ââ RSI âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── RSI ───────────────────────────────────────────────────────────────────
     if "rsi" in series:
         dates = list(series["rsi"].keys())
         vals = list(series["rsi"].values())
@@ -435,7 +435,7 @@ def _render_charts(result: dict) -> None:
             fig.add_hline(y=level, line_dash="dash", line_color=color,
                           line_width=1, row=2, col=1)
 
-    # ââ Stochastic ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Stochastic ────────────────────────────────────────────────────────────
     if "stoch_k" in series:
         dates_k = list(series["stoch_k"].keys())
         vals_k = list(series["stoch_k"].values())
@@ -455,7 +455,7 @@ def _render_charts(result: dict) -> None:
             fig.add_hline(y=level, line_dash="dash", line_color=color,
                           line_width=1, row=3, col=1)
 
-    # ââ Volume ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+    # ── Volume ────────────────────────────────────────────────────────────────
     if "volume" in series and "close" in series:
         dates = list(series["volume"].keys())
         vols = list(series["volume"].values())
@@ -481,11 +481,11 @@ def _render_charts(result: dict) -> None:
     )
     fig.update_yaxes(gridcolor="#f0f0f0")
 
-    # Supprimer les gaps weekends et jours sans cotation (BRVM fermÃ©e sam/dim)
+    # Supprimer les gaps weekends et jours sans cotation (BRVM fermée sam/dim)
     fig.update_xaxes(
         gridcolor="#f0f0f0",
         rangebreaks=[
-            dict(bounds=["sat", "mon"]),  # saute samâlun
+            dict(bounds=["sat", "mon"]),  # saute sam→lun
         ]
     )
 
@@ -493,7 +493,7 @@ def _render_charts(result: dict) -> None:
 
 
 def render_recap_table(results: dict) -> None:
-    """Affiche le tableau rÃ©capitulatif multi-tickers."""
+    """Affiche le tableau récapitulatif multi-tickers."""
     rows = []
     for ticker, result in results.items():
         if result is None:
@@ -505,7 +505,7 @@ def render_recap_table(results: dict) -> None:
             "Cours (FCFA)": f"{ind.cours_actuel:,.0f}",
             "Var J-1 (%)": f"{ind.variation_j1_pct:+.2f}%",
             "RSI": f"{ind.rsi:.1f}" if ind.rsi else "N/D",
-            "Div. RSI": {"haussiere_forte": "ââ", "haussiere": "â", "baissiere_forte": "ââ", "baissiere": "â"}.get(ind.rsi_divergence, "â"),
+            "Div. RSI": {"haussiere_forte": "↗↗", "haussiere": "↗", "baissiere_forte": "↘↘", "baissiere": "↘"}.get(ind.rsi_divergence, "—"),
             "Stoch %K": f"{ind.stoch_k:.0f}" if ind.stoch_k else "N/D",
             "ADX": f"{ind.adx:.0f}" if ind.adx else "N/D",
             "MA Signal": score_to_ma_label(ind.ma_signal),
@@ -532,13 +532,13 @@ def render_recap_table(results: dict) -> None:
 
     def highlight_divergence(val):
         s = str(val)
-        if "ââ" in s:
+        if "↗↗" in s:
             return "background-color: #E1F5EE; color: #0F6E56; font-weight: 700"
-        if "â" in s:
+        if "↗" in s:
             return "color: #0F6E56; font-weight: 600"
-        if "ââ" in s:
+        if "↘↘" in s:
             return "background-color: #FCEBEB; color: #A32D2D; font-weight: 700"
-        if "â" in s:
+        if "↘" in s:
             return "color: #A32D2D; font-weight: 600"
         return ""
 
@@ -548,34 +548,34 @@ def render_recap_table(results: dict) -> None:
 
 def score_to_ma_label(ma_signal: str) -> str:
     labels = {
-        "golden_cross": "ð Golden Cross",
-        "bullish": "â¬ï¸ Bullish",
-        "bearish": "â¬ï¸ Bearish",
-        "death_cross": "ð Death Cross",
-        "neutre": "â¡ï¸ Neutre",
+        "golden_cross": "🚀 Golden Cross",
+        "bullish": "⬆️ Bullish",
+        "bearish": "⬇️ Bearish",
+        "death_cross": "💀 Death Cross",
+        "neutre": "➡️ Neutre",
     }
     return labels.get(ma_signal, ma_signal)
 
 
-# âââ Point d'entrÃ©e âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+# ─── Point d'entrée ───────────────────────────────────────────────────────────
 
 def main() -> None:
-    st.title("ð BRVM Stock Screener")
-    st.caption("Analyse technique multi-critÃ¨res pour actions BRVM â Investment Pioneers")
+    st.title("📈 BRVM Stock Screener")
+    st.caption("Analyse technique multi-critères pour actions BRVM — Investment Pioneers")
 
     if not analyser_btn or not tickers_combined:
-        st.info("ð SÃ©lectionnez un ou plusieurs titres dans le panneau gauche puis cliquez sur **Analyser**.")
+        st.info("👈 Sélectionnez un ou plusieurs titres dans le panneau gauche puis cliquez sur **Analyser**.")
         st.markdown(f"""
 **Horizons disponibles :**
-- â¡ **Court terme** (1â4 semaines) : MACDÃ2, StochasticÃ2 â paramÃ¨tres rapides (RSI 7, MA 10/20/50)
-- ð **Moyen terme** (1â6 mois) : critÃ¨res Ã©quilibrÃ©s â paramÃ¨tres standards (RSI 14, MA 20/50/200)
-- ð¦ **Long terme** (6 mois+) : MA ConfigÃ2, Tendance LTÃ2, Perf relativeÃ2 â paramÃ¨tres lents (RSI 21, MA 50/100/200)
+- ⚡ **Court terme** (1–4 semaines) : MACD×2, Stochastic×2 — paramètres rapides (RSI 7, MA 10/20/50)
+- 📈 **Moyen terme** (1–6 mois) : critères équilibrés — paramètres standards (RSI 14, MA 20/50/200)
+- 🏦 **Long terme** (6 mois+) : MA Config×2, Tendance LT×2, Perf relative×2 — paramètres lents (RSI 21, MA 50/100/200)
 
-**Indicateurs calculÃ©s :**
+**Indicateurs calculés :**
 RSI, Stochastic, ADX, Moyennes Mobiles adaptatives, Golden/Death Cross, MACD, Bandes de Bollinger,
-Volume relatif, Performance vs BRVMC, Supports/RÃ©sistances, Configuration chartiste
+Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chartiste
 
-**SystÃ¨me de scoring :** critÃ¨res pondÃ©rÃ©s selon l'horizon â Signal ACHAT / NEUTRE / VENTE
+**Système de scoring :** critères pondérés selon l'horizon → Signal ACHAT / NEUTRE / VENTE
         """)
         return
 
@@ -593,16 +593,16 @@ Volume relatif, Performance vs BRVMC, Supports/RÃ©sistances, Configuration cha
     valid_results = {k: v for k, v in results.items() if v is not None}
 
     if not valid_results:
-        st.error("Aucun ticker n'a pu Ãªtre analysÃ©.")
+        st.error("Aucun ticker n'a pu être analysé.")
         return
 
-    # Tableau rÃ©capitulatif (si plusieurs tickers)
+    # Tableau récapitulatif (si plusieurs tickers)
     if len(valid_results) > 1:
-        st.subheader("ð Tableau rÃ©capitulatif")
+        st.subheader("📊 Tableau récapitulatif")
         render_recap_table(valid_results)
         st.divider()
 
-    # Carte dÃ©taillÃ©e par ticker
+    # Carte détaillée par ticker
     for ticker, result in valid_results.items():
         with st.container():
             render_signal_card(result)
