@@ -21,6 +21,17 @@ SIKA_AAZ_URL = "https://www.sikafinance.com/marches/aaz"
 # Fallback Rich Bourse
 RICHBOURSE_BASE_URL = "https://www.richbourse.com"
 
+# ─── Flux RSS actualités BRVM ─────────────────────────────────────────────────
+# Testés dans l'ordre. Les flux sans contenu BRVM sont naturellement filtrés
+# par le matching de mots-clés dans rss_feeds.py.
+
+RSS_FEEDS: list[str] = [
+    "https://www.sikafinance.com/rss/actualites",
+    "https://www.sikafinance.com/feed",
+    "https://lereussitefinanciere.com/feed/",
+    "https://www.abidjan.net/services/rss/economie.asp",
+]
+
 # ─── Mapping Ticker → ID Sika Finance ─────────────────────────────────────────
 # Sur Sika Finance, les tickers portent un suffixe pays : BICC.ci, BOAB.bj, etc.
 # Les indices n'ont pas de suffixe : BRVMC, BRVM30, etc.
@@ -171,7 +182,9 @@ COUNTRY_SUFFIXES = [".ci", ".sn", ".tg", ".bf", ".bj", ".ml", ".ne", ""]
 # ─── Cache ─────────────────────────────────────────────────────────────────────
 
 CACHE_DIR = ".cache"
-CACHE_TTL_SECONDS = 3600  # 1 heure
+CACHE_TTL_SECONDS = 3600       # 1 heure (OHLCV — valeur par défaut)
+NEWS_CACHE_TTL_SECONDS = 1800  # 30 minutes (actualités)
+MACRO_CACHE_TTL_SECONDS = 86400  # 24 heures (données macro)
 
 # ─── Rate limiting ─────────────────────────────────────────────────────────────
 

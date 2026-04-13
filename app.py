@@ -7,6 +7,7 @@ Lancement : streamlit run app.py
 import logging
 import sys
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -19,7 +20,6 @@ from config import PERIODES_DISPONIBLES, BRVM_INDEX_TICKER, MA_SHORT, MA_MID, MA
 from indicators import compute_indicators
 from scoring import compute_score
 from scraper import get_ohlcv, get_news, TickerNotFoundError, InsufficientDataError, SourceStructureChangedError
-from auth import check_auth, logout_button
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
@@ -58,7 +58,6 @@ st.markdown("""
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    logout_button()
     st.title("📈 BRVM Screener")
     st.caption("Investment Pioneers")
     st.divider()
@@ -169,53 +168,62 @@ with st.sidebar:
 
 # ─── Logique principale ───────────────────────────────────────────────────────
 
-def analyser_ticker(ticker: str, days: int, horizon: str = DEFAULT_HORIZON) -> Optional[dict]:
+def _analyser_ticker_worker(ticker: str, days: int, horizon: str) -> dict:
     """
-    Pipeline complet pour un ticker : scraping → indicateurs → score → analyse.
+    Pipeline complet pour un ticker, sans appels Streamlit (thread-safe).
+    Retourne toujours un dict avec au minimum {"ticker": ticker}.
+    En cas d'erreur, ajoute la clé "error" avec l'exception.
     """
     try:
-        with st.spinner(f"Chargement des données pour {ticker}..."):
-            df = get_ohlcv(ticker, days=days)
+        df = get_ohlcv(ticker, days=days)
 
-        # Indice BRVMC pour calcul alpha
         df_index = None
         try:
             df_index = get_ohlcv(BRVM_INDEX_TICKER, days=days)
         except Exception:
             logger.debug(f"Indice BRVMC non disponible pour {ticker}")
 
-        # Indicateurs — avec horizon
-        with st.spinner(f"Calcul des indicateurs pour {ticker}..."):
-            ind = compute_indicators(df, ticker, df_index=df_index, horizon=horizon)
-
-        # Scoring — avec horizon (lu depuis ind.horizon)
+        ind = compute_indicators(df, ticker, df_index=df_index, horizon=horizon)
         score = compute_score(ind)
-
-        # Analyse narrative
         analyse = build_analyse(ind, score, df)
 
-        # Actualités
         news = []
         try:
-            with st.spinner(f"Recherche d'actualités pour {ticker}..."):
-                news = get_news(ticker, max_items=5)
+            news = get_news(ticker, max_items=5)
             analyse.actualites = news
         except Exception:
             logger.debug(f"Actualités non disponibles pour {ticker}")
 
-        return {"df": df, "ind": ind, "score": score, "analyse": analyse, "news": news}
+        return {"ticker": ticker, "df": df, "ind": ind, "score": score, "analyse": analyse, "news": news}
 
-    except TickerNotFoundError as e:
-        st.error(f"❌ **{ticker}** : ticker introuvable sur toutes les sources.\n\n{e}")
-    except InsufficientDataError as e:
-        st.warning(f"⚠️ **{ticker}** : données insuffisantes.\n\n{e}")
-    except SourceStructureChangedError as e:
-        st.error(f"🔧 **{ticker}** : structure du site modifiée — mise à jour du scraper requise.\n\n{e}")
+    except (TickerNotFoundError, InsufficientDataError, SourceStructureChangedError) as e:
+        return {"ticker": ticker, "error": e, "error_type": type(e).__name__}
     except Exception as e:
         logger.exception(f"Erreur inattendue pour {ticker}")
-        st.error(f"💥 **{ticker}** : erreur inattendue — {e}")
+        return {"ticker": ticker, "error": e, "error_type": "unexpected"}
 
-    return None
+
+def analyser_ticker(ticker: str, days: int, horizon: str = DEFAULT_HORIZON) -> Optional[dict]:
+    """
+    Wrapper Streamlit autour du worker : affiche les messages d'erreur UI.
+    Utilisé pour l'analyse ticker unique (hors batch parallèle).
+    """
+    result = _analyser_ticker_worker(ticker, days, horizon)
+
+    if "error" in result:
+        e = result["error"]
+        etype = result.get("error_type", "")
+        if etype == "TickerNotFoundError":
+            st.error(f"❌ **{ticker}** : ticker introuvable sur toutes les sources.\n\n{e}")
+        elif etype == "InsufficientDataError":
+            st.warning(f"⚠️ **{ticker}** : données insuffisantes.\n\n{e}")
+        elif etype == "SourceStructureChangedError":
+            st.error(f"🔧 **{ticker}** : structure du site modifiée — mise à jour du scraper requise.\n\n{e}")
+        else:
+            st.error(f"💥 **{ticker}** : erreur inattendue — {e}")
+        return None
+
+    return result
 
 
 def render_signal_card(result: dict) -> None:
@@ -366,11 +374,11 @@ def _render_charts(result: dict) -> None:
         return
 
     fig = make_subplots(
-        rows=4, cols=1,
+        rows=5, cols=1,
         shared_xaxes=True,
-        row_heights=[0.5, 0.17, 0.17, 0.16],
-        vertical_spacing=0.04,
-        subplot_titles=("Prix + Moyennes Mobiles + Bollinger", "RSI (14)", "Stochastic (14,3)", "Volume"),
+        row_heights=[0.42, 0.14, 0.14, 0.14, 0.16],
+        vertical_spacing=0.03,
+        subplot_titles=("Prix + Moyennes Mobiles + Bollinger", "MACD", "RSI", "Stochastic", "Volume"),
     )
 
     # ── Chandelier ────────────────────────────────────────────────────────────
@@ -422,7 +430,37 @@ def _render_charts(result: dict) -> None:
         fig.add_hline(y=ind.resistance, line_dash="dash", line_color="#A32D2D",
                       annotation_text=f"R {ind.resistance:,.0f}", row=1, col=1)
 
-    # ── RSI ───────────────────────────────────────────────────────────────────
+    # ── MACD (row 2) ──────────────────────────────────────────────────────────
+    if "macd" in series and "macd_signal" in series:
+        macd_dates = list(series["macd"].keys())
+        macd_vals = list(series["macd"].values())
+        sig_dates = list(series["macd_signal"].keys())
+        sig_vals = list(series["macd_signal"].values())
+
+        fig.add_trace(go.Scatter(
+            x=macd_dates, y=macd_vals, name="MACD",
+            line=dict(color="#2196F3", width=1.5),
+        ), row=2, col=1)
+        fig.add_trace(go.Scatter(
+            x=sig_dates, y=sig_vals, name="Signal MACD",
+            line=dict(color="#FF9800", width=1.2, dash="dot"),
+        ), row=2, col=1)
+
+        # Histogramme MACD (vert si positif, rouge si négatif)
+        if "macd_hist" in series:
+            hist_dates = list(series["macd_hist"].keys())
+            hist_vals = list(series["macd_hist"].values())
+            hist_colors = ["#0F6E56" if v >= 0 else "#A32D2D" for v in hist_vals]
+            fig.add_trace(go.Bar(
+                x=hist_dates, y=hist_vals, name="Histogramme MACD",
+                marker_color=hist_colors,
+                opacity=0.6,
+            ), row=2, col=1)
+
+        # Ligne zéro MACD
+        fig.add_hline(y=0, line_dash="dash", line_color="#888", line_width=1, row=2, col=1)
+
+    # ── RSI (row 3) ───────────────────────────────────────────────────────────
     if "rsi" in series:
         dates = list(series["rsi"].keys())
         vals = list(series["rsi"].values())
@@ -430,32 +468,32 @@ def _render_charts(result: dict) -> None:
             x=dates, y=vals, name="RSI",
             line=dict(color="#7F77DD", width=1.5),
             fill="tozeroy", fillcolor="rgba(127,119,221,0.1)",
-        ), row=2, col=1)
+        ), row=3, col=1)
         for level, color in [(30, "#0F6E56"), (70, "#A32D2D")]:
             fig.add_hline(y=level, line_dash="dash", line_color=color,
-                          line_width=1, row=2, col=1)
+                          line_width=1, row=3, col=1)
 
-    # ── Stochastic ────────────────────────────────────────────────────────────
+    # ── Stochastic (row 4) ────────────────────────────────────────────────────
     if "stoch_k" in series:
         dates_k = list(series["stoch_k"].keys())
         vals_k = list(series["stoch_k"].values())
         fig.add_trace(go.Scatter(
             x=dates_k, y=vals_k, name="%K",
             line=dict(color="#2196F3", width=1.5),
-        ), row=3, col=1)
+        ), row=4, col=1)
     if "stoch_d" in series:
         dates_d = list(series["stoch_d"].keys())
         vals_d = list(series["stoch_d"].values())
         fig.add_trace(go.Scatter(
             x=dates_d, y=vals_d, name="%D",
             line=dict(color="#FF9800", width=1.2, dash="dot"),
-        ), row=3, col=1)
+        ), row=4, col=1)
     if "stoch_k" in series or "stoch_d" in series:
         for level, color in [(20, "#0F6E56"), (80, "#A32D2D")]:
             fig.add_hline(y=level, line_dash="dash", line_color=color,
-                          line_width=1, row=3, col=1)
+                          line_width=1, row=4, col=1)
 
-    # ── Volume ────────────────────────────────────────────────────────────────
+    # ── Volume (row 5) ────────────────────────────────────────────────────────
     if "volume" in series and "close" in series:
         dates = list(series["volume"].keys())
         vols = list(series["volume"].values())
@@ -467,10 +505,10 @@ def _render_charts(result: dict) -> None:
         fig.add_trace(go.Bar(
             x=dates, y=vols, name="Volume",
             marker_color=colors_vol,
-        ), row=4, col=1)
+        ), row=5, col=1)
 
     fig.update_layout(
-        height=850,
+        height=1000,
         showlegend=True,
         legend=dict(orientation="h", y=1.02, x=0),
         xaxis_rangeslider_visible=False,
@@ -488,6 +526,10 @@ def _render_charts(result: dict) -> None:
             dict(bounds=["sat", "mon"]),  # saute sam→lun
         ]
     )
+
+    # Fixer les axes Y des oscillateurs
+    fig.update_yaxes(range=[0, 100], row=3, col=1)   # RSI
+    fig.update_yaxes(range=[0, 100], row=4, col=1)   # Stochastic
 
     st.plotly_chart(fig, use_container_width=True)
 
@@ -585,10 +627,38 @@ Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chart
         st.warning("Aucun ticker valide saisi.")
         return
 
-    # Analyser chaque ticker
-    results = {}
-    for ticker in tickers:
-        results[ticker] = analyser_ticker(ticker, days, horizon=horizon)
+    # Analyser les tickers en parallèle (ThreadPoolExecutor)
+    # max_workers = min(nb tickers, 5) pour ne pas surcharger les sources
+    results: dict = {}
+    max_workers = min(len(tickers), 5)
+
+    with st.spinner(f"Analyse en cours pour {len(tickers)} titre(s)…"):
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_ticker = {
+                executor.submit(_analyser_ticker_worker, t, days, horizon): t
+                for t in tickers
+            }
+            for future in as_completed(future_to_ticker):
+                ticker = future_to_ticker[future]
+                result = future.result()
+
+                if "error" in result:
+                    e = result["error"]
+                    etype = result.get("error_type", "")
+                    if etype == "TickerNotFoundError":
+                        st.error(f"❌ **{ticker}** : ticker introuvable sur toutes les sources.\n\n{e}")
+                    elif etype == "InsufficientDataError":
+                        st.warning(f"⚠️ **{ticker}** : données insuffisantes.\n\n{e}")
+                    elif etype == "SourceStructureChangedError":
+                        st.error(f"🔧 **{ticker}** : structure du site modifiée.\n\n{e}")
+                    else:
+                        st.error(f"💥 **{ticker}** : erreur inattendue — {e}")
+                    results[ticker] = None
+                else:
+                    results[ticker] = result
+
+    # Remettre dans l'ordre de sélection (as_completed ne préserve pas l'ordre)
+    results = {t: results.get(t) for t in tickers}
 
     valid_results = {k: v for k, v in results.items() if v is not None}
 
@@ -610,5 +680,4 @@ Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chart
 
 
 if __name__ == "__main__":
-    if check_auth():
-        main()
+    main()

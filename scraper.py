@@ -32,8 +32,11 @@ from config import (
     MIN_DATA_POINTS,
     TICKER_TO_SIKA_ID,
     COUNTRY_SUFFIXES,
+    NEWS_CACHE_TTL_SECONDS,
 )
 from cache import cache
+import richbourse
+import rss_feeds
 
 logger = logging.getLogger(__name__)
 
@@ -445,7 +448,7 @@ def get_ohlcv(ticker: str, days: int = 365) -> pd.DataFrame:
     except Exception as e:
         errors.append(f"SikaFinance HTML: {e}")
 
-    # 4. Fallback : JSON chartdata
+    # 4. Fallback : JSON chartdata SikaFinance
     if df is None or len(df) < MIN_DATA_POINTS:
         try:
             df_json = _fetch_sika_chartdata(sika_id, days)
@@ -454,6 +457,16 @@ def get_ohlcv(ticker: str, days: int = 365) -> pd.DataFrame:
                 logger.info(f"[SikaFinance JSON] {len(df)} jours pour {ticker}")
         except Exception as e:
             errors.append(f"SikaFinance JSON: {e}")
+
+    # 5. Fallback : RichBourse.com
+    if df is None or len(df) < MIN_DATA_POINTS:
+        try:
+            df_rb = richbourse.fetch_ohlcv(sika_id, days)
+            if df_rb is not None and (df is None or len(df_rb) > len(df)):
+                df = df_rb
+                logger.info(f"[RichBourse] {len(df)} jours pour {ticker}")
+        except Exception as e:
+            errors.append(f"RichBourse: {e}")
 
     # Validation finale
     if df is None or len(df) == 0:
@@ -504,16 +517,14 @@ def _parse_date(date_str: str) -> Optional[str]:
         return None
 
 
-# ─── Scraping Actualités ──────────────────────────────────────────────────────
+# ─── Actualités ──────────────────────────────────────────────────────────────
 
 def get_news(ticker: str, max_items: int = 5) -> list[dict]:
     """
-    Récupère les dernières actualités pour un ticker BRVM depuis Sika Finance.
+    Récupère les dernières actualités pour un ticker BRVM.
 
-    Stratégie :
-    1. Page recherche Sika Finance : /recherche?q={ticker}
-    2. Page actualités : /marches/actualites filtré par ticker
-    3. Fallback : recherche générale BRVM + ticker
+    Délègue à rss_feeds.py qui agrège plusieurs sources (RSS + scraping).
+    Cache avec TTL court (30 min) pour avoir des news fraîches.
 
     Returns:
         Liste de dicts avec clés : titre, date, url, source, resume
@@ -521,123 +532,12 @@ def get_news(ticker: str, max_items: int = 5) -> list[dict]:
     ticker = ticker.upper().strip()
     cache_key = f"news_{ticker}"
 
-    # Cache
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    news = []
+    news = rss_feeds.get_news_for_ticker(ticker, max_items=max_items)
 
-    # Tenter la page d'actualité Sika Finance
-    try:
-        news = _fetch_sika_news(ticker, max_items)
-    except Exception as e:
-        logger.debug(f"Erreur news Sika Finance pour {ticker}: {e}")
-
-    # Fallback : recherche Sika Finance
-    if not news:
-        try:
-            news = _fetch_sika_search_news(ticker, max_items)
-        except Exception as e:
-            logger.debug(f"Erreur recherche Sika Finance pour {ticker}: {e}")
-
-    # Mise en cache (même si vide, pour éviter re-scraping)
-    cache.set(cache_key, news)
-    return news
-
-
-def _fetch_sika_news(ticker: str, max_items: int) -> list[dict]:
-    """Scrape les actualités depuis la page actualités Sika Finance."""
-    sika_id = TICKER_TO_SIKA_ID.get(ticker, ticker)
-    # Essayer la page du titre sur Sika Finance
-    url = f"{SIKA_BASE_URL}/marches/cotation/{sika_id}"
-    logger.info(f"[News] Tentative page cotation : {url}")
-
-    time.sleep(REQUEST_DELAY_SECONDS)
-    resp = _session.get(url, timeout=REQUEST_TIMEOUT)
-    if resp.status_code != 200:
-        return []
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-    news = []
-
-    # Chercher les blocs d'actualités sur la page (section actualités ou news)
-    news_containers = soup.select(
-        ".news-item, .article-item, .actualite-item, "
-        "[class*='news'], [class*='actu'], article"
-    )
-
-    for item in news_containers[:max_items]:
-        titre_el = item.select_one("a, h3, h4, .title, .titre")
-        if not titre_el:
-            continue
-
-        titre = titre_el.get_text(strip=True)
-        if not titre or len(titre) < 10:
-            continue
-
-        href = titre_el.get("href", "")
-        if href and not href.startswith("http"):
-            href = SIKA_BASE_URL + href
-
-        date_el = item.select_one("time, .date, .published, [class*='date']")
-        date_str = date_el.get_text(strip=True) if date_el else ""
-
-        resume_el = item.select_one("p, .resume, .excerpt, .summary")
-        resume = resume_el.get_text(strip=True)[:200] if resume_el else ""
-
-        news.append({
-            "titre": titre,
-            "date": date_str,
-            "url": href,
-            "source": "Sika Finance",
-            "resume": resume,
-        })
-
-    return news
-
-
-def _fetch_sika_search_news(ticker: str, max_items: int) -> list[dict]:
-    """Recherche d'actualités via la barre de recherche Sika Finance."""
-    # Utiliser le nom du ticker pour la recherche
-    search_term = ticker.replace("BF", "").replace(".ci", "").replace(".sn", "")
-    url = f"{SIKA_BASE_URL}/recherche?q={search_term}"
-    logger.info(f"[News] Recherche Sika Finance : {url}")
-
-    time.sleep(REQUEST_DELAY_SECONDS)
-    resp = _session.get(url, timeout=REQUEST_TIMEOUT)
-    if resp.status_code != 200:
-        return []
-
-    soup = BeautifulSoup(resp.text, "html.parser")
-    news = []
-
-    results = soup.select(".search-result, .result-item, article, .card")
-    for item in results[:max_items]:
-        titre_el = item.select_one("a, h3, h4, .title")
-        if not titre_el:
-            continue
-
-        titre = titre_el.get_text(strip=True)
-        if not titre or len(titre) < 10:
-            continue
-
-        href = titre_el.get("href", "")
-        if href and not href.startswith("http"):
-            href = SIKA_BASE_URL + href
-
-        date_el = item.select_one("time, .date, [class*='date']")
-        date_str = date_el.get_text(strip=True) if date_el else ""
-
-        resume_el = item.select_one("p, .excerpt")
-        resume = resume_el.get_text(strip=True)[:200] if resume_el else ""
-
-        news.append({
-            "titre": titre,
-            "date": date_str,
-            "url": href,
-            "source": "Sika Finance",
-            "resume": resume,
-        })
-
+    # TTL court pour les news (30 min), même si vide (évite re-scraping rapide)
+    cache.set(cache_key, news, ttl=NEWS_CACHE_TTL_SECONDS)
     return news
