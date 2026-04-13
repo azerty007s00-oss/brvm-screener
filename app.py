@@ -16,7 +16,13 @@ from plotly.subplots import make_subplots
 
 from analysis import build_analyse
 from cache import cache
-from config import PERIODES_DISPONIBLES, BRVM_INDEX_TICKER, MA_SHORT, MA_MID, MA_LONG, HORIZON_PROFILES, DEFAULT_HORIZON, TICKER_NAMES, TICKER_GROUPS
+from config import (
+    PERIODES_DISPONIBLES, BRVM_INDEX_TICKER, MA_SHORT, MA_MID, MA_LONG,
+    HORIZON_PROFILES, DEFAULT_HORIZON, TICKER_NAMES, TICKER_GROUPS,
+)
+from evolution import compute_evolution
+from export import generate_excel, generate_csv
+from fundamentals import get_fundamentals
 from indicators import compute_indicators
 from scoring import compute_score
 from scraper import get_ohlcv, get_news, TickerNotFoundError, InsufficientDataError, SourceStructureChangedError
@@ -51,6 +57,8 @@ st.markdown("""
     .alerte        { font-size: 0.85rem; margin: 2px 0; }
     .section-label { font-size: 0.75rem; text-transform: uppercase;
                      letter-spacing: 0.08em; color: #888; margin-bottom: 2px; }
+    .fd-metric     { font-size: 0.9rem; padding: 6px 10px; border-radius: 6px;
+                     background: #f8f9fa; margin: 4px 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -65,7 +73,6 @@ with st.sidebar:
     # ── Sélection des tickers ─────────────────────────────────────────────────
     st.markdown("**Sélection des titres**")
 
-    # Construire les options avec noms publics, groupées
     all_ticker_options = []
     for group, tickers_in_group in TICKER_GROUPS.items():
         for t in tickers_in_group:
@@ -91,7 +98,6 @@ with st.sidebar:
     )
     tickers_from_manual = [t.strip().upper() for t in tickers_input_manual.split(",") if t.strip()]
 
-    # Fusion (multiselect prioritaire + saisie manuelle, sans doublon)
     tickers_combined = list(dict.fromkeys(tickers_from_select + tickers_from_manual))
 
     # ── Horizon d'analyse ─────────────────────────────────────────────────────
@@ -108,7 +114,6 @@ with st.sidebar:
     )
     profile = HORIZON_PROFILES[horizon]
 
-    # Info dynamique sur l'horizon sélectionné
     jours_min = profile["jours_min"]
     p = profile["periods"]
     with st.expander("🔍 Paramètres de l'horizon", expanded=False):
@@ -118,7 +123,6 @@ with st.sidebar:
             f"Stoch({p['stoch_k']},{p['stoch_d']}) · ADX({p['adx']})"
         )
         w = profile["weights"]
-        active = [k for k, v in w.items() if v > 0]
         boosted = [k for k, v in w.items() if v > 1]
         disabled = [k for k, v in w.items() if v == 0]
         if boosted:
@@ -129,10 +133,9 @@ with st.sidebar:
 
     st.divider()
 
-    # ── Période de données ────────────────────────────────────────────────────
     periodes_filtrees = {k: v for k, v in PERIODES_DISPONIBLES.items() if v >= jours_min}
     if not periodes_filtrees:
-        periodes_filtrees = PERIODES_DISPONIBLES  # fallback
+        periodes_filtrees = PERIODES_DISPONIBLES
 
     periode_label = st.selectbox(
         "Période de données",
@@ -166,7 +169,7 @@ with st.sidebar:
             st.success(f"{n} entrée(s) supprimée(s)")
 
 
-# ─── Logique principale ───────────────────────────────────────────────────────
+# ─── Worker d'analyse ─────────────────────────────────────────────────────────
 
 def _analyser_ticker_worker(ticker: str, days: int, horizon: str) -> dict:
     """
@@ -194,7 +197,30 @@ def _analyser_ticker_worker(ticker: str, days: int, horizon: str) -> dict:
         except Exception:
             logger.debug(f"Actualités non disponibles pour {ticker}")
 
-        return {"ticker": ticker, "df": df, "ind": ind, "score": score, "analyse": analyse, "news": news}
+        # ── Phase 2 : évolution 3M ────────────────────────────────────────────
+        evo = None
+        try:
+            evo = compute_evolution(df, ticker, df_index=df_index)
+        except Exception as e:
+            logger.debug(f"Évolution non disponible pour {ticker}: {e}")
+
+        # ── Phase 2 : données fondamentales ──────────────────────────────────
+        fd = None
+        try:
+            fd = get_fundamentals(ticker)
+        except Exception as e:
+            logger.debug(f"Fondamentaux non disponibles pour {ticker}: {e}")
+
+        return {
+            "ticker": ticker,
+            "df": df,
+            "ind": ind,
+            "score": score,
+            "analyse": analyse,
+            "news": news,
+            "evolution": evo,
+            "fundamentals": fd,
+        }
 
     except (TickerNotFoundError, InsufficientDataError, SourceStructureChangedError) as e:
         return {"ticker": ticker, "error": e, "error_type": type(e).__name__}
@@ -204,10 +230,7 @@ def _analyser_ticker_worker(ticker: str, days: int, horizon: str) -> dict:
 
 
 def analyser_ticker(ticker: str, days: int, horizon: str = DEFAULT_HORIZON) -> Optional[dict]:
-    """
-    Wrapper Streamlit autour du worker : affiche les messages d'erreur UI.
-    Utilisé pour l'analyse ticker unique (hors batch parallèle).
-    """
+    """Wrapper Streamlit autour du worker."""
     result = _analyser_ticker_worker(ticker, days, horizon)
 
     if "error" in result:
@@ -226,11 +249,15 @@ def analyser_ticker(ticker: str, days: int, horizon: str = DEFAULT_HORIZON) -> O
     return result
 
 
+# ─── Rendu des cartes ticker ──────────────────────────────────────────────────
+
 def render_signal_card(result: dict) -> None:
-    """Affiche le bloc principal d'un ticker : signal + scorecard + analyse."""
+    """Affiche le bloc principal d'un ticker avec onglets Phase 2."""
     score = result["score"]
     ind = result["ind"]
     analyse = result["analyse"]
+    evo = result.get("evolution")
+    fd = result.get("fundamentals")
     horizon_label = HORIZON_PROFILES.get(ind.horizon, {}).get("label", ind.horizon)
     horizon_emoji = HORIZON_PROFILES.get(ind.horizon, {}).get("emoji", "📈")
 
@@ -239,12 +266,13 @@ def render_signal_card(result: dict) -> None:
 
     with col1:
         st.markdown(f"### {score.ticker}")
-        variation_color = "green" if ind.variation_j1_pct >= 0 else "red"
-        sign = "+" if ind.variation_j1_pct >= 0 else ""
+        variation_color = "green" if (ind.variation_j1_pct or 0) >= 0 else "red"
+        sign = "+" if (ind.variation_j1_pct or 0) >= 0 else ""
+        var_str = f"{sign}{ind.variation_j1_pct:.2f}%" if ind.variation_j1_pct is not None else "N/D"
+        cours_str = f"{ind.cours_actuel:,.0f} FCFA" if ind.cours_actuel else "N/D"
         st.markdown(
-            f"**{ind.cours_actuel:,.0f} FCFA** &nbsp;"
-            f"<span style='color:{variation_color};font-size:0.9rem'>"
-            f"{sign}{ind.variation_j1_pct:.2f}%</span>"
+            f"**{cours_str}** &nbsp;"
+            f"<span style='color:{variation_color};font-size:0.9rem'>{var_str}</span>"
             f"&nbsp;&nbsp;<span style='font-size:0.78rem;color:#888'>{horizon_emoji} {horizon_label}</span>",
             unsafe_allow_html=True
         )
@@ -272,8 +300,24 @@ def render_signal_card(result: dict) -> None:
         if ind.adx is not None:
             st.caption(f"ADX: {ind.adx:.0f} ({'forte' if ind.adx > 25 else 'faible'})")
 
-    # ── Scorecard détaillée ───────────────────────────────────────────────────
-    with st.expander("📋 Scorecard détaillée", expanded=True):
+    # ── Onglets Phase 2 ───────────────────────────────────────────────────────
+    tab_labels = ["📊 Graphiques", "📋 Scorecard", "🔍 Analyse"]
+    if evo is not None:
+        tab_labels.append("📅 Évolution 3M")
+    if fd is not None and fd.donnees_disponibles:
+        tab_labels.append("🏦 Fondamentaux")
+    tab_labels.append("📰 Actualités")
+
+    tabs = st.tabs(tab_labels)
+    tab_idx = 0
+
+    # ── Onglet Graphiques ─────────────────────────────────────────────────────
+    with tabs[tab_idx]:
+        _render_charts(result)
+    tab_idx += 1
+
+    # ── Onglet Scorecard ──────────────────────────────────────────────────────
+    with tabs[tab_idx]:
         for critere in score.criteres:
             points_color = (
                 "#0F6E56" if critere.points > 0
@@ -293,46 +337,51 @@ def render_signal_card(result: dict) -> None:
             f"<div style='margin-top:8px;font-weight:600'>Score total : {score.score_total:+d}</div>",
             unsafe_allow_html=True
         )
+    tab_idx += 1
 
-    # ── Analyse narrative ─────────────────────────────────────────────────────
-    with st.expander("🔍 Analyse complète", expanded=True):
+    # ── Onglet Analyse ────────────────────────────────────────────────────────
+    with tabs[tab_idx]:
         col_a, col_b = st.columns(2)
-
         with col_a:
             st.markdown("<div class='section-label'>Tendance</div>", unsafe_allow_html=True)
             st.write(analyse.section_tendance)
-
             st.markdown("<div class='section-label'>Momentum</div>", unsafe_allow_html=True)
             st.write(analyse.section_momentum)
-
             st.markdown("<div class='section-label'>Niveaux clés</div>", unsafe_allow_html=True)
             st.write(analyse.section_niveaux)
-
             st.markdown("<div class='section-label'>Stochastic</div>", unsafe_allow_html=True)
             st.write(analyse.section_stochastic)
-
         with col_b:
             st.markdown("<div class='section-label'>Configuration chartiste</div>", unsafe_allow_html=True)
             st.write(analyse.section_chartiste)
-
             st.markdown("<div class='section-label'>Volume</div>", unsafe_allow_html=True)
             st.write(analyse.section_volume)
-
             st.markdown("<div class='section-label'>Force de tendance (ADX)</div>", unsafe_allow_html=True)
             st.write(analyse.section_adx)
-
             st.markdown("<div class='section-label'>Divergence RSI</div>", unsafe_allow_html=True)
             st.write(analyse.section_divergence)
-
         if analyse.alertes:
             st.markdown("---")
             st.markdown("<div class='section-label'>Alertes</div>", unsafe_allow_html=True)
             for alerte in analyse.alertes:
                 st.markdown(f"<div class='alerte'>{alerte}</div>", unsafe_allow_html=True)
+    tab_idx += 1
 
-    # ── Actualités ────────────────────────────────────────────────────────────
-    news = result.get("news", [])
-    with st.expander(f"📰 Actualités ({len(news)} article{'s' if len(news) != 1 else ''})", expanded=bool(news)):
+    # ── Onglet Évolution 3M ───────────────────────────────────────────────────
+    if evo is not None:
+        with tabs[tab_idx]:
+            _render_evolution(evo)
+        tab_idx += 1
+
+    # ── Onglet Fondamentaux ───────────────────────────────────────────────────
+    if fd is not None and fd.donnees_disponibles:
+        with tabs[tab_idx]:
+            _render_fondamentaux(fd)
+        tab_idx += 1
+
+    # ── Onglet Actualités ─────────────────────────────────────────────────────
+    with tabs[tab_idx]:
+        news = result.get("news", [])
         if news:
             for article in news:
                 titre = article.get("titre", "")
@@ -340,7 +389,6 @@ def render_signal_card(result: dict) -> None:
                 date = article.get("date", "")
                 resume = article.get("resume", "")
                 source = article.get("source", "")
-
                 if url:
                     st.markdown(f"**[{titre}]({url})**")
                 else:
@@ -358,15 +406,214 @@ def render_signal_card(result: dict) -> None:
         else:
             st.info("Aucune actualité récente trouvée pour ce titre.")
 
-    # ── Graphiques ────────────────────────────────────────────────────────────
-    with st.expander("📊 Graphiques", expanded=True):
-        _render_charts(result)
+
+# ─── Rendu Évolution 3M ───────────────────────────────────────────────────────
+
+def _render_evolution(evo) -> None:
+    """Affiche l'onglet évolution 3 mois d'un ticker."""
+    # Métriques clés
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        perf_val = f"{evo.perf_totale_pct:+.1f}%" if evo.perf_totale_pct is not None else "N/D"
+        st.metric("Performance 3M", perf_val)
+    with col2:
+        vol_val = f"{evo.volatilite_63j:.1f}%" if evo.volatilite_63j else "N/D"
+        st.metric("Volatilité annualisée", vol_val)
+    with col3:
+        dd_val = f"{evo.max_drawdown_pct:.1f}%" if evo.max_drawdown_pct else "N/D"
+        st.metric("Max Drawdown", dd_val)
+    with col4:
+        sharpe_val = f"{evo.sharpe_ratio:.2f}" if evo.sharpe_ratio is not None else "N/D"
+        st.metric("Sharpe Ratio", sharpe_val)
+
+    st.markdown("---")
+
+    # Performances glissantes
+    if evo.periodes_glissantes:
+        st.markdown("**Performances glissantes**")
+        perf_rows = []
+        for p in evo.periodes_glissantes:
+            perf_rows.append({
+                "Période": p.label,
+                "Début": p.debut.strftime("%d/%m/%Y"),
+                "Fin": p.fin.strftime("%d/%m/%Y"),
+                "Performance": f"{p.perf_pct:+.2f}%",
+                "Alpha vs BRVMC": f"{p.vs_index_pct:+.2f}%" if p.vs_index_pct is not None else "N/D",
+            })
+
+        df_perf = pd.DataFrame(perf_rows)
+
+        def color_perf(val):
+            s = str(val)
+            if s.startswith("+") and s != "+0.00%":
+                return "color: #0F6E56; font-weight: 600"
+            if s.startswith("-"):
+                return "color: #A32D2D; font-weight: 600"
+            return ""
+
+        styled = df_perf.style.map(color_perf, subset=["Performance", "Alpha vs BRVMC"])
+        st.dataframe(styled, use_container_width=True, hide_index=True)
+
+    # Graphique des rendements journaliers (heatmap simplifiée)
+    if evo.heatmap_data:
+        st.markdown("**Rendements journaliers**")
+        # Transformer la liste plate en bar chart
+        dates = [d["date"] for d in evo.heatmap_data[-63:]]
+        returns = [d["return_pct"] for d in evo.heatmap_data[-63:]]
+        colors = ["#0F6E56" if r >= 0 else "#A32D2D" for r in returns]
+
+        fig_bar = go.Figure(go.Bar(
+            x=dates,
+            y=returns,
+            marker_color=colors,
+            name="Rendement %",
+            hovertemplate="%{x|%d/%m/%Y}: %{y:+.2f}%<extra></extra>",
+        ))
+        fig_bar.add_hline(y=0, line_color="#888", line_width=1)
+        fig_bar.update_layout(
+            height=250,
+            margin=dict(l=40, r=20, t=20, b=40),
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            showlegend=False,
+            yaxis_title="Rendement (%)",
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+    # Événements détectés
+    if evo.evenements:
+        st.markdown("**Événements détectés**")
+        ev_rows = []
+        for ev in evo.evenements:
+            ev_rows.append({
+                "Date": ev.date.strftime("%d/%m/%Y"),
+                "Type": ev.type.replace("_", " ").title(),
+                "Prix (FCFA)": f"{ev.prix:,.0f}" if ev.prix else "N/D",
+                "Intensité": ev.intensite.capitalize(),
+                "Description": ev.description,
+            })
+        st.dataframe(pd.DataFrame(ev_rows), use_container_width=True, hide_index=True)
+
+
+# ─── Rendu Fondamentaux ───────────────────────────────────────────────────────
+
+def _render_fondamentaux(fd) -> None:
+    """Affiche l'onglet fondamentaux d'un ticker."""
+    # Signal fondamental
+    signal_color = (
+        "#0F6E56" if "ACHAT" in fd.signal_fondamental or "SOLIDE" in fd.signal_fondamental
+        else "#A32D2D" if "VENTE" in fd.signal_fondamental or "FAIBLE" in fd.signal_fondamental
+        else "#BA7517"
+    )
+    st.markdown(
+        f"<div style='font-size:1.2rem;font-weight:600;color:{signal_color}'>"
+        f"{fd.signal_emoji} {fd.signal_fondamental} "
+        f"<span style='font-size:0.9rem;color:#666'>(Score : {fd.score_fondamental:+d})</span>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
+    st.markdown("---")
+
+    # Métriques principales
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        cap_str = _fmt_large(fd.capitalisation_fcfa)
+        st.metric("Capitalisation", cap_str)
+    with col2:
+        per_str = f"{fd.per:.1f}×" if fd.per else "N/D"
+        st.metric("PER", per_str)
+    with col3:
+        div_str = f"{fd.rendement_dividende_pct:.1f}%" if fd.rendement_dividende_pct else "N/D"
+        st.metric("Rdt Dividende", div_str)
+    with col4:
+        pos_str = f"{fd.position_52s_pct:.0f}%" if fd.position_52s_pct is not None else "N/D"
+        st.metric("Position 52 sem.", pos_str)
+
+    # Range 52 semaines
+    if fd.plus_haut_52s and fd.plus_bas_52s and fd.position_52s_pct is not None:
+        st.markdown(f"""
+        **Range 52 semaines** : {fd.plus_bas_52s:,.0f} FCFA → {fd.plus_haut_52s:,.0f} FCFA
+        *(position actuelle : {fd.position_52s_pct:.0f}% du range)*
+        """)
+
+    if fd.nombre_titres:
+        st.caption(f"Nombre de titres : {_fmt_large(fd.nombre_titres)} | Source : {fd.source}")
+
+    # Scorecard fondamentale
+    if fd.criteres_fondamentaux:
+        st.markdown("**Scorecard fondamentale**")
+        for c in fd.criteres_fondamentaux:
+            points_color = (
+                "#0F6E56" if c["points"] > 0
+                else "#A32D2D" if c["points"] < 0
+                else "#888"
+            )
+            st.markdown(
+                f"<div class='critere-row'>"
+                f"<span style='color:{points_color};font-weight:600;min-width:28px;display:inline-block'>{c['points']:+d}</span> "
+                f"<b>{c['nom']}</b> : {c['valeur']} — "
+                f"<span style='color:#666'>{c['interpretation']}</span>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+
+
+def _fmt_large(value) -> str:
+    """Formate un grand nombre lisible."""
+    if value is None:
+        return "N/D"
+    if value >= 1e9:
+        return f"{value / 1e9:.1f} Mds"
+    if value >= 1e6:
+        return f"{value / 1e6:.0f} M"
+    if value >= 1e3:
+        return f"{value / 1e3:.0f} K"
+    return f"{value:,.0f}"
+
+
+# ─── Rendu graphiques ─────────────────────────────────────────────────────────
+
+def _add_event_annotations(fig, evo, row: int = 1) -> None:
+    """Ajoute des annotations verticales pour les événements détectés."""
+    if evo is None or not evo.evenements:
+        return
+
+    event_colors = {
+        "golden_cross": "#0F6E56",
+        "death_cross": "#A32D2D",
+        "breakout": "#2196F3",
+        "breakdown": "#FF5722",
+        "volume_spike": "#9C27B0",
+        "rsi_extreme": "#FF9800",
+    }
+    event_symbols = {
+        "golden_cross": "☀",
+        "death_cross": "💀",
+        "breakout": "▲",
+        "breakdown": "▼",
+        "volume_spike": "⬛",
+        "rsi_extreme": "⚡",
+    }
+
+    for ev in evo.evenements:
+        color = event_colors.get(ev.type, "#888")
+        symbol = event_symbols.get(ev.type, "●")
+        fig.add_vline(
+            x=ev.date,
+            line_dash="dot",
+            line_color=color,
+            line_width=1,
+            annotation_text=symbol,
+            annotation_position="top",
+            row=row, col=1,
+        )
 
 
 def _render_charts(result: dict) -> None:
-    """Affiche les 3 graphiques Plotly pour un ticker."""
+    """Affiche les graphiques Plotly pour un ticker."""
     df = result["df"]
     ind = result["ind"]
+    evo = result.get("evolution")
     series = ind.series
 
     if df is None or len(df) < 5:
@@ -391,7 +638,6 @@ def _render_charts(result: dict) -> None:
         decreasing_line_color="#A32D2D",
     ), row=1, col=1)
 
-    # Moyennes mobiles
     def _add_ma(series_dict, label, color, row=1):
         if series_dict:
             dates = list(series_dict.keys())
@@ -413,7 +659,10 @@ def _render_charts(result: dict) -> None:
 
     # Bollinger
     if "bb_upper" in series and "bb_lower" in series:
-        for key, label, color in [("bb_upper", "BB Haut", "rgba(127,119,221,0.4)"), ("bb_lower", "BB Bas", "rgba(127,119,221,0.4)")]:
+        for key, label, color in [
+            ("bb_upper", "BB Haut", "rgba(127,119,221,0.4)"),
+            ("bb_lower", "BB Bas", "rgba(127,119,221,0.4)"),
+        ]:
             dates = list(series[key].keys())
             vals = list(series[key].values())
             fig.add_trace(go.Scatter(
@@ -429,6 +678,9 @@ def _render_charts(result: dict) -> None:
     if ind.resistance:
         fig.add_hline(y=ind.resistance, line_dash="dash", line_color="#A32D2D",
                       annotation_text=f"R {ind.resistance:,.0f}", row=1, col=1)
+
+    # Annotations événements
+    _add_event_annotations(fig, evo, row=1)
 
     # ── MACD (row 2) ──────────────────────────────────────────────────────────
     if "macd" in series and "macd_signal" in series:
@@ -446,7 +698,6 @@ def _render_charts(result: dict) -> None:
             line=dict(color="#FF9800", width=1.2, dash="dot"),
         ), row=2, col=1)
 
-        # Histogramme MACD (vert si positif, rouge si négatif)
         if "macd_hist" in series:
             hist_dates = list(series["macd_hist"].keys())
             hist_vals = list(series["macd_hist"].values())
@@ -457,7 +708,6 @@ def _render_charts(result: dict) -> None:
                 opacity=0.6,
             ), row=2, col=1)
 
-        # Ligne zéro MACD
         fig.add_hline(y=0, line_dash="dash", line_color="#888", line_width=1, row=2, col=1)
 
     # ── RSI (row 3) ───────────────────────────────────────────────────────────
@@ -518,45 +768,54 @@ def _render_charts(result: dict) -> None:
         margin=dict(l=60, r=40, t=40, b=40),
     )
     fig.update_yaxes(gridcolor="#f0f0f0")
-
-    # Supprimer les gaps weekends et jours sans cotation (BRVM fermée sam/dim)
     fig.update_xaxes(
         gridcolor="#f0f0f0",
-        rangebreaks=[
-            dict(bounds=["sat", "mon"]),  # saute sam→lun
-        ]
+        rangebreaks=[dict(bounds=["sat", "mon"])],
     )
-
-    # Fixer les axes Y des oscillateurs
-    fig.update_yaxes(range=[0, 100], row=3, col=1)   # RSI
-    fig.update_yaxes(range=[0, 100], row=4, col=1)   # Stochastic
+    fig.update_yaxes(range=[0, 100], row=3, col=1)
+    fig.update_yaxes(range=[0, 100], row=4, col=1)
 
     st.plotly_chart(fig, use_container_width=True)
 
 
+# ─── Tableau récapitulatif ────────────────────────────────────────────────────
+
 def render_recap_table(results: dict) -> None:
-    """Affiche le tableau récapitulatif multi-tickers."""
+    """Affiche le tableau récapitulatif multi-tickers avec colonnes Phase 2."""
     rows = []
     for ticker, result in results.items():
         if result is None:
             continue
         ind = result["ind"]
         score = result["score"]
-        rows.append({
+        evo = result.get("evolution")
+        fd = result.get("fundamentals")
+
+        row = {
             "Ticker": ticker,
-            "Cours (FCFA)": f"{ind.cours_actuel:,.0f}",
-            "Var J-1 (%)": f"{ind.variation_j1_pct:+.2f}%",
+            "Cours (FCFA)": f"{ind.cours_actuel:,.0f}" if ind.cours_actuel else "N/D",
+            "Var J-1": f"{ind.variation_j1_pct:+.2f}%" if ind.variation_j1_pct is not None else "N/D",
             "RSI": f"{ind.rsi:.1f}" if ind.rsi else "N/D",
             "Div. RSI": {"haussiere_forte": "↗↗", "haussiere": "↗", "baissiere_forte": "↘↘", "baissiere": "↘"}.get(ind.rsi_divergence, "—"),
-            "Stoch %K": f"{ind.stoch_k:.0f}" if ind.stoch_k else "N/D",
-            "ADX": f"{ind.adx:.0f}" if ind.adx else "N/D",
-            "MA Signal": score_to_ma_label(ind.ma_signal),
             "MACD": ind.macd_signal.capitalize() if ind.macd_signal else "N/D",
+            "ADX": f"{ind.adx:.0f}" if ind.adx else "N/D",
             "Perf 1M": f"{ind.perf_1m:+.1f}%" if ind.perf_1m is not None else "N/D",
+            "Alpha": f"{ind.perf_vs_index_1m:+.1f}%" if ind.perf_vs_index_1m is not None else "N/D",
             "Score": f"{score.score_total:+d}",
             "Signal": f"{score.signal_emoji} {score.signal}",
             "Confiance": score.confiance.capitalize(),
-        })
+        }
+
+        if evo is not None:
+            row["Volat. 3M"] = f"{evo.volatilite_63j:.1f}%" if evo.volatilite_63j else "N/D"
+            row["Max DD"] = f"{evo.max_drawdown_pct:.1f}%" if evo.max_drawdown_pct else "N/D"
+
+        if fd is not None and fd.donnees_disponibles:
+            row["PER"] = f"{fd.per:.1f}×" if fd.per else "N/D"
+            row["Rdt Div."] = f"{fd.rendement_dividende_pct:.1f}%" if fd.rendement_dividende_pct else "N/D"
+            row["Score Fond."] = f"{fd.score_fondamental:+d}" if fd.donnees_disponibles else "N/D"
+
+        rows.append(row)
 
     if not rows:
         return
@@ -584,8 +843,186 @@ def render_recap_table(results: dict) -> None:
             return "color: #A32D2D; font-weight: 600"
         return ""
 
-    styled = df_recap.style.map(highlight_signal, subset=["Signal"]).map(highlight_divergence, subset=["Div. RSI"])
+    style_cols = {"Signal": highlight_signal, "Div. RSI": highlight_divergence}
+    styled = df_recap.style
+    for col, fn in style_cols.items():
+        if col in df_recap.columns:
+            styled = styled.map(fn, subset=[col])
+
     st.dataframe(styled, use_container_width=True, hide_index=True)
+
+
+# ─── Comparateur ─────────────────────────────────────────────────────────────
+
+def render_comparateur(results: dict) -> None:
+    """Affiche le comparateur multi-tickers (performances normalisées, risque, scores)."""
+    valid = {t: r for t, r in results.items() if r is not None}
+    if len(valid) < 2:
+        return
+
+    st.subheader("📊 Comparateur multi-titres")
+    tab_perf, tab_risk, tab_scores = st.tabs(["Performance normalisée", "Risque", "Scores comparés"])
+
+    # ── Performance normalisée (base 100) ────────────────────────────────────
+    with tab_perf:
+        fig_norm = go.Figure()
+        for ticker, result in valid.items():
+            df = result.get("df")
+            if df is None or df.empty or "close" not in df.columns:
+                continue
+            close = df["close"].dropna()
+            if len(close) < 5:
+                continue
+            base = close.iloc[0]
+            if base == 0:
+                continue
+            normalized = (close / base * 100).round(2)
+            fig_norm.add_trace(go.Scatter(
+                x=normalized.index,
+                y=normalized.values,
+                name=ticker,
+                mode="lines",
+                hovertemplate=f"{ticker}: %{{y:.1f}}<extra></extra>",
+            ))
+
+        fig_norm.add_hline(y=100, line_dash="dash", line_color="#888", line_width=1)
+        fig_norm.update_layout(
+            height=400,
+            plot_bgcolor="white",
+            paper_bgcolor="white",
+            yaxis_title="Base 100",
+            legend=dict(orientation="h", y=1.05),
+            margin=dict(l=50, r=20, t=30, b=40),
+        )
+        st.plotly_chart(fig_norm, use_container_width=True)
+
+    # ── Risque (volatilité vs drawdown) ──────────────────────────────────────
+    with tab_risk:
+        risk_rows = []
+        for ticker, result in valid.items():
+            evo = result.get("evolution")
+            ind = result.get("ind")
+            if evo is None:
+                continue
+            risk_rows.append({
+                "Ticker": ticker,
+                "Volatilité 3M (%)": round(evo.volatilite_63j, 2) if evo.volatilite_63j else None,
+                "Max Drawdown (%)": round(evo.max_drawdown_pct, 2) if evo.max_drawdown_pct else None,
+                "Drawdown actuel (%)": round(evo.current_drawdown_pct, 2) if evo.current_drawdown_pct else None,
+                "Sharpe": round(evo.sharpe_ratio, 2) if evo.sharpe_ratio else None,
+                "Perf 3M (%)": round(evo.perf_totale_pct, 2) if evo.perf_totale_pct else None,
+            })
+
+        if risk_rows:
+            df_risk = pd.DataFrame(risk_rows)
+            st.dataframe(df_risk, use_container_width=True, hide_index=True)
+
+            # Scatter volatilité vs performance
+            df_valid_risk = df_risk.dropna(subset=["Volatilité 3M (%)", "Perf 3M (%)"])
+            if len(df_valid_risk) >= 2:
+                fig_scatter = go.Figure(go.Scatter(
+                    x=df_valid_risk["Volatilité 3M (%)"],
+                    y=df_valid_risk["Perf 3M (%)"],
+                    mode="markers+text",
+                    text=df_valid_risk["Ticker"],
+                    textposition="top center",
+                    marker=dict(size=12, color="#2196F3"),
+                    hovertemplate="<b>%{text}</b><br>Volatilité: %{x:.1f}%<br>Perf 3M: %{y:+.1f}%<extra></extra>",
+                ))
+                fig_scatter.add_hline(y=0, line_dash="dash", line_color="#888")
+                fig_scatter.update_layout(
+                    height=350,
+                    xaxis_title="Volatilité annualisée (%)",
+                    yaxis_title="Performance 3M (%)",
+                    plot_bgcolor="white",
+                    paper_bgcolor="white",
+                    margin=dict(l=50, r=20, t=30, b=40),
+                )
+                st.plotly_chart(fig_scatter, use_container_width=True)
+        else:
+            st.info("Données d'évolution non disponibles pour la comparaison de risque.")
+
+    # ── Scores comparés ───────────────────────────────────────────────────────
+    with tab_scores:
+        score_rows = []
+        for ticker, result in valid.items():
+            score = result.get("score")
+            fd = result.get("fundamentals")
+            ind = result.get("ind")
+            if score is None:
+                continue
+            row = {
+                "Ticker": ticker,
+                "Score technique": score.score_total,
+                "Signal": f"{score.signal_emoji} {score.signal}",
+                "Confiance": score.confiance.capitalize(),
+                "RSI": round(ind.rsi, 1) if ind.rsi else None,
+                "ADX": round(ind.adx, 0) if ind.adx else None,
+                "Perf 1M (%)": round(ind.perf_1m, 1) if ind.perf_1m is not None else None,
+            }
+            if fd is not None and fd.donnees_disponibles:
+                row["Score fondamental"] = fd.score_fondamental
+                row["PER"] = round(fd.per, 1) if fd.per else None
+                row["Rdt Div. (%)"] = round(fd.rendement_dividende_pct, 1) if fd.rendement_dividende_pct else None
+            score_rows.append(row)
+
+        if score_rows:
+            df_scores = pd.DataFrame(score_rows).sort_values("Score technique", ascending=False)
+
+            def hl_signal(val):
+                if "ACHAT" in str(val):
+                    return "background-color: #E1F5EE; color: #0F6E56; font-weight: 600"
+                if "VENTE" in str(val):
+                    return "background-color: #FCEBEB; color: #A32D2D; font-weight: 600"
+                if "NEUTRE" in str(val):
+                    return "background-color: #FAEEDA; color: #BA7517"
+                return ""
+
+            styled_scores = df_scores.style.map(hl_signal, subset=["Signal"])
+            st.dataframe(styled_scores, use_container_width=True, hide_index=True)
+
+
+# ─── Export ───────────────────────────────────────────────────────────────────
+
+def render_export_buttons(results: dict) -> None:
+    """Affiche les boutons de téléchargement Excel et CSV."""
+    valid = {k: v for k, v in results.items() if v is not None}
+    if not valid:
+        return
+
+    st.subheader("📥 Export")
+    col_xl, col_csv, col_spacer = st.columns([2, 2, 4])
+
+    with col_xl:
+        try:
+            excel_bytes = generate_excel(valid, include_ohlcv=True, include_news=True)
+            st.download_button(
+                label="⬇️ Télécharger Excel",
+                data=excel_bytes,
+                file_name=f"brvm_screener_{_today_str()}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+            )
+        except Exception as e:
+            st.error(f"Erreur génération Excel : {e}")
+
+    with col_csv:
+        try:
+            csv_bytes = generate_csv(valid)
+            st.download_button(
+                label="⬇️ Télécharger CSV",
+                data=csv_bytes,
+                file_name=f"brvm_screener_{_today_str()}.csv",
+                mime="text/csv",
+                use_container_width=True,
+            )
+        except Exception as e:
+            st.error(f"Erreur génération CSV : {e}")
+
+
+def _today_str() -> str:
+    from datetime import date
+    return date.today().strftime("%Y%m%d")
 
 
 def score_to_ma_label(ma_signal: str) -> str:
@@ -613,11 +1050,15 @@ def main() -> None:
 - 📈 **Moyen terme** (1–6 mois) : critères équilibrés — paramètres standards (RSI 14, MA 20/50/200)
 - 🏦 **Long terme** (6 mois+) : MA Config×2, Tendance LT×2, Perf relative×2 — paramètres lents (RSI 21, MA 50/100/200)
 
-**Indicateurs calculés :**
-RSI, Stochastic, ADX, Moyennes Mobiles adaptatives, Golden/Death Cross, MACD, Bandes de Bollinger,
-Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chartiste
+**Nouveautés Phase 2 :**
+- 📅 Évolution 3M : performances glissantes, volatilité, drawdown, événements (Golden Cross, Breakout…)
+- 🏦 Fondamentaux : PER, dividende, capitalisation, position 52 semaines
+- 📊 Comparateur : performances normalisées, risque, scores croisés
+- 📥 Export Excel multi-onglets et CSV
 
-**Système de scoring :** critères pondérés selon l'horizon → Signal ACHAT / NEUTRE / VENTE
+**Indicateurs techniques :**
+RSI, Stochastic, ADX, Moyennes Mobiles, Golden/Death Cross, MACD, Bollinger,
+Volume relatif, Performance vs BRVMC, Supports/Résistances
         """)
         return
 
@@ -627,8 +1068,7 @@ Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chart
         st.warning("Aucun ticker valide saisi.")
         return
 
-    # Analyser les tickers en parallèle (ThreadPoolExecutor)
-    # max_workers = min(nb tickers, 5) pour ne pas surcharger les sources
+    # Analyser en parallèle
     results: dict = {}
     max_workers = min(len(tickers), 5)
 
@@ -646,7 +1086,7 @@ Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chart
                     e = result["error"]
                     etype = result.get("error_type", "")
                     if etype == "TickerNotFoundError":
-                        st.error(f"❌ **{ticker}** : ticker introuvable sur toutes les sources.\n\n{e}")
+                        st.error(f"❌ **{ticker}** : ticker introuvable.\n\n{e}")
                     elif etype == "InsufficientDataError":
                         st.warning(f"⚠️ **{ticker}** : données insuffisantes.\n\n{e}")
                     elif etype == "SourceStructureChangedError":
@@ -657,7 +1097,7 @@ Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chart
                 else:
                     results[ticker] = result
 
-    # Remettre dans l'ordre de sélection (as_completed ne préserve pas l'ordre)
+    # Remettre dans l'ordre de sélection
     results = {t: results.get(t) for t in tickers}
 
     valid_results = {k: v for k, v in results.items() if v is not None}
@@ -666,11 +1106,20 @@ Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chart
         st.error("Aucun ticker n'a pu être analysé.")
         return
 
-    # Tableau récapitulatif (si plusieurs tickers)
+    # Tableau récapitulatif (multi-tickers)
     if len(valid_results) > 1:
         st.subheader("📊 Tableau récapitulatif")
         render_recap_table(valid_results)
         st.divider()
+
+    # Comparateur (si plusieurs tickers)
+    if len(valid_results) > 1:
+        render_comparateur(valid_results)
+        st.divider()
+
+    # Export
+    render_export_buttons(valid_results)
+    st.divider()
 
     # Carte détaillée par ticker
     for ticker, result in valid_results.items():
