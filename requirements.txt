@@ -18,5 +18,8 @@ lxml
 # Graphiques
 plotly>=5.18,<6.0
 
+# Export Excel
+openpyxl>=3.1,<4.0
+
 # Utilitaires
 python-dateutil>=2.8,<3.0

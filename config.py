@@ -182,9 +182,10 @@ COUNTRY_SUFFIXES = [".ci", ".sn", ".tg", ".bf", ".bj", ".ml", ".ne", ""]
 # ─── Cache ─────────────────────────────────────────────────────────────────────
 
 CACHE_DIR = ".cache"
-CACHE_TTL_SECONDS = 3600       # 1 heure (OHLCV — valeur par défaut)
-NEWS_CACHE_TTL_SECONDS = 1800  # 30 minutes (actualités)
-MACRO_CACHE_TTL_SECONDS = 86400  # 24 heures (données macro)
+CACHE_TTL_SECONDS = 3600             # 1 heure  (OHLCV — valeur par défaut)
+NEWS_CACHE_TTL_SECONDS = 1800        # 30 min   (actualités)
+MACRO_CACHE_TTL_SECONDS = 86400      # 24 heures (fondamentaux, données macro)
+EVOLUTION_CACHE_TTL_SECONDS = 3600   # 1 heure  (calculs évolution)
 
 # ─── Rate limiting ─────────────────────────────────────────────────────────────
 
