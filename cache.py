@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 from typing import Optional, Any
 
-from config import CACHE_DIR, CACHE_TTL_SECONDS
+from config import CACHE_DIR, CACHE_TTL_SECONDS, NEWS_CACHE_TTL_SECONDS, MACRO_CACHE_TTL_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -44,8 +44,10 @@ class CacheManager:
                 entry = json.load(f)
 
             age = time.time() - entry.get("timestamp", 0)
-            if age > self.ttl:
-                logger.debug(f"Cache expiré pour la clé '{key}' ({age:.0f}s > {self.ttl}s)")
+            # Utilise le TTL stocké dans l'entrée (si présent) ou le TTL global
+            effective_ttl = entry.get("ttl", self.ttl)
+            if age > effective_ttl:
+                logger.debug(f"Cache expiré pour la clé '{key}' ({age:.0f}s > {effective_ttl}s)")
                 path.unlink(missing_ok=True)
                 return None
 
@@ -57,18 +59,28 @@ class CacheManager:
             path.unlink(missing_ok=True)
             return None
 
-    def set(self, key: str, data: Any) -> None:
-        """Enregistre une valeur dans le cache avec timestamp."""
+    def set(self, key: str, data: Any, ttl: Optional[int] = None) -> None:
+        """
+        Enregistre une valeur dans le cache avec timestamp.
+
+        Args:
+            key:  Clé de cache
+            data: Données à stocker
+            ttl:  TTL en secondes (prioritaire sur le TTL global du manager).
+                  Utiliser NEWS_CACHE_TTL_SECONDS pour les news,
+                  MACRO_CACHE_TTL_SECONDS pour les données macro.
+        """
         path = self._key_to_path(key)
         entry = {
             "key": key,
             "timestamp": time.time(),
+            "ttl": ttl if ttl is not None else self.ttl,  # TTL stocké avec l'entrée
             "data": data,
         }
         try:
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(entry, f, ensure_ascii=False, indent=2)
-            logger.debug(f"Cache écrit pour '{key}'")
+            logger.debug(f"Cache écrit pour '{key}' (TTL: {entry['ttl']}s)")
         except OSError as e:
             logger.warning(f"Impossible d'écrire le cache pour '{key}': {e}")
 
