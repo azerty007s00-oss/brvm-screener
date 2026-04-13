@@ -908,7 +908,7 @@ def render_comparateur(results: dict) -> None:
                 "Ticker": ticker,
                 "Volatilité 3M (%)": round(evo.volatilite_63j, 2) if evo.volatilite_63j else None,
                 "Max Drawdown (%)": round(evo.max_drawdown_pct, 2) if evo.max_drawdown_pct else None,
-                "Drawdown actuel (%)": round(evo.current_drawdown_pct, 2) if evo.current_drawdown_pct else None,
+                "Drawdown actuel (%)": round(evo.drawdown_actuel_pct, 2) if evo.drawdown_actuel_pct else None,
                 "Sharpe": round(evo.sharpe_ratio, 2) if evo.sharpe_ratio else None,
                 "Perf 3M (%)": round(evo.perf_totale_pct, 2) if evo.perf_totale_pct else None,
             })
