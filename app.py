@@ -598,13 +598,12 @@ def _add_event_annotations(fig, evo, row: int = 1) -> None:
     for ev in evo.evenements:
         color = event_colors.get(ev.type, "#888")
         symbol = event_symbols.get(ev.type, "●")
+        x_str = ev.date.strftime("%Y-%m-%d") if hasattr(ev.date, "strftime") else str(ev.date)
         fig.add_vline(
-            x=ev.date,
+            x=x_str,
             line_dash="dot",
             line_color=color,
             line_width=1,
-            annotation_text=symbol,
-            annotation_position="top",
             row=row, col=1,
         )
 
