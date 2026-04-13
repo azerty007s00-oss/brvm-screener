@@ -455,11 +455,11 @@ def _render_evolution(evo) -> None:
         st.dataframe(styled, use_container_width=True, hide_index=True)
 
     # Graphique des rendements journaliers (heatmap simplifiée)
-    if evo.heatmap_data:
+    if evo.returns_daily:
         st.markdown("**Rendements journaliers**")
-        # Transformer la liste plate en bar chart
-        dates = [d["date"] for d in evo.heatmap_data[-63:]]
-        returns = [d["return_pct"] for d in evo.heatmap_data[-63:]]
+        daily = evo.returns_daily[-63:]
+        dates = [d["date"] for d in daily]
+        returns = [d["return_pct"] for d in daily]
         colors = ["#0F6E56" if r >= 0 else "#A32D2D" for r in returns]
 
         fig_bar = go.Figure(go.Bar(
