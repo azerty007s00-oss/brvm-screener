@@ -23,6 +23,7 @@ from scraper import get_ohlcv, get_news, TickerNotFoundError, InsufficientDataEr
 from fundamentals import get_fundamentals, FundamentalData
 from exports import export_to_excel, export_to_csv
 from utils import get_company_name, format_ticker_display, format_fcfa, format_pct, format_variation
+from auth import check_auth, logout_button
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
@@ -58,9 +59,16 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# ─── Authentification ────────────────────────────────────────────────────────
+
+if not check_auth():
+    st.stop()
+
+
 # ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 with st.sidebar:
+    logout_button()
     st.title("📈 BRVM Screener")
     st.caption("Investment Pioneers")
     st.divider()
