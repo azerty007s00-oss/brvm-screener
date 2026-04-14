@@ -12,6 +12,7 @@ import logging
 import re
 from typing import Optional
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 import pandas as pd
@@ -401,6 +402,41 @@ def _parse_chartdata_json(data) -> Optional[pd.DataFrame]:
         return None
 
 
+# ─── Fallback parallèle ──────────────────────────────────────────────────────
+
+def _parallel_fallback(sika_id: str, ticker: str, days: int) -> list[tuple[str, Optional[pd.DataFrame]]]:
+    """
+    Lance les sources de fallback en parallèle (JSON SikaFinance + RichBourse).
+
+    Returns:
+        Liste de (nom_source, DataFrame_ou_None) triée par quantité de données
+    """
+    results = []
+
+    def _try_json():
+        try:
+            return ("SikaFinance JSON", _fetch_sika_chartdata(sika_id, days))
+        except Exception as e:
+            return ("SikaFinance JSON", None)
+
+    def _try_richbourse():
+        try:
+            return ("RichBourse", richbourse.fetch_ohlcv(sika_id, days))
+        except Exception as e:
+            return ("RichBourse", None)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(_try_json), executor.submit(_try_richbourse)]
+        for future in as_completed(futures):
+            source_name, df = future.result()
+            if df is not None:
+                results.append((source_name, df))
+
+    # Trier par quantité de données (le plus de jours en premier)
+    results.sort(key=lambda x: len(x[1]) if x[1] is not None else 0, reverse=True)
+    return results
+
+
 # ─── Point d'entrée principal ─────────────────────────────────────────────────
 
 def get_ohlcv(ticker: str, days: int = 365) -> pd.DataFrame:
@@ -448,25 +484,15 @@ def get_ohlcv(ticker: str, days: int = 365) -> pd.DataFrame:
     except Exception as e:
         errors.append(f"SikaFinance HTML: {e}")
 
-    # 4. Fallback : JSON chartdata SikaFinance
+    # 4. Fallback parallèle : JSON SikaFinance + RichBourse simultanément
     if df is None or len(df) < MIN_DATA_POINTS:
-        try:
-            df_json = _fetch_sika_chartdata(sika_id, days)
-            if df_json is not None and (df is None or len(df_json) > len(df)):
-                df = df_json
-                logger.info(f"[SikaFinance JSON] {len(df)} jours pour {ticker}")
-        except Exception as e:
-            errors.append(f"SikaFinance JSON: {e}")
-
-    # 5. Fallback : RichBourse.com
-    if df is None or len(df) < MIN_DATA_POINTS:
-        try:
-            df_rb = richbourse.fetch_ohlcv(sika_id, days)
-            if df_rb is not None and (df is None or len(df_rb) > len(df)):
-                df = df_rb
-                logger.info(f"[RichBourse] {len(df)} jours pour {ticker}")
-        except Exception as e:
-            errors.append(f"RichBourse: {e}")
+        fallback_results = _parallel_fallback(sika_id, ticker, days)
+        for source_name, df_fallback in fallback_results:
+            if df_fallback is not None and (df is None or len(df_fallback) > len(df)):
+                df = df_fallback
+                logger.info(f"[{source_name}] {len(df)} jours pour {ticker}")
+                if len(df) >= MIN_DATA_POINTS:
+                    break
 
     # Validation finale
     if df is None or len(df) == 0:

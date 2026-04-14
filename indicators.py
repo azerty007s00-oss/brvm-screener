@@ -194,9 +194,30 @@ class TechnicalIndicators:
     rsi_divergence: str = "aucune"       # aucune | haussiere | baissiere | haussiere_forte | baissiere_forte
     rsi_divergence_detail: str = ""      # Explication textuelle
 
+    # Divergence MACD
+    macd_divergence: str = "aucune"      # aucune | haussiere | baissiere
+    macd_divergence_detail: str = ""
+
     # Configuration chartiste
     config_chartiste: str = "indéterminé"
     # canal_ascendant | canal_descendant | range_lateral | squeeze_bollinger | indéterminé
+
+    # ── Analyse 3 mois ──
+    volatilite_3m: Optional[float] = None   # écart-type annualisé des rendements sur 3M
+    drawdown_max_3m: Optional[float] = None # drawdown max sur 3 mois (%)
+    drawdown_current: Optional[float] = None # drawdown courant depuis le plus haut 3M
+    perf_vs_index_3m: Optional[float] = None # alpha vs BRVMC sur 3 mois
+
+    # ── Détection d'événements techniques ──
+    events: list = field(default_factory=list)
+    # Liste de dicts : {"type": str, "date": str, "description": str, "importance": str}
+    # Types : golden_cross, death_cross, breakout_up, breakout_down,
+    #         volume_spike, rsi_divergence, macd_divergence, bollinger_breakout
+
+    # ── Plus haut / plus bas ──
+    high_52w: Optional[float] = None
+    low_52w: Optional[float] = None
+    pct_from_52w_high: Optional[float] = None  # % par rapport au plus haut 52 semaines
 
     # Séries temporelles pour les graphiques
     series: dict = field(default_factory=dict)
@@ -437,12 +458,48 @@ def compute_indicators(
         if index_perf_1m is not None and result.perf_1m is not None:
             result.perf_vs_index_1m = round(result.perf_1m - index_perf_1m, 2)
 
+    if df_index is not None and len(df_index) >= 63:
+        index_perf_3m = _compute_perf(df_index["close"], 63)
+        if index_perf_3m is not None and result.perf_3m is not None:
+            result.perf_vs_index_3m = round(result.perf_3m - index_perf_3m, 2)
+
+    # ── Analyse 3 mois (volatilité, drawdown) ────────────────────────────────
+    if n >= 63:
+        result.volatilite_3m = _compute_volatility(close, window=63)
+        result.drawdown_max_3m, result.drawdown_current = _compute_drawdown(close, window=63)
+
+    # ── Plus haut / plus bas 52 semaines ─────────────────────────────────────
+    if n >= 21:
+        lookback_52w = min(n, 252)
+        result.high_52w = round(float(high.iloc[-lookback_52w:].max()), 2)
+        result.low_52w = round(float(low.iloc[-lookback_52w:].min()), 2)
+        if result.high_52w > 0:
+            result.pct_from_52w_high = round(
+                (result.cours_actuel / result.high_52w - 1) * 100, 2
+            )
+
+    # ── Divergence MACD ──────────────────────────────────────────────────────
+    if "macd_hist" in result.series and len(result.series["macd_hist"]) >= 20:
+        macd_hist_s = pd.Series(result.series["macd_hist"])
+        result.macd_divergence, result.macd_divergence_detail = _detect_macd_divergence(
+            close, macd_hist_s
+        )
+
+    # ── Détection d'événements techniques ────────────────────────────────────
+    result.events = _detect_events(df, result, close, high, low, volume)
+
     # ── Séries pour graphiques ────────────────────────────────────────────────
     result.series["close"] = close.round(2).to_dict()
     result.series["open"] = df["open"].round(2).to_dict()
     result.series["high"] = high.round(2).to_dict()
     result.series["low"] = low.round(2).to_dict()
     result.series["volume"] = volume.round(0).to_dict()
+
+    # Séries ADX (+DI, -DI) pour graphique
+    if n >= ADX_PERIOD * 2:
+        adx_s, plus_di_s, minus_di_s = _calc_adx(high, low, close, length=ADX_PERIOD)
+        result.series["plus_di"] = plus_di_s.dropna().round(2).to_dict()
+        result.series["minus_di"] = minus_di_s.dropna().round(2).to_dict()
 
     return result
 
@@ -610,3 +667,249 @@ def _detect_chart_config(df: pd.DataFrame, bb_squeeze: bool) -> str:
             return "canal_descendant"
 
     return "indéterminé"
+
+
+# ─── Analyse 3 mois ─────────────────────────────────────────────────────────
+
+def _compute_volatility(close: pd.Series, window: int = 63) -> Optional[float]:
+    """
+    Calcule la volatilité annualisée (écart-type des rendements quotidiens × √252).
+
+    Args:
+        close:  Série de prix de clôture
+        window: Nombre de séances (63 ≈ 3 mois)
+
+    Returns:
+        Volatilité annualisée en %
+    """
+    if len(close) < window:
+        return None
+    returns = close.iloc[-window:].pct_change().dropna()
+    if len(returns) < 10:
+        return None
+    vol = float(returns.std() * np.sqrt(252) * 100)
+    return round(vol, 2)
+
+
+def _compute_drawdown(close: pd.Series, window: int = 63) -> tuple[Optional[float], Optional[float]]:
+    """
+    Calcule le drawdown max et le drawdown courant sur une fenêtre glissante.
+
+    Returns:
+        (drawdown_max_pct, drawdown_current_pct) — valeurs négatives
+    """
+    if len(close) < window:
+        return None, None
+    recent = close.iloc[-window:]
+    cummax = recent.cummax()
+    drawdown = (recent / cummax - 1) * 100
+    dd_max = round(float(drawdown.min()), 2)
+    dd_current = round(float(drawdown.iloc[-1]), 2)
+    return dd_max, dd_current
+
+
+# ─── Divergence MACD ─────────────────────────────────────────────────────────
+
+def _detect_macd_divergence(
+    close: pd.Series, macd_hist: pd.Series, window: int = 30
+) -> tuple[str, str]:
+    """
+    Détecte les divergences entre le prix et l'histogramme MACD.
+
+    Divergence haussière : prix fait des bas décroissants, MACD hist fait des bas croissants
+    Divergence baissière : prix fait des hauts croissants, MACD hist fait des hauts décroissants
+    """
+    if len(close) < window or len(macd_hist) < window:
+        return "aucune", ""
+
+    # Aligner les deux séries sur les mêmes dates
+    common_idx = close.index.intersection(macd_hist.index)
+    if len(common_idx) < window:
+        return "aucune", ""
+
+    c = close.loc[common_idx].iloc[-window:].values
+    m = macd_hist.loc[common_idx].iloc[-window:].values
+
+    # Trouver les creux (zéro-crossings négatifs de l'histogramme)
+    troughs = []
+    for i in range(1, len(m) - 1):
+        if m[i] < m[i-1] and m[i] < m[i+1] and m[i] < 0:
+            troughs.append((i, c[i], m[i]))
+
+    # Trouver les pics (zéro-crossings positifs)
+    peaks = []
+    for i in range(1, len(m) - 1):
+        if m[i] > m[i-1] and m[i] > m[i+1] and m[i] > 0:
+            peaks.append((i, c[i], m[i]))
+
+    # Divergence haussière : prix descend, MACD hist remonte
+    if len(troughs) >= 2:
+        prev, last = troughs[-2], troughs[-1]
+        if last[1] < prev[1] and last[2] > prev[2]:
+            return "haussiere", (
+                f"Prix en baisse mais histogramme MACD en hausse "
+                f"→ divergence haussière MACD, essoufflement vendeur"
+            )
+
+    # Divergence baissière : prix monte, MACD hist descend
+    if len(peaks) >= 2:
+        prev, last = peaks[-2], peaks[-1]
+        if last[1] > prev[1] and last[2] < prev[2]:
+            return "baissiere", (
+                f"Prix en hausse mais histogramme MACD en baisse "
+                f"→ divergence baissière MACD, essoufflement acheteur"
+            )
+
+    return "aucune", ""
+
+
+# ─── Détection d'événements techniques ───────────────────────────────────────
+
+def _detect_events(
+    df: pd.DataFrame,
+    ind: 'TechnicalIndicators',
+    close: pd.Series,
+    high: pd.Series,
+    low: pd.Series,
+    volume: pd.Series,
+) -> list[dict]:
+    """
+    Détecte les événements techniques récents (20 dernières séances).
+
+    Types d'événements :
+    - golden_cross / death_cross : croisement MA courte/longue
+    - breakout_up / breakout_down : cassure de résistance/support
+    - volume_spike : volume > 2× la moyenne 20j
+    - bollinger_breakout : sortie des bandes de Bollinger
+    - rsi_extreme : RSI < 20 ou > 80
+    - macd_crossover : croisement MACD/Signal
+    """
+    events = []
+    n = len(df)
+    lookback = min(20, n - 1)
+
+    # ── Golden Cross / Death Cross dynamique ──
+    if "ma20" in ind.series and "ma50" in ind.series:
+        ma20_s = pd.Series(ind.series["ma20"])
+        ma50_s = pd.Series(ind.series["ma50"])
+        common = ma20_s.index.intersection(ma50_s.index)
+        if len(common) >= 5:
+            ma20_c = ma20_s.loc[common]
+            ma50_c = ma50_s.loc[common]
+            diff = ma20_c - ma50_c
+            for i in range(max(1, len(diff) - lookback), len(diff)):
+                idx = diff.index[i]
+                prev_idx = diff.index[i - 1]
+                # Golden cross : MA20 passe au-dessus de MA50
+                if diff.iloc[i] > 0 and diff.iloc[i - 1] <= 0:
+                    events.append({
+                        "type": "golden_cross",
+                        "date": str(idx)[:10],
+                        "description": "Golden Cross — MA courte croise au-dessus de la MA longue",
+                        "importance": "forte",
+                    })
+                # Death cross : MA20 passe en-dessous de MA50
+                elif diff.iloc[i] < 0 and diff.iloc[i - 1] >= 0:
+                    events.append({
+                        "type": "death_cross",
+                        "date": str(idx)[:10],
+                        "description": "Death Cross — MA courte croise en-dessous de la MA longue",
+                        "importance": "forte",
+                    })
+
+    # ── Volume Spike ──
+    if volume.sum() > 0 and n > 20:
+        vol_mean = volume.iloc[-21:-1].mean()
+        if vol_mean > 0:
+            for i in range(max(0, n - lookback), n):
+                if volume.iloc[i] > vol_mean * 2.5:
+                    date_str = str(df.index[i])[:10]
+                    ratio = volume.iloc[i] / vol_mean
+                    events.append({
+                        "type": "volume_spike",
+                        "date": date_str,
+                        "description": f"Volume spike ×{ratio:.1f} vs moyenne 20j",
+                        "importance": "modérée" if ratio < 4 else "forte",
+                    })
+
+    # ── Breakout (cassure support/résistance Bollinger) ──
+    if "bb_upper" in ind.series and "bb_lower" in ind.series:
+        bb_up = pd.Series(ind.series["bb_upper"])
+        bb_lo = pd.Series(ind.series["bb_lower"])
+        for i in range(max(0, n - lookback), n):
+            date = df.index[i]
+            date_str = str(date)[:10]
+            if date in bb_up.index and close.iloc[i] > bb_up.loc[date]:
+                events.append({
+                    "type": "breakout_up",
+                    "date": date_str,
+                    "description": "Cassure haussière de la bande Bollinger haute",
+                    "importance": "modérée",
+                })
+            elif date in bb_lo.index and close.iloc[i] < bb_lo.loc[date]:
+                events.append({
+                    "type": "breakout_down",
+                    "date": date_str,
+                    "description": "Cassure baissière de la bande Bollinger basse",
+                    "importance": "modérée",
+                })
+
+    # ── MACD Crossover ──
+    if "macd" in ind.series and "macd_signal" in ind.series:
+        macd_s = pd.Series(ind.series["macd"])
+        sig_s = pd.Series(ind.series["macd_signal"])
+        common = macd_s.index.intersection(sig_s.index)
+        if len(common) >= 5:
+            m = macd_s.loc[common]
+            s = sig_s.loc[common]
+            diff = m - s
+            for i in range(max(1, len(diff) - lookback), len(diff)):
+                idx = diff.index[i]
+                if diff.iloc[i] > 0 and diff.iloc[i - 1] <= 0:
+                    events.append({
+                        "type": "macd_crossover",
+                        "date": str(idx)[:10],
+                        "description": "MACD croise au-dessus du signal — momentum haussier",
+                        "importance": "modérée",
+                    })
+                elif diff.iloc[i] < 0 and diff.iloc[i - 1] >= 0:
+                    events.append({
+                        "type": "macd_crossover",
+                        "date": str(idx)[:10],
+                        "description": "MACD croise en-dessous du signal — momentum baissier",
+                        "importance": "modérée",
+                    })
+
+    # ── RSI Extreme ──
+    if "rsi" in ind.series:
+        rsi_s = pd.Series(ind.series["rsi"])
+        for i in range(max(0, len(rsi_s) - lookback), len(rsi_s)):
+            val = rsi_s.iloc[i]
+            if val < 20:
+                events.append({
+                    "type": "rsi_extreme",
+                    "date": str(rsi_s.index[i])[:10],
+                    "description": f"RSI extrêmement bas ({val:.0f}) — survente excessive",
+                    "importance": "forte",
+                })
+            elif val > 80:
+                events.append({
+                    "type": "rsi_extreme",
+                    "date": str(rsi_s.index[i])[:10],
+                    "description": f"RSI extrêmement haut ({val:.0f}) — surachat excessif",
+                    "importance": "forte",
+                })
+
+    # Trier par date décroissante et dédupliquer
+    events.sort(key=lambda e: e["date"], reverse=True)
+
+    # Dédupliquer par (type, date)
+    seen = set()
+    unique = []
+    for e in events:
+        key = (e["type"], e["date"])
+        if key not in seen:
+            seen.add(key)
+            unique.append(e)
+
+    return unique[:20]  # max 20 événements
