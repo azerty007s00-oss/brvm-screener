@@ -232,7 +232,23 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
                 points=0, interpretation="Historique insuffisant"
             ))
 
-    # ── Critère 6 : Stochastic Oscillator ─────────────────────────────────────
+    # ── Critère 6 : Divergence MACD ─────────────────────────────────────────
+    w_macd_div = w.get("macd", 1)
+    if w_macd_div > 0 and hasattr(ind, "macd_divergence") and ind.macd_divergence != "aucune":
+        if ind.macd_divergence == "haussiere":
+            criteres.append(CritereScore(
+                nom="Divergence MACD", valeur="Div. haussière",
+                points=+1 * w_macd_div,
+                interpretation=ind.macd_divergence_detail or "Divergence haussière MACD — essoufflement vendeur"
+            ))
+        elif ind.macd_divergence == "baissiere":
+            criteres.append(CritereScore(
+                nom="Divergence MACD", valeur="Div. baissière",
+                points=-1 * w_macd_div,
+                interpretation=ind.macd_divergence_detail or "Divergence baissière MACD — essoufflement acheteur"
+            ))
+
+    # ── Critère 7 : Stochastic Oscillator ─────────────────────────────────────
     w_stoch = w.get("stochastic", 1)
     if w_stoch > 0:
         if ind.stoch_k is not None:

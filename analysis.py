@@ -34,6 +34,8 @@ class AnalyseComplete:
     section_stochastic: str = ""
     section_adx: str = ""
     section_divergence: str = ""
+    section_3mois: str = ""
+    section_events: str = ""
     section_actualites: str = ""
 
     # Actualités scrappées
@@ -97,6 +99,12 @@ def build_analyse(
     # ── Section 8 : Divergence RSI ─────────────────────────────────────────
     analyse.section_divergence = _build_divergence(ind)
 
+    # ── Section 9 : Analyse 3 mois ──────────────────────────────────────────
+    analyse.section_3mois = _build_3mois(ind)
+
+    # ── Section 10 : Événements techniques ───────────────────────────────────
+    analyse.section_events = _build_events(ind)
+
     # ── Alertes ───────────────────────────────────────────────────────────────
     analyse.alertes = _build_alertes(ind, score)
 
@@ -113,6 +121,7 @@ def build_analyse(
         f"🔄 STOCHASTIC : {analyse.section_stochastic}",
         f"💪 ADX        : {analyse.section_adx}",
         f"🔀 DIVERGENCE : {analyse.section_divergence}",
+        f"📅 3 MOIS     : {analyse.section_3mois}",
     ])
 
     return analyse
@@ -325,6 +334,21 @@ def _build_alertes(ind: TechnicalIndicators, score: ScoreResult) -> list[str]:
         direction = "surperformance" if ind.perf_vs_index_1m > 0 else "sous-performance"
         alertes.append(f"📈 {direction.capitalize()} importante vs BRVMC ({ind.perf_vs_index_1m:+.1f}% sur 1M)")
 
+    # Divergence MACD
+    if hasattr(ind, "macd_divergence") and ind.macd_divergence != "aucune":
+        emoji = "📈" if "haussiere" in ind.macd_divergence else "📉"
+        alertes.append(f"{emoji} {ind.macd_divergence_detail}")
+
+    # Drawdown sévère
+    if hasattr(ind, "drawdown_current") and ind.drawdown_current is not None and ind.drawdown_current < -15:
+        alertes.append(f"📉 Drawdown important ({ind.drawdown_current:.1f}%) — prix bien en-dessous du plus haut récent")
+
+    # Événements techniques forts récents
+    events = getattr(ind, "events", [])
+    strong_events = [e for e in events if e.get("importance") == "forte"]
+    for e in strong_events[:2]:
+        alertes.append(f"🔔 [{e['date']}] {e['description']}")
+
     return alertes
 
 
@@ -427,3 +451,64 @@ def _build_synthese_courte(ind: TechnicalIndicators, score: ScoreResult) -> str:
         parts.append(vol_str)
 
     return " | ".join(parts)
+
+
+def _build_3mois(ind: TechnicalIndicators) -> str:
+    """Décrit l'analyse sur 3 mois : volatilité, drawdown, performance relative."""
+    parts = []
+
+    if ind.perf_3m is not None:
+        parts.append(f"Performance 3M : {ind.perf_3m:+.1f}%")
+
+    if ind.perf_vs_index_3m is not None:
+        alpha = ind.perf_vs_index_3m
+        label = "surperformance" if alpha > 0 else "sous-performance"
+        parts.append(f"Alpha vs BRVMC : {alpha:+.1f}% ({label})")
+
+    if ind.volatilite_3m is not None:
+        vol_level = (
+            "très volatile" if ind.volatilite_3m > 40
+            else "volatile" if ind.volatilite_3m > 25
+            else "modérée" if ind.volatilite_3m > 15
+            else "faible"
+        )
+        parts.append(f"Volatilité : {ind.volatilite_3m:.1f}% ann. ({vol_level})")
+
+    if ind.drawdown_max_3m is not None:
+        parts.append(f"Drawdown max 3M : {ind.drawdown_max_3m:.1f}%")
+
+    if ind.drawdown_current is not None and ind.drawdown_current < -1:
+        parts.append(f"Drawdown courant : {ind.drawdown_current:.1f}%")
+
+    if ind.pct_from_52w_high is not None:
+        if ind.pct_from_52w_high > -2:
+            parts.append(f"Proche du plus haut 52 semaines ({ind.high_52w:,.0f} FCFA)")
+        elif ind.pct_from_52w_high < -20:
+            parts.append(f"À {ind.pct_from_52w_high:.0f}% du plus haut 52S ({ind.high_52w:,.0f} FCFA)")
+
+    if not parts:
+        return "Données insuffisantes pour l'analyse 3 mois"
+
+    return " | ".join(parts)
+
+
+def _build_events(ind: TechnicalIndicators) -> str:
+    """Décrit les événements techniques détectés récemment."""
+    events = getattr(ind, "events", [])
+    if not events:
+        return "Aucun événement technique notable détecté"
+
+    strong = [e for e in events if e.get("importance") == "forte"]
+    moderate = [e for e in events if e.get("importance") == "modérée"]
+
+    parts = []
+    if strong:
+        parts.append(f"{len(strong)} événement(s) fort(s)")
+        for e in strong[:3]:
+            parts.append(f"  [{e['date']}] {e['description']}")
+    if moderate:
+        parts.append(f"{len(moderate)} événement(s) modéré(s)")
+        for e in moderate[:2]:
+            parts.append(f"  [{e['date']}] {e['description']}")
+
+    return " — ".join(parts) if len(parts) <= 3 else "\n".join(parts)
