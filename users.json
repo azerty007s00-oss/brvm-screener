@@ -19,7 +19,9 @@
     "name": "Tiélina SORO",
     "email": "AZERTY007S00@gmail.com",
     "reason": "JE SUIS LE BOSS.",
-    "status": "pending",
-    "requested_at": "2026-04-14T22:04:39.787087"
+    "status": "approved",
+    "requested_at": "2026-04-14T22:04:39.787087",
+    "password_hash": "e0928eadc5e7873594e1008ec05d303455bd59070a80e6e3aa6955299ca9a7c6",
+    "approved_at": "2026-04-14T22:06:06.223935"
   }
 }
