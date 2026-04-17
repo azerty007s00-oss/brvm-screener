@@ -418,33 +418,57 @@ def render_signal_card(result: dict) -> None:
                             unsafe_allow_html=True,
                         )
 
-    # ── Actualités ────────────────────────────────────────────────────────────
+    # ── Actualités ────────────────────────────────────────────────────────────────────────────
     news = result.get("news", [])
-    with st.expander(f"📰 Actualités ({len(news)} article{'s' if len(news) != 1 else ''})", expanded=bool(news)):
-        if news:
-            for article in news:
+    ticker_for_news = score.ticker
+    SOURCE_COLORS = {
+        "Sika Finance": "#1B5E20", "Financial Afrik": "#0D47A1",
+        "Agence Ecofin": "#4A148C", "BRVM Officielle": "#BF360C",
+        "La Réussite Financière": "#006064", "Abidjan.net": "#827717",
+        "Jeune Afrique": "#1A237E",
+    }
+    def _source_badge(source):
+        color = SOURCE_COLORS.get(source, "#555")
+        return f"<span style='background:{color};color:white;font-size:0.7rem;padding:1px 7px;border-radius:10px;font-weight:600'>{source}</span>"
+    expander_label = f"📰 Actualités ({len(news)} article{'s' if len(news) != 1 else ''})" if news else "📰 Actualités"
+    with st.expander(expander_label, expanded=bool(news)):
+        if not st.session_state.get("news_enabled", True):
+            st.info("Actualités désactivées. Réactiver via le toggle 📰 dans la sidebar.")
+        elif news:
+            if any(a.get("date") for a in news):
+                st.caption("📅 Articles des 3 derniers mois, triés du plus récent")
+            for i, article in enumerate(news):
                 titre = article.get("titre", "")
                 url = article.get("url", "")
                 date = article.get("date", "")
                 resume = article.get("resume", "")
                 source = article.get("source", "")
-
                 if url:
-                    st.markdown(f"**[{titre}]({url})**")
+                    st.markdown(f"<a href='{url}' target='_blank' style='font-weight:600;font-size:0.95rem;text-decoration:none;color:inherit'>🔗 {titre}</a>", unsafe_allow_html=True)
                 else:
                     st.markdown(f"**{titre}**")
                 meta_parts = []
                 if date:
-                    meta_parts.append(date)
+                    meta_parts.append(f"<span style='color:#888;font-size:0.8rem'>📅 {date}</span>")
                 if source:
-                    meta_parts.append(source)
+                    meta_parts.append(_source_badge(source))
                 if meta_parts:
-                    st.caption(" — ".join(meta_parts))
+                    st.markdown(" &nbsp; ".join(meta_parts), unsafe_allow_html=True)
                 if resume:
-                    st.write(resume)
-                st.markdown("---")
+                    st.caption(resume)
+                if i < len(news) - 1:
+                    st.markdown("---")
+            try:
+                from news_sources import TICKER_IR_URLS
+                ir_url = TICKER_IR_URLS.get(ticker_for_news)
+                if ir_url:
+                    st.markdown(f"<div style='margin-top:10px;font-size:0.8rem'>📋 <a href='{ir_url}' target='_blank'>Relations Investisseurs — page officielle</a></div>", unsafe_allow_html=True)
+            except ImportError:
+                pass
         else:
             st.info("Aucune actualité récente trouvée pour ce titre.")
+            sika_url = f"https://www.sikafinance.com/marches/cotation/{ticker_for_news.lower()}"
+            st.markdown(f"[🔍 Voir la fiche {ticker_for_news} sur Sika Finance]({sika_url})")
 
     # ── Graphiques ────────────────────────────────────────────────────────────
     with st.expander("📊 Graphiques", expanded=True):
