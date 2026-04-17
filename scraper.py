@@ -555,6 +555,9 @@ def get_news(ticker: str, max_items: int = 5) -> list[dict]:
     Returns:
         Liste de dicts avec clés : titre, date, url, source, resume
     """
+    from config import NEWS_ENABLED
+    if not NEWS_ENABLED:
+        return []
     ticker = ticker.upper().strip()
     cache_key = f"news_{ticker}"
 
