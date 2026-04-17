@@ -20,6 +20,8 @@ from urllib3.util.retry import Retry
 
 from config import (
     HTTP_HEADERS,
+    NEWS_MAX_AGE_DAYS,
+    NEWS_MAX_ITEMS_DEFAULT,
     REQUEST_DELAY_SECONDS,
     REQUEST_TIMEOUT,
     RSS_FEEDS,
@@ -28,6 +30,12 @@ from config import (
 )
 
 logger = logging.getLogger(__name__)
+
+try:
+    from news_cleaner import process_articles
+    _CLEANER_AVAILABLE = True
+except ImportError:
+    _CLEANER_AVAILABLE = False
 
 
 # ─── Mots-clés par ticker ─────────────────────────────────────────────────────
@@ -82,7 +90,7 @@ _session = _build_session()
 
 # ─── Point d'entrée ───────────────────────────────────────────────────────────
 
-def get_news_for_ticker(ticker: str, max_items: int = 5) -> list[dict]:
+def get_news_for_ticker(ticker: str, max_items: int = None) -> list[dict]:
     """
     Agrège les actualités depuis plusieurs sources pour un ticker BRVM.
 
@@ -97,19 +105,32 @@ def get_news_for_ticker(ticker: str, max_items: int = 5) -> list[dict]:
     Returns:
         Liste de dicts {titre, date, url, source, resume}
     """
+    if max_items is None:
+        try:
+            from config import NEWS_MAX_ITEMS_DEFAULT
+            max_items = NEWS_MAX_ITEMS_DEFAULT
+        except ImportError:
+            max_items = 10
     ticker = ticker.upper().strip()
     keywords = _get_keywords(ticker)
     news: list[dict] = []
 
     # 1. Flux RSS (plus rapide, plus propre)
     for feed_url in RSS_FEEDS:
-        if len(news) >= max_items:
+        if len(news) >= max_items * 3:
             break
         try:
-            items = _fetch_rss(feed_url, keywords, max_items=max_items * 2)
+            items = _fetch_rss(feed_url, keywords, max_items=max_items * 3)
             news.extend(items)
         except Exception as e:
             logger.debug(f"[RSS] Flux {feed_url} → {e}")
+
+    # 1b. Scraping BRVM officielle
+    try:
+        items = _scrape_brvm_org(ticker, keywords, max_items)
+        news.extend(items)
+    except Exception as e:
+        logger.debug(f"[RSS] BRVM.org scraping → {e}")
 
     # 2. Fallback : page actualités Sika Finance
     if len(news) < 2:
@@ -311,21 +332,32 @@ def _matches_keywords(text: str, keywords: list[str]) -> bool:
 
 
 def _source_label(url: str) -> str:
-    """Extrait un label lisible depuis une URL de flux RSS."""
-    if "sikafinance" in url:
-        return "Sika Finance"
-    if "lereussitefinanciere" in url:
-        return "La Réussite Financière"
-    if "abidjan.net" in url:
-        return "Abidjan.net"
-    if "apanews" in url:
-        return "APA News"
-    if "reuters" in url:
-        return "Reuters Africa"
-    # Fallback : domaine extrait de l'URL
+    try:
+        from news_sources import source_label_from_url
+        label = source_label_from_url(url)
+        if label and not label.startswith("http"):
+            return label
+    except ImportError:
+        pass
+    url_lower = url.lower()
+    LABELS = {
+        "sikafinance": "Sika Finance",
+        "lereussitefinanciere": "La Réussite Financière",
+        "abidjan.net": "Abidjan.net",
+        "apanews": "APA News",
+        "reuters": "Reuters Africa",
+        "financialafrik": "Financial Afrik",
+        "agenceecofin": "Agence Ecofin",
+        "jeuneafrique": "Jeune Afrique",
+        "invest.ci": "Invest.ci",
+        "brvm.org": "BRVM Officielle",
+        "richbourse": "Richbourse",
+    }
+    for key, label in LABELS.items():
+        if key in url_lower:
+            return label
     match = re.search(r"https?://(?:www\.)?([^/]+)", url)
     return match.group(1) if match else url
-
 
 def _clean_date(date_str: str) -> str:
     """Normalise une chaîne de date en format lisible court."""
