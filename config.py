@@ -4,6 +4,8 @@ config.py — Constantes et configuration du BRVM Screener
 
 # ─── Sources de données ────────────────────────────────────────────────────────
 
+NEWS_ENABLED = True
+
 SIKA_BASE_URL = "https://www.sikafinance.com"
 
 # Page historiques HTML (source la plus fiable)
@@ -28,8 +30,13 @@ RICHBOURSE_BASE_URL = "https://www.richbourse.com"
 RSS_FEEDS: list[str] = [
     "https://www.sikafinance.com/rss/actualites",
     "https://www.sikafinance.com/feed",
+    "https://www.financialafrik.com/feed/",
+    "https://www.agenceecofin.com/feed",
     "https://lereussitefinanciere.com/feed/",
+    "https://www.invest.ci/feed/",
     "https://www.abidjan.net/services/rss/economie.asp",
+    "https://apanews.net/feed/",
+    "https://www.jeuneafrique.com/feed/",
 ]
 
 # ─── Mapping Ticker → ID Sika Finance ─────────────────────────────────────────
@@ -184,6 +191,8 @@ COUNTRY_SUFFIXES = [".ci", ".sn", ".tg", ".bf", ".bj", ".ml", ".ne", ""]
 CACHE_DIR = ".cache"
 CACHE_TTL_SECONDS = 3600       # 1 heure (OHLCV — valeur par défaut)
 NEWS_CACHE_TTL_SECONDS = 1800  # 30 minutes (actualités)
+NEWS_MAX_AGE_DAYS = 90
+NEWS_MAX_ITEMS_DEFAULT = 10
 MACRO_CACHE_TTL_SECONDS = 86400  # 24 heures (données macro)
 
 # ─── Rate limiting ─────────────────────────────────────────────────────────────
