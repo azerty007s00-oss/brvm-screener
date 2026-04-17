@@ -467,7 +467,9 @@ def render_signal_card(result: dict) -> None:
                 pass
         else:
             st.info("Aucune actualité récente trouvée pour ce titre.")
-            sika_url = f"https://www.sikafinance.com/marches/cotation/{ticker_for_news.lower()}"
+            _SIKA_EXT = {"BOABF": "bf", "CBIBF": "bf", "ONTBF": "bf", "BOAML": "ml", "BOAN": "ne", "BOASN": "sn", "SNTS": "sn", "TTLS": "sn", "ETIT": "tg", "ORAT": "tg", "BOAB": "bj", "BICIB": "bj", "LNBB": "bj"}
+            _ext = _SIKA_EXT.get(ticker_for_news.upper(), "ci")
+            sika_url = f"https://www.sikafinance.com/marches/cotation_{ticker_for_news.upper()}.{_ext}"
             st.markdown(f"[🔍 Voir la fiche {ticker_for_news} sur Sika Finance]({sika_url})")
 
     # ── Graphiques ────────────────────────────────────────────────────────────
