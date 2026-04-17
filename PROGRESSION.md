@@ -3,3 +3,4 @@
 >>> CHECKPOINT 3 — config.py modifié — STATUS: OK
 >>> CHECKPOINT 4 — rss_feeds.py modifié — STATUS: OK
 >>> CHECKPOINT 5 — scraper.py modifié — STATUS: OK
+>>> CHECKPOINT 6 — app.py modifié — STATUS: OK
