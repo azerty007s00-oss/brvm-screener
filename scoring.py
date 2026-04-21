@@ -41,6 +41,7 @@ class ScoreResult:
     message_synthese: str = ""
     stop_loss: Optional[float] = None    # D1 — ATR-based, conditionné par confiance
     take_profit: Optional[float] = None  # D1 — ATR-based, ratio R/R asymétrique
+    position_size_pct: Optional[float] = None  # D2 — % du capital à allouer
 
 
 # ─── Calcul du score ──────────────────────────────────────────────────────────

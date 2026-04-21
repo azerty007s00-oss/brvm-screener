@@ -57,6 +57,36 @@ class AnalyseComplete:
             self.actualites = []
 
 
+def compute_position_size(
+    score: ScoreResult,
+    ind: TechnicalIndicators,
+    risk_pct: float = 1.0,
+) -> Optional[float]:
+    """
+    D2 — Position sizing ATR-based : % du capital à allouer.
+
+    Formule : position_pct = risk_pct / (k1 × atr_pct)
+    Où k1 est le multiplicateur stop-loss issu de la confiance (D1).
+    Résultat clampé à [1%, 25%] pour éviter concentration excessive.
+
+    Args:
+        risk_pct: risque maximal par trade en % du capital (défaut 1%)
+    Returns:
+        % du capital à allouer, ou None si stop absent / ATR invalide
+    """
+    if score.stop_loss is None or ind.atr_pct is None or ind.atr_pct <= 0:
+        return None
+    if score.signal == "NEUTRE" or ind.cours_actuel <= 0:
+        return None
+
+    k1 = abs(score.stop_loss - ind.cours_actuel) / ind.cours_actuel * 100  # % prix
+    if k1 <= 0:
+        return None
+
+    raw = risk_pct / k1 * 100   # % capital
+    return round(min(25.0, max(1.0, raw)), 1)
+
+
 def compute_risk_levels(
     score: ScoreResult,
     ind: TechnicalIndicators,
@@ -145,8 +175,9 @@ def build_analyse(
     # ── Alertes ───────────────────────────────────────────────────────────────
     analyse.alertes = _build_alertes(ind, score)
 
-    # ── Risk levels D1 — enrichit score in-place ──────────────────────────────
+    # ── Risk levels D1 + position sizing D2 — enrichit score in-place ──────────
     score.stop_loss, score.take_profit = compute_risk_levels(score, ind)
+    score.position_size_pct = compute_position_size(score, ind)
 
     # ── Synthèse courte (format one-liner) ───────────────────────────────────
     analyse.synthese_courte = _build_synthese_courte(ind, score)

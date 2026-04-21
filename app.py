@@ -319,6 +319,44 @@ def render_signal_card(result: dict) -> None:
             unsafe_allow_html=True
         )
 
+    # ── Niveaux de risque D1 ─────────────────────────────────────────────────
+    if score.stop_loss is not None and score.take_profit is not None and ind.atr and ind.atr > 0:
+        with st.expander("🎯 Niveaux de risque (ATR-based)", expanded=True):
+            prix = ind.cours_actuel
+            k1 = abs(score.stop_loss  - prix) / ind.atr
+            k2 = abs(score.take_profit - prix) / ind.atr
+            pct_stop   = (score.stop_loss  - prix) / prix * 100
+            pct_target = (score.take_profit - prix) / prix * 100
+            r1, r2, r3 = st.columns(3)
+            with r1:
+                st.metric(
+                    "Stop Loss",
+                    f"{score.stop_loss:,.0f} FCFA",
+                    delta=f"{pct_stop:+.1f}% / -{k1:.1f} ATR",
+                    delta_color="inverse",
+                )
+            with r2:
+                st.metric(
+                    "Cours actuel",
+                    f"{prix:,.0f} FCFA",
+                )
+            with r3:
+                st.metric(
+                    "Take Profit",
+                    f"{score.take_profit:,.0f} FCFA",
+                    delta=f"{pct_target:+.1f}% / +{k2:.1f} ATR",
+                )
+            st.caption(
+                f"Confiance {score.confiance} → k1={k1:.1f}×ATR / k2={k2:.1f}×ATR  |  "
+                f"ATR = {ind.atr_pct:.2f}% ({ind.atr:,.0f} FCFA)"
+            )
+            if score.position_size_pct is not None:
+                st.info(
+                    f"**Sizing indicatif (risque 1% capital)** : "
+                    f"allouer ~{score.position_size_pct:.1f}% du portefeuille sur ce titre.",
+                    icon="📐",
+                )
+
     # ── Analyse narrative ─────────────────────────────────────────────────────
     with st.expander("🔍 Analyse complète", expanded=True):
         col_a, col_b = st.columns(2)
@@ -782,6 +820,9 @@ def render_recap_table(results: dict) -> None:
             "Score": f"{score.score_total:+d}",
             "Signal": f"{score.signal_emoji} {score.signal}",
             "Confiance": score.confiance.capitalize(),
+            "Stop Loss": f"{score.stop_loss:,.0f}" if score.stop_loss is not None else "—",
+            "Take Profit": f"{score.take_profit:,.0f}" if score.take_profit is not None else "—",
+            "Sizing (%)": f"{score.position_size_pct:.1f}%" if score.position_size_pct is not None else "—",
         })
 
     if not rows:

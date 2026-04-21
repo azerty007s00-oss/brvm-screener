@@ -509,11 +509,68 @@ def get_ohlcv(ticker: str, days: int = 365) -> pd.DataFrame:
             "Le titre a peut-être trop peu d'historique ou est peu coté."
         )
 
+    # Validation qualité (E1) — log sans bloquer
+    _validate_ohlcv(df, ticker)
+
     # Mise en cache — convertir l'index DatetimeIndex en str pour JSON
     df_cache = df.copy()
     df_cache.index = df_cache.index.strftime("%Y-%m-%d")
     cache.set(cache_key, df_cache.to_dict())
     return df
+
+
+# ─── Validation qualité données (E1) ─────────────────────────────────────────
+
+def _validate_ohlcv(df: pd.DataFrame, ticker: str) -> None:
+    """
+    Contrôle qualité post-scrape — log des anomalies sans bloquer le pipeline.
+    Détecte : données trop sparse, OHLCV incohérent, staleness.
+    """
+    if df is None or df.empty:
+        return
+
+    n = len(df)
+    issues = []
+
+    # 1. Sparsité close (> 20% NaN → probable changement de structure HTML)
+    nan_rate = df["close"].isna().mean()
+    if nan_rate > 0.20:
+        issues.append(
+            f"close NaN rate={nan_rate:.0%} — possible structure change on Sika Finance"
+        )
+
+    # 2. Cohérence OHLCV (high >= low et close dans [low, high])
+    valid = df.dropna(subset=["open", "high", "low", "close"])
+    if len(valid) > 0:
+        pct_hl_ok = (valid["high"] >= valid["low"]).mean()
+        pct_c_ok  = ((valid["close"] >= valid["low"]) & (valid["close"] <= valid["high"])).mean()
+        if pct_hl_ok < 0.95:
+            issues.append(f"OHLCV incohérent: high<low sur {1-pct_hl_ok:.0%} des séances")
+        if pct_c_ok < 0.90:
+            issues.append(f"close hors [low,high] sur {1-pct_c_ok:.0%} des séances")
+
+    # 3. Staleness — dernière date > 15 jours ouvrés
+    try:
+        last_date = pd.to_datetime(df.index[-1])
+        lag_days = (pd.Timestamp.today() - last_date).days
+        if lag_days > 21:   # ~15 jours ouvrés
+            issues.append(f"Données potentiellement obsolètes : dernière séance il y a {lag_days}j")
+    except Exception:
+        pass
+
+    # 4. Zéros pathologiques sur close (erreur de parsing, non NaN)
+    zero_rate = (df["close"] == 0).mean()
+    if zero_rate > 0.05:
+        issues.append(f"close=0 sur {zero_rate:.0%} des séances — vérifier le parsing")
+
+    for issue in issues:
+        logger.warning(f"[DataQuality] {ticker}: {issue}")
+
+    if issues:
+        logger.warning(
+            f"[DataQuality] {ticker}: {len(issues)} anomalie(s) détectée(s) — "
+            "données utilisées avec réserve"
+        )
 
 
 # ─── Utilitaires ──────────────────────────────────────────────────────────────
