@@ -24,16 +24,16 @@ TICKERS = [
     "SNTS",    # Sonatel (Orange Sénégal)
     "ETIT",    # Ecobank Transnational
     "BICC",    # BICI Côte d'Ivoire
-    "SGBCI",   # Société Générale CI
-    "BOA-CI",  # Bank of Africa CI
+    "SGBC",    # Société Générale CI
+    "BOAC",    # Bank of Africa CI
     # Mid caps
     "PALC",    # Palm CI
     "SIVC",    # SIV CI
     "ONTBF",   # Orange Burkina
-    "CIE-CI",  # CIE CI
+    "CIEC",    # CIE CI
     # Small caps / illiquides
     "CFAC",    # Compagnie Forestière et Agricole
-    "NEIM",    # NEI-CEDA
+    "NEIC",    # NEI-CEDA
     "UNLC",    # Union des Lacs CI
 ]
 
