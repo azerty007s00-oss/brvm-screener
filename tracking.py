@@ -25,15 +25,17 @@ logger = logging.getLogger(__name__)
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 
-JOURNAL_PATH = Path(__file__).parent / "journal_signaux.csv"
+JOURNAL_PATH  = Path(__file__).parent / "journal_signaux.csv"
 
-_TIMEOUT_DAYS = 20   # clôture forcée si ni stop ni target atteints en N séances
+_TIMEOUT_DAYS  = 20  # clôture forcée si ni stop ni target atteints en N séances
+COOLDOWN_DAYS  = 5   # délai min (jours) entre sortie et ré-entrée sur même ticker
 
 _COLUMNS = [
     "date", "ticker", "signal", "score", "confiance",
-    "entry_price", "stop_loss", "take_profit", "rr", "position_pct",
-    "atr_pct", "data_quality",
-    "exit_price", "exit_date", "exit_reason", "pnl_pct",
+    "entry_price", "stop_loss", "take_profit", "rr",
+    "k_stop", "k_target",          # multiplicateurs ATR D1 (pour calibration future)
+    "position_pct", "atr_pct", "data_quality",
+    "exit_price", "exit_date", "exit_reason", "pnl_pct", "r_realise",
 ]
 
 
@@ -51,6 +53,28 @@ def _load() -> pd.DataFrame:
 
 def _save(df: pd.DataFrame) -> None:
     df.to_csv(JOURNAL_PATH, index=False)
+
+
+def _get_last_closed(ticker: str) -> dict | None:
+    """Retourne le trade le plus récemment clôturé pour ce ticker, ou None."""
+    df = _load()
+    if df.empty:
+        return None
+    closed = df[df["exit_date"].notna() & (df["exit_date"] != "") & (df["ticker"] == ticker)]
+    if closed.empty:
+        return None
+    return closed.sort_values("exit_date", ascending=False).iloc[0].to_dict()
+
+
+def _r_realise(signal: str, entry: float, stop: float, exit_price: float) -> float | None:
+    """R réalisé = pnl / risque initial (en multiples de R). Normalise cross-tickers."""
+    if entry <= 0:
+        return None
+    risk_pct = abs(entry - stop) / entry * 100
+    if risk_pct <= 0:
+        return None
+    pnl = _pnl(signal, entry, exit_price)
+    return round(pnl / risk_pct, 2)
 
 
 # ─── Log signal ──────────────────────────────────────────────────────────────
@@ -80,6 +104,20 @@ def log_signal(ind, score, today: Optional[date] = None) -> bool:
             logger.debug(f"[Tracking] Trade déjà ouvert — {ind.ticker} ignoré")
             return False
 
+        # Cooldown post-sortie : évite les ré-entrées bruitées sans changement structurel
+        last = _get_last_closed(str(ind.ticker))
+        if last:
+            try:
+                exit_d = date.fromisoformat(str(last["exit_date"]))
+                days_since = ((today or date.today()) - exit_d).days
+                if days_since < COOLDOWN_DAYS:
+                    logger.debug(
+                        f"[Tracking] Cooldown — {ind.ticker} ({days_since}j < {COOLDOWN_DAYS}j)"
+                    )
+                    return False
+            except (ValueError, TypeError):
+                pass
+
         dup = (
             (df["ticker"] == str(ind.ticker))
             & (df["date"] == today_str)
@@ -90,11 +128,14 @@ def log_signal(ind, score, today: Optional[date] = None) -> bool:
             return False
 
     rr = None
+    k_stop = k_target = None
     if (score.stop_loss is not None and score.take_profit is not None
             and ind.atr and ind.atr > 0):
         k1 = abs(score.stop_loss  - ind.cours_actuel) / ind.atr
         k2 = abs(score.take_profit - ind.cours_actuel) / ind.atr
-        rr = round(k2 / k1, 2) if k1 > 0 else None
+        rr       = round(k2 / k1, 2) if k1 > 0 else None
+        k_stop   = round(k1, 2)
+        k_target = round(k2, 2)
 
     row = {
         "date":         today_str,
@@ -106,6 +147,8 @@ def log_signal(ind, score, today: Optional[date] = None) -> bool:
         "stop_loss":    score.stop_loss,
         "take_profit":  score.take_profit,
         "rr":           rr,
+        "k_stop":       k_stop,
+        "k_target":     k_target,
         "position_pct": score.position_size_pct,
         "atr_pct":      round(ind.atr_pct, 2) if ind.atr_pct is not None else None,
         "data_quality": getattr(ind, "data_quality_flag", "ok"),
@@ -113,6 +156,7 @@ def log_signal(ind, score, today: Optional[date] = None) -> bool:
         "exit_date":    None,
         "exit_reason":  None,
         "pnl_pct":      None,
+        "r_realise":    None,
     }
 
     df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
@@ -181,10 +225,12 @@ def update_open_trades(
 
         if exit_reason:
             pnl = _pnl(signal, entry, current_price)
+            r_r = _r_realise(signal, entry, stop, current_price)
             df.loc[idx, "exit_price"]  = round(current_price, 2)
             df.loc[idx, "exit_date"]   = today_dt.isoformat()
             df.loc[idx, "exit_reason"] = exit_reason
             df.loc[idx, "pnl_pct"]     = round(pnl, 2)
+            df.loc[idx, "r_realise"]   = r_r
             closed_this_run.append({
                 "ticker":      ticker,
                 "signal":      signal,
@@ -276,12 +322,27 @@ def get_kpis() -> dict:
         - pd.to_datetime(valid["date"])
     ).dt.days
 
+    # Expectancy pondérée par taille de position (rendement capital réel)
+    valid["position_pct"] = pd.to_numeric(valid.get("position_pct", pd.Series()), errors="coerce")
+    avg_pos = valid["position_pct"].mean()
+    exp_weighted = round(expectancy * avg_pos / 100, 3) if pd.notna(avg_pos) and avg_pos > 0 else None
+
+    # R réalisé moyen (cross-tickers normalisé)
+    if "r_realise" in valid.columns:
+        valid["r_realise"] = pd.to_numeric(valid["r_realise"], errors="coerce")
+        avg_r = valid["r_realise"].mean()
+    else:
+        avg_r = None
+
     kpis: dict = {
-        "status":              "ok",
-        "n_closed":            len(valid),
-        "n_open":              len(get_open_trades()),
-        "hit_rate_pct":        round(win_rate * 100, 1),
-        "expectancy_pct":      expectancy,
+        "status":                  "ok",
+        "n_closed":                len(valid),
+        "n_open":                  len(get_open_trades()),
+        "hit_rate_pct":            round(win_rate * 100, 1),
+        "expectancy_pct":          expectancy,
+        "expectancy_weighted_pct": exp_weighted,   # E × position moy. / 100
+        "avg_r_realise":           round(avg_r, 2) if pd.notna(avg_r) else None,
+        "avg_position_pct":        round(avg_pos, 1) if pd.notna(avg_pos) else None,
         "avg_pnl_pct":         round(valid["pnl_pct"].mean(), 2),
         "avg_win_pct":         round(avg_win,  2) if not wins.empty  else None,
         "avg_loss_pct":        round(avg_loss, 2) if not loses.empty else None,
