@@ -2,3 +2,4 @@ date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k
 2026-04-21,ECOC,VENTE,-2,faible,15810.0,16033.3,15363.4,2.0,1.0,2.0,25.0,1.41,ok,,,,,
 2026-04-21,CABC,ACHAT,3,modérée,3515.0,3276.35,3992.3,2.0,1.5,3.0,12.5,4.53,ok,,,,,
 2026-04-21,NEIC,VENTE,-3,faible,1380.0,1392.98,1354.05,2.0,1.0,2.0,25.0,0.94,ok,,,,,
+2026-04-21,PALC,ACHAT,2,faible,8060.0,7939.73,8300.54,2.0,1.0,2.0,25.0,1.49,ok,,,,,
