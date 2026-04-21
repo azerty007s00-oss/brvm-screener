@@ -20,6 +20,32 @@ from utils import get_company_name
 logger = logging.getLogger(__name__)
 
 
+# ─── Helpers risk ─────────────────────────────────────────────────────────────
+
+def _rr(score, ind) -> float | None:
+    """R/R = distance_target / distance_stop, en multiples d'ATR."""
+    if score.stop_loss is None or score.take_profit is None:
+        return None
+    if ind.atr is None or ind.atr <= 0:
+        return None
+    k1 = abs(score.stop_loss  - ind.cours_actuel) / ind.atr
+    k2 = abs(score.take_profit - ind.cours_actuel) / ind.atr
+    return round(k2 / k1, 2) if k1 > 0 else None
+
+
+def _risk_label(score, rr: float | None) -> str:
+    """Classification rapide pour tri Excel : A+ > A > B > C."""
+    if score.signal == "NEUTRE" or rr is None:
+        return ""
+    if rr >= 2.0 and score.confiance == "forte":
+        return "A+"
+    if rr >= 2.0:
+        return "A"
+    if rr >= 1.5:
+        return "B"
+    return "C"
+
+
 def export_to_excel(results: dict) -> io.BytesIO:
     """
     Génère un fichier Excel multi-onglets à partir des résultats d'analyse.
@@ -42,14 +68,24 @@ def export_to_excel(results: dict) -> io.BytesIO:
             score = result["score"]
             fundamentals = result.get("fundamentals")
 
+            rr_val = _rr(score, ind)
+            rl     = _risk_label(score, rr_val)
+
             row = {
                 "Ticker": ticker,
                 "Société": get_company_name(ticker),
-                "Cours (FCFA)": ind.cours_actuel,
-                "Var J-1 (%)": ind.variation_j1_pct,
                 "Signal": score.signal,
+                "Risk Label": rl,
                 "Score technique": score.score_total,
                 "Confiance": score.confiance,
+                "Cours (FCFA)": ind.cours_actuel,
+                "Stop Loss": score.stop_loss,
+                "Take Profit": score.take_profit,
+                "R/R": rr_val,
+                "Position (%)": score.position_size_pct,
+                "ATR (%)": round(ind.atr_pct, 2) if ind.atr_pct is not None else None,
+                "Data Quality": getattr(ind, "data_quality_flag", "ok"),
+                "Var J-1 (%)": ind.variation_j1_pct,
                 "RSI": ind.rsi,
                 "Stoch %K": ind.stoch_k,
                 "ADX": ind.adx,
@@ -200,14 +236,24 @@ def export_to_csv(results: dict) -> str:
         score = result["score"]
         fundamentals = result.get("fundamentals")
 
+        rr_val = _rr(score, ind)
+        rl     = _risk_label(score, rr_val)
+
         row = {
             "Ticker": ticker,
             "Société": get_company_name(ticker),
-            "Cours": ind.cours_actuel,
-            "Var_J1_pct": ind.variation_j1_pct,
             "Signal": score.signal,
+            "Risk_Label": rl,
             "Score_tech": score.score_total,
             "Confiance": score.confiance,
+            "Cours": ind.cours_actuel,
+            "Stop_Loss": score.stop_loss,
+            "Take_Profit": score.take_profit,
+            "RR": rr_val,
+            "Position_pct": score.position_size_pct,
+            "ATR_pct": round(ind.atr_pct, 2) if ind.atr_pct is not None else None,
+            "Data_Quality": getattr(ind, "data_quality_flag", "ok"),
+            "Var_J1_pct": ind.variation_j1_pct,
             "RSI": ind.rsi,
             "Stoch_K": ind.stoch_k,
             "ADX": ind.adx,
