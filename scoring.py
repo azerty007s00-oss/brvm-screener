@@ -457,6 +457,10 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
         + s_autres
     )
 
+    # Dampening données lacunaires (E1) : données sparse → signal moins fiable
+    if getattr(ind, "data_quality_flag", "ok") == "sparse":
+        score = round(score * 0.8)
+
     points_positifs = [c.points for c in criteres if c.points > 0]
     points_negatifs = [c.points for c in criteres if c.points < 0]
 
