@@ -260,8 +260,8 @@ HORIZON_PROFILES: dict[str, dict] = {
             "perf_relative": 0,  # Non pertinent en CT
             "stochastic": 2,     # Stochastic prioritaire en CT
         },
-        "seuil_achat": 3,
-        "seuil_vente": -3,
+        "seuil_achat": 2,   # recalibré post-A5 (group caps réduisent le range pratique)
+        "seuil_vente": -2,
         "jours_min": 60,
     },
     "Moyen terme": {
@@ -289,8 +289,8 @@ HORIZON_PROFILES: dict[str, dict] = {
             "perf_relative": 1,
             "stochastic": 1,
         },
-        "seuil_achat": 3,
-        "seuil_vente": -3,
+        "seuil_achat": 2,   # recalibré post-A5
+        "seuil_vente": -2,
         "jours_min": 120,
     },
     "Long terme": {
@@ -318,8 +318,8 @@ HORIZON_PROFILES: dict[str, dict] = {
             "perf_relative": 2,   # Alpha vs indice clé en LT
             "stochastic": 0,      # Stochastic peu fiable sur LT
         },
-        "seuil_achat": 4,         # Seuil plus élevé — plus sélectif
-        "seuil_vente": -4,
+        "seuil_achat": 3,   # recalibré post-A5 (reste plus sélectif que CT/MT)
+        "seuil_vente": -3,
         "jours_min": 250,
     },
 }
