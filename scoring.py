@@ -83,6 +83,13 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
                 points=-2 * w_rsi,
                 interpretation=f"Suracheté (> {rsi_hi:.0f}) — risque de retournement",
             ))
+        elif ind.rsi > 65:
+            # Hard ceiling : RSI élevé même si sous le P90 adaptatif (marché haussier prolongé)
+            criteres.append(CritereScore(
+                nom="RSI", valeur=f"RSI({ind.rsi}) [{seuil_str}]",
+                points=-1 * w_rsi,
+                interpretation="RSI élevé (>65) — zone de prudence même hors P90",
+            ))
         else:
             criteres.append(CritereScore(
                 nom="RSI", valeur=f"RSI({ind.rsi}) [{seuil_str}]",
@@ -256,11 +263,27 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
                     points=0, interpretation="Performance en ligne avec l'indice"
                 ))
         elif ind.perf_1m is not None:
-            criteres.append(CritereScore(
-                nom="Perf 1M",
-                valeur=f"Perf 1M = {ind.perf_1m:+.1f}% (indice indisponible)",
-                points=0, interpretation="Indice BRVMC non disponible pour comparaison"
-            ))
+            # Fallback absolu : sans indice, la perf brute signale au moins les cas extrêmes
+            if ind.perf_1m < -2:
+                criteres.append(CritereScore(
+                    nom="Perf 1M",
+                    valeur=f"Perf 1M = {ind.perf_1m:+.1f}% (indice indisponible)",
+                    points=-1 * w_perf,
+                    interpretation="Baisse >2% sans indice disponible — signal baissier absolu",
+                ))
+            elif ind.perf_1m > 5:
+                criteres.append(CritereScore(
+                    nom="Perf 1M",
+                    valeur=f"Perf 1M = {ind.perf_1m:+.1f}% (indice indisponible)",
+                    points=+1 * w_perf,
+                    interpretation="Hausse >5% sans indice disponible — signal haussier absolu",
+                ))
+            else:
+                criteres.append(CritereScore(
+                    nom="Perf 1M",
+                    valeur=f"Perf 1M = {ind.perf_1m:+.1f}% (indice indisponible)",
+                    points=0, interpretation="Indice BRVMC non disponible pour comparaison",
+                ))
         else:
             criteres.append(CritereScore(
                 nom="Perf relative", valeur="N/D",
@@ -321,6 +344,14 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
                 valeur=f"MA50 +{ind.ma50_slope_pct:.2f}%/5j",
                 points=+1,
                 interpretation="MA50 en hausse structurelle — trend de fond haussier confirmé"
+            ))
+        elif ind.ma50_slope_pct < -0.3:
+            # Pente fortement négative : trend baissier structurel prononcé
+            criteres.append(CritereScore(
+                nom="MA50 Slope",
+                valeur=f"MA50 {ind.ma50_slope_pct:.2f}%/5j",
+                points=-2,
+                interpretation="MA50 en forte baisse structurelle — trend baissier de fond confirmé"
             ))
         elif ind.ma50_slope_pct < -0.2:
             criteres.append(CritereScore(
