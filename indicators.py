@@ -241,6 +241,9 @@ class TechnicalIndicators:
     low_52w: Optional[float] = None
     pct_from_52w_high: Optional[float] = None  # % par rapport au plus haut 52 semaines
 
+    # Qualité des données (E1)
+    data_quality_flag: str = "ok"   # ok | gaps | sparse — dégrade C1 confiance
+
     # Séries temporelles pour les graphiques
     series: dict = field(default_factory=dict)
 
@@ -295,6 +298,15 @@ def compute_indicators(
     high = df["high"]
     low = df["low"]
     volume = df["volume"] if "volume" in df.columns else pd.Series(0, index=df.index)
+
+    # ── Gap detection (E1) — trous de cotation impactent indicateurs temporels ─
+    if len(df) >= 5:
+        date_diffs = pd.Series(df.index).diff().dt.days.dropna()
+        n_gaps = int((date_diffs > 10).sum())   # > 10 jours cal. = trou non-férié
+        if n_gaps >= 3:
+            result.data_quality_flag = "sparse"  # données très lacunaires
+        elif n_gaps >= 1:
+            result.data_quality_flag = "gaps"    # quelques trous acceptables
 
     # ── Prix actuels ──────────────────────────────────────────────────────────
     result.cours_actuel = round(float(close.iloc[-1]), 2)

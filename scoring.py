@@ -497,13 +497,14 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
     )
     nb_groupes_alignes = votes.count(direction) if direction != 0 else 0
     nb_groupes_actifs  = sum(1 for s in [s_momentum, s_trend, s_timing] if s != 0)
+    data_quality       = getattr(ind, "data_quality_flag", "ok")
 
-    if taux_couverture < 0.5 or nb_groupes_actifs < 2:
-        result.confiance = "faible"   # Données insuffisantes ou signal mono-bloc
-    elif nb_groupes_alignes == 3:
-        result.confiance = "forte"
-    elif nb_groupes_alignes == 2:
-        result.confiance = "modérée"
+    if taux_couverture < 0.5 or nb_groupes_actifs < 2 or data_quality == "sparse":
+        result.confiance = "faible"   # Données insuffisantes, mono-bloc, ou très lacunaires
+    elif nb_groupes_alignes == 3 and data_quality == "ok":
+        result.confiance = "forte"    # forte requiert données sans trou
+    elif nb_groupes_alignes >= 2:
+        result.confiance = "modérée"  # gaps acceptables → cap à modérée
     else:
         result.confiance = "faible"
 

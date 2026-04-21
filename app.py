@@ -327,7 +327,10 @@ def render_signal_card(result: dict) -> None:
             k2 = abs(score.take_profit - prix) / ind.atr
             pct_stop   = (score.stop_loss  - prix) / prix * 100
             pct_target = (score.take_profit - prix) / prix * 100
-            r1, r2, r3 = st.columns(3)
+            rr = k2 / k1 if k1 > 0 else 0.0
+            rr_color = "#0F6E56" if rr >= 2.0 else ("#BA7517" if rr >= 1.5 else "#A32D2D")
+            rr_label  = "Excellent" if rr >= 2.0 else ("Acceptable" if rr >= 1.5 else "Faible")
+            r1, r2, r3, r4 = st.columns(4)
             with r1:
                 st.metric(
                     "Stop Loss",
@@ -336,15 +339,19 @@ def render_signal_card(result: dict) -> None:
                     delta_color="inverse",
                 )
             with r2:
-                st.metric(
-                    "Cours actuel",
-                    f"{prix:,.0f} FCFA",
-                )
+                st.metric("Cours actuel", f"{prix:,.0f} FCFA")
             with r3:
                 st.metric(
                     "Take Profit",
                     f"{score.take_profit:,.0f} FCFA",
                     delta=f"{pct_target:+.1f}% / +{k2:.1f} ATR",
+                )
+            with r4:
+                st.metric("R/R", f"{rr:.2f}")
+                st.markdown(
+                    f"<span style='color:{rr_color};font-size:0.8em;font-weight:600'>"
+                    f"{rr_label}</span>",
+                    unsafe_allow_html=True,
                 )
             st.caption(
                 f"Confiance {score.confiance} → k1={k1:.1f}×ATR / k2={k2:.1f}×ATR  |  "
@@ -352,7 +359,7 @@ def render_signal_card(result: dict) -> None:
             )
             if score.position_size_pct is not None:
                 st.info(
-                    f"**Sizing indicatif (risque 1% capital)** : "
+                    f"**Sizing indicatif (risque 1% capital, avec haircut liquidité)** : "
                     f"allouer ~{score.position_size_pct:.1f}% du portefeuille sur ce titre.",
                     icon="📐",
                 )

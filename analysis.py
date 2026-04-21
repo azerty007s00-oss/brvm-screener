@@ -84,6 +84,17 @@ def compute_position_size(
         return None
 
     raw = risk_pct / k1 * 100   # % capital
+
+    # Haircut liquidité BRVM — surdimensionnement impossible sur small caps illiquides
+    vol_moy = getattr(ind, "volume_moy20", None)
+    if vol_moy is not None and vol_moy > 0:
+        if vol_moy < 100:
+            raw *= 0.50   # très illiquide : exécution partielle probable
+        elif vol_moy < 500:
+            raw *= 0.70   # illiquide : slippage significatif
+        else:
+            raw *= 0.85   # liquide BRVM : décote résiduelle
+
     return round(min(25.0, max(1.0, raw)), 1)
 
 

@@ -108,9 +108,12 @@ def report(label: str, df: pd.DataFrame):
     if stop is not None and ind.atr and ind.atr > 0:
         k1_obs = abs(stop - ind.cours_actuel) / ind.atr
         k2_obs = abs(target - ind.cours_actuel) / ind.atr
+        rr = k2_obs / k1_obs if k1_obs > 0 else 0
+        rr_tag = "OK" if rr >= 1.5 else "FAIBLE"
         risk_str = (
-            f"Stop={stop:,.0f} ({k1_obs:.1f}×ATR) | "
-            f"Target={target:,.0f} (+{k2_obs:.1f}×ATR)"
+            f"Stop={stop:,.0f} ({k1_obs:.1f}xATR) | "
+            f"Target={target:,.0f} (+{k2_obs:.1f}xATR) | "
+            f"R/R={rr:.2f} [{rr_tag}]"
         )
     else:
         risk_str = "N/A (neutre ou ATR absent)"
