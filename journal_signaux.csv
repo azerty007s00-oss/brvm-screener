@@ -4,3 +4,4 @@ date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k
 2026-04-21,NEIC,VENTE,-3,faible,1380.0,1392.98,1354.05,2.0,1.0,2.0,25.0,0.94,ok,,,,,
 2026-04-21,PALC,ACHAT,2,faible,8060.0,7939.73,8300.54,2.0,1.0,2.0,25.0,1.49,ok,,,,,
 2026-04-21,PRSC,ACHAT,2,modérée,4800.0,4648.46,5103.09,2.0,1.5,3.0,25.0,2.1,ok,,,,,
+2026-04-21,SAFC,VENTE,-2,modérée,6200.0,6714.78,5170.45,2.0,1.5,3.0,10.2,5.54,ok,,,,,
