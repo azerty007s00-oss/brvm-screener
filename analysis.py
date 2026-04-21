@@ -190,6 +190,13 @@ def build_analyse(
     score.stop_loss, score.take_profit = compute_risk_levels(score, ind)
     score.position_size_pct = compute_position_size(score, ind)
 
+    # ── Journal de tracking J1 — log automatique des signaux exploitables ─────
+    try:
+        from tracking import log_signal
+        log_signal(ind, score)
+    except Exception as _e:
+        logger.debug(f"[Tracking] Skipped — {_e}")
+
     # ── Synthèse courte (format one-liner) ───────────────────────────────────
     analyse.synthese_courte = _build_synthese_courte(ind, score)
 
