@@ -57,6 +57,43 @@ class AnalyseComplete:
             self.actualites = []
 
 
+def compute_risk_levels(
+    score: ScoreResult,
+    ind: TechnicalIndicators,
+) -> tuple[Optional[float], Optional[float]]:
+    """
+    D1 — Stop-loss et take-profit ATR-based, conditionnés par la confiance du signal.
+
+    Multiplicateurs k₁ (stop) / k₂ (target) par niveau de confiance :
+      forte    → 2.0 / 3.5  (laisser respirer, fort consensus)
+      modérée  → 1.5 / 2.5
+      faible   → 1.0 / 1.5  (conservateur)
+
+    Returns (stop_loss, take_profit) ou (None, None) si signal NEUTRE ou ATR absent.
+    """
+    if score.signal == "NEUTRE":
+        return None, None
+    if ind.atr is None or ind.atr <= 0 or ind.cours_actuel <= 0:
+        return None, None
+
+    if score.confiance == "forte":
+        k1, k2 = 2.0, 3.5
+    elif score.confiance == "modérée":
+        k1, k2 = 1.5, 2.5
+    else:
+        k1, k2 = 1.0, 1.5
+
+    prix = ind.cours_actuel
+    if score.signal == "ACHAT":
+        stop   = prix - k1 * ind.atr
+        target = prix + k2 * ind.atr
+    else:  # VENTE
+        stop   = prix + k1 * ind.atr
+        target = prix - k2 * ind.atr
+
+    return round(max(0.0, stop), 2), round(max(0.0, target), 2)
+
+
 def build_analyse(
     ind: TechnicalIndicators,
     score: ScoreResult,
@@ -107,6 +144,9 @@ def build_analyse(
 
     # ── Alertes ───────────────────────────────────────────────────────────────
     analyse.alertes = _build_alertes(ind, score)
+
+    # ── Risk levels D1 — enrichit score in-place ──────────────────────────────
+    score.stop_loss, score.take_profit = compute_risk_levels(score, ind)
 
     # ── Synthèse courte (format one-liner) ───────────────────────────────────
     analyse.synthese_courte = _build_synthese_courte(ind, score)

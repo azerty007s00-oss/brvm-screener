@@ -39,6 +39,8 @@ class ScoreResult:
     score_max_possible: int = 0
     score_min_possible: int = 0
     message_synthese: str = ""
+    stop_loss: Optional[float] = None    # D1 — ATR-based, conditionné par confiance
+    take_profit: Optional[float] = None  # D1 — ATR-based, ratio R/R asymétrique
 
 
 # ─── Calcul du score ──────────────────────────────────────────────────────────
