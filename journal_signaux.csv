@@ -1,0 +1,2 @@
+date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k_target,position_pct,atr_pct,data_quality,exit_price,exit_date,exit_reason,pnl_pct,r_realise
+2026-04-21,ECOC,VENTE,-2,faible,15810.0,16033.3,15363.4,2.0,1.0,2.0,25.0,1.41,ok,,,,,
