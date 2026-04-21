@@ -73,6 +73,15 @@ with st.sidebar:
     st.caption("Investment Pioneers")
     st.divider()
 
+    # ── Vue principale ────────────────────────────────────────────────────────
+    vue = st.radio(
+        "Vue",
+        ["📈 Screener", "📒 Journal"],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    st.divider()
+
     # ── Sélection des tickers ─────────────────────────────────────────────────
     st.markdown("**Sélection des titres**")
 
@@ -875,7 +884,126 @@ def score_to_ma_label(ma_signal: str) -> str:
 
 # ─── Point d'entrée ───────────────────────────────────────────────────────────
 
+def _render_open_trades(open_df: pd.DataFrame, today) -> None:
+    from tracking import _TIMEOUT_DAYS
+    st.subheader(f"Trades ouverts ({len(open_df)})")
+    disp = open_df[["date", "ticker", "signal", "confiance", "score",
+                     "entry_price", "stop_loss", "take_profit", "rr",
+                     "position_pct", "atr_pct"]].copy()
+    disp["jours"] = pd.to_datetime(disp["date"]).apply(
+        lambda x: (today - x.date()).days
+    )
+    disp["restants"] = (_TIMEOUT_DAYS - disp["jours"]).clip(lower=0)
+    disp.columns = [
+        "Date", "Ticker", "Signal", "Confiance", "Score",
+        "Entrée", "Stop", "Target", "R/R", "Pos%", "ATR%",
+        "Jours détenus", "Jours restants",
+    ]
+    st.dataframe(
+        disp.sort_values("Jours détenus", ascending=False),
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
+def render_journal_dashboard() -> None:
+    """Dashboard KPI branché sur journal_signaux.csv."""
+    from tracking import get_kpis, get_open_trades, get_closed_trades
+    from datetime import date as date_type
+
+    st.title("📒 Journal de Trading")
+    st.caption("Signaux ACHAT/VENTE enregistrés automatiquement — sortie sur stop / target / timeout 20 séances")
+
+    kpis  = get_kpis()
+    today = date_type.today()
+
+    # ── Section 1 : métriques globales ───────────────────────────────────────
+    n_closed = kpis.get("n_closed", 0)
+    n_open   = kpis.get("n_open",   0)
+
+    if kpis.get("status") == "no_data":
+        st.info("📭 Aucun signal enregistré. Le journal se remplit automatiquement à chaque analyse.")
+        open_df = get_open_trades()
+        if not open_df.empty:
+            _render_open_trades(open_df, today)
+        return
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Clôturés",    n_closed)
+    c2.metric("Ouverts",     n_open)
+    c3.metric("Hit Rate",    f"{kpis['hit_rate_pct']}%")
+    c4.metric("Expectancy",  f"{kpis['expectancy_pct']:+.1f}%",
+              help="Break-even ≈ 0%. Avec R/R=2.0, rentable dès ~33% hit rate.")
+    c5.metric("Durée moy.",  f"{kpis['avg_holding_days']:.0f}j")
+
+    st.divider()
+
+    # ── Section 2 : trades ouverts ────────────────────────────────────────────
+    open_df = get_open_trades()
+    if not open_df.empty:
+        _render_open_trades(open_df, today)
+        st.divider()
+
+    # ── Section 3 : ventilation par confiance (C1) ────────────────────────────
+    by_conf = kpis.get("by_confiance", {})
+    if by_conf:
+        st.subheader("Performance par niveau de confiance (C1)")
+        st.caption("Le test clé : est-ce que *forte* surperforme *faible* ?")
+        cols = st.columns(3)
+        for i, conf in enumerate(["forte", "modérée", "faible"]):
+            stats = by_conf.get(conf)
+            with cols[i]:
+                if stats:
+                    delta_color = "normal" if stats["hit_rate_pct"] >= 50 else "inverse"
+                    st.markdown(f"**{conf.capitalize()}** — n={stats['n']}")
+                    st.metric("Hit Rate",   f"{stats['hit_rate_pct']}%")
+                    st.metric("Expectancy", f"{stats['expectancy_pct']:+.1f}%")
+                    st.caption(f"Durée moy. : {stats['avg_days']:.0f}j")
+                else:
+                    st.markdown(f"**{conf.capitalize()}** — aucun trade")
+        st.divider()
+
+    # ── Section 4 : distribution des sorties ─────────────────────────────────
+    by_reason = kpis.get("by_reason", {})
+    if by_reason:
+        st.subheader("Distribution des sorties")
+        icons   = {"stop": "🔴", "target": "🟢", "timeout": "⏱️"}
+        r_cols  = st.columns(max(len(by_reason), 1))
+        for i, (reason, stats) in enumerate(by_reason.items()):
+            with r_cols[i]:
+                st.metric(
+                    f"{icons.get(reason, '')} {reason.capitalize()}",
+                    f"{stats['n']} trades",
+                    f"PnL moy : {stats['avg_pnl']:+.1f}%",
+                )
+                st.caption(f"Durée moy. : {stats['avg_days']:.0f}j")
+        st.divider()
+
+    # ── Section 5 : historique ────────────────────────────────────────────────
+    st.subheader("Historique des trades clôturés")
+    closed_df = get_closed_trades()
+    if not closed_df.empty:
+        disp = closed_df[[
+            "date", "ticker", "signal", "confiance", "score",
+            "entry_price", "exit_price", "exit_reason", "pnl_pct", "rr",
+        ]].copy()
+        disp.columns = [
+            "Date", "Ticker", "Signal", "Confiance", "Score",
+            "Entrée", "Sortie", "Raison", "PnL (%)", "R/R",
+        ]
+        disp["PnL (%)"] = pd.to_numeric(disp["PnL (%)"], errors="coerce").round(2)
+        st.dataframe(
+            disp.sort_values("Date", ascending=False),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+
 def main() -> None:
+    if "Journal" in vue:
+        render_journal_dashboard()
+        return
+
     st.title("📈 BRVM Stock Screener")
     st.caption("Analyse technique multi-critères pour actions BRVM — Investment Pioneers")
 
