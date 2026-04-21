@@ -929,12 +929,30 @@ def render_journal_dashboard() -> None:
         return
 
     c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Clôturés",    n_closed)
-    c2.metric("Ouverts",     n_open)
-    c3.metric("Hit Rate",    f"{kpis['hit_rate_pct']}%")
-    c4.metric("Expectancy",  f"{kpis['expectancy_pct']:+.1f}%",
+    c1.metric("Clôturés",   n_closed)
+    c2.metric("Ouverts",    n_open)
+    c3.metric("Hit Rate",   f"{kpis['hit_rate_pct']}%")
+    c4.metric("Expectancy", f"{kpis['expectancy_pct']:+.1f}%",
               help="Break-even ≈ 0%. Avec R/R=2.0, rentable dès ~33% hit rate.")
-    c5.metric("Durée moy.",  f"{kpis['avg_holding_days']:.0f}j")
+    c5.metric("Durée moy.", f"{kpis['avg_holding_days']:.0f}j")
+
+    # Ligne 2 — métriques capital-adjusted
+    r1, r2, r3, r4 = st.columns(4)
+    exp_w = kpis.get("expectancy_weighted_pct")
+    avg_r = kpis.get("avg_r_realise")
+    avg_p = kpis.get("avg_position_pct")
+    r1.metric("Expectancy pondérée",
+              f"{exp_w:.2f}%" if exp_w is not None else "—",
+              help="E × position moy. / 100 — rendement réel sur capital alloué")
+    r2.metric("R réalisé moyen",
+              f"{avg_r:.2f}R" if avg_r is not None else "—",
+              help="PnL / risque initial normalisé (cross-tickers)")
+    r3.metric("Position moy.",
+              f"{avg_p:.1f}%" if avg_p is not None else "—",
+              help="Taille moyenne allouée par trade (D2)")
+    r4.metric("Break-even hit rate",
+              "33%" if kpis.get("win_loss_ratio") else "—",
+              help="Avec R/R=2.0 : seuil de profitabilité théorique")
 
     st.divider()
 
