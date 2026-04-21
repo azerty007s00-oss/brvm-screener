@@ -64,20 +64,26 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
     # ── Critère 1 : RSI ───────────────────────────────────────────────────────
     w_rsi = w.get("rsi", 1)
     if w_rsi > 0 and ind.rsi is not None:
-        if ind.rsi < 30:
+        # Seuils adaptatifs C2 — percentile local ; fallback 30/70 si non calculé
+        rsi_lo = ind.rsi_p10 if ind.rsi_p10 is not None else 30.0
+        rsi_hi = ind.rsi_p90 if ind.rsi_p90 is not None else 70.0
+        seuil_str = f"P10={rsi_lo:.0f}/P90={rsi_hi:.0f}" if ind.rsi_p10 is not None else "30/70"
+        if ind.rsi < rsi_lo:
             criteres.append(CritereScore(
-                nom="RSI", valeur=f"RSI({ind.rsi})",
-                points=+2 * w_rsi, interpretation="Survendu — potentiel rebond"
+                nom="RSI", valeur=f"RSI({ind.rsi}) [{seuil_str}]",
+                points=+2 * w_rsi,
+                interpretation=f"Survendu (< {rsi_lo:.0f}) — potentiel rebond",
             ))
-        elif ind.rsi > 70:
+        elif ind.rsi > rsi_hi:
             criteres.append(CritereScore(
-                nom="RSI", valeur=f"RSI({ind.rsi})",
-                points=-2 * w_rsi, interpretation="Suracheté — risque de retournement"
+                nom="RSI", valeur=f"RSI({ind.rsi}) [{seuil_str}]",
+                points=-2 * w_rsi,
+                interpretation=f"Suracheté (> {rsi_hi:.0f}) — risque de retournement",
             ))
         else:
             criteres.append(CritereScore(
-                nom="RSI", valeur=f"RSI({ind.rsi})",
-                points=0, interpretation="Zone neutre"
+                nom="RSI", valeur=f"RSI({ind.rsi}) [{seuil_str}]",
+                points=0, interpretation="Zone neutre",
             ))
     elif w_rsi == 0:
         pass  # Critère désactivé pour cet horizon
@@ -201,18 +207,44 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
     # ── Critère 5 : Performance relative vs indice ────────────────────────────
     w_perf = w.get("perf_relative", 1)
     if w_perf > 0:
-        if ind.perf_vs_index_1m is not None:
+        if ind.perf_vs_index_1m_atr_norm is not None:
+            # ATR-normalized alpha (B3) : seuil ±1.0 ATR-unit — risk-adjusted
+            norm = ind.perf_vs_index_1m_atr_norm
+            alpha_str = f"{ind.perf_vs_index_1m:+.1f}%" if ind.perf_vs_index_1m is not None else "?"
+            if norm > 1.0:
+                criteres.append(CritereScore(
+                    nom="Perf relative",
+                    valeur=f"Alpha 1M = {alpha_str} vs BRVMC ({norm:+.2f} ATR)",
+                    points=+1 * w_perf,
+                    interpretation="Sur-performance risk-adjusted > 1 ATR mensuel",
+                ))
+            elif norm < -1.0:
+                criteres.append(CritereScore(
+                    nom="Perf relative",
+                    valeur=f"Alpha 1M = {alpha_str} vs BRVMC ({norm:+.2f} ATR)",
+                    points=-1 * w_perf,
+                    interpretation="Sous-performance risk-adjusted < -1 ATR mensuel",
+                ))
+            else:
+                criteres.append(CritereScore(
+                    nom="Perf relative",
+                    valeur=f"Alpha 1M = {alpha_str} vs BRVMC ({norm:+.2f} ATR)",
+                    points=0,
+                    interpretation="Performance en ligne avec l'indice (< 1 ATR d'écart)",
+                ))
+        elif ind.perf_vs_index_1m is not None:
+            # Fallback brut si ATR indisponible (série trop courte)
             if ind.perf_vs_index_1m > 2:
                 criteres.append(CritereScore(
                     nom="Perf relative",
                     valeur=f"Alpha 1M = +{ind.perf_vs_index_1m:.1f}% vs BRVMC",
-                    points=+1 * w_perf, interpretation="Sur-performance vs indice BRVM (+2% de seuil)"
+                    points=+1 * w_perf, interpretation="Sur-performance vs indice BRVM (ATR non dispo)"
                 ))
             elif ind.perf_vs_index_1m < -2:
                 criteres.append(CritereScore(
                     nom="Perf relative",
                     valeur=f"Alpha 1M = {ind.perf_vs_index_1m:.1f}% vs BRVMC",
-                    points=-1 * w_perf, interpretation="Sous-performance vs indice BRVM (-2% de seuil)"
+                    points=-1 * w_perf, interpretation="Sous-performance vs indice BRVM (ATR non dispo)"
                 ))
             else:
                 criteres.append(CritereScore(
@@ -248,6 +280,55 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
                 interpretation=ind.macd_divergence_detail or "Divergence baissière MACD — essoufflement acheteur"
             ))
 
+    # ── Critère 6b : Pente histogramme MACD — Inflexion de momentum ───────────
+    # Seconde dérivée du MACD : hist = f'(MACD), slope(hist) = f''(MACD)
+    # Score uniquement les transitions de régime (pas la direction brute)
+    # → évite de doubler le critère MACD directionnel déjà présent
+    # Histogramme > 0 ET pente < 0 : momentum haussier s'épuise → -1
+    # Histogramme < 0 ET pente > 0 : momentum baissier se retourne → +1
+    # Critère silencieux si aucune inflexion détectée (pas de ligne N/D)
+    if ind.macd_histogram is not None and ind.macd_histogram_prev is not None:
+        hist_slope = ind.macd_histogram - ind.macd_histogram_prev
+        if ind.macd_histogram > 0 and hist_slope < 0:
+            criteres.append(CritereScore(
+                nom="MACD Momentum",
+                valeur=f"Hist({ind.macd_histogram:+.4f}) ↘",
+                points=-1,
+                interpretation="Histogramme positif en baisse — momentum haussier s'épuise"
+            ))
+        elif ind.macd_histogram < 0 and hist_slope > 0:
+            criteres.append(CritereScore(
+                nom="MACD Momentum",
+                valeur=f"Hist({ind.macd_histogram:+.4f}) ↗",
+                points=+1,
+                interpretation="Histogramme négatif en hausse — momentum baissier se retourne"
+            ))
+        # Pas d'inflexion → critère silencieux (pas de N/D, pas de dilution couverture)
+
+    # ── Critère 6c : Pente MA50 — Trend structurel long ──────────────────────
+    # Couche "trend long" du modèle 3-layer (régime → trend → timing)
+    # Pente normalisée % / 5 séances → comparable cross-tickers BRVM
+    # Seuil ±0.2% : en dessous = MA plate sur 5j, pas de signal structurel détectable
+    # Symétrique (+1/-1) : ADX distingue déjà "baissier structurel" vs "baissier bruité"
+    # Critère silencieux en zone neutre (pas de N/D) — cohérence avec 6b
+    if ind.ma50_slope_pct is not None:
+        if ind.ma50_slope_pct > 0.2:
+            criteres.append(CritereScore(
+                nom="MA50 Slope",
+                valeur=f"MA50 +{ind.ma50_slope_pct:.2f}%/5j",
+                points=+1,
+                interpretation="MA50 en hausse structurelle — trend de fond haussier confirmé"
+            ))
+        elif ind.ma50_slope_pct < -0.2:
+            criteres.append(CritereScore(
+                nom="MA50 Slope",
+                valeur=f"MA50 {ind.ma50_slope_pct:.2f}%/5j",
+                points=-1,
+                interpretation="MA50 en baisse structurelle — trend de fond baissier confirmé"
+            ))
+        # Entre ±0.2% : MA plate → critère silencieux (pas de N/D)
+    # ind.ma50_slope_pct is None → données insuffisantes → silencieux
+
     # ── Critère 7 : Stochastic Oscillator ─────────────────────────────────────
     w_stoch = w.get("stochastic", 1)
     if w_stoch > 0:
@@ -276,8 +357,103 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
                 points=0, interpretation="Données insuffisantes"
             ))
 
-    # ── Calcul score total ────────────────────────────────────────────────────
-    score = sum(c.points for c in criteres)
+    # ── Critère 8 : ADX — Régime de marché ───────────────────────────────────
+    # Poids fixe = 1 (régime filter, indépendant de l'horizon)
+    # ADX > 25 : tendance forte, signaux directionnels fiables → +1
+    # ADX < 15 : range/chop, signaux peu fiables sur BRVM illiquide → -1
+    # Garde : ind.adx is None si historique < 28 séances (2× période Wilder)
+    if ind.adx is not None:
+        if ind.adx > 25:
+            criteres.append(CritereScore(
+                nom="ADX",
+                valeur=f"ADX({ind.adx})",
+                points=+1,
+                interpretation="Tendance forte (ADX>25) — signal directionnel fiable"
+            ))
+        elif ind.adx < 15:
+            criteres.append(CritereScore(
+                nom="ADX",
+                valeur=f"ADX({ind.adx})",
+                points=-1,
+                interpretation="Marché en range (ADX<15) — signaux directionnels peu fiables"
+            ))
+        else:
+            criteres.append(CritereScore(
+                nom="ADX",
+                valeur=f"ADX({ind.adx})",
+                points=0,
+                interpretation="Tendance modérée (15≤ADX≤25) — régime ambigu"
+            ))
+    else:
+        criteres.append(CritereScore(
+            nom="ADX", valeur="N/D",
+            points=0, interpretation="Données insuffisantes (< 28 séances)"
+        ))
+
+    # ── Critère 9 : Volume — Confirmation du signal ───────────────────────────
+    # Poids fixe = 1 (confirmation, indépendant de l'horizon)
+    # Volume en titres échangés (Sika Finance → "Volume Titres" → colonne "volume")
+    # Garde stricte : volume_moy20 == 0 uniquement (pas de seuil dur — small caps BRVM
+    # peuvent avoir 10–200 titres/jour, un seuil fixe tuerait leur scoring)
+    # ADX (critère 8) joue déjà le rôle de filtre de régime structurel
+    if ind.volume_moy20 is not None and ind.volume_moy20 > 0 and ind.volume_actuel is not None:
+        vol_ratio = ind.volume_actuel / ind.volume_moy20
+        if vol_ratio >= 2.0:
+            criteres.append(CritereScore(
+                nom="Volume",
+                valeur=f"Vol {vol_ratio:.1f}× moy20j",
+                points=+1,
+                interpretation="Volume élevé (≥2×) — signal confirmé par l'activité"
+            ))
+        elif vol_ratio <= 0.5:
+            criteres.append(CritereScore(
+                nom="Volume",
+                valeur=f"Vol {vol_ratio:.1f}× moy20j",
+                points=-1,
+                interpretation="Volume faible (≤0.5×) — signal non confirmé, activité absente"
+            ))
+        else:
+            criteres.append(CritereScore(
+                nom="Volume",
+                valeur=f"Vol {vol_ratio:.1f}× moy20j",
+                points=0,
+                interpretation="Volume dans la norme (0.5×–2×)"
+            ))
+    else:
+        criteres.append(CritereScore(
+            nom="Volume", valeur="N/D",
+            points=0, interpretation="Volume moyen indisponible ou nul"
+        ))
+
+    # ── Calcul score total — Hierarchical Bounded Factor Model (A5-Simple) ────
+    # Trois blocs corrélés : chaque critère normalisé à ±1 intra-groupe (vote unique),
+    # puis cap ±2 par groupe → mesure un consensus de signaux, pas une addition de magnitudes
+    # Régime/filtre (ADX, Volume, PerfRel) : libres, information structurellement indépendante
+    _G_MOMENTUM = {"MACD", "Divergence MACD", "MACD Momentum"}
+    _G_TREND    = {"MA Config", "MA50 Slope", "Tendance LT"}
+    _G_TIMING   = {"RSI", "Divergence RSI", "Stochastic"}
+    _G_GROUPED  = _G_MOMENTUM | _G_TREND | _G_TIMING
+    _CAP        = 2
+
+    def _group_score(group):
+        """Somme des votes normalisés ±1 par critère dans un groupe."""
+        return sum(
+            max(-1, min(1, c.points))
+            for c in criteres if c.nom in group
+        )
+
+    s_momentum = _group_score(_G_MOMENTUM)
+    s_trend    = _group_score(_G_TREND)
+    s_timing   = _group_score(_G_TIMING)
+    s_autres   = sum(c.points for c in criteres if c.nom not in _G_GROUPED)
+
+    score = (
+        max(-_CAP, min(_CAP, s_momentum))
+        + max(-_CAP, min(_CAP, s_trend))
+        + max(-_CAP, min(_CAP, s_timing))
+        + s_autres
+    )
+
     points_positifs = [c.points for c in criteres if c.points > 0]
     points_negatifs = [c.points for c in criteres if c.points < 0]
 
@@ -300,13 +476,30 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
         result.signal_emoji = "🟡"
         result.signal_color = "#BA7517"
 
-    # ── Niveau de confiance ───────────────────────────────────────────────────
-    criteres_avec_donnees = [c for c in criteres if c.valeur != "N/D"]
-    taux_couverture = len(criteres_avec_donnees) / len(criteres)
+    # ── Niveau de confiance — Dispersion inter-groupes (C1) ───────────────────
+    # Couche validation : indépendante de score_total (sinon biais ADX/Volume/PerfRel)
+    # Direction = majorité de votes directionnels des groupes, pas signe du score global
+    # Couverture : critères de _G_GROUPED avec N/D comptent quand même (absence de signal
+    # ≠ absence de données ; critères silencieux = logique validée sans signal détecté)
+    criteres_valides = [c for c in criteres if c.valeur != "N/D" or c.nom in _G_GROUPED]
+    taux_couverture = len(criteres_valides) / len(criteres) if criteres else 0
 
-    if taux_couverture >= 0.8 and abs(score) >= 4:
+    votes = [
+        1 if s_momentum > 0 else (-1 if s_momentum < 0 else 0),
+        1 if s_trend > 0 else (-1 if s_trend < 0 else 0),
+        1 if s_timing > 0 else (-1 if s_timing < 0 else 0),
+    ]
+    direction = 1 if votes.count(1) > votes.count(-1) else (
+        -1 if votes.count(-1) > votes.count(1) else 0
+    )
+    nb_groupes_alignes = votes.count(direction) if direction != 0 else 0
+    nb_groupes_actifs  = sum(1 for s in [s_momentum, s_trend, s_timing] if s != 0)
+
+    if taux_couverture < 0.5 or nb_groupes_actifs < 2:
+        result.confiance = "faible"   # Données insuffisantes ou signal mono-bloc
+    elif nb_groupes_alignes == 3:
         result.confiance = "forte"
-    elif taux_couverture >= 0.6 and abs(score) >= 2:
+    elif nb_groupes_alignes == 2:
         result.confiance = "modérée"
     else:
         result.confiance = "faible"

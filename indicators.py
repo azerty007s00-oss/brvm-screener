@@ -126,6 +126,21 @@ def _calc_adx(
 
     return adx, plus_di, minus_di
 
+
+def _calc_atr(
+    high: pd.Series, low: pd.Series, close: pd.Series,
+    period: int = 14,
+) -> Optional[pd.Series]:
+    """ATR de Wilder — formule identique à _calc_adx pour cohérence interne."""
+    if len(close) < period + 1:
+        return None
+    tr1 = high - low
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    return tr.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
+
+
 @dataclass
 class TechnicalIndicators:
     """Conteneur structuré pour tous les indicateurs calculés."""
@@ -142,10 +157,13 @@ class TechnicalIndicators:
     # RSI
     rsi: Optional[float] = None
     rsi_signal: str = "neutre"        # survendu | neutre | suracheté
+    rsi_p10: Optional[float] = None   # seuil survendu adaptatif (C2) — percentile 10 local
+    rsi_p90: Optional[float] = None   # seuil suracheté adaptatif (C2) — percentile 90 local
 
     # Moyennes mobiles
     ma20: Optional[float] = None
     ma50: Optional[float] = None
+    ma50_slope_pct: Optional[float] = None
     ma200: Optional[float] = None
     ma_lt: Optional[float] = None       # MA long terme adaptative (MA200 ou MA100 fallback)
     ma_lt_period: int = 0               # Période réellement utilisée pour la MA LT
@@ -156,6 +174,7 @@ class TechnicalIndicators:
     macd_line: Optional[float] = None
     macd_signal_line: Optional[float] = None
     macd_histogram: Optional[float] = None
+    macd_histogram_prev: Optional[float] = None
     macd_signal: str = "neutre"       # haussier | baissier | neutre
 
     # Bollinger
@@ -180,6 +199,8 @@ class TechnicalIndicators:
     plus_di: Optional[float] = None
     minus_di: Optional[float] = None
     adx_signal: str = "neutre"        # tendance_forte | tendance_moderee | pas_de_tendance
+    atr: Optional[float] = None           # ATR absolu (Wilder, période ADX)
+    atr_pct: Optional[float] = None       # ATR / close[-1] × 100 — comparable cross-tickers BRVM
 
     # Supports / Résistances
     support: Optional[float] = None
@@ -188,7 +209,8 @@ class TechnicalIndicators:
     # Performance relative
     perf_1m: Optional[float] = None   # % sur 1 mois
     perf_3m: Optional[float] = None   # % sur 3 mois
-    perf_vs_index_1m: Optional[float] = None  # alpha vs BRVMC
+    perf_vs_index_1m: Optional[float] = None        # alpha brut vs BRVMC (%)
+    perf_vs_index_1m_atr_norm: Optional[float] = None  # alpha / atr_pct — ATR space (B3)
 
     # Divergence RSI
     rsi_divergence: str = "aucune"       # aucune | haussiere | baissiere | haussiere_forte | baissiere_forte
@@ -281,6 +303,17 @@ def compute_indicators(
             (close.iloc[-1] / close.iloc[-2] - 1) * 100, 2
         )
 
+    # ── ATR — calculé avant RSI pour que atr_pct soit disponible (B1) ────────
+    # Même période qu'ADX → cohérence Wilder ; close.iloc[-1] pour référence temporelle
+    atr_s = _calc_atr(high, low, close, period=ADX_PERIOD)
+    if atr_s is not None:
+        atr_val = atr_s.iloc[-1]
+        if pd.notna(atr_val):
+            result.atr = round(float(atr_val), 4)
+            price_ref = float(close.iloc[-1])
+            if price_ref > 0:
+                result.atr_pct = round(result.atr / price_ref * 100, 3)
+
     # ── RSI ───────────────────────────────────────────────────────────────────
     if len(df) >= RSI_PERIOD + 1:
         rsi_series = _calc_rsi(close, length=RSI_PERIOD)
@@ -298,8 +331,23 @@ def compute_indicators(
                 # Détection divergence RSI vs prix
                 div_window = {"Court terme": 20, "Moyen terme": 40, "Long terme": 60}.get(horizon, 40)
                 result.rsi_divergence, result.rsi_divergence_detail = _detect_rsi_divergence(
-                    close, rsi_series, window=min(div_window, len(close))
+                    close, rsi_series, window=min(div_window, len(close)),
+                    atr_pct=result.atr_pct,
                 )
+
+                # Seuils adaptatifs RSI (C2) — percentile local, fenêtre adaptative
+                # Fallback 30/70 si distribution comprimée (spread < 15 pts RSI)
+                rsi_clean = rsi_series.dropna()
+                if len(rsi_clean) >= 60:
+                    rsi_window = rsi_clean.iloc[-min(120, len(rsi_clean)):]
+                    p10 = float(rsi_window.quantile(0.10))
+                    p90 = float(rsi_window.quantile(0.90))
+                    if (p90 - p10) >= 15:
+                        result.rsi_p10 = round(p10, 2)
+                        result.rsi_p90 = round(p90, 2)
+                    else:
+                        result.rsi_p10 = 30.0
+                        result.rsi_p90 = 70.0
 
     # ── Moyennes mobiles ──────────────────────────────────────────────────────
     n = len(close)
@@ -314,6 +362,14 @@ def compute_indicators(
         if ma50_s is not None:
             result.ma50 = round(float(ma50_s.iloc[-1]), 2) if pd.notna(ma50_s.iloc[-1]) else None
             result.series["ma50"] = ma50_s.dropna().round(2).to_dict()
+            # Pente normalisée % sur 5 séances — comparable cross-tickers (BRVM multi-cap)
+            # Robuste aux gaps : on travaille sur la série clean, pas sur iloc absolu
+            ma50_clean = ma50_s.dropna()
+            if len(ma50_clean) >= 6:
+                last = ma50_clean.iloc[-1]
+                prev = ma50_clean.iloc[-6]
+                if prev != 0:
+                    result.ma50_slope_pct = round((last - prev) / prev * 100, 3)
 
     if n >= MA_LONG:
         ma200_s = _calc_sma(close, length=MA_LONG)
@@ -352,9 +408,12 @@ def compute_indicators(
         result.macd_signal_line = round(float(v), 4) if pd.notna(v) else None
         result.series["macd_signal"] = macd_s.dropna().round(4).to_dict()
 
-        v = macd_h.iloc[-1]
-        result.macd_histogram = round(float(v), 4) if pd.notna(v) else None
-        result.series["macd_hist"] = macd_h.dropna().round(4).to_dict()
+        macd_clean = macd_h.dropna()
+        v = macd_clean.iloc[-1] if len(macd_clean) >= 1 else None
+        result.macd_histogram = round(float(v), 4) if v is not None and pd.notna(v) else None
+        v_prev = macd_clean.iloc[-2] if len(macd_clean) >= 2 else None
+        result.macd_histogram_prev = round(float(v_prev), 4) if v_prev is not None and pd.notna(v_prev) else None
+        result.series["macd_hist"] = macd_clean.round(4).to_dict()
 
         if result.macd_line is not None and result.macd_signal_line is not None:
             result.macd_signal = (
@@ -457,6 +516,11 @@ def compute_indicators(
         index_perf_1m = _compute_perf(df_index["close"], 21)
         if index_perf_1m is not None and result.perf_1m is not None:
             result.perf_vs_index_1m = round(result.perf_1m - index_perf_1m, 2)
+            # ATR-normalized alpha (B3) — atr_pct déjà disponible (calculé avant RSI)
+            if result.atr_pct is not None and result.atr_pct > 0:
+                result.perf_vs_index_1m_atr_norm = round(
+                    result.perf_vs_index_1m / result.atr_pct, 3
+                )
 
     if df_index is not None and len(df_index) >= 63:
         index_perf_3m = _compute_perf(df_index["close"], 63)
@@ -482,7 +546,7 @@ def compute_indicators(
     if "macd_hist" in result.series and len(result.series["macd_hist"]) >= 20:
         macd_hist_s = pd.Series(result.series["macd_hist"])
         result.macd_divergence, result.macd_divergence_detail = _detect_macd_divergence(
-            close, macd_hist_s
+            close, macd_hist_s, atr_pct=result.atr_pct,
         )
 
     # ── Détection d'événements techniques ────────────────────────────────────
@@ -529,8 +593,27 @@ def _compute_perf(close: pd.Series, periods: int) -> Optional[float]:
     return round(float(perf), 2)
 
 
+# ─── Volatility Normalization Layer (B2) ─────────────────────────────────────
+# Point de vérité unique pour le scaling ATR : tous les seuils adaptatifs
+# passent par _vol_mult() → cohérence garantie cross-indicateurs.
+
+_BRVM_REF_ATR_PCT = 1.5   # régime de volatilité "normal" BRVM
+_VOL_MULT_LO      = 0.67  # plancher : marché très stable
+_VOL_MULT_HI      = 2.0   # plafond  : marché violent / illiquidité extrême
+
+
+def _vol_mult(atr_pct: Optional[float]) -> float:
+    """Multiplicateur volatilité borné — appliqué à TOUS les seuils adaptatifs."""
+    if atr_pct is None or atr_pct <= 0:
+        return 1.0
+    if atr_pct < 0.3 * _BRVM_REF_ATR_PCT:   # titre quasi-figé — ATR non représentatif
+        return 1.0
+    return max(_VOL_MULT_LO, min(_VOL_MULT_HI, atr_pct / _BRVM_REF_ATR_PCT))
+
+
 def _detect_rsi_divergence(
-    close: pd.Series, rsi_series: pd.Series, window: int = 30, min_swing: float = 1.5
+    close: pd.Series, rsi_series: pd.Series, window: int = 30, min_swing: float = 1.5,
+    atr_pct: Optional[float] = None,
 ) -> tuple[str, str]:
     """
     Détecte les divergences haussières et baissières entre le prix et le RSI.
@@ -575,6 +658,9 @@ def _detect_rsi_divergence(
             if not np.isnan(r[i]):
                 pivot_lows.append((i, c[i], r[i]))
 
+    # Seuil forte adaptatif — via VNL (B2) : 3.0% × vol_mult, borné [2.0%, 6.0%]
+    seuil_forte = 3.0 * _vol_mult(atr_pct)
+
     # === Divergence baissière : comparer les 2 derniers pivot highs ===
     if len(pivot_highs) >= 2:
         prev_h = pivot_highs[-2]
@@ -583,7 +669,7 @@ def _detect_rsi_divergence(
         if last_h[1] > prev_h[1] and last_h[2] < prev_h[2] - min_swing:
             price_pct = (last_h[1] - prev_h[1]) / prev_h[1] * 100
             rsi_drop = prev_h[2] - last_h[2]
-            if price_pct > 3 or rsi_drop > 5:
+            if price_pct > seuil_forte or rsi_drop > 5:
                 return "baissiere_forte", (
                     f"Prix +{price_pct:.1f}% (hauts croissants) mais RSI -{rsi_drop:.1f}pts "
                     f"(hauts décroissants) → divergence baissière forte, retournement probable"
@@ -601,7 +687,7 @@ def _detect_rsi_divergence(
         if last_l[1] < prev_l[1] and last_l[2] > prev_l[2] + min_swing:
             price_pct = (prev_l[1] - last_l[1]) / prev_l[1] * 100
             rsi_rise = last_l[2] - prev_l[2]
-            if price_pct > 3 or rsi_rise > 5:
+            if price_pct > seuil_forte or rsi_rise > 5:
                 return "haussiere_forte", (
                     f"Prix -{price_pct:.1f}% (bas décroissants) mais RSI +{rsi_rise:.1f}pts "
                     f"(bas croissants) → divergence haussière forte, rebond probable"
@@ -711,7 +797,8 @@ def _compute_drawdown(close: pd.Series, window: int = 63) -> tuple[Optional[floa
 # ─── Divergence MACD ─────────────────────────────────────────────────────────
 
 def _detect_macd_divergence(
-    close: pd.Series, macd_hist: pd.Series, window: int = 30
+    close: pd.Series, macd_hist: pd.Series, window: int = 30,
+    atr_pct: Optional[float] = None,
 ) -> tuple[str, str]:
     """
     Détecte les divergences entre le prix et l'histogramme MACD.
@@ -742,23 +829,30 @@ def _detect_macd_divergence(
         if m[i] > m[i-1] and m[i] > m[i+1] and m[i] > 0:
             peaks.append((i, c[i], m[i]))
 
+    # Swing minimum adaptatif — via VNL (B2) : 1.0% × vol_mult
+    seuil_min = 1.0 * _vol_mult(atr_pct)
+
     # Divergence haussière : prix descend, MACD hist remonte
     if len(troughs) >= 2:
         prev, last = troughs[-2], troughs[-1]
         if last[1] < prev[1] and last[2] > prev[2]:
-            return "haussiere", (
-                f"Prix en baisse mais histogramme MACD en hausse "
-                f"→ divergence haussière MACD, essoufflement vendeur"
-            )
+            price_pct = (prev[1] - last[1]) / prev[1] * 100
+            if price_pct >= seuil_min:
+                return "haussiere", (
+                    f"Prix en baisse mais histogramme MACD en hausse "
+                    f"→ divergence haussière MACD, essoufflement vendeur"
+                )
 
     # Divergence baissière : prix monte, MACD hist descend
     if len(peaks) >= 2:
         prev, last = peaks[-2], peaks[-1]
         if last[1] > prev[1] and last[2] < prev[2]:
-            return "baissiere", (
-                f"Prix en hausse mais histogramme MACD en baisse "
-                f"→ divergence baissière MACD, essoufflement acheteur"
-            )
+            price_pct = (last[1] - prev[1]) / prev[1] * 100
+            if price_pct >= seuil_min:
+                return "baissiere", (
+                    f"Prix en hausse mais histogramme MACD en baisse "
+                    f"→ divergence baissière MACD, essoufflement acheteur"
+                )
 
     return "aucune", ""
 
