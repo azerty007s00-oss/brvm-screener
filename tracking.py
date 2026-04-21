@@ -60,10 +60,11 @@ def log_signal(ind, score, today: Optional[date] = None) -> bool:
     Enregistre un signal exploitable dans le journal CSV.
 
     Filtre : signal ACHAT/VENTE ET stop_loss non None (D1 actif).
+    Guard  : 1 trade max par ticker — ignore si un trade est déjà ouvert.
     Dédoublonnage : même ticker + même date + même signal → ignoré.
 
     Returns:
-        True si enregistré, False si filtré ou doublon.
+        True si enregistré, False si filtré, bloqué ou doublon.
     """
     if score.signal not in ("ACHAT", "VENTE") or score.stop_loss is None:
         return False
@@ -72,6 +73,13 @@ def log_signal(ind, score, today: Optional[date] = None) -> bool:
     df = _load()
 
     if not df.empty:
+        # Guard 1-trade-par-ticker : évite de surpondérer un titre en drift
+        open_mask = df["exit_date"].isna() | (df["exit_date"] == "")
+        open_tickers = set(df[open_mask]["ticker"].tolist())
+        if str(ind.ticker) in open_tickers:
+            logger.debug(f"[Tracking] Trade déjà ouvert — {ind.ticker} ignoré")
+            return False
+
         dup = (
             (df["ticker"] == str(ind.ticker))
             & (df["date"] == today_str)
@@ -255,32 +263,56 @@ def get_kpis() -> dict:
     if not wins.empty and not loses.empty and loses["pnl_pct"].mean() != 0:
         wl_ratio = round(abs(wins["pnl_pct"].mean() / loses["pnl_pct"].mean()), 2)
 
+    # Expectancy : seul KPI qui compte avec un R/R fixé à 2.0
+    win_rate  = len(wins) / len(valid)
+    avg_win   = wins["pnl_pct"].mean()  if not wins.empty  else 0.0
+    avg_loss  = loses["pnl_pct"].mean() if not loses.empty else 0.0
+    expectancy = round(win_rate * avg_win + (1 - win_rate) * avg_loss, 2)
+
+    # Holding days (clé pour BRVM : capital immobilisé = coût réel)
+    valid = valid.copy()
+    valid["holding_days"] = (
+        pd.to_datetime(valid["exit_date"])
+        - pd.to_datetime(valid["date"])
+    ).dt.days
+
     kpis: dict = {
-        "status":         "ok",
-        "n_closed":       len(valid),
-        "n_open":         len(get_open_trades()),
-        "hit_rate_pct":   round(len(wins) / len(valid) * 100, 1),
-        "avg_pnl_pct":    round(valid["pnl_pct"].mean(), 2),
-        "avg_win_pct":    round(wins["pnl_pct"].mean(),  2) if not wins.empty  else None,
-        "avg_loss_pct":   round(loses["pnl_pct"].mean(), 2) if not loses.empty else None,
-        "win_loss_ratio": wl_ratio,
-        "by_reason":      (
-            valid.groupby("exit_reason")["pnl_pct"]
-            .agg(n="count", avg_pnl="mean")
+        "status":              "ok",
+        "n_closed":            len(valid),
+        "n_open":              len(get_open_trades()),
+        "hit_rate_pct":        round(win_rate * 100, 1),
+        "expectancy_pct":      expectancy,
+        "avg_pnl_pct":         round(valid["pnl_pct"].mean(), 2),
+        "avg_win_pct":         round(avg_win,  2) if not wins.empty  else None,
+        "avg_loss_pct":        round(avg_loss, 2) if not loses.empty else None,
+        "win_loss_ratio":      wl_ratio,
+        "avg_holding_days":    round(valid["holding_days"].mean(), 1),
+        "avg_holding_winners": round(wins.assign(h=(pd.to_datetime(wins["exit_date"]) - pd.to_datetime(wins["date"])).dt.days)["h"].mean(), 1) if not wins.empty else None,
+        "avg_holding_losers":  round(loses.assign(h=(pd.to_datetime(loses["exit_date"]) - pd.to_datetime(loses["date"])).dt.days)["h"].mean(), 1) if not loses.empty else None,
+        "by_reason": (
+            valid.groupby("exit_reason")
+            .agg(n=("pnl_pct", "count"), avg_pnl=("pnl_pct", "mean"), avg_days=("holding_days", "mean"))
             .round(2)
             .to_dict(orient="index")
         ),
     }
 
-    # Ventilation par niveau de confiance — la clé du modèle C1
+    # Ventilation par niveau de confiance — le test clé du modèle C1
     by_conf = {}
     for conf in ("forte", "modérée", "faible"):
         sub = valid[valid["confiance"] == conf]
         if not sub.empty:
+            sub_wins = sub[sub["pnl_pct"] > 0]
+            sub_avg_w = sub_wins["pnl_pct"].mean() if not sub_wins.empty else 0.0
+            sub_loses = sub[sub["pnl_pct"] <= 0]
+            sub_avg_l = sub_loses["pnl_pct"].mean() if not sub_loses.empty else 0.0
+            wr = len(sub_wins) / len(sub)
             by_conf[conf] = {
-                "n":            len(sub),
-                "hit_rate_pct": round((sub["pnl_pct"] > 0).mean() * 100, 1),
-                "avg_pnl_pct":  round(sub["pnl_pct"].mean(), 2),
+                "n":              len(sub),
+                "hit_rate_pct":   round(wr * 100, 1),
+                "avg_pnl_pct":    round(sub["pnl_pct"].mean(), 2),
+                "expectancy_pct": round(wr * sub_avg_w + (1 - wr) * sub_avg_l, 2),
+                "avg_days":       round(sub["holding_days"].mean(), 1),
             }
     if by_conf:
         kpis["by_confiance"] = by_conf
