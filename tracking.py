@@ -13,12 +13,15 @@ Intégration dans le screener (app.py) :
     update_open_trades({ticker: ind.cours_actuel for ticker, ... in results.items()})
 """
 
+import base64
+import io
 import logging
 from datetime import date
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+import requests
 
 logger = logging.getLogger(__name__)
 
@@ -39,19 +42,77 @@ _COLUMNS = [
 ]
 
 
-# ─── I/O CSV ─────────────────────────────────────────────────────────────────
+# ─── Backend GitHub (Streamlit Cloud) ────────────────────────────────────────
+# Même pattern que auth.py/users.json — fallback local si credentials absents.
+
+_GH_FILE = "journal_signaux.csv"
+
+
+def _gh_creds() -> tuple[str, str] | tuple[None, None]:
+    """Retourne (token, repo) depuis st.secrets, ou (None, None) si indispo."""
+    try:
+        import streamlit as st
+        token = st.secrets.get("GITHUB_TOKEN", "")
+        repo  = st.secrets.get("GITHUB_REPO",  "")
+        if token and repo:
+            return token, repo
+    except Exception:
+        pass
+    return None, None
+
+
+def _load_github(token: str, repo: str) -> pd.DataFrame:
+    url     = f"https://api.github.com/repos/{repo}/contents/{_GH_FILE}"
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+    resp    = requests.get(url, headers=headers, timeout=10)
+    if resp.status_code == 404:
+        return pd.DataFrame(columns=_COLUMNS)
+    content = base64.b64decode(resp.json()["content"]).decode("utf-8")
+    df = pd.read_csv(io.StringIO(content), dtype=str)
+    for col in _COLUMNS:
+        if col not in df.columns:
+            df[col] = ""
+    return df[_COLUMNS]
+
+
+def _save_github(df: pd.DataFrame, token: str, repo: str) -> None:
+    url     = f"https://api.github.com/repos/{repo}/contents/{_GH_FILE}"
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+    content_b64 = base64.b64encode(df.to_csv(index=False).encode("utf-8")).decode("utf-8")
+    sha_resp = requests.get(url, headers=headers, timeout=10)
+    sha = sha_resp.json().get("sha") if sha_resp.status_code == 200 else None
+    payload = {"message": "tracking: journal_signaux.csv", "content": content_b64}
+    if sha:
+        payload["sha"] = sha
+    requests.put(url, headers=headers, json=payload, timeout=15)
+
+
+# ─── I/O CSV (local ou GitHub selon contexte) ─────────────────────────────────
 
 def _load() -> pd.DataFrame:
+    token, repo = _gh_creds()
+    if token:
+        try:
+            return _load_github(token, repo)
+        except Exception as e:
+            logger.warning(f"[Tracking] GitHub load failed, fallback local — {e}")
     if not JOURNAL_PATH.exists():
         return pd.DataFrame(columns=_COLUMNS)
     df = pd.read_csv(JOURNAL_PATH, dtype=str)
-    for col in _COLUMNS:          # compatibilité si colonnes ajoutées ultérieurement
+    for col in _COLUMNS:
         if col not in df.columns:
             df[col] = ""
     return df[_COLUMNS]
 
 
 def _save(df: pd.DataFrame) -> None:
+    token, repo = _gh_creds()
+    if token:
+        try:
+            _save_github(df, token, repo)
+            return
+        except Exception as e:
+            logger.warning(f"[Tracking] GitHub save failed, fallback local — {e}")
     df.to_csv(JOURNAL_PATH, index=False)
 
 

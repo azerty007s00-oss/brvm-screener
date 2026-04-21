@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+.cache/
+.env
+*.log
+
+# Journal local — géré via GitHub API en production
+journal_signaux.csv
