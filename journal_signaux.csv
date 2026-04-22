@@ -16,3 +16,4 @@ date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k
 2026-04-22,SEMC,VENTE,-3,faible,1800.0,1870.2,1659.6,2.0,1.0,2.0,21.8,3.9,ok,,,,,
 2026-04-22,SIVC,VENTE,-3,faible,2695.0,2760.99,2563.01,2.0,1.0,2.0,25.0,2.45,ok,,,,,
 2026-04-22,TTLC,VENTE,-3,faible,2700.0,2756.34,2587.31,2.0,1.0,2.0,25.0,2.09,ok,,,,,
+2026-04-22,SNTS,ACHAT,3,faible,28500.0,28211.28,29077.43,2.0,1.0,2.0,25.0,1.01,ok,,,,,
