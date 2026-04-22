@@ -11,3 +11,4 @@ date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k
 2026-04-21,STAC,ACHAT,2,faible,2850.0,2677.85,3194.31,2.0,1.0,2.0,14.1,6.04,ok,,,,,
 2026-04-21,STBC,VENTE,-2,modérée,20900.0,21297.57,20104.86,2.0,1.5,3.0,25.0,1.27,ok,,,,,
 2026-04-21,ETIT,VENTE,-2,faible,29.0,30.05,26.89,2.01,1.0,2.0,23.5,3.63,ok,,,,,
+2026-04-22,BICC,ACHAT,4,faible,24850.0,24332.15,25885.7,2.0,1.0,2.0,25.0,2.08,ok,,,,,
