@@ -22,3 +22,4 @@ date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k
 2026-04-23,SHEC,VENTE,-2,faible,1940.0,1984.96,1850.08,2.0,1.0,2.0,25.0,2.32,ok,,,,,
 2026-04-23,SLBC,ACHAT,2,modérée,39455.0,38463.41,41438.18,2.0,1.5,3.0,25.0,1.68,ok,,,,,
 2026-04-23,BOAS,ACHAT,2,modérée,6800.0,6707.4,6985.2,2.0,1.5,3.0,25.0,0.91,ok,,,,,
+2026-04-23,BOABF,ACHAT,4,modérée,5400.0,5301.37,5597.26,2.0,1.5,3.0,25.0,1.22,ok,,,,,
