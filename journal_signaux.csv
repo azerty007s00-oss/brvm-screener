@@ -24,3 +24,4 @@ date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k
 2026-04-23,BOAS,ACHAT,2,modérée,6800.0,6707.4,6985.2,2.0,1.5,3.0,25.0,0.91,ok,,,,,
 2026-04-23,BOABF,ACHAT,4,modérée,5400.0,5301.37,5597.26,2.0,1.5,3.0,25.0,1.22,ok,,,,,
 2026-04-23,CBIBF,ACHAT,3,faible,16490.0,16142.54,17184.93,2.0,1.0,2.0,25.0,2.11,ok,,,,,
+2026-04-27,BOAC,ACHAT,2,modérée,8750.0,8606.06,9037.87,2.0,1.5,3.0,25.0,1.1,ok,,,,,
