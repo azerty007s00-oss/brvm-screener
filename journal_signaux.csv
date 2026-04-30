@@ -29,3 +29,4 @@ date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k
 2026-04-27,UNLC,VENTE,-2,faible,63345.0,66252.13,57530.75,2.0,1.0,2.0,10.9,4.59,ok,,,,,
 2026-04-30,CFAC,VENTE,-3,faible,1530.0,1564.95,1460.1,2.0,1.0,2.0,25.0,2.28,ok,,,,,
 2026-04-30,NSBC,VENTE,-3,modérée,13900.0,14150.77,13398.45,2.0,1.5,3.0,25.0,1.2,ok,,,,,
+2026-04-30,BOAB,ACHAT,2,modérée,8905.0,8682.06,9350.88,2.0,1.5,3.0,25.0,1.67,ok,,,,,
