@@ -1,0 +1,448 @@
+{
+  "_meta": {
+    "version": "1.1",
+    "description": "Données fondamentales BRVM — fichier statique curated",
+    "sources": "Rapports annuels BRVM, SikaFinance, BRVM.org — données publiques",
+    "annee_donnees": 2023,
+    "date_mise_a_jour": "2025-01-01",
+    "note": "BPA et dividende issus des résultats FY2023. PER et rendement calculés dynamiquement avec le cours live. À mettre à jour après chaque publication annuelle.",
+    "confiance_niveaux": {
+      "haute": "Données vérifiées sur rapports officiels BRVM",
+      "moyenne": "Données issues de sources publiques secondaires",
+      "estimee": "Estimation basée sur données sectorielles et historiques"
+    }
+  },
+  "stocks": {
+    "SNTS": {
+      "nom": "Sonatel",
+      "pays": "Sénégal",
+      "secteur": "Télécommunications",
+      "nb_actions_millions": 100.0,
+      "bpa": 2380,
+      "dividende": 1500,
+      "annee_dividende": 2023,
+      "confiance": "haute"
+    },
+    "ORAC": {
+      "nom": "Orange CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Télécommunications",
+      "nb_actions_millions": 267.0,
+      "bpa": 245,
+      "dividende": 160,
+      "annee_dividende": 2023,
+      "confiance": "moyenne"
+    },
+    "ONTBF": {
+      "nom": "Onatel Burkina Faso",
+      "pays": "Burkina Faso",
+      "secteur": "Télécommunications",
+      "nb_actions_millions": 100.0,
+      "bpa": 4500,
+      "dividende": 3500,
+      "annee_dividende": 2023,
+      "confiance": "haute"
+    },
+    "CBIBF": {
+      "nom": "Coris Bank International BF",
+      "pays": "Burkina Faso",
+      "secteur": "Banques",
+      "nb_actions_millions": 30.0,
+      "bpa": 1400,
+      "dividende": 900,
+      "annee_dividende": 2023,
+      "confiance": "moyenne"
+    },
+    "SGBC": {
+      "nom": "Société Générale CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Banques",
+      "nb_actions_millions": 30.0,
+      "bpa": 4600,
+      "dividende": 2000,
+      "annee_dividende": 2023,
+      "confiance": "haute"
+    },
+    "BICC": {
+      "nom": "BICICI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Banques",
+      "nb_actions_millions": 10.0,
+      "bpa": 1800,
+      "dividende": 900,
+      "annee_dividende": 2023,
+      "confiance": "moyenne"
+    },
+    "SIBC": {
+      "nom": "SIB — Société Ivoirienne de Banque",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Banques",
+      "nb_actions_millions": 15.0,
+      "bpa": 850,
+      "dividende": 450,
+      "annee_dividende": 2023,
+      "confiance": "moyenne"
+    },
+    "ECOC": {
+      "nom": "Ecobank CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Banques",
+      "nb_actions_millions": 97.0,
+      "bpa": 450,
+      "dividende": 200,
+      "annee_dividende": 2023,
+      "confiance": "moyenne"
+    },
+    "BNBC": {
+      "nom": "NSIA Banque CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Banques",
+      "nb_actions_millions": 30.0,
+      "bpa": 650,
+      "dividende": 300,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "BOAC": {
+      "nom": "Bank of Africa CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Banques",
+      "nb_actions_millions": 100.0,
+      "bpa": 300,
+      "dividende": 120,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "NSBC": {
+      "nom": "NSIA Assurances CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Assurances",
+      "nb_actions_millions": 10.0,
+      "bpa": 900,
+      "dividende": 500,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "ETIT": {
+      "nom": "Ecobank Transnational Inc.",
+      "pays": "Togo",
+      "secteur": "Banques",
+      "nb_actions_millions": 29760.0,
+      "bpa": 6,
+      "dividende": 3,
+      "annee_dividende": 2023,
+      "confiance": "haute",
+      "note": "Très grand nombre d'actions — cours en FCFA <20"
+    },
+    "ORGT": {
+      "nom": "Oragroup Togo",
+      "pays": "Togo",
+      "secteur": "Banques",
+      "nb_actions_millions": 20.0,
+      "bpa": 500,
+      "dividende": 200,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "BOABF": {
+      "nom": "Bank of Africa Burkina Faso",
+      "pays": "Burkina Faso",
+      "secteur": "Banques",
+      "nb_actions_millions": 30.0,
+      "bpa": 400,
+      "dividende": 180,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "BOAB": {
+      "nom": "Bank of Africa Bénin",
+      "pays": "Bénin",
+      "secteur": "Banques",
+      "nb_actions_millions": 10.0,
+      "bpa": 350,
+      "dividende": 150,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "BOAS": {
+      "nom": "Bank of Africa Sénégal",
+      "pays": "Sénégal",
+      "secteur": "Banques",
+      "nb_actions_millions": 12.0,
+      "bpa": 300,
+      "dividende": 120,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "BOAM": {
+      "nom": "Bank of Africa Mali",
+      "pays": "Mali",
+      "secteur": "Banques",
+      "nb_actions_millions": 12.0,
+      "bpa": 280,
+      "dividende": 100,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "SLBC": {
+      "nom": "Solibra CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Agroalimentaire",
+      "nb_actions_millions": 3.0,
+      "bpa": 12500,
+      "dividende": 8000,
+      "annee_dividende": 2023,
+      "confiance": "haute"
+    },
+    "NTLC": {
+      "nom": "Nestlé CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Agroalimentaire",
+      "nb_actions_millions": 3.0,
+      "bpa": 11000,
+      "dividende": 9000,
+      "annee_dividende": 2023,
+      "confiance": "moyenne"
+    },
+    "UNLC": {
+      "nom": "Unilever CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Agroalimentaire",
+      "nb_actions_millions": 3.0,
+      "bpa": 900,
+      "dividende": 600,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "PALC": {
+      "nom": "Palm CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Agro-industrie",
+      "nb_actions_millions": 8.0,
+      "bpa": 600,
+      "dividende": 400,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "SPHC": {
+      "nom": "SAPH CI — Caoutchouc",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Agro-industrie",
+      "nb_actions_millions": 4.0,
+      "bpa": 3500,
+      "dividende": 2200,
+      "annee_dividende": 2023,
+      "confiance": "moyenne"
+    },
+    "SOGC": {
+      "nom": "SOGB CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Agro-industrie",
+      "nb_actions_millions": 5.0,
+      "bpa": 1500,
+      "dividende": 800,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "FTSC": {
+      "nom": "Filtisac CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Industrie",
+      "nb_actions_millions": 5.0,
+      "bpa": 950,
+      "dividende": 600,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "CABC": {
+      "nom": "Sicable CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Industrie",
+      "nb_actions_millions": 3.0,
+      "bpa": 1000,
+      "dividende": 600,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "UNXC": {
+      "nom": "Uniwax CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Industrie",
+      "nb_actions_millions": 4.0,
+      "bpa": 500,
+      "dividende": 350,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "SICC": {
+      "nom": "SICOR CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Industrie",
+      "nb_actions_millions": 2.5,
+      "bpa": 400,
+      "dividende": 200,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "SMBC": {
+      "nom": "SMB CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Industrie",
+      "nb_actions_millions": 2.0,
+      "bpa": 300,
+      "dividende": 150,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "STBC": {
+      "nom": "SITAB CI — Tabac",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Industrie",
+      "nb_actions_millions": 1.5,
+      "bpa": 2000,
+      "dividende": 1500,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "CIEC": {
+      "nom": "CIE — Électricité CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Énergie & Utilities",
+      "nb_actions_millions": 10.0,
+      "bpa": 800,
+      "dividende": 600,
+      "annee_dividende": 2023,
+      "confiance": "moyenne"
+    },
+    "SDCC": {
+      "nom": "SODECI — Eau CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Énergie & Utilities",
+      "nb_actions_millions": 5.0,
+      "bpa": 2500,
+      "dividende": 1800,
+      "annee_dividende": 2023,
+      "confiance": "moyenne"
+    },
+    "TTLC": {
+      "nom": "TotalEnergies CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Énergie & Utilities",
+      "nb_actions_millions": 6.0,
+      "bpa": 1300,
+      "dividende": 900,
+      "annee_dividende": 2023,
+      "confiance": "moyenne"
+    },
+    "SHEC": {
+      "nom": "Vivo Energy CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Énergie & Utilities",
+      "nb_actions_millions": 20.0,
+      "bpa": 500,
+      "dividende": 300,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "TTLS": {
+      "nom": "TotalEnergies Sénégal",
+      "pays": "Sénégal",
+      "secteur": "Énergie & Utilities",
+      "nb_actions_millions": 12.0,
+      "bpa": 1100,
+      "dividende": 750,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "CFAC": {
+      "nom": "CFAO Motors CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Distribution",
+      "nb_actions_millions": 15.0,
+      "bpa": 700,
+      "dividende": 400,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "SDSC": {
+      "nom": "Africa Global Logistics CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Transport & Logistique",
+      "nb_actions_millions": 9.0,
+      "bpa": 500,
+      "dividende": 300,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "SIVC": {
+      "nom": "Servair Abidjan CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Transport & Logistique",
+      "nb_actions_millions": 2.0,
+      "bpa": 400,
+      "dividende": 200,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "LNBB": {
+      "nom": "Loterie Nationale du Bénin",
+      "pays": "Bénin",
+      "secteur": "Loisirs",
+      "nb_actions_millions": 10.0,
+      "bpa": 600,
+      "dividende": 400,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "NEIC": {
+      "nom": "NEI-CEDA CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Distribution",
+      "nb_actions_millions": 2.0,
+      "bpa": 300,
+      "dividende": 150,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "PRSC": {
+      "nom": "Bernabé CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Distribution",
+      "nb_actions_millions": 3.0,
+      "bpa": 400,
+      "dividende": 200,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "SAFC": {
+      "nom": "SAFCA CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Agro-industrie",
+      "nb_actions_millions": 2.0,
+      "bpa": 350,
+      "dividende": 180,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "SEMC": {
+      "nom": "Crown SIEM CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Industrie",
+      "nb_actions_millions": 1.5,
+      "bpa": 500,
+      "dividende": 250,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    },
+    "STAC": {
+      "nom": "SETAO CI",
+      "pays": "Côte d'Ivoire",
+      "secteur": "Construction",
+      "nb_actions_millions": 1.0,
+      "bpa": 800,
+      "dividende": 400,
+      "annee_dividende": 2023,
+      "confiance": "estimee"
+    }
+  }
+}

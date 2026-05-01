@@ -24,6 +24,7 @@ from fundamentals import get_fundamentals, FundamentalData
 from exports import export_to_excel, export_to_csv
 from utils import get_company_name, format_ticker_display, format_fcfa, format_pct, format_variation
 from auth import check_auth, logout_button
+from tracking import log_signal, update_open_trades
 
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
@@ -76,7 +77,7 @@ with st.sidebar:
     # ── Vue principale ────────────────────────────────────────────────────────
     vue = st.radio(
         "Vue",
-        ["📈 Screener", "📒 Journal"],
+        ["📈 Screener", "📒 Journal", "🔬 Backtest"],
         horizontal=True,
         label_visibility="collapsed",
     )
@@ -206,6 +207,11 @@ def _analyser_ticker_worker(ticker: str, days: int, horizon: str) -> dict:
         ind = compute_indicators(df, ticker, df_index=df_index, horizon=horizon)
         score = compute_score(ind)
         analyse = build_analyse(ind, score, df)
+
+        try:
+            log_signal(ind, score)
+        except Exception:
+            logger.debug(f"[Tracking] log_signal KO pour {ticker}")
 
         news = []
         try:
@@ -420,27 +426,64 @@ def render_signal_card(result: dict) -> None:
 
     # ── Données fondamentales ────────────────────────────────────────────────
     fundamentals = result.get("fundamentals")
-    if fundamentals and (fundamentals.per or fundamentals.dividende_par_action or fundamentals.capitalisation):
-        with st.expander("🏦 Données fondamentales", expanded=True):
+    has_fundamental_data = fundamentals and (
+        fundamentals.per or fundamentals.dividende_par_action
+        or fundamentals.capitalisation or fundamentals.secteur
+    )
+    if has_fundamental_data:
+        _CONFIANCE_LABEL = {"haute": "✅ Rapport officiel", "moyenne": "🔵 Source publique", "estimee": "🟡 Estimation"}
+        confiance_label = _CONFIANCE_LABEL.get(fundamentals.confiance_donnees, "")
+
+        expander_title = "🏦 Données fondamentales"
+        if fundamentals.secteur:
+            expander_title += f" — {fundamentals.secteur}"
+        with st.expander(expander_title, expanded=True):
+            # Ligne info : secteur / pays / qualité donnée
+            meta_parts = []
+            if fundamentals.secteur:
+                meta_parts.append(f"**Secteur :** {fundamentals.secteur}")
+            if fundamentals.pays:
+                meta_parts.append(f"**Pays :** {fundamentals.pays}")
+            if confiance_label:
+                meta_parts.append(f"{confiance_label} ({fundamentals.dividende_annee})")
+            if meta_parts:
+                st.caption("  ·  ".join(meta_parts))
+
             fcol1, fcol2, fcol3, fcol4 = st.columns(4)
             with fcol1:
                 if fundamentals.capitalisation:
-                    st.metric("Capitalisation", f"{fundamentals.capitalisation:,.0f}M FCFA")
-                    st.caption(f"Source : {fundamentals.capitalisation_source}")
+                    cap_val = fundamentals.capitalisation
+                    if cap_val >= 1_000_000:
+                        cap_str = f"{cap_val/1_000_000:.2f}T FCFA"
+                    elif cap_val >= 1_000:
+                        cap_str = f"{cap_val/1_000:.1f}Mrd FCFA"
+                    else:
+                        cap_str = f"{cap_val:,.0f}M FCFA"
+                    st.metric("Capitalisation", cap_str)
+                    st.caption(fundamentals.capitalisation_source)
                 else:
                     st.metric("Capitalisation", "N/D")
             with fcol2:
                 if fundamentals.per:
-                    per_color = "#0F6E56" if fundamentals.per < 15 else "#BA7517" if fundamentals.per < 25 else "#A32D2D"
-                    st.metric("PER", f"{fundamentals.per:.1f}")
-                    st.caption(f"Source : {fundamentals.per_source}")
+                    per_color = "#0F6E56" if fundamentals.per < 12 else "#BA7517" if fundamentals.per < 20 else "#A32D2D"
+                    per_label = "Décoté" if fundamentals.per < 12 else "Raisonnable" if fundamentals.per < 20 else "Cher"
+                    st.metric("PER", f"{fundamentals.per:.1f}×")
+                    st.markdown(
+                        f"<span style='font-size:0.75rem;color:{per_color}'>{per_label}</span>",
+                        unsafe_allow_html=True,
+                    )
                 else:
                     st.metric("PER", "N/D")
             with fcol3:
                 if fundamentals.dividende_par_action:
                     st.metric("Dividende/Action", f"{fundamentals.dividende_par_action:,.0f} FCFA")
                     if fundamentals.rendement_dividende:
-                        st.caption(f"Rendement : {fundamentals.rendement_dividende:.1f}%")
+                        rdt = fundamentals.rendement_dividende
+                        rdt_color = "#0F6E56" if rdt >= 5 else "#BA7517" if rdt >= 3 else "#888"
+                        st.markdown(
+                            f"<span style='font-size:0.75rem;color:{rdt_color}'>Rendement : {rdt:.1f}%</span>",
+                            unsafe_allow_html=True,
+                        )
                 else:
                     st.metric("Dividende", "N/D")
             with fcol4:
@@ -457,6 +500,14 @@ def render_signal_card(result: dict) -> None:
                     )
                 else:
                     st.metric("Score fondamental", "N/D")
+
+            # BPA affiché séparément si disponible
+            if fundamentals.bpa:
+                st.caption(
+                    f"BPA : {fundamentals.bpa:,.0f} FCFA  ·  "
+                    f"Nb actions : {fundamentals.nb_actions_millions:.1f}M"
+                    if fundamentals.nb_actions_millions else f"BPA : {fundamentals.bpa:,.0f} FCFA"
+                )
 
             # Détail du score
             if fundamentals.score_detail:
@@ -882,6 +933,250 @@ def score_to_ma_label(ma_signal: str) -> str:
     return labels.get(ma_signal, ma_signal)
 
 
+# ─── Backtest ────────────────────────────────────────────────────────────────
+
+def render_backtest_page() -> None:
+    """Page Backtest — stratégie long-only, revue bi-mensuelle, tous tickers BRVM hors indices."""
+    from backtest import fetch_and_backtest, WARMUP_BARS, INITIAL_CAP, REVIEW_INTERVAL_DAYS, ALL_TICKERS, INDICES
+
+    st.title("🔬 Backtest BRVM")
+    st.caption(
+        "Long-only · Revue bi-mensuelle · Stop/target ATR-based · "
+        "Tous les tickers actions BRVM (hors indices) · Aucun look-ahead."
+    )
+
+    st.warning(
+        "**Limitation données** : Sika Finance fournit ~64 barres (~3 mois). "
+        "Les résultats sont indicatifs — insuffisants pour valider un système statistiquement.",
+        icon="⚠️",
+    )
+
+    # ── Paramètres ────────────────────────────────────────────────────────────
+    with st.form("backtest_form"):
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            # Tous les tickers actions (hors indices) sélectionnés par défaut
+            tickers_bt = st.multiselect(
+                "Tickers (hors indices)",
+                options=ALL_TICKERS,
+                default=ALL_TICKERS,
+                format_func=lambda t: f"{t} — {TICKER_NAMES.get(t, t)}",
+                help="Tous les tickers actions BRVM. Les indices sont exclus.",
+            )
+
+        with col2:
+            horizon_bt = st.selectbox(
+                "Horizon d'analyse",
+                options=list(HORIZON_PROFILES.keys()),
+                index=list(HORIZON_PROFILES.keys()).index(DEFAULT_HORIZON),
+                format_func=lambda k: f"{HORIZON_PROFILES[k]['emoji']} {HORIZON_PROFILES[k]['label']}",
+            )
+            review_bt = st.slider(
+                "Fréquence de revue (jours)",
+                min_value=7, max_value=30, value=REVIEW_INTERVAL_DAYS, step=7,
+                help="Tous les N jours calendaires : réévaluation des signaux + ouvertures éventuelles.",
+            )
+
+        with col3:
+            capital_bt = st.number_input(
+                "Capital initial (FCFA)",
+                min_value=100_000,
+                max_value=100_000_000,
+                value=int(INITIAL_CAP),
+                step=100_000,
+                format="%d",
+            )
+            warmup_bt = st.slider(
+                "Warmup (barres min)",
+                min_value=20, max_value=55, value=WARMUP_BARS, step=5,
+                help="Barres nécessaires avant le 1er signal. Max disponible ≈ 64 barres.",
+            )
+            debug_bt = st.checkbox("Mode debug (console)", value=False)
+
+        run_btn = st.form_submit_button("▶ Lancer le backtest", type="primary", use_container_width=True)
+
+    if not run_btn:
+        st.info(
+            f"**Stratégie** : entrée sur signal ACHAT lors de chaque revue (/{review_bt if 'review_bt' in dir() else REVIEW_INTERVAL_DAYS}j), "
+            f"sortie sur stop loss, take profit ou signal ≠ ACHAT à la revue suivante. "
+            f"Pas de short (interdit sur la BRVM)."
+        )
+        return
+
+    if not tickers_bt:
+        st.warning("Sélectionnez au moins un ticker.")
+        return
+
+    with st.spinner(f"Backtest en cours — {len(tickers_bt)} tickers, revue /{review_bt}j…"):
+        try:
+            result = fetch_and_backtest(
+                tickers_bt,
+                days=730,
+                initial_capital=float(capital_bt),
+                horizon=horizon_bt,
+                warmup_bars=warmup_bt,
+                review_interval_days=review_bt,
+                debug=debug_bt,
+            )
+        except RuntimeError as e:
+            st.error(f"Erreur : {e}")
+            return
+        except Exception as e:
+            st.error(f"Erreur inattendue : {e}")
+            logger.exception("Backtest erreur")
+            return
+
+    s = result.summary
+
+    if s.get("status") != "ok":
+        st.warning(f"Aucun trade généré ({s.get('status')}). Augmentez l'historique ou ajoutez des tickers.")
+        return
+
+    # ── KPIs globaux ─────────────────────────────────────────────────────────
+    st.subheader("Résultats globaux")
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("Trades", s["n_trades"], f"W={s['n_wins']} / L={s['n_losses']}")
+    m2.metric("Win Rate", f"{s['win_rate_pct']}%", help="Break-even ≈ 33% avec R/R=2.0")
+    m3.metric("Expectancy", f"{s['expectancy_pct']:+.2f}%")
+    m4.metric("Return total", f"{s['total_return_pct']:+.2f}%")
+    m5.metric("Max Drawdown", f"{s['max_drawdown_pct']:.1f}%", delta_color="inverse")
+
+    r1, r2, r3, r4 = st.columns(4)
+    r1.metric("Capital final", f"{s['final_capital']:,.0f} FCFA",
+              delta=f"{s['total_return_pct']:+.1f}%")
+    r2.metric("R réalisé moy.", f"{s['avg_r_realise']}R" if s.get("avg_r_realise") else "—")
+    r3.metric("Durée moy.", f"{s['avg_holding_days']:.0f}j")
+    r4.metric("Expectancy pondérée", f"{s['expectancy_weighted']:.3f}%" if s.get("expectancy_weighted") else "—",
+              help="E × position moy. / 100")
+
+    st.divider()
+
+    # ── Equity curve ─────────────────────────────────────────────────────────
+    if not result.equity_curve.empty:
+        st.subheader("Courbe d'équité")
+        eq = result.equity_curve.copy()
+        eq["date"] = pd.to_datetime(eq["date"])
+
+        fig_eq = go.Figure()
+        fig_eq.add_trace(go.Scatter(
+            x=eq["date"], y=eq["equity"],
+            name="Capital", mode="lines",
+            line=dict(color="#0F6E56", width=2),
+            fill="tozeroy", fillcolor="rgba(15,110,86,0.08)",
+        ))
+        fig_eq.add_hline(
+            y=float(capital_bt), line_dash="dash",
+            line_color="#888", annotation_text="Capital initial",
+        )
+        fig_eq.update_layout(
+            height=320, plot_bgcolor="white", paper_bgcolor="white",
+            yaxis_title="Capital (FCFA)", margin=dict(l=60, r=40, t=30, b=40),
+        )
+        fig_eq.update_yaxes(gridcolor="#f0f0f0")
+        fig_eq.update_xaxes(gridcolor="#f0f0f0")
+        st.plotly_chart(fig_eq, use_container_width=True)
+
+        # Drawdown
+        fig_dd = go.Figure()
+        fig_dd.add_trace(go.Scatter(
+            x=eq["date"], y=-eq["drawdown_pct"],
+            name="Drawdown", mode="lines",
+            line=dict(color="#A32D2D", width=1.5),
+            fill="tozeroy", fillcolor="rgba(163,45,45,0.12)",
+        ))
+        fig_dd.update_layout(
+            height=180, plot_bgcolor="white", paper_bgcolor="white",
+            yaxis_title="Drawdown (%)", margin=dict(l=60, r=40, t=10, b=40),
+        )
+        fig_dd.update_yaxes(gridcolor="#f0f0f0")
+        fig_dd.update_xaxes(gridcolor="#f0f0f0")
+        st.plotly_chart(fig_dd, use_container_width=True)
+
+    st.divider()
+
+    # ── Distribution des sorties ──────────────────────────────────────────────
+    by_exit = s.get("by_exit_reason", {})
+    if by_exit:
+        st.subheader("Distribution des sorties")
+        icons = {"stop": "🔴", "target": "🟢", "timeout": "⏱️", "end_of_backtest": "⏹️"}
+        ec = st.columns(max(len(by_exit), 1))
+        for i, (reason, stats) in enumerate(by_exit.items()):
+            with ec[i]:
+                st.metric(
+                    f"{icons.get(reason, '')} {reason.replace('_', ' ').capitalize()}",
+                    f"{stats['n']} trades",
+                    f"PnL moy : {stats['avg_pnl']:+.1f}%",
+                )
+                st.caption(f"Durée moy. : {stats['avg_days']:.0f}j")
+        st.divider()
+
+    # ── Par confiance ─────────────────────────────────────────────────────────
+    if result.by_confiance:
+        st.subheader("Performance par confiance (C1)")
+        st.caption("Test clé : *forte* surperforme-t-elle *faible* ?")
+        cc = st.columns(3)
+        for i, conf in enumerate(["forte", "modérée", "faible"]):
+            stats = result.by_confiance.get(conf)
+            with cc[i]:
+                if stats:
+                    st.markdown(f"**{conf.capitalize()}** — n={stats['n']}")
+                    st.metric("Win Rate",   f"{stats['win_rate_pct']}%")
+                    st.metric("Expectancy", f"{stats['expectancy_pct']:+.2f}%")
+                    st.caption(f"Durée moy. : {stats['avg_days']:.0f}j")
+                else:
+                    st.markdown(f"**{conf.capitalize()}** — aucun trade")
+        st.divider()
+
+    # ── Par ticker ────────────────────────────────────────────────────────────
+    if result.by_ticker:
+        st.subheader("Performance par ticker")
+        bt_rows = []
+        for ticker, stats in result.by_ticker.items():
+            bt_rows.append({
+                "Ticker": f"{ticker} — {TICKER_NAMES.get(ticker, ticker)}",
+                "Trades": stats["n"],
+                "Win Rate": f"{stats['win_rate_pct']}%",
+                "PnL moyen": f"{stats['avg_pnl_pct']:+.2f}%",
+                "PnL total": f"{stats['total_pnl_pct']:+.2f}%",
+                "Durée moy.": f"{stats['avg_days']:.0f}j",
+            })
+        st.dataframe(
+            pd.DataFrame(bt_rows).sort_values("PnL moyen", ascending=False),
+            use_container_width=True, hide_index=True,
+        )
+        st.divider()
+
+    # ── Historique des trades ─────────────────────────────────────────────────
+    if not result.trades.empty:
+        st.subheader(f"Historique des trades ({len(result.trades)})")
+        disp = result.trades[[
+            "entry_date", "exit_date", "ticker", "signal", "confiance",
+            "entry_price", "exit_price", "exit_reason", "pnl_pct", "r_realise",
+            "holding_days", "rr",
+        ]].copy()
+        disp.columns = [
+            "Entrée", "Sortie", "Ticker", "Signal", "Confiance",
+            "Prix entrée", "Prix sortie", "Raison", "PnL (%)", "R réalisé",
+            "Durée (j)", "R/R cible",
+        ]
+        disp["PnL (%)"] = pd.to_numeric(disp["PnL (%)"], errors="coerce").round(2)
+
+        def _color_pnl(val):
+            try:
+                v = float(val)
+                if v > 0:
+                    return "color: #0F6E56; font-weight: 600"
+                if v < 0:
+                    return "color: #A32D2D; font-weight: 600"
+            except (ValueError, TypeError):
+                pass
+            return ""
+
+        styled = disp.sort_values("Entrée", ascending=False).style.map(_color_pnl, subset=["PnL (%)"])
+        st.dataframe(styled, use_container_width=True, hide_index=True)
+
+
 # ─── Point d'entrée ───────────────────────────────────────────────────────────
 
 def _render_open_trades(open_df: pd.DataFrame, today) -> None:
@@ -1022,6 +1317,10 @@ def main() -> None:
         render_journal_dashboard()
         return
 
+    if "Backtest" in vue:
+        render_backtest_page()
+        return
+
     st.title("📈 BRVM Stock Screener")
     st.caption("Analyse technique multi-critères pour actions BRVM — Investment Pioneers")
 
@@ -1085,6 +1384,21 @@ Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chart
     if not valid_results:
         st.error("Aucun ticker n'a pu être analysé.")
         return
+
+    # ── Mise à jour des trades ouverts (stop / target / timeout) ─────────────
+    try:
+        ticker_prices = {t: r["ind"].cours_actuel for t, r in valid_results.items()}
+        closed = update_open_trades(ticker_prices)
+        if closed:
+            for c in closed:
+                sign = "+" if c["pnl_pct"] >= 0 else ""
+                st.toast(
+                    f"📒 {c['ticker']} clôturé ({c['exit_reason']}) — "
+                    f"{sign}{c['pnl_pct']:.1f}% en {c['days_held']}j",
+                    icon="✅" if c["pnl_pct"] >= 0 else "🔴",
+                )
+    except Exception:
+        logger.debug("[Tracking] update_open_trades KO")
 
     # ── Tableau de synthèse — signaux forts, anomalies, tendances ────────────
     _render_synthesis_dashboard(valid_results)
