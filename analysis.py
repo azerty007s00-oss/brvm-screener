@@ -63,37 +63,49 @@ def compute_position_size(
     risk_pct: float = 1.0,
 ) -> Optional[float]:
     """
-    D2 — Position sizing ATR-based : % du capital à allouer.
+    D2 — Position sizing hiérarchisé par confiance et potentiel de gain.
 
-    Formule : position_pct = risk_pct / (k1 × atr_pct)
-    Où k1 est le multiplicateur stop-loss issu de la confiance (D1).
-    Résultat clampé à [1%, 25%] pour éviter concentration excessive.
-
-    Args:
-        risk_pct: risque maximal par trade en % du capital (défaut 1%)
-    Returns:
-        % du capital à allouer, ou None si stop absent / ATR invalide
+    base        = risk_pct / stop_distance_pct × 100
+    conf_factor = forte=1.0 | modérée=0.65 | faible=0.35
+    gain_factor = score_total / score_max mappé → [0.75, 1.25]
+    final       = base × conf_factor × gain_factor × haircut_liquidité
+    Clampé [1%, 10%].
     """
     if score.stop_loss is None or ind.atr_pct is None or ind.atr_pct <= 0:
         return None
     if score.signal == "NEUTRE" or ind.cours_actuel <= 0:
         return None
 
-    k1 = abs(score.stop_loss - ind.cours_actuel) / ind.cours_actuel * 100  # % prix
+    k1 = abs(score.stop_loss - ind.cours_actuel) / ind.cours_actuel * 100
     if k1 <= 0:
         return None
 
-    raw = risk_pct / k1 * 100   # % capital
+    base = risk_pct / k1 * 100
 
-    # Haircut liquidité BRVM — surdimensionnement impossible sur small caps illiquides
+    # ── Facteur confiance (hiérarchie primaire) ───────────────────────────────
+    _CONF = {"forte": 1.0, "modérée": 0.65, "faible": 0.35}
+    conf_factor = _CONF.get(score.confiance, 0.5)
+
+    # ── Facteur potentiel de gain (score normalisé) ───────────────────────────
+    # ratio ∈ [0, 1]  →  gain_factor ∈ [0.75, 1.25]
+    # score=0 → 0.75 (signal au seuil), score=max → 1.25 (tous critères alignés)
+    if score.score_max_possible > 0:
+        ratio = max(0.0, min(1.0, score.score_total / score.score_max_possible))
+        gain_factor = 0.75 + ratio * 0.5
+    else:
+        gain_factor = 1.0
+
+    raw = base * conf_factor * gain_factor
+
+    # ── Haircut liquidité BRVM ────────────────────────────────────────────────
     vol_moy = getattr(ind, "volume_moy20", None)
     if vol_moy is not None and vol_moy > 0:
         if vol_moy < 100:
-            raw *= 0.50   # très illiquide : exécution partielle probable
+            raw *= 0.50
         elif vol_moy < 500:
-            raw *= 0.70   # illiquide : slippage significatif
+            raw *= 0.70
         else:
-            raw *= 0.85   # liquide BRVM : décote résiduelle
+            raw *= 0.85
 
     return round(min(10.0, max(1.0, raw)), 1)
 
