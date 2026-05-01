@@ -994,6 +994,15 @@ def render_backtest_page() -> None:
             )
             debug_bt = st.checkbox("Mode debug (console)", value=False)
 
+        st.markdown("**Filtrer par niveau de confiance**")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            cb_forte   = st.checkbox("💪 Forte",   value=True, key="bt_conf_forte")
+        with c2:
+            cb_moderee = st.checkbox("📊 Modérée", value=True, key="bt_conf_moderee")
+        with c3:
+            cb_faible  = st.checkbox("🔸 Faible",  value=True, key="bt_conf_faible")
+
         run_btn = st.form_submit_button("▶ Lancer le backtest", type="primary", use_container_width=True)
 
     if not run_btn:
@@ -1008,6 +1017,11 @@ def render_backtest_page() -> None:
         st.warning("Sélectionnez au moins un ticker.")
         return
 
+    confiances_bt = [c for c, v in [("forte", cb_forte), ("modérée", cb_moderee), ("faible", cb_faible)] if v]
+    if not confiances_bt:
+        st.warning("Cochez au moins un niveau de confiance.")
+        return
+
     with st.spinner(f"Backtest en cours — {len(tickers_bt)} tickers, revue /{review_bt}j…"):
         try:
             result = fetch_and_backtest(
@@ -1017,6 +1031,7 @@ def render_backtest_page() -> None:
                 horizon=horizon_bt,
                 warmup_bars=warmup_bt,
                 review_interval_days=review_bt,
+                confiance_filter=confiances_bt,
                 debug=debug_bt,
             )
         except RuntimeError as e:

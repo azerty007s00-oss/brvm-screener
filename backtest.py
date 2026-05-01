@@ -96,14 +96,15 @@ class BacktestEngine:
 
     def __init__(
         self,
-        initial_capital:      float = INITIAL_CAP,
-        horizon:              str   = DEFAULT_HORIZON,
-        warmup_bars:          int   = WARMUP_BARS,
-        review_interval_days: int   = REVIEW_INTERVAL_DAYS,
-        max_holding_days:     int   = MAX_HOLDING_DAYS,
-        max_atr_pct:          float = MAX_ATR_PCT,
-        min_price:            float = MIN_PRICE,
-        debug:                bool  = False,
+        initial_capital:      float             = INITIAL_CAP,
+        horizon:              str               = DEFAULT_HORIZON,
+        warmup_bars:          int               = WARMUP_BARS,
+        review_interval_days: int               = REVIEW_INTERVAL_DAYS,
+        max_holding_days:     int               = MAX_HOLDING_DAYS,
+        max_atr_pct:          float             = MAX_ATR_PCT,
+        min_price:            float             = MIN_PRICE,
+        confiance_filter:     Optional[list]    = None,
+        debug:                bool              = False,
     ):
         self.initial_capital      = initial_capital
         self.horizon              = horizon
@@ -112,6 +113,7 @@ class BacktestEngine:
         self.max_holding_days     = max_holding_days
         self.max_atr_pct          = max_atr_pct
         self.min_price            = min_price
+        self.confiance_filter     = set(confiance_filter) if confiance_filter else {"forte", "modérée", "faible"}
         self.debug                = debug or DEBUG_MODE
 
         self._open:    dict[str, Position] = {}
@@ -185,6 +187,7 @@ class BacktestEngine:
                             continue
 
                         if (score.signal == "ACHAT"
+                                and score.confiance in self.confiance_filter
                                 and score.stop_loss is not None
                                 and score.take_profit is not None
                                 and score.position_size_pct is not None
@@ -296,14 +299,15 @@ class BacktestEngine:
 
 def run_backtest(
     ticker_data:          dict[str, pd.DataFrame],
-    initial_capital:      float = INITIAL_CAP,
-    horizon:              str   = DEFAULT_HORIZON,
-    warmup_bars:          int   = WARMUP_BARS,
-    review_interval_days: int   = REVIEW_INTERVAL_DAYS,
-    max_holding_days:     int   = MAX_HOLDING_DAYS,
-    max_atr_pct:          float = MAX_ATR_PCT,
-    min_price:            float = MIN_PRICE,
-    debug:                bool  = False,
+    initial_capital:      float          = INITIAL_CAP,
+    horizon:              str            = DEFAULT_HORIZON,
+    warmup_bars:          int            = WARMUP_BARS,
+    review_interval_days: int            = REVIEW_INTERVAL_DAYS,
+    max_holding_days:     int            = MAX_HOLDING_DAYS,
+    max_atr_pct:          float          = MAX_ATR_PCT,
+    min_price:            float          = MIN_PRICE,
+    confiance_filter:     Optional[list] = None,
+    debug:                bool           = False,
 ) -> BacktestResult:
     return BacktestEngine(
         initial_capital      = initial_capital,
@@ -313,6 +317,7 @@ def run_backtest(
         max_holding_days     = max_holding_days,
         max_atr_pct          = max_atr_pct,
         min_price            = min_price,
+        confiance_filter     = confiance_filter,
         debug                = debug,
     ).run(ticker_data)
 
