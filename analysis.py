@@ -116,12 +116,11 @@ def _vwap_risk_levels(
     atr: float,
     signal: str,
     vwap_window: int = 20,
+    k_stop: float = 1.5,
+    k_target: float = 2.5,
 ) -> tuple[Optional[float], Optional[float]]:
     """
-    Stop/target ancrés sur VWAP rolling.
-
-    Stop  = VWAP - 1.5 × std  (sous le cours pour ACHAT)
-    Target= VWAP + 2.5 × std  (au-dessus pour ACHAT)
+    Stop/target ancrés sur VWAP rolling avec multiplicateurs paramétrables.
     R/R garanti >= 1.5 ; fallback ATR si volume absent ou niveaux incohérents.
     """
     if len(df) < vwap_window or df["volume"].sum() == 0:
@@ -137,20 +136,19 @@ def _vwap_risk_levels(
         return None, None
 
     if signal == "ACHAT":
-        stop   = vwap - 1.5 * std
-        target = vwap + 2.5 * std
+        stop   = vwap - k_stop   * std
+        target = vwap + k_target * std
         if stop >= prix or target <= prix:
             return None, None
     else:  # VENTE
-        stop   = vwap + 1.5 * std
-        target = vwap - 2.5 * std
+        stop   = vwap + k_stop   * std
+        target = vwap - k_target * std
         if stop <= prix or target >= prix:
             return None, None
 
     dist_stop   = abs(prix - stop)
     dist_target = abs(target - prix)
     if dist_stop > 0 and dist_target / dist_stop < 1.5:
-        # Étirer le target pour garantir R/R >= 1.5
         if signal == "ACHAT":
             target = prix + 1.5 * dist_stop
         else:
@@ -165,14 +163,15 @@ def compute_risk_levels(
     df: Optional[pd.DataFrame] = None,
 ) -> tuple[Optional[float], Optional[float]]:
     """
-    Stop-loss et take-profit.
+    Stop-loss et take-profit adaptés à l'horizon.
 
-    Méthode principale : VWAP rolling 20j (si df fourni et volume disponible).
+    Méthode principale : VWAP rolling (fenêtre adaptée à l'horizon).
     Fallback : ATR-based avec multiplicateurs k₁/k₂ selon la confiance.
 
-    Résultats de backtest (2% frais BRVM) :
-      VWAP  → WR=55.0%  Exp=+4.66%  Ret=+11.8%  DD=4.5%
-      ATR   → WR=50.3%  Exp=+2.47%  Ret=+6.3%   DD=9.2%
+    Paramètres VWAP par horizon :
+      Court terme  → window=10j, stop=-1.0σ, target=+1.5σ  (sorties rapides)
+      Moyen terme  → window=20j, stop=-1.5σ, target=+2.5σ  (équilibré)
+      Long terme   → window=40j, stop=-2.0σ, target=+3.5σ  (laisser courir)
 
     Returns (stop_loss, take_profit) ou (None, None) si signal NEUTRE / données absentes.
     """
@@ -183,9 +182,23 @@ def compute_risk_levels(
 
     prix = ind.cours_actuel
 
+    # Paramètres VWAP selon horizon
+    _vwap_params = {
+        "Court terme": {"window": 10, "k_stop": 1.0, "k_target": 1.5},
+        "Moyen terme": {"window": 20, "k_stop": 1.5, "k_target": 2.5},
+        "Long terme":  {"window": 40, "k_stop": 2.0, "k_target": 3.5},
+    }
+    horizon = getattr(ind, "horizon", "Moyen terme") or "Moyen terme"
+    vp = _vwap_params.get(horizon, _vwap_params["Moyen terme"])
+
     # ── Méthode principale : VWAP ─────────────────────────────────────────────
-    if df is not None and len(df) >= 20:
-        stop, target = _vwap_risk_levels(prix, df, ind.atr, score.signal)
+    if df is not None and len(df) >= vp["window"]:
+        stop, target = _vwap_risk_levels(
+            prix, df, ind.atr, score.signal,
+            vwap_window=vp["window"],
+            k_stop=vp["k_stop"],
+            k_target=vp["k_target"],
+        )
         if stop is not None and target is not None:
             return stop, target
 

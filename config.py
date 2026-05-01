@@ -237,6 +237,8 @@ HORIZON_PROFILES: dict[str, dict] = {
     "Court terme": {
         "label": "Court terme (1–4 semaines)",
         "emoji": "⚡",
+        "max_holding_days": 30,
+        "review_interval_days": 5,
         "periods": {
             "rsi": 7,
             "ma_short": 10,
@@ -267,6 +269,8 @@ HORIZON_PROFILES: dict[str, dict] = {
     "Moyen terme": {
         "label": "Moyen terme (1–6 mois)",
         "emoji": "📈",
+        "max_holding_days": 90,
+        "review_interval_days": 7,
         "periods": {
             "rsi": 14,
             "ma_short": 20,
@@ -296,6 +300,8 @@ HORIZON_PROFILES: dict[str, dict] = {
     "Long terme": {
         "label": "Long terme (6 mois+)",
         "emoji": "🏦",
+        "max_holding_days": 180,
+        "review_interval_days": 14,
         "periods": {
             "rsi": 21,
             "ma_short": 50,

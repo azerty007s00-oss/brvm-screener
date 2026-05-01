@@ -998,10 +998,18 @@ def render_backtest_page() -> None:
                 index=list(HORIZON_PROFILES.keys()).index(DEFAULT_HORIZON),
                 format_func=lambda k: f"{HORIZON_PROFILES[k]['emoji']} {HORIZON_PROFILES[k]['label']}",
             )
+            _hp = HORIZON_PROFILES.get(horizon_bt, {})
+            _default_review = _hp.get("review_interval_days", REVIEW_INTERVAL_DAYS)
+            _default_holding = _hp.get("max_holding_days", 90)
             review_bt = st.slider(
                 "Fréquence de revue (jours)",
-                min_value=7, max_value=30, value=REVIEW_INTERVAL_DAYS, step=7,
+                min_value=3, max_value=30, value=_default_review, step=1,
                 help="Tous les N jours calendaires : réévaluation des signaux + ouvertures éventuelles.",
+            )
+            holding_bt = st.slider(
+                "Durée max de détention (jours)",
+                min_value=15, max_value=200, value=_default_holding, step=5,
+                help="Court terme ~30j · Moyen terme ~90j · Long terme ~180j",
             )
 
         with col3:
@@ -1068,6 +1076,7 @@ def render_backtest_page() -> None:
                 horizon=horizon_bt,
                 warmup_bars=warmup_bt,
                 review_interval_days=review_bt,
+                max_holding_days=holding_bt,
                 confiance_filter=confiances_bt,
                 fee_pct=float(fee_bt) if use_fees_bt else 0.0,
                 debug=debug_bt,

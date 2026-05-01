@@ -416,6 +416,15 @@ def fetch_and_backtest(
         except Exception:
             pass
 
+    # Adapter max_holding_days et review_interval_days à l'horizon si non fournis
+    from config import HORIZON_PROFILES
+    horizon = kwargs.get("horizon", "Moyen terme")
+    hp = HORIZON_PROFILES.get(horizon, {})
+    if "max_holding_days" not in kwargs:
+        kwargs["max_holding_days"] = hp.get("max_holding_days", MAX_HOLDING_DAYS)
+    if "review_interval_days" not in kwargs:
+        kwargs["review_interval_days"] = hp.get("review_interval_days", REVIEW_INTERVAL_DAYS)
+
     return run_backtest(ticker_data, **kwargs)
 
 
