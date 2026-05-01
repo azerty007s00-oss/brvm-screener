@@ -1032,9 +1032,9 @@ def render_backtest_page() -> None:
                 help="Décocher pour voir la performance brute sans friction.",
             )
             fee_bt = st.number_input(
-                "Frais aller-retour (%)",
-                min_value=0.0, max_value=5.0, value=2.86, step=0.1, format="%.2f",
-                help="Phoenix Capital Management : ~2.86% TTC (1% HT × 2 + TVA 18% + frais BRVM/DC).",
+                "Frais par côté (%)",
+                min_value=0.0, max_value=5.0, value=1.43, step=0.05, format="%.2f",
+                help="Phoenix Capital Management : ~1.43% par côté (entrée sur valeur achat, sortie sur valeur vente).",
                 disabled=not use_fees_bt,
             )
             debug_bt = st.checkbox("Mode debug (console)", value=False)
@@ -1078,7 +1078,8 @@ def render_backtest_page() -> None:
                 review_interval_days=review_bt,
                 max_holding_days=holding_bt,
                 confiance_filter=confiances_bt,
-                fee_pct=float(fee_bt) if use_fees_bt else 0.0,
+                fee_entry_pct=float(fee_bt) if use_fees_bt else 0.0,
+                fee_exit_pct=float(fee_bt) if use_fees_bt else 0.0,
                 debug=debug_bt,
             )
         except RuntimeError as e:

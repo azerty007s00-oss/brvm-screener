@@ -109,7 +109,8 @@ class BacktestEngine:
         min_atr_pct:          float             = 2.0,
         min_price:            float             = MIN_PRICE,
         confiance_filter:     Optional[list]    = None,
-        fee_pct:              float             = 0.0,
+        fee_entry_pct:        float             = 0.0,
+        fee_exit_pct:         float             = 0.0,
         stop_tolerance_days:  int               = 3,
         regime_filter:        bool              = True,
         df_index:             Optional[pd.DataFrame] = None,
@@ -124,7 +125,8 @@ class BacktestEngine:
         self.min_atr_pct          = min_atr_pct
         self.min_price            = min_price
         self.confiance_filter     = set(confiance_filter) if confiance_filter else {"forte", "modérée", "faible"}
-        self.fee_pct              = fee_pct
+        self.fee_entry_pct        = fee_entry_pct
+        self.fee_exit_pct         = fee_exit_pct
         self.stop_tolerance_days  = stop_tolerance_days
         self.regime_filter        = regime_filter
         self.df_index             = df_index  # BRVMC OHLCV pour filtre regime
@@ -318,17 +320,20 @@ class BacktestEngine:
         pos.exit_reason  = reason
         pos.holding_days = (exit_date - pos.entry_date).days
 
-        pos.pnl_pct = round((exit_price - pos.entry_price) / pos.entry_price * 100, 2)
+        # Frais asymétriques : entrée sur valeur d'achat, sortie sur valeur de vente
+        raw_pnl        = (exit_price - pos.entry_price) / pos.entry_price * 100
+        fee_entry_drag = self.fee_entry_pct
+        fee_exit_drag  = self.fee_exit_pct * (exit_price / pos.entry_price)
+        net_pnl        = raw_pnl - fee_entry_drag - fee_exit_drag
+        pos.pnl_pct    = round(net_pnl, 2)
 
-        risk_pct = abs(pos.entry_price - pos.stop_loss) / pos.entry_price * 100
+        risk_pct = abs(pos.entry_price - pos.stop_loss) / pos.entry_price * 100 if pos.stop_loss else 1.0
         pos.r_realise = round(pos.pnl_pct / risk_pct, 2) if risk_pct > 0 else None
 
         pos.capital_gain_pct     = round(pos.position_pct / 100 * pos.pnl_pct, 2)
         pos.capital_investi_fcfa = round(pos.equity_at_entry * pos.position_pct / 100, 0)
         pos.gain_fcfa            = round(pos.capital_investi_fcfa * pos.pnl_pct / 100, 0)
-        # Frais aller-retour appliqués sur le capital investi
-        fee_drag = pos.position_pct * self.fee_pct / 100
-        self._equity *= 1 + (pos.capital_gain_pct - fee_drag) / 100
+        self._equity *= 1 + pos.capital_gain_pct / 100
 
         self._closed.append(pos)
 
@@ -364,7 +369,8 @@ def run_backtest(
     min_atr_pct:          float          = 2.0,
     min_price:            float          = MIN_PRICE,
     confiance_filter:     Optional[list] = None,
-    fee_pct:              float          = 0.0,
+    fee_entry_pct:        float          = 0.0,
+    fee_exit_pct:         float          = 0.0,
     stop_tolerance_days:  int            = 3,
     regime_filter:        bool           = True,
     df_index:             Optional[pd.DataFrame] = None,
@@ -380,7 +386,8 @@ def run_backtest(
         min_atr_pct          = min_atr_pct,
         min_price            = min_price,
         confiance_filter     = confiance_filter,
-        fee_pct              = fee_pct,
+        fee_entry_pct        = fee_entry_pct,
+        fee_exit_pct         = fee_exit_pct,
         stop_tolerance_days  = stop_tolerance_days,
         regime_filter        = regime_filter,
         df_index             = df_index,
