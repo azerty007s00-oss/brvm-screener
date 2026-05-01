@@ -157,6 +157,14 @@ def _vwap_risk_levels(
     return round(max(0.0, stop), 2), round(max(0.0, target), 2)
 
 
+def _is_monthly_data(df: pd.DataFrame) -> bool:
+    """True si les barres du DataFrame sont mensuelles (intervalle moyen >= 20 jours)."""
+    if df is None or len(df) < 2:
+        return False
+    avg_days = (df.index[-1] - df.index[0]).days / max(len(df) - 1, 1)
+    return avg_days >= 20
+
+
 def _donchian_risk_levels(
     prix: float,
     df: pd.DataFrame,
@@ -190,14 +198,15 @@ def compute_risk_levels(
     df: Optional[pd.DataFrame] = None,
 ) -> tuple[Optional[float], Optional[float]]:
     """
-    Stop-loss et take-profit adaptés à l'horizon.
+    Stop-loss et take-profit adaptés à l'horizon et à la granularité des données.
 
     Méthode principale : Donchian channels (plus bas / plus haut N barres).
-    Fallback 1 : VWAP rolling.
+    Fallback 1 : VWAP rolling (daily uniquement).
     Fallback 2 : ATR-based.
 
-    Fenêtre N par horizon :
-      Court terme → n=10j | Moyen terme → n=20j | Long terme → n=40j
+    Fenêtre N :
+      Journalier : CT=10j  | MT=20j  | LT=40j
+      Mensuel    : CT=3m   | MT=6m   | LT=12m
     """
     if score.signal == "NEUTRE":
         return None, None
@@ -206,12 +215,20 @@ def compute_risk_levels(
 
     prix = ind.cours_actuel
     horizon = getattr(ind, "horizon", "Moyen terme") or "Moyen terme"
+    monthly = _is_monthly_data(df) if df is not None else False
 
-    _params = {
-        "Court terme": {"n": 10, "vwap_window": 10, "k_stop": 1.0, "k_target": 1.5},
-        "Moyen terme": {"n": 20, "vwap_window": 20, "k_stop": 1.5, "k_target": 2.5},
-        "Long terme":  {"n": 40, "vwap_window": 40, "k_stop": 2.0, "k_target": 3.5},
-    }
+    if monthly:
+        _params = {
+            "Court terme": {"n": 3,  "vwap_window": 0, "k_stop": 1.0, "k_target": 1.5},
+            "Moyen terme": {"n": 6,  "vwap_window": 0, "k_stop": 1.5, "k_target": 2.5},
+            "Long terme":  {"n": 12, "vwap_window": 0, "k_stop": 2.0, "k_target": 3.5},
+        }
+    else:
+        _params = {
+            "Court terme": {"n": 10, "vwap_window": 10, "k_stop": 1.0, "k_target": 1.5},
+            "Moyen terme": {"n": 20, "vwap_window": 20, "k_stop": 1.5, "k_target": 2.5},
+            "Long terme":  {"n": 40, "vwap_window": 40, "k_stop": 2.0, "k_target": 3.5},
+        }
     p = _params.get(horizon, _params["Moyen terme"])
 
     # ── Méthode principale : Donchian ─────────────────────────────────────────
@@ -220,8 +237,8 @@ def compute_risk_levels(
         if stop is not None and target is not None:
             return stop, target
 
-    # ── Fallback 1 : VWAP ────────────────────────────────────────────────────
-    if df is not None and len(df) >= p["vwap_window"]:
+    # ── Fallback 1 : VWAP (daily uniquement — sans sens sur barres mensuelles) ─
+    if not monthly and df is not None and p["vwap_window"] > 0 and len(df) >= p["vwap_window"]:
         stop, target = _vwap_risk_levels(
             prix, df, ind.atr, score.signal,
             vwap_window=p["vwap_window"],

@@ -303,21 +303,26 @@ def _normalize_sika_dataframe(df: pd.DataFrame) -> Optional[pd.DataFrame]:
 
 SIKA_API_URL = "https://www.sikafinance.com/api/general/GetHistos"
 
-def _fetch_sika_api(sika_id: str, days: int) -> Optional[pd.DataFrame]:
+def _fetch_sika_api(sika_id: str, days: int, period: str = "daily") -> Optional[pd.DataFrame]:
     """
     Appel à l'API POST /api/general/GetHistos de SikaFinance.
 
-    Retourne ~260 séances quotidiennes (1 an de trading) quel que soit
-    l'intervalle demandé — c'est le maximum disponible via cet endpoint.
-    Champs : Date (DD/MM/YYYY), Open, High, Low, Close, Volume.
+    period='daily'   → xperiod='1',  ~260 barres journalières (1 an max)
+    period='monthly' → xperiod='30', ~60 barres mensuelles (5 ans)
     """
     from datetime import timedelta
     today = datetime.now()
+    if period == "monthly":
+        xperiod = "30"
+        lookback_days = max(days * 35, 1900)   # 60 mois × 35j ≈ 2100j
+    else:
+        xperiod = "1"
+        lookback_days = max(days, 365)
     payload = {
         "ticker": sika_id,
-        "datedeb": (today - timedelta(days=max(days, 365))).strftime("%Y-%m-%d"),
+        "datedeb": (today - timedelta(days=lookback_days)).strftime("%Y-%m-%d"),
         "datefin": today.strftime("%Y-%m-%d"),
-        "xperiod": "1",
+        "xperiod": xperiod,
     }
     headers_api = {
         "Content-Type": "application/json;charset=UTF-8",
@@ -375,29 +380,24 @@ def _fetch_sika_api(sika_id: str, days: int) -> Optional[pd.DataFrame]:
 
 # ─── Point d'entrée principal ─────────────────────────────────────────────────
 
-def get_ohlcv(ticker: str, days: int = 365) -> pd.DataFrame:
+def get_ohlcv(ticker: str, days: int = 365, period: str = "daily") -> pd.DataFrame:
     """
     Récupère les données OHLCV pour un ticker BRVM.
 
-    Stratégie en cascade :
-    1. Cache local
-    2. Résoudre le ticker en ID Sika Finance (BICC → BICC.ci)
-    3. Scraping HTML page historiques
-    4. Endpoint JSON chartdata (fallback)
-
     Args:
-        ticker: Symbole boursier (ex: "BICC", "ONTBF")
-        days:   Nombre de jours d'historique souhaité
+        ticker:  Symbole boursier (ex: "BICC", "ONTBF")
+        days:    Nombre de barres souhaitées
+        period:  'daily' (~260 barres max, 1 an) ou 'monthly' (~60 barres, 5 ans)
 
     Returns:
         DataFrame avec colonnes [open, high, low, close, volume] et index DatetimeIndex
 
     Raises:
         TickerNotFoundError: Si le ticker est introuvable
-        InsufficientDataError: Si moins de MIN_DATA_POINTS jours disponibles
+        InsufficientDataError: Si moins de MIN_DATA_POINTS barres disponibles
     """
     ticker = ticker.upper().strip()
-    cache_key = f"ohlcv_{ticker}_{days}"
+    cache_key = f"ohlcv_{ticker}_{days}_{period}"
 
     # 1. Cache
     cached = cache.get(cache_key)
@@ -414,14 +414,14 @@ def get_ohlcv(ticker: str, days: int = 365) -> pd.DataFrame:
     df = None
     errors = []
 
-    # 3. API POST GetHistos — source primaire (~260 séances quotidiennes)
+    # 3. API POST GetHistos — source primaire
     try:
-        df = _fetch_sika_api(sika_id, days)
+        df = _fetch_sika_api(sika_id, days, period=period)
     except Exception as e:
         errors.append(f"SikaFinance API: {e}")
 
-    # 4. Fallback HTML historiques si l'API échoue
-    if df is None or len(df) < MIN_DATA_POINTS:
+    # 4. Fallback HTML historiques (daily seulement)
+    if period == "daily" and (df is None or len(df) < MIN_DATA_POINTS):
         try:
             df_html = _fetch_sika_historiques(sika_id, days)
             if df_html is not None and (df is None or len(df_html) > len(df)):
@@ -429,8 +429,8 @@ def get_ohlcv(ticker: str, days: int = 365) -> pd.DataFrame:
         except Exception as e:
             errors.append(f"SikaFinance HTML: {e}")
 
-    # 5. Fallback RichBourse si toujours insuffisant
-    if df is None or len(df) < MIN_DATA_POINTS:
+    # 5. Fallback RichBourse si toujours insuffisant (daily seulement)
+    if period == "daily" and (df is None or len(df) < MIN_DATA_POINTS):
         try:
             df_rb = richbourse.fetch_ohlcv(sika_id, days)
             if df_rb is not None and (df is None or len(df_rb) > len(df)):

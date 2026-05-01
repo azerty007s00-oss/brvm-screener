@@ -967,14 +967,8 @@ def render_backtest_page() -> None:
 
     st.title("🔬 Backtest BRVM")
     st.caption(
-        "Long-only · Revue bi-mensuelle · Stop/target ATR-based · "
+        "Long-only · Stop/target Donchian · Frais asymétriques · "
         "Tous les tickers actions BRVM (hors indices) · Aucun look-ahead."
-    )
-
-    st.info(
-        "**Données** : API SikaFinance — ~260 séances quotidiennes (~1 an de trading). "
-        "Résultats statistiquement plus robustes qu'avant, mais 500+ trades recommandés pour validation complète.",
-        icon="ℹ️",
     )
 
     # ── Paramètres ────────────────────────────────────────────────────────────
@@ -990,6 +984,13 @@ def render_backtest_page() -> None:
                 format_func=lambda t: f"{t} — {TICKER_NAMES.get(t, t)}",
                 help="Tous les tickers actions BRVM. Les indices sont exclus.",
             )
+            data_period_bt = st.radio(
+                "Historique",
+                options=["daily", "monthly"],
+                format_func=lambda x: "📅 1 an — journalier (~260 barres)" if x == "daily" else "📆 5 ans — mensuel (~60 barres)",
+                index=0,
+                help="Journalier : API SikaFinance ~260 barres. Mensuel : ~60 barres mensuelles couvrant 5 ans (2021–2026).",
+            )
 
         with col2:
             horizon_bt = st.selectbox(
@@ -999,16 +1000,22 @@ def render_backtest_page() -> None:
                 format_func=lambda k: f"{HORIZON_PROFILES[k]['emoji']} {HORIZON_PROFILES[k]['label']}",
             )
             _hp = HORIZON_PROFILES.get(horizon_bt, {})
-            _default_review = _hp.get("review_interval_days", REVIEW_INTERVAL_DAYS)
-            _default_holding = _hp.get("max_holding_days", 90)
+            if data_period_bt == "monthly":
+                _default_review  = 30
+                _default_holding = _hp.get("max_holding_days", 90) * 2
+                _rev_max, _hold_max = 60, 730
+            else:
+                _default_review  = _hp.get("review_interval_days", REVIEW_INTERVAL_DAYS)
+                _default_holding = _hp.get("max_holding_days", 90)
+                _rev_max, _hold_max = 30, 200
             review_bt = st.slider(
                 "Fréquence de revue (jours)",
-                min_value=3, max_value=30, value=_default_review, step=1,
+                min_value=3, max_value=_rev_max, value=_default_review, step=1,
                 help="Tous les N jours calendaires : réévaluation des signaux + ouvertures éventuelles.",
             )
             holding_bt = st.slider(
                 "Durée max de détention (jours)",
-                min_value=15, max_value=200, value=_default_holding, step=5,
+                min_value=15, max_value=_hold_max, value=_default_holding, step=5,
                 help="Court terme ~30j · Moyen terme ~90j · Long terme ~180j",
             )
 
@@ -1021,10 +1028,12 @@ def render_backtest_page() -> None:
                 step=100_000,
                 format="%d",
             )
+            _warmup_default = 12 if data_period_bt == "monthly" else WARMUP_BARS
+            _warmup_max     = 20 if data_period_bt == "monthly" else 55
             warmup_bt = st.slider(
                 "Warmup (barres min)",
-                min_value=20, max_value=55, value=WARMUP_BARS, step=5,
-                help="Barres nécessaires avant le 1er signal. ~260 barres disponibles via API SikaFinance.",
+                min_value=5, max_value=_warmup_max, value=_warmup_default, step=1,
+                help="Barres nécessaires avant le 1er signal.",
             )
             use_fees_bt = st.checkbox(
                 "Inclure les frais de transaction",
@@ -1067,11 +1076,14 @@ def render_backtest_page() -> None:
         st.warning("Cochez au moins un niveau de confiance.")
         return
 
-    with st.spinner(f"Backtest en cours — {len(tickers_bt)} tickers, revue /{review_bt}j…"):
+    _period_label = "mensuel 5 ans" if data_period_bt == "monthly" else "journalier 1 an"
+    with st.spinner(f"Backtest en cours — {len(tickers_bt)} tickers, {_period_label}, revue /{review_bt}j…"):
         try:
+            _days = 60 if data_period_bt == "monthly" else 730
             result = fetch_and_backtest(
                 tickers_bt,
-                days=730,
+                days=_days,
+                data_period=data_period_bt,
                 initial_capital=float(capital_bt),
                 horizon=horizon_bt,
                 warmup_bars=warmup_bt,

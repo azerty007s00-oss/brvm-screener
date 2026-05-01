@@ -396,18 +396,23 @@ def run_backtest(
 
 
 def fetch_and_backtest(
-    tickers: list[str],
-    days:    int = 730,
+    tickers:     list[str],
+    days:        int = 730,
+    data_period: str = "daily",
     **kwargs,
 ) -> BacktestResult:
     from scraper import get_ohlcv, TickerNotFoundError, InsufficientDataError
 
+    # Données mensuelles : 60 barres = 5 ans
+    if data_period == "monthly" and days == 730:
+        days = 60
+
     ticker_data: dict[str, pd.DataFrame] = {}
     for ticker in tickers:
         try:
-            df = get_ohlcv(ticker, days=days)
+            df = get_ohlcv(ticker, days=days, period=data_period)
             ticker_data[ticker] = df
-            logger.info(f"[Backtest] {ticker} — {len(df)} barres")
+            logger.info(f"[Backtest] {ticker} — {len(df)} barres ({data_period})")
         except (TickerNotFoundError, InsufficientDataError) as exc:
             logger.warning(f"[Backtest] {ticker} ignore — {exc}")
         except Exception as exc:
@@ -419,18 +424,27 @@ def fetch_and_backtest(
     # Récupérer BRVMC pour le filtre régime si non fourni
     if kwargs.get("regime_filter", True) and kwargs.get("df_index") is None:
         try:
-            kwargs["df_index"] = get_ohlcv("BRVMC", days=days)
+            kwargs["df_index"] = get_ohlcv("BRVMC", days=days, period=data_period)
         except Exception:
             pass
 
-    # Adapter max_holding_days et review_interval_days à l'horizon si non fournis
+    # Adapter les paramètres à l'horizon et au mode données
     from config import HORIZON_PROFILES
     horizon = kwargs.get("horizon", "Moyen terme")
     hp = HORIZON_PROFILES.get(horizon, {})
     if "max_holding_days" not in kwargs:
-        kwargs["max_holding_days"] = hp.get("max_holding_days", MAX_HOLDING_DAYS)
+        base_hold = hp.get("max_holding_days", MAX_HOLDING_DAYS)
+        kwargs["max_holding_days"] = base_hold * 2 if data_period == "monthly" else base_hold
     if "review_interval_days" not in kwargs:
-        kwargs["review_interval_days"] = hp.get("review_interval_days", REVIEW_INTERVAL_DAYS)
+        kwargs["review_interval_days"] = 30 if data_period == "monthly" else hp.get("review_interval_days", REVIEW_INTERVAL_DAYS)
+    if "warmup_bars" not in kwargs:
+        kwargs["warmup_bars"] = 12 if data_period == "monthly" else WARMUP_BARS
+    if data_period == "monthly":
+        # Monthly ATR% est naturellement 5-15× plus élevé qu'en daily → seuils adaptés
+        if "max_atr_pct" not in kwargs:
+            kwargs["max_atr_pct"] = 25.0   # filtre seulement les valeurs extrêmement volatiles
+        if "min_atr_pct" not in kwargs:
+            kwargs["min_atr_pct"] = 3.0    # minimum de mouvement mensuel
 
     return run_backtest(ticker_data, **kwargs)
 
