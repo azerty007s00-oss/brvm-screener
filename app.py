@@ -1057,12 +1057,16 @@ def render_backtest_page() -> None:
     m4.metric("Return total", f"{s['total_return_pct']:+.2f}%")
     m5.metric("Max Drawdown", f"{s['max_drawdown_pct']:.1f}%", delta_color="inverse")
 
-    r1, r2, r3, r4 = st.columns(4)
+    r1, r2, r3, r4, r5 = st.columns(5)
     r1.metric("Capital final", f"{s['final_capital']:,.0f} FCFA",
               delta=f"{s['total_return_pct']:+.1f}%")
-    r2.metric("R réalisé moy.", f"{s['avg_r_realise']}R" if s.get("avg_r_realise") else "—")
-    r3.metric("Durée moy.", f"{s['avg_holding_days']:.0f}j")
-    r4.metric("Expectancy pondérée", f"{s['expectancy_weighted']:.3f}%" if s.get("expectancy_weighted") else "—",
+    gain_net = s.get("gain_net_fcfa", 0)
+    r2.metric("Gain net", f"{gain_net:+,.0f} FCFA",
+              delta=f"{s['total_return_pct']:+.2f}%",
+              delta_color="normal")
+    r3.metric("R réalisé moy.", f"{s['avg_r_realise']}R" if s.get("avg_r_realise") else "—")
+    r4.metric("Durée moy.", f"{s['avg_holding_days']:.0f}j")
+    r5.metric("Expectancy pondérée", f"{s['expectancy_weighted']:.3f}%" if s.get("expectancy_weighted") else "—",
               help="E × position moy. / 100")
 
     st.divider()
@@ -1166,18 +1170,22 @@ def render_backtest_page() -> None:
     if not result.trades.empty:
         st.subheader(f"Historique des trades ({len(result.trades)})")
         disp = result.trades[[
-            "entry_date", "exit_date", "ticker", "signal", "confiance",
-            "entry_price", "exit_price", "exit_reason", "pnl_pct", "r_realise",
-            "holding_days", "rr",
+            "entry_date", "exit_date", "ticker", "confiance", "score",
+            "position_pct", "capital_investi_fcfa",
+            "entry_price", "exit_price", "exit_reason",
+            "pnl_pct", "gain_fcfa", "r_realise", "holding_days",
         ]].copy()
         disp.columns = [
-            "Entrée", "Sortie", "Ticker", "Signal", "Confiance",
-            "Prix entrée", "Prix sortie", "Raison", "PnL (%)", "R réalisé",
-            "Durée (j)", "R/R cible",
+            "Entrée", "Sortie", "Ticker", "Confiance", "Score",
+            "Alloc %", "Capital investi (FCFA)",
+            "Prix entrée", "Prix sortie", "Raison",
+            "PnL (%)", "Gain (FCFA)", "R réalisé", "Durée (j)",
         ]
         disp["PnL (%)"] = pd.to_numeric(disp["PnL (%)"], errors="coerce").round(2)
+        disp["Gain (FCFA)"] = pd.to_numeric(disp["Gain (FCFA)"], errors="coerce")
+        disp["Capital investi (FCFA)"] = pd.to_numeric(disp["Capital investi (FCFA)"], errors="coerce")
 
-        def _color_pnl(val):
+        def _color_num(val):
             try:
                 v = float(val)
                 if v > 0:
@@ -1188,7 +1196,17 @@ def render_backtest_page() -> None:
                 pass
             return ""
 
-        styled = disp.sort_values("Entrée", ascending=False).style.map(_color_pnl, subset=["PnL (%)"])
+        styled = (
+            disp.sort_values("Entrée", ascending=False)
+            .style
+            .map(_color_num, subset=["PnL (%)", "Gain (FCFA)"])
+            .format({
+                "Capital investi (FCFA)": "{:,.0f}",
+                "Gain (FCFA)":            "{:+,.0f}",
+                "PnL (%)":                "{:+.2f}",
+                "Alloc %":                "{:.1f}%",
+            }, na_rep="—")
+        )
         st.dataframe(styled, use_container_width=True, hide_index=True)
 
 

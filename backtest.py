@@ -65,13 +65,16 @@ class Position:
     score:        int
     atr_pct:      Optional[float]
     data_quality: str
-    exit_date:        Optional[date]  = None
-    exit_price:       Optional[float] = None
-    exit_reason:      Optional[str]   = None
-    pnl_pct:          Optional[float] = None
-    r_realise:        Optional[float] = None
-    holding_days:     Optional[int]   = None
-    capital_gain_pct: Optional[float] = None
+    equity_at_entry:      float         = 0.0
+    exit_date:            Optional[date]  = None
+    exit_price:           Optional[float] = None
+    exit_reason:          Optional[str]   = None
+    pnl_pct:              Optional[float] = None
+    r_realise:            Optional[float] = None
+    holding_days:         Optional[int]   = None
+    capital_gain_pct:     Optional[float] = None
+    capital_investi_fcfa: Optional[float] = None
+    gain_fcfa:            Optional[float] = None
 
 
 @dataclass
@@ -235,17 +238,18 @@ class BacktestEngine:
             rr = round(k2 / k1, 2) if k1 > 0 else None
 
         pos = Position(
-            ticker       = ticker,
-            entry_date   = current_date,
-            entry_price  = ind.cours_actuel,
-            stop_loss    = score.stop_loss,
-            take_profit  = score.take_profit,
-            rr           = rr,
-            position_pct = score.position_size_pct,
-            confiance    = score.confiance,
-            score        = score.score_total,
-            atr_pct      = ind.atr_pct,
-            data_quality = getattr(ind, "data_quality_flag", "ok"),
+            ticker          = ticker,
+            entry_date      = current_date,
+            entry_price     = ind.cours_actuel,
+            stop_loss       = score.stop_loss,
+            take_profit     = score.take_profit,
+            rr              = rr,
+            position_pct    = score.position_size_pct,
+            confiance       = score.confiance,
+            score           = score.score_total,
+            atr_pct         = ind.atr_pct,
+            data_quality    = getattr(ind, "data_quality_flag", "ok"),
+            equity_at_entry = self._equity,
         )
         self._open[ticker] = pos
 
@@ -271,7 +275,9 @@ class BacktestEngine:
         risk_pct = abs(pos.entry_price - pos.stop_loss) / pos.entry_price * 100
         pos.r_realise = round(pos.pnl_pct / risk_pct, 2) if risk_pct > 0 else None
 
-        pos.capital_gain_pct = round(pos.position_pct / 100 * pos.pnl_pct, 2)
+        pos.capital_gain_pct     = round(pos.position_pct / 100 * pos.pnl_pct, 2)
+        pos.capital_investi_fcfa = round(pos.equity_at_entry * pos.position_pct / 100, 0)
+        pos.gain_fcfa            = round(pos.capital_investi_fcfa * pos.pnl_pct / 100, 0)
         self._equity *= 1 + pos.capital_gain_pct / 100
 
         self._closed.append(pos)
@@ -364,11 +370,13 @@ def _positions_to_df(positions: list[Position]) -> pd.DataFrame:
             "stop_loss":        p.stop_loss,
             "take_profit":      p.take_profit,
             "exit_reason":      p.exit_reason,
-            "pnl_pct":          p.pnl_pct,
-            "r_realise":        p.r_realise,
-            "capital_gain_pct": p.capital_gain_pct,
-            "position_pct":     p.position_pct,
-            "holding_days":     p.holding_days,
+            "pnl_pct":              p.pnl_pct,
+            "r_realise":            p.r_realise,
+            "capital_gain_pct":     p.capital_gain_pct,
+            "capital_investi_fcfa": p.capital_investi_fcfa,
+            "gain_fcfa":            p.gain_fcfa,
+            "position_pct":         p.position_pct,
+            "holding_days":         p.holding_days,
             "rr":               p.rr,
             "atr_pct":          p.atr_pct,
             "data_quality":     p.data_quality,
@@ -429,6 +437,8 @@ def _compute_summary(
         .to_dict(orient="index")
     )
 
+    gain_fcfa_total = valid["gain_fcfa"].sum() if "gain_fcfa" in valid.columns else None
+
     return {
         "status":              "ok",
         "n_trades":            len(valid),
@@ -444,6 +454,8 @@ def _compute_summary(
         "avg_position_pct":    round(avg_pos, 1),
         "avg_holding_days":    round(float(valid["holding_days"].mean()), 1),
         "total_return_pct":    round((final_equity - initial_capital) / initial_capital * 100, 2),
+        "gain_net_fcfa":       round(final_equity - initial_capital, 0),
+        "gain_fcfa_total":     round(float(gain_fcfa_total), 0) if gain_fcfa_total is not None else None,
         "final_capital":       round(final_equity, 2),
         "max_drawdown_pct":    round(max_dd, 2),
         "by_exit_reason":      by_reason,
