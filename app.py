@@ -992,10 +992,16 @@ def render_backtest_page() -> None:
                 min_value=20, max_value=55, value=WARMUP_BARS, step=5,
                 help="Barres nécessaires avant le 1er signal. ~260 barres disponibles via API SikaFinance.",
             )
+            use_fees_bt = st.checkbox(
+                "Inclure les frais de transaction",
+                value=True,
+                help="Décocher pour voir la performance brute sans friction.",
+            )
             fee_bt = st.number_input(
                 "Frais aller-retour (%)",
                 min_value=0.0, max_value=5.0, value=2.86, step=0.1, format="%.2f",
-                help="Phoenix Capital Management : ~2.86% TTC (1% HT × 2 + TVA 18% + frais BRVM/DC). Mettre 0 pour voir la performance brute.",
+                help="Phoenix Capital Management : ~2.86% TTC (1% HT × 2 + TVA 18% + frais BRVM/DC).",
+                disabled=not use_fees_bt,
             )
             debug_bt = st.checkbox("Mode debug (console)", value=False)
 
@@ -1037,7 +1043,7 @@ def render_backtest_page() -> None:
                 warmup_bars=warmup_bt,
                 review_interval_days=review_bt,
                 confiance_filter=confiances_bt,
-                fee_pct=float(fee_bt),
+                fee_pct=float(fee_bt) if use_fees_bt else 0.0,
                 debug=debug_bt,
             )
         except RuntimeError as e:
