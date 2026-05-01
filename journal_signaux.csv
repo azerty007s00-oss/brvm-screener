@@ -35,3 +35,4 @@ date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k
 2026-05-01,ORGT,ACHAT,2,modérée,3250.0,3111.81,3526.38,2.0,2.0,4.0,10.0,2.13,ok,,,,,
 2026-05-01,SPHC,ACHAT,2,modérée,6800.0,6502.7,7394.6,2.0,2.0,4.0,10.0,2.19,ok,,,,,
 2026-05-01,BRVMC,VENTE,-3,modérée,403.93,407.34,397.1,2.0,2.0,4.0,10.0,0.42,ok,,,,,
+2026-05-01,BRVM-TEL,VENTE,-3,modérée,103.03,104.71,99.66,2.01,2.0,4.0,10.0,0.82,ok,,,,,
