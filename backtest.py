@@ -214,7 +214,7 @@ class BacktestEngine:
                         try:
                             ind   = compute_indicators(df_slice, ticker=ticker, horizon=self.horizon)
                             score = compute_score(ind)
-                            score.stop_loss, score.take_profit = compute_risk_levels(score, ind)
+                            score.stop_loss, score.take_profit = compute_risk_levels(score, ind, df_slice)
                             score.position_size_pct = compute_position_size(score, ind)
                         except Exception as exc:
                             logger.debug(f"[Backtest] {ticker} {current_date} indicators KO: {exc}")
