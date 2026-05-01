@@ -382,6 +382,29 @@ def render_signal_card(result: dict) -> None:
                     icon="📐",
                 )
 
+    # ── Bouton ajout portfolio ────────────────────────────────────────────────
+    if score.signal in ("ACHAT", "VENTE"):
+        btn_label = "➕ Ajouter au Portfolio" if score.signal == "ACHAT" else "📌 Suivre dans le Portfolio"
+        btn_key = f"add_port_{score.ticker}_{score.signal}"
+        if st.button(btn_label, key=btn_key, type="primary" if score.signal == "ACHAT" else "secondary"):
+            positions = _load_portfolio()
+            # Remplacer si déjà présent, sinon ajouter
+            positions = [p for p in positions if p["ticker"] != score.ticker]
+            positions.append({
+                "ticker":        score.ticker,
+                "entry_price":   float(ind.cours_actuel),
+                "quantity":      1,
+                "stop_loss":     float(score.stop_loss)   if score.stop_loss   is not None else None,
+                "take_profit":   float(score.take_profit) if score.take_profit is not None else None,
+                "entry_date":    str(date_type.today()),
+                "current_price": float(ind.cours_actuel),
+                "refreshed_at":  datetime.now().strftime("%Y-%m-%d %H:%M"),
+                "signal":        score.signal,
+                "confiance":     score.confiance,
+            })
+            _save_portfolio(positions)
+            st.success(f"**{score.ticker}** ajouté au Portfolio. Mettez à jour la quantité dans l'onglet 💼 Portfolio.")
+
     # ── Analyse narrative ─────────────────────────────────────────────────────
     with st.expander("🔍 Analyse complète", expanded=True):
         col_a, col_b = st.columns(2)
