@@ -107,6 +107,7 @@ class BacktestEngine:
         max_atr_pct:          float             = MAX_ATR_PCT,
         min_price:            float             = MIN_PRICE,
         confiance_filter:     Optional[list]    = None,
+        fee_pct:              float             = 0.0,
         debug:                bool              = False,
     ):
         self.initial_capital      = initial_capital
@@ -117,6 +118,7 @@ class BacktestEngine:
         self.max_atr_pct          = max_atr_pct
         self.min_price            = min_price
         self.confiance_filter     = set(confiance_filter) if confiance_filter else {"forte", "modérée", "faible"}
+        self.fee_pct              = fee_pct   # frais aller-retour en % du capital investi
         self.debug                = debug or DEBUG_MODE
 
         self._open:    dict[str, Position] = {}
@@ -288,7 +290,9 @@ class BacktestEngine:
         pos.capital_gain_pct     = round(pos.position_pct / 100 * pos.pnl_pct, 2)
         pos.capital_investi_fcfa = round(pos.equity_at_entry * pos.position_pct / 100, 0)
         pos.gain_fcfa            = round(pos.capital_investi_fcfa * pos.pnl_pct / 100, 0)
-        self._equity *= 1 + pos.capital_gain_pct / 100
+        # Frais aller-retour appliqués sur le capital investi
+        fee_drag = pos.position_pct * self.fee_pct / 100
+        self._equity *= 1 + (pos.capital_gain_pct - fee_drag) / 100
 
         self._closed.append(pos)
 
@@ -323,6 +327,7 @@ def run_backtest(
     max_atr_pct:          float          = MAX_ATR_PCT,
     min_price:            float          = MIN_PRICE,
     confiance_filter:     Optional[list] = None,
+    fee_pct:              float          = 0.0,
     debug:                bool           = False,
 ) -> BacktestResult:
     return BacktestEngine(
@@ -334,6 +339,7 @@ def run_backtest(
         max_atr_pct          = max_atr_pct,
         min_price            = min_price,
         confiance_filter     = confiance_filter,
+        fee_pct              = fee_pct,
         debug                = debug,
     ).run(ticker_data)
 
