@@ -46,8 +46,9 @@ MAX_ATR_PCT           = 4.0    # ATR% max autorisé à l'entrée (filtre volatil
 MIN_PRICE             = 500.0  # prix min en FCFA (exclut les penny stocks type ETIT)
 
 # Tous les tickers actions (hors indices)
-INDICES = {"BRVMC", "BRVM30", "BRVM-IN", "BRVM-TEL", "BRVM-EN"}
-ALL_TICKERS = [t for t in TICKER_NAMES if t not in INDICES]
+INDICES   = {"BRVMC", "BRVM30", "BRVM-IN", "BRVM-TEL", "BRVM-EN"}
+BLACKLIST = {"SPHC"}   # WR 20%, exp -2.01% sur 5 ans — exclu définitivement
+ALL_TICKERS = [t for t in TICKER_NAMES if t not in INDICES and t not in BLACKLIST]
 
 
 # ─── Dataclasses ─────────────────────────────────────────────────────────────
@@ -105,9 +106,11 @@ class BacktestEngine:
         review_interval_days: int               = REVIEW_INTERVAL_DAYS,
         max_holding_days:     int               = MAX_HOLDING_DAYS,
         max_atr_pct:          float             = MAX_ATR_PCT,
+        min_atr_pct:          float             = 1.5,
         min_price:            float             = MIN_PRICE,
         confiance_filter:     Optional[list]    = None,
         fee_pct:              float             = 0.0,
+        stop_tolerance_days:  int               = 3,
         debug:                bool              = False,
     ):
         self.initial_capital      = initial_capital
@@ -116,9 +119,11 @@ class BacktestEngine:
         self.review_interval_days = review_interval_days
         self.max_holding_days     = max_holding_days
         self.max_atr_pct          = max_atr_pct
+        self.min_atr_pct          = min_atr_pct
         self.min_price            = min_price
         self.confiance_filter     = set(confiance_filter) if confiance_filter else {"forte", "modérée", "faible"}
-        self.fee_pct              = fee_pct   # frais aller-retour en % du capital investi
+        self.fee_pct              = fee_pct
+        self.stop_tolerance_days  = stop_tolerance_days
         self.debug                = debug or DEBUG_MODE
 
         self._open:    dict[str, Position] = {}
@@ -205,6 +210,7 @@ class BacktestEngine:
                                 and score.position_size_pct is not None
                                 and ind.cours_actuel >= self.min_price
                                 and (ind.atr_pct is None or ind.atr_pct <= self.max_atr_pct)
+                                and (ind.atr_pct is None or ind.atr_pct >= self.min_atr_pct)
                                 and self._deployed_pct + score.position_size_pct <= 100.0):
                             self._open_position(ticker, score, ind, current_date)
                         elif score.signal == "ACHAT" and self.debug:
@@ -232,6 +238,19 @@ class BacktestEngine:
 
     def _check_stop_target(self, ticker: str, low: float, high: float, current_date: date) -> None:
         pos = self._open[ticker]
+
+        if self.stop_tolerance_days > 0:
+            days_held = (current_date - pos.entry_date).days
+            if days_held < self.stop_tolerance_days:
+                # Stop normal suspendu — seul un stop extrême (2× distance) déclenche la sortie
+                stop_distance = pos.entry_price - pos.stop_loss
+                extreme_stop  = pos.stop_loss - stop_distance  # = 2*stop_loss - entry_price
+                if low <= extreme_stop:
+                    self._close(ticker, extreme_stop, current_date, "stop_extreme")
+                elif ticker in self._open and high >= pos.take_profit:
+                    self._close(ticker, pos.take_profit, current_date, "target")
+                return
+
         stop_hit   = low  <= pos.stop_loss
         target_hit = high >= pos.take_profit
         # Si les deux sont touchés dans la même barre → priorité au stop (conservateur)
@@ -325,9 +344,11 @@ def run_backtest(
     review_interval_days: int            = REVIEW_INTERVAL_DAYS,
     max_holding_days:     int            = MAX_HOLDING_DAYS,
     max_atr_pct:          float          = MAX_ATR_PCT,
+    min_atr_pct:          float          = 1.5,
     min_price:            float          = MIN_PRICE,
     confiance_filter:     Optional[list] = None,
     fee_pct:              float          = 0.0,
+    stop_tolerance_days:  int            = 3,
     debug:                bool           = False,
 ) -> BacktestResult:
     return BacktestEngine(
@@ -337,9 +358,11 @@ def run_backtest(
         review_interval_days = review_interval_days,
         max_holding_days     = max_holding_days,
         max_atr_pct          = max_atr_pct,
+        min_atr_pct          = min_atr_pct,
         min_price            = min_price,
         confiance_filter     = confiance_filter,
         fee_pct              = fee_pct,
+        stop_tolerance_days  = stop_tolerance_days,
         debug                = debug,
     ).run(ticker_data)
 
