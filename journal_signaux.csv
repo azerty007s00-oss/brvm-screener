@@ -33,3 +33,4 @@ date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k
 2026-05-01,SIBC,ACHAT,2,modérée,7080.0,6903.93,7432.15,2.0,2.0,4.0,10.0,1.24,ok,,,,,
 2026-05-01,NTLC,ACHAT,3,modérée,12340.0,11854.19,13311.62,2.0,2.0,4.0,10.0,1.97,ok,,,,,
 2026-05-01,ORGT,ACHAT,2,modérée,3250.0,3111.81,3526.38,2.0,2.0,4.0,10.0,2.13,ok,,,,,
+2026-05-01,SPHC,ACHAT,2,modérée,6800.0,6502.7,7394.6,2.0,2.0,4.0,10.0,2.19,ok,,,,,
