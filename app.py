@@ -945,10 +945,10 @@ def render_backtest_page() -> None:
         "Tous les tickers actions BRVM (hors indices) · Aucun look-ahead."
     )
 
-    st.warning(
-        "**Limitation données** : Sika Finance fournit ~64 barres (~3 mois). "
-        "Les résultats sont indicatifs — insuffisants pour valider un système statistiquement.",
-        icon="⚠️",
+    st.info(
+        "**Données** : API SikaFinance — ~260 séances quotidiennes (~1 an de trading). "
+        "Résultats statistiquement plus robustes qu'avant, mais 500+ trades recommandés pour validation complète.",
+        icon="ℹ️",
     )
 
     # ── Paramètres ────────────────────────────────────────────────────────────
@@ -990,7 +990,7 @@ def render_backtest_page() -> None:
             warmup_bt = st.slider(
                 "Warmup (barres min)",
                 min_value=20, max_value=55, value=WARMUP_BARS, step=5,
-                help="Barres nécessaires avant le 1er signal. Max disponible ≈ 64 barres.",
+                help="Barres nécessaires avant le 1er signal. ~260 barres disponibles via API SikaFinance.",
             )
             debug_bt = st.checkbox("Mode debug (console)", value=False)
 

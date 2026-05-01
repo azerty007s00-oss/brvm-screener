@@ -299,142 +299,78 @@ def _normalize_sika_dataframe(df: pd.DataFrame) -> Optional[pd.DataFrame]:
     return df
 
 
-# ─── Tentative JSON chartdata ─────────────────────────────────────────────────
+# ─── API POST GetHistos (source principale) ───────────────────────────────────
 
-def _fetch_sika_chartdata(sika_id: str, days: int) -> Optional[pd.DataFrame]:
+SIKA_API_URL = "https://www.sikafinance.com/api/general/GetHistos"
+
+def _fetch_sika_api(sika_id: str, days: int) -> Optional[pd.DataFrame]:
     """
-    Tente l'endpoint JSON XHR de Sika Finance pour le graphique.
-    Essaie plusieurs valeurs de period pour maximiser l'historique.
-    period=0 → court terme, period=1 → 6 mois?, period=2 → 1 an?, period=3 → max
+    Appel à l'API POST /api/general/GetHistos de SikaFinance.
+
+    Retourne ~260 séances quotidiennes (1 an de trading) quel que soit
+    l'intervalle demandé — c'est le maximum disponible via cet endpoint.
+    Champs : Date (DD/MM/YYYY), Open, High, Low, Close, Volume.
     """
-    best_df = None
-    for period in [3, 2, 1, 0]:  # du plus long au plus court
-        url = f"{SIKA_CHART_URL}?chartid={sika_id}&period={period}"
-        try:
-            logger.info(f"[SikaFinance JSON] Tentative period={period} : {url}")
-            time.sleep(REQUEST_DELAY_SECONDS)
-            resp = _session.get(url, timeout=REQUEST_TIMEOUT)
-
-            if resp.status_code != 200:
-                continue
-
-            content_type = resp.headers.get("Content-Type", "")
-            text = resp.text.strip()
-
-            if not ("application/json" in content_type or text.startswith("[") or text.startswith("{")):
-                continue
-
-            data = resp.json()
-            df = _parse_chartdata_json(data)
-            if df is not None and len(df) > 0:
-                if best_df is None or len(df) > len(best_df):
-                    best_df = df
-                if best_df is not None and len(best_df) >= days:
-                    break
-
-        except (requests.RequestException, ValueError) as e:
-            logger.debug(f"Échec chartdata period={period}: {e}")
-            continue
-
-    if best_df is not None:
-        return best_df.tail(days) if len(best_df) > days else best_df
-    return None
-
-
-def _parse_chartdata_json(data) -> Optional[pd.DataFrame]:
-    """Parse le JSON chartdata Sika Finance."""
+    from datetime import timedelta
+    today = datetime.now()
+    payload = {
+        "ticker": sika_id,
+        "datedeb": (today - timedelta(days=max(days, 365))).strftime("%Y-%m-%d"),
+        "datefin": today.strftime("%Y-%m-%d"),
+        "xperiod": "1",
+    }
+    headers_api = {
+        "Content-Type": "application/json;charset=UTF-8",
+        "Origin": "https://www.sikafinance.com",
+        "Referer": f"https://www.sikafinance.com/marches/historiques/{sika_id}",
+    }
     try:
-        # Format dict avec clé 'data'
-        if isinstance(data, dict):
-            data = data.get("data", data.get("Data", []))
+        time.sleep(REQUEST_DELAY_SECONDS)
+        resp = _session.post(SIKA_API_URL, json=payload, headers=headers_api, timeout=REQUEST_TIMEOUT)
+        if resp.status_code != 200:
+            logger.debug(f"[SikaFinance API] HTTP {resp.status_code} pour {sika_id}")
+            return None
 
-        if not isinstance(data, list) or len(data) == 0:
+        data = resp.json()
+        lst = data.get("lst", [])
+        if not lst:
+            err = data.get("error", "")
+            logger.debug(f"[SikaFinance API] Aucune donnée pour {sika_id} (error={err})")
             return None
 
         rows = []
-        first = data[0]
-
-        # Format liste de listes : [timestamp_ms, o, h, l, c, v]
-        if isinstance(first, (list, tuple)):
-            for row in data:
-                if len(row) < 5:
-                    continue
-                ts = row[0]
-                dt = datetime.fromtimestamp(ts / 1000) if ts > 1e10 else datetime.fromtimestamp(ts)
+        for row in lst:
+            try:
                 rows.append({
-                    "date": dt.date(),
-                    "open": float(row[1]),
-                    "high": float(row[2]),
-                    "low": float(row[3]),
-                    "close": float(row[4]),
-                    "volume": float(row[5]) if len(row) > 5 else 0.0,
+                    "date": _parse_date(str(row["Date"])),
+                    "open":   float(row.get("Open",  row.get("Close", 0))),
+                    "high":   float(row.get("High",  row.get("Close", 0))),
+                    "low":    float(row.get("Low",   row.get("Close", 0))),
+                    "close":  float(row["Close"]),
+                    "volume": float(row.get("Volume", 0)),
                 })
-        # Format liste de dicts
-        elif isinstance(first, dict):
-            for row in data:
-                try:
-                    date_val = row.get("date") or row.get("Date") or row.get("jour")
-                    close_val = row.get("cloture") or row.get("close") or row.get("Close") or row.get("dernier")
-                    if date_val is None or close_val is None:
-                        continue
-                    rows.append({
-                        "date": _parse_date(str(date_val)),
-                        "open": float(str(row.get("ouverture") or row.get("open") or close_val).replace(",", ".")),
-                        "high": float(str(row.get("haut") or row.get("high") or close_val).replace(",", ".")),
-                        "low": float(str(row.get("bas") or row.get("low") or close_val).replace(",", ".")),
-                        "close": float(str(close_val).replace(",", ".")),
-                        "volume": float(str(row.get("volume") or 0).replace(",", ".")),
-                    })
-                except (ValueError, TypeError):
-                    continue
+            except (KeyError, ValueError, TypeError):
+                continue
 
         if not rows:
             return None
 
         df = pd.DataFrame(rows)
         df["date"] = pd.to_datetime(df["date"])
+        df = df.dropna(subset=["date", "close"])
+        df = df[df["close"] > 0]
         df = df.sort_values("date").drop_duplicates("date").reset_index(drop=True)
         df.set_index("date", inplace=True)
+        df = df[["open", "high", "low", "close", "volume"]]
+
+        logger.info(f"[SikaFinance API] {len(df)} points pour {sika_id}")
         return df
 
-    except Exception as e:
-        logger.warning(f"Erreur parsing chartdata JSON: {e}")
+    except (requests.RequestException, ValueError, KeyError) as e:
+        logger.debug(f"[SikaFinance API] Erreur pour {sika_id}: {e}")
         return None
 
 
-# ─── Fallback parallèle ──────────────────────────────────────────────────────
-
-def _parallel_fallback(sika_id: str, ticker: str, days: int) -> list[tuple[str, Optional[pd.DataFrame]]]:
-    """
-    Lance les sources de fallback en parallèle (JSON SikaFinance + RichBourse).
-
-    Returns:
-        Liste de (nom_source, DataFrame_ou_None) triée par quantité de données
-    """
-    results = []
-
-    def _try_json():
-        try:
-            return ("SikaFinance JSON", _fetch_sika_chartdata(sika_id, days))
-        except Exception as e:
-            return ("SikaFinance JSON", None)
-
-    def _try_richbourse():
-        try:
-            return ("RichBourse", richbourse.fetch_ohlcv(sika_id, days))
-        except Exception as e:
-            return ("RichBourse", None)
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        futures = [executor.submit(_try_json), executor.submit(_try_richbourse)]
-        for future in as_completed(futures):
-            source_name, df = future.result()
-            if df is not None:
-                results.append((source_name, df))
-
-    # Trier par quantité de données (le plus de jours en premier)
-    results.sort(key=lambda x: len(x[1]) if x[1] is not None else 0, reverse=True)
-    return results
 
 
 # ─── Point d'entrée principal ─────────────────────────────────────────────────
@@ -478,21 +414,30 @@ def get_ohlcv(ticker: str, days: int = 365) -> pd.DataFrame:
     df = None
     errors = []
 
-    # 3. Scraping HTML historiques (méthode principale)
+    # 3. API POST GetHistos — source primaire (~260 séances quotidiennes)
     try:
-        df = _fetch_sika_historiques(sika_id, days)
+        df = _fetch_sika_api(sika_id, days)
     except Exception as e:
-        errors.append(f"SikaFinance HTML: {e}")
+        errors.append(f"SikaFinance API: {e}")
 
-    # 4. Fallback parallèle : JSON SikaFinance + RichBourse simultanément
+    # 4. Fallback HTML historiques si l'API échoue
     if df is None or len(df) < MIN_DATA_POINTS:
-        fallback_results = _parallel_fallback(sika_id, ticker, days)
-        for source_name, df_fallback in fallback_results:
-            if df_fallback is not None and (df is None or len(df_fallback) > len(df)):
-                df = df_fallback
-                logger.info(f"[{source_name}] {len(df)} jours pour {ticker}")
-                if len(df) >= MIN_DATA_POINTS:
-                    break
+        try:
+            df_html = _fetch_sika_historiques(sika_id, days)
+            if df_html is not None and (df is None or len(df_html) > len(df)):
+                df = df_html
+        except Exception as e:
+            errors.append(f"SikaFinance HTML: {e}")
+
+    # 5. Fallback RichBourse si toujours insuffisant
+    if df is None or len(df) < MIN_DATA_POINTS:
+        try:
+            df_rb = richbourse.fetch_ohlcv(sika_id, days)
+            if df_rb is not None and (df is None or len(df_rb) > len(df)):
+                df = df_rb
+                logger.info(f"[RichBourse] {len(df)} jours pour {ticker}")
+        except Exception as e:
+            errors.append(f"RichBourse: {e}")
 
     # Validation finale
     if df is None or len(df) == 0:
