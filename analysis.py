@@ -95,7 +95,7 @@ def compute_position_size(
         else:
             raw *= 0.85   # liquide BRVM : décote résiduelle
 
-    return round(min(25.0, max(1.0, raw)), 1)
+    return round(min(10.0, max(1.0, raw)), 1)
 
 
 def compute_risk_levels(
