@@ -123,8 +123,12 @@ class BacktestEngine:
         self._closed:  list[Position]      = []
         self._equity:  float               = initial_capital
         self._equity_history: list[dict]   = []
-        # date de prochaine revue par ticker
         self._next_review: dict[str, date] = {}
+
+    @property
+    def _deployed_pct(self) -> float:
+        """Somme des allocations des positions ouvertes (% capital)."""
+        return sum(p.position_pct for p in self._open.values())
 
     # ── Boucle principale ────────────────────────────────────────────────────
 
@@ -160,7 +164,10 @@ class BacktestEngine:
                 if len(df_slice) < self.warmup_bars:
                     continue
 
-                current_price = float(df_slice["close"].iloc[-1])
+                current_bar   = df_full.loc[ts]
+                current_price = float(current_bar["close"])
+                current_high  = float(current_bar.get("high", current_price))
+                current_low   = float(current_bar.get("low",  current_price))
 
                 # ── Suivi journalier des positions ouvertes ────────────────
                 if ticker in self._open:
@@ -171,8 +178,8 @@ class BacktestEngine:
                     if days_held >= self.max_holding_days:
                         self._close(ticker, current_price, current_date, "timeout_3m")
                     else:
-                        # 2. Stop / target (prix intraday)
-                        self._check_stop_target(ticker, current_price, current_date)
+                        # 2. Stop / target — vérifié sur high/low intraday
+                        self._check_stop_target(ticker, current_low, current_high, current_date)
 
                 # ── Revue bi-mensuelle — ouvertures uniquement ────────────
                 next_rev = self._next_review.get(ticker)
@@ -195,7 +202,8 @@ class BacktestEngine:
                                 and score.take_profit is not None
                                 and score.position_size_pct is not None
                                 and ind.cours_actuel >= self.min_price
-                                and (ind.atr_pct is None or ind.atr_pct <= self.max_atr_pct)):
+                                and (ind.atr_pct is None or ind.atr_pct <= self.max_atr_pct)
+                                and self._deployed_pct + score.position_size_pct <= 100.0):
                             self._open_position(ticker, score, ind, current_date)
                         elif score.signal == "ACHAT" and self.debug:
                             reason = []
@@ -218,15 +226,17 @@ class BacktestEngine:
 
         return self._build_result()
 
-    # ── Stop / target (daily) ────────────────────────────────────────────────
+    # ── Stop / target (intraday high/low) ───────────────────────────────────
 
-    def _check_stop_target(self, ticker: str, current_price: float, current_date: date) -> None:
+    def _check_stop_target(self, ticker: str, low: float, high: float, current_date: date) -> None:
         pos = self._open[ticker]
-        # Long-only : stop en-dessous, target au-dessus
-        if current_price <= pos.stop_loss:
-            self._close(ticker, current_price, current_date, "stop")
-        elif current_price >= pos.take_profit:
-            self._close(ticker, current_price, current_date, "target")
+        stop_hit   = low  <= pos.stop_loss
+        target_hit = high >= pos.take_profit
+        # Si les deux sont touchés dans la même barre → priorité au stop (conservateur)
+        if stop_hit:
+            self._close(ticker, pos.stop_loss,   current_date, "stop")
+        elif target_hit:
+            self._close(ticker, pos.take_profit, current_date, "target")
 
     # ── Ouverture ────────────────────────────────────────────────────────────
 
