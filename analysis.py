@@ -118,11 +118,11 @@ def compute_risk_levels(
         return None, None
 
     if score.confiance == "forte":
-        k1, k2 = 2.0, 4.0   # R/R = 2.0
+        k1, k2 = 2.5, 5.0   # R/R = 2.0
     elif score.confiance == "modérée":
-        k1, k2 = 1.5, 3.0   # R/R = 2.0
+        k1, k2 = 2.0, 4.0   # R/R = 2.0
     else:
-        k1, k2 = 1.0, 2.0   # R/R = 2.0
+        k1, k2 = 1.5, 3.0   # R/R = 2.0
 
     prix = ind.cours_actuel
     if score.signal == "ACHAT":
