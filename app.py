@@ -4,8 +4,11 @@ app.py — Interface Streamlit du BRVM Stock Screener (Investment Pioneers)
 Lancement : streamlit run app.py
 """
 
+import json
 import logging
+import os
 import sys
+from datetime import date as date_type, datetime
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -77,7 +80,7 @@ with st.sidebar:
     # ── Vue principale ────────────────────────────────────────────────────────
     vue = st.radio(
         "Vue",
-        ["📈 Screener", "📒 Journal", "🔬 Backtest"],
+        ["📈 Screener", "📒 Journal", "🔬 Backtest", "💼 Portfolio"],
         horizontal=True,
         label_visibility="collapsed",
     )
@@ -1249,7 +1252,7 @@ def _render_open_trades(open_df: pd.DataFrame, today) -> None:
 def render_journal_dashboard() -> None:
     """Dashboard KPI branché sur journal_signaux.csv."""
     from tracking import get_kpis, get_open_trades, get_closed_trades
-    from datetime import date as date_type
+    # date_type already imported at module level
 
     st.title("📒 Journal de Trading")
     st.caption("Signaux ACHAT/VENTE enregistrés automatiquement — sortie sur stop / target / timeout 20 séances")
@@ -1357,6 +1360,188 @@ def render_journal_dashboard() -> None:
         )
 
 
+# ─── Portfolio Tracker ────────────────────────────────────────────────────────
+
+_PORTFOLIO_FILE = os.path.join(os.path.dirname(__file__), "portfolio.json")
+
+ALERT_STOP_PCT  = 5.0   # rouge si prix à moins de X% du stop
+ALERT_TGT_PCT   = 3.0   # vert si prix à moins de X% du target (ou dépassé)
+
+
+def _load_portfolio() -> list[dict]:
+    if os.path.exists(_PORTFOLIO_FILE):
+        try:
+            with open(_PORTFOLIO_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return []
+
+
+def _save_portfolio(positions: list[dict]) -> None:
+    with open(_PORTFOLIO_FILE, "w", encoding="utf-8") as f:
+        json.dump(positions, f, ensure_ascii=False, indent=2)
+
+
+def _fetch_price(ticker: str) -> float | None:
+    try:
+        df = get_ohlcv(ticker, days=5)
+        if df is not None and not df.empty:
+            return float(df["close"].iloc[-1])
+    except Exception:
+        pass
+    return None
+
+
+def render_portfolio_page() -> None:
+    st.title("💼 Portfolio Tracker")
+    st.caption("Suivi en temps réel de vos positions — P&L, distance stop/target, alertes")
+
+    positions = _load_portfolio()
+
+    # ── Rafraîchir les prix ────────────────────────────────────────────────────
+    if st.button("🔄 Rafraîchir les prix", key="port_refresh"):
+        for pos in positions:
+            p = _fetch_price(pos["ticker"])
+            if p is not None:
+                pos["current_price"] = p
+                pos["refreshed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        _save_portfolio(positions)
+        st.rerun()
+
+    # ── Alertes ───────────────────────────────────────────────────────────────
+    alerts_stop   = []
+    alerts_target = []
+    for pos in positions:
+        cp = pos.get("current_price")
+        if cp is None:
+            continue
+        ep = pos["entry_price"]
+        sl = pos.get("stop_loss")
+        tp = pos.get("take_profit")
+        if sl and sl > 0:
+            dist_stop_pct = (cp - sl) / cp * 100
+            if dist_stop_pct <= ALERT_STOP_PCT:
+                alerts_stop.append((pos["ticker"], cp, sl, dist_stop_pct))
+        if tp and tp > 0:
+            dist_tgt_pct = (tp - cp) / cp * 100
+            if dist_tgt_pct <= ALERT_TGT_PCT:
+                alerts_target.append((pos["ticker"], cp, tp, dist_tgt_pct))
+
+    if alerts_stop:
+        for tk, cp, sl, d in alerts_stop:
+            st.error(f"🔴 **{tk}** — Prix actuel {cp:,.0f} FCFA à seulement {d:.1f}% au-dessus du stop ({sl:,.0f} FCFA)")
+    if alerts_target:
+        for tk, cp, tp, d in alerts_target:
+            st.success(f"🟢 **{tk}** — Target {tp:,.0f} FCFA à portée ! Prix actuel {cp:,.0f} FCFA (écart {d:.1f}%)")
+
+    # ── Tableau des positions ─────────────────────────────────────────────────
+    if positions:
+        rows = []
+        total_invested = 0.0
+        total_pnl_fcfa = 0.0
+        for pos in positions:
+            cp   = pos.get("current_price")
+            ep   = pos["entry_price"]
+            qty  = pos["quantity"]
+            sl   = pos.get("stop_loss")
+            tp   = pos.get("take_profit")
+            inv  = ep * qty
+
+            if cp is not None:
+                pnl_pct  = (cp - ep) / ep * 100
+                pnl_fcfa = (cp - ep) * qty
+                dist_stop_pct = (cp - sl) / cp * 100 if (sl and sl > 0) else None
+                dist_tgt_pct  = (tp - cp) / cp * 100 if (tp and tp > 0) else None
+                if pnl_pct >= 3:
+                    statut = "🟢"
+                elif pnl_pct <= -3:
+                    statut = "🔴"
+                else:
+                    statut = "🟡"
+            else:
+                pnl_pct = pnl_fcfa = dist_stop_pct = dist_tgt_pct = None
+                statut = "⚪"
+
+            total_invested += inv
+            if pnl_fcfa is not None:
+                total_pnl_fcfa += pnl_fcfa
+
+            rows.append({
+                "": statut,
+                "Ticker": pos["ticker"],
+                "Entrée": f"{ep:,.0f}",
+                "Qté": qty,
+                "Actuel": f"{cp:,.0f}" if cp else "—",
+                "PnL %": f"{pnl_pct:+.2f}%" if pnl_pct is not None else "—",
+                "PnL FCFA": f"{pnl_fcfa:+,.0f}" if pnl_fcfa is not None else "—",
+                "Investi FCFA": f"{inv:,.0f}",
+                "Dist. Stop": f"{dist_stop_pct:.1f}%" if dist_stop_pct is not None else "—",
+                "Dist. Target": f"{dist_tgt_pct:.1f}%" if dist_tgt_pct is not None else "—",
+                "Stop": f"{sl:,.0f}" if sl else "—",
+                "Target": f"{tp:,.0f}" if tp else "—",
+                "Date entrée": pos.get("entry_date", "—"),
+                "MàJ": pos.get("refreshed_at", "—"),
+            })
+
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+        # Totaux
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Capital investi", f"{total_invested:,.0f} FCFA")
+        c2.metric("P&L total", f"{total_pnl_fcfa:+,.0f} FCFA",
+                  delta=f"{total_pnl_fcfa / total_invested * 100:+.2f}%" if total_invested else None)
+        c3.metric("Positions ouvertes", len(positions))
+        st.divider()
+
+    # ── Ajouter une position ───────────────────────────────────────────────────
+    with st.expander("➕ Ajouter une position", expanded=not positions):
+        all_tickers = sorted(TICKER_NAMES.keys())
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            new_ticker = st.selectbox("Ticker", all_tickers, key="port_ticker")
+            new_qty    = st.number_input("Quantité (actions)", min_value=1, value=100, key="port_qty")
+        with col2:
+            new_entry  = st.number_input("Prix d'entrée (FCFA)", min_value=0.0, value=1000.0,
+                                          step=1.0, format="%.0f", key="port_entry")
+            new_stop   = st.number_input("Stop loss (FCFA, 0 = aucun)", min_value=0.0, value=0.0,
+                                          step=1.0, format="%.0f", key="port_stop")
+        with col3:
+            new_target = st.number_input("Take profit (FCFA, 0 = aucun)", min_value=0.0, value=0.0,
+                                          step=1.0, format="%.0f", key="port_target")
+            new_date   = st.date_input("Date d'entrée", value=date_type.today(), key="port_date")
+
+        if st.button("Ajouter", key="port_add"):
+            current_p = _fetch_price(new_ticker)
+            new_pos = {
+                "ticker":        new_ticker,
+                "entry_price":   float(new_entry),
+                "quantity":      int(new_qty),
+                "stop_loss":     float(new_stop) if new_stop > 0 else None,
+                "take_profit":   float(new_target) if new_target > 0 else None,
+                "entry_date":    str(new_date),
+                "current_price": current_p,
+                "refreshed_at":  datetime.now().strftime("%Y-%m-%d %H:%M"),
+            }
+            positions.append(new_pos)
+            _save_portfolio(positions)
+            st.success(f"Position {new_ticker} ajoutée.")
+            st.rerun()
+
+    # ── Supprimer une position ─────────────────────────────────────────────────
+    if positions:
+        with st.expander("🗑️ Supprimer une position"):
+            tickers_open = [p["ticker"] for p in positions]
+            to_delete = st.selectbox("Ticker à supprimer", tickers_open, key="port_del_sel")
+            if st.button("Supprimer", key="port_del_btn"):
+                positions = [p for p in positions if p["ticker"] != to_delete]
+                _save_portfolio(positions)
+                st.success(f"Position {to_delete} supprimée.")
+                st.rerun()
+
+
+# ─── Routing ──────────────────────────────────────────────────────────────────
+
 def main() -> None:
     if "Journal" in vue:
         render_journal_dashboard()
@@ -1364,6 +1549,10 @@ def main() -> None:
 
     if "Backtest" in vue:
         render_backtest_page()
+        return
+
+    if "Portfolio" in vue:
+        render_portfolio_page()
         return
 
     st.title("📈 BRVM Stock Screener")

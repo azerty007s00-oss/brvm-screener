@@ -111,6 +111,8 @@ class BacktestEngine:
         confiance_filter:     Optional[list]    = None,
         fee_pct:              float             = 0.0,
         stop_tolerance_days:  int               = 3,
+        regime_filter:        bool              = True,
+        df_index:             Optional[pd.DataFrame] = None,
         debug:                bool              = False,
     ):
         self.initial_capital      = initial_capital
@@ -124,6 +126,8 @@ class BacktestEngine:
         self.confiance_filter     = set(confiance_filter) if confiance_filter else {"forte", "modérée", "faible"}
         self.fee_pct              = fee_pct
         self.stop_tolerance_days  = stop_tolerance_days
+        self.regime_filter        = regime_filter
+        self.df_index             = df_index  # BRVMC OHLCV pour filtre regime
         self.debug                = debug or DEBUG_MODE
 
         self._open:    dict[str, Position] = {}
@@ -136,6 +140,15 @@ class BacktestEngine:
     def _deployed_pct(self) -> float:
         """Somme des allocations des positions ouvertes (% capital)."""
         return sum(p.position_pct for p in self._open.values())
+
+    def _is_regime_ok(self, ts: pd.Timestamp) -> bool:
+        """True si BRVMC est au-dessus de sa MA50 (marché haussier)."""
+        if not self.regime_filter or self.df_index is None:
+            return True
+        idx = self.df_index[self.df_index.index <= ts]
+        if len(idx) < 50:
+            return True  # pas assez d'historique → laisser passer
+        return float(idx["close"].iloc[-1]) >= float(idx["close"].iloc[-50:].mean())
 
     # ── Boucle principale ────────────────────────────────────────────────────
 
@@ -194,6 +207,10 @@ class BacktestEngine:
                     self._next_review[ticker] = current_date + timedelta(days=self.review_interval_days)
 
                     if ticker not in self._open:   # ticker libre → tenter une entrée
+                        # Filtre régime marché
+                        if not self._is_regime_ok(ts):
+                            continue
+
                         try:
                             ind   = compute_indicators(df_slice, ticker=ticker, horizon=self.horizon)
                             score = compute_score(ind)
@@ -349,6 +366,8 @@ def run_backtest(
     confiance_filter:     Optional[list] = None,
     fee_pct:              float          = 0.0,
     stop_tolerance_days:  int            = 3,
+    regime_filter:        bool           = True,
+    df_index:             Optional[pd.DataFrame] = None,
     debug:                bool           = False,
 ) -> BacktestResult:
     return BacktestEngine(
@@ -363,6 +382,8 @@ def run_backtest(
         confiance_filter     = confiance_filter,
         fee_pct              = fee_pct,
         stop_tolerance_days  = stop_tolerance_days,
+        regime_filter        = regime_filter,
+        df_index             = df_index,
         debug                = debug,
     ).run(ticker_data)
 
@@ -387,6 +408,13 @@ def fetch_and_backtest(
 
     if not ticker_data:
         raise RuntimeError("Aucun ticker disponible pour le backtest")
+
+    # Récupérer BRVMC pour le filtre régime si non fourni
+    if kwargs.get("regime_filter", True) and kwargs.get("df_index") is None:
+        try:
+            kwargs["df_index"] = get_ohlcv("BRVMC", days=days)
+        except Exception:
+            pass
 
     return run_backtest(ticker_data, **kwargs)
 
