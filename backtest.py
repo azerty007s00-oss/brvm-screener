@@ -446,6 +446,7 @@ def fetch_and_backtest(
         if "min_atr_pct" not in kwargs:
             kwargs["min_atr_pct"] = 3.0    # minimum de mouvement mensuel
 
+    kwargs.pop("data_period", None)   # consommé ici, inconnu de run_backtest/BacktestEngine
     return run_backtest(ticker_data, **kwargs)
 
 
