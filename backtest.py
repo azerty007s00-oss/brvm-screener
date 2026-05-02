@@ -446,7 +446,15 @@ def fetch_and_backtest(
         if "min_atr_pct" not in kwargs:
             kwargs["min_atr_pct"] = 3.0    # minimum de mouvement mensuel
 
-    kwargs.pop("data_period", None)   # consommé ici, inconnu de run_backtest/BacktestEngine
+    data_period = kwargs.pop("data_period", data_period)  # absorbe si passé via **kwargs (cache .pyc)
+
+    # Réappliquer la logique mensuelle au cas où data_period venait de kwargs
+    if data_period == "monthly":
+        if "max_atr_pct" not in kwargs:
+            kwargs["max_atr_pct"] = 25.0
+        if "min_atr_pct" not in kwargs:
+            kwargs["min_atr_pct"] = 3.0
+
     return run_backtest(ticker_data, **kwargs)
 
 
