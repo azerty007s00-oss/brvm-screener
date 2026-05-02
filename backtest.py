@@ -76,6 +76,8 @@ class Position:
     capital_gain_pct:     Optional[float] = None
     capital_investi_fcfa: Optional[float] = None
     gain_fcfa:            Optional[float] = None
+    tp_active:            bool            = True
+    original_stop_loss:   Optional[float] = None
 
 
 @dataclass
@@ -114,6 +116,10 @@ class BacktestEngine:
         stop_tolerance_days:  int               = 3,
         regime_filter:        bool              = True,
         df_index:             Optional[pd.DataFrame] = None,
+        tp_trail_signal:      bool              = False,
+        trail_stop:           bool              = False,
+        close_on_non_achat:   bool              = False,
+        close_on_vente:       bool              = False,
         debug:                bool              = False,
     ):
         self.initial_capital      = initial_capital
@@ -130,6 +136,10 @@ class BacktestEngine:
         self.stop_tolerance_days  = stop_tolerance_days
         self.regime_filter        = regime_filter
         self.df_index             = df_index  # BRVMC OHLCV pour filtre regime
+        self.tp_trail_signal      = tp_trail_signal
+        self.trail_stop           = trail_stop
+        self.close_on_non_achat   = close_on_non_achat
+        self.close_on_vente       = close_on_vente
         self.debug                = debug or DEBUG_MODE
 
         self._open:    dict[str, Position] = {}
@@ -203,7 +213,7 @@ class BacktestEngine:
                         # 2. Stop / target — vérifié sur high/low intraday
                         self._check_stop_target(ticker, current_low, current_high, current_date)
 
-                # ── Revue bi-mensuelle — ouvertures uniquement ────────────
+                # ── Revue bi-mensuelle ────────────────────────────────────
                 next_rev = self._next_review.get(ticker)
                 if next_rev is None or current_date >= next_rev:
                     self._next_review[ticker] = current_date + timedelta(days=self.review_interval_days)
@@ -241,6 +251,49 @@ class BacktestEngine:
                             if reason:
                                 print(f"  SKIP  {current_date}  {ticker:<8}  {' | '.join(reason)}")
 
+                    elif ticker in self._open:
+                        # Réévaluation du signal pour position ouverte
+                        _need = self.trail_stop or self.close_on_non_achat or self.close_on_vente or self.tp_trail_signal
+                        if _need:
+                            try:
+                                ind   = compute_indicators(df_slice, ticker=ticker, horizon=self.horizon)
+                                score = compute_score(ind)
+                                pos   = self._open[ticker]
+
+                                if score.signal == "ACHAT":
+                                    # tp_trail_signal : désactiver TP si forte/modérée
+                                    if self.tp_trail_signal:
+                                        pos.tp_active = score.confiance not in ("forte", "modérée")
+
+                                    # Trailing stop : remonter le stop d'initial_risk sous le cours
+                                    if self.trail_stop and pos.original_stop_loss is not None:
+                                        initial_risk = pos.entry_price - pos.original_stop_loss
+                                        if initial_risk > 0:
+                                            new_stop = ind.cours_actuel - initial_risk
+                                            if new_stop > pos.stop_loss:
+                                                if self.debug:
+                                                    print(
+                                                        f"  TRAIL {current_date}  {ticker:<8}  "
+                                                        f"stop {pos.stop_loss:,.0f} → {new_stop:,.0f}"
+                                                    )
+                                                pos.stop_loss = new_stop
+                                else:
+                                    # Signal ≠ ACHAT
+                                    if self.tp_trail_signal:
+                                        pos.tp_active = True
+                                    if self.close_on_non_achat:
+                                        self._close(
+                                            ticker, ind.cours_actuel, current_date,
+                                            f"signal_{score.signal.lower()}"
+                                        )
+                                    elif self.close_on_vente and score.signal == "VENTE":
+                                        self._close(
+                                            ticker, ind.cours_actuel, current_date,
+                                            "signal_vente"
+                                        )
+                            except Exception:
+                                pass
+
             self._equity_history.append({"date": current_date, "equity": self._equity})
 
         # Clôture forcée des positions ouvertes à la fin
@@ -266,12 +319,12 @@ class BacktestEngine:
                 extreme_stop  = pos.stop_loss - stop_distance  # = 2*stop_loss - entry_price
                 if low <= extreme_stop:
                     self._close(ticker, extreme_stop, current_date, "stop_extreme")
-                elif ticker in self._open and high >= pos.take_profit:
+                elif ticker in self._open and pos.tp_active and high >= pos.take_profit:
                     self._close(ticker, pos.take_profit, current_date, "target")
                 return
 
         stop_hit   = low  <= pos.stop_loss
-        target_hit = high >= pos.take_profit
+        target_hit = pos.tp_active and high >= pos.take_profit
         # Si les deux sont touchés dans la même barre → priorité au stop (conservateur)
         if stop_hit:
             self._close(ticker, pos.stop_loss,   current_date, "stop")
@@ -288,18 +341,19 @@ class BacktestEngine:
             rr = round(k2 / k1, 2) if k1 > 0 else None
 
         pos = Position(
-            ticker          = ticker,
-            entry_date      = current_date,
-            entry_price     = ind.cours_actuel,
-            stop_loss       = score.stop_loss,
-            take_profit     = score.take_profit,
-            rr              = rr,
-            position_pct    = score.position_size_pct,
-            confiance       = score.confiance,
-            score           = score.score_total,
-            atr_pct         = ind.atr_pct,
-            data_quality    = getattr(ind, "data_quality_flag", "ok"),
-            equity_at_entry = self._equity,
+            ticker              = ticker,
+            entry_date          = current_date,
+            entry_price         = ind.cours_actuel,
+            stop_loss           = score.stop_loss,
+            take_profit         = score.take_profit,
+            original_stop_loss  = score.stop_loss,
+            rr                  = rr,
+            position_pct        = score.position_size_pct,
+            confiance           = score.confiance,
+            score               = score.score_total,
+            atr_pct             = ind.atr_pct,
+            data_quality        = getattr(ind, "data_quality_flag", "ok"),
+            equity_at_entry     = self._equity,
         )
         self._open[ticker] = pos
 
@@ -374,6 +428,10 @@ def run_backtest(
     stop_tolerance_days:  int            = 3,
     regime_filter:        bool           = True,
     df_index:             Optional[pd.DataFrame] = None,
+    tp_trail_signal:      bool           = False,
+    trail_stop:           bool           = False,
+    close_on_non_achat:   bool           = False,
+    close_on_vente:       bool           = False,
     debug:                bool           = False,
 ) -> BacktestResult:
     return BacktestEngine(
@@ -391,6 +449,10 @@ def run_backtest(
         stop_tolerance_days  = stop_tolerance_days,
         regime_filter        = regime_filter,
         df_index             = df_index,
+        tp_trail_signal      = tp_trail_signal,
+        trail_stop           = trail_stop,
+        close_on_non_achat   = close_on_non_achat,
+        close_on_vente       = close_on_vente,
         debug                = debug,
     ).run(ticker_data)
 
@@ -613,6 +675,28 @@ def _compute_by_confiance(trades: pd.DataFrame) -> dict:
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
 
+def _print_result(s: dict, result: BacktestResult, label: str = "") -> None:
+    tag = f"  [{label}]" if label else " "
+    if s.get("status") != "ok":
+        print(f"{tag} Aucun trade genere ({s.get('status')}).")
+        return
+    print(f"\n{tag} Trades : {s['n_trades']}  (W={s['n_wins']} / L={s['n_losses']})")
+    print(f"{tag} Win rate       : {s['win_rate_pct']}%")
+    print(f"{tag} Expectancy     : {s['expectancy_pct']:+.2f}%  (ponderee : {s['expectancy_weighted']})")
+    print(f"{tag} Avg R realise  : {s['avg_r_realise']}")
+    print(f"{tag} Duree moy.     : {s['avg_holding_days']:.0f}j")
+    print(f"{tag} Return total   : {s['total_return_pct']:+.2f}%")
+    print(f"{tag} Capital final  : {s['final_capital']:,.0f} FCFA")
+    print(f"{tag} Max drawdown   : {s['max_drawdown_pct']:.1f}%")
+    print(f"{tag} Sorties :")
+    for reason, stats in s.get("by_exit_reason", {}).items():
+        print(f"{tag}   {reason:<20}  n={stats['n']}  PnL moy={stats['avg_pnl']:+.1f}%  {stats['avg_days']:.0f}j")
+    if result.by_confiance:
+        print(f"{tag} Par confiance :")
+        for conf, stats in result.by_confiance.items():
+            print(f"{tag}   {conf:<12}  n={stats['n']}  hit={stats['win_rate_pct']}%  exp={stats['expectancy_pct']:+.2f}%  {stats['avg_days']:.0f}j")
+
+
 if __name__ == "__main__":
     import sys
     import time
@@ -621,59 +705,72 @@ if __name__ == "__main__":
 
     args    = sys.argv[1:]
     debug   = "--debug" in args
+    compare = "--compare" in args
+    trail   = "--trail" in args or compare
+    monthly = "--monthly" in args
     tickers_arg = [a for a in args if not a.startswith("--")]
     tickers = tickers_arg if tickers_arg else ALL_TICKERS
 
-    print(f"\nBACKTEST BRVM (long-only, revue /{REVIEW_INTERVAL_DAYS}j)")
+    _days   = 60  if monthly else 730
+    _period = "monthly" if monthly else "daily"
+
+    print(f"\nBACKTEST BRVM (long-only, revue /{REVIEW_INTERVAL_DAYS}j, {_period})")
     print(f"Tickers : {len(tickers)} | Horizon : {DEFAULT_HORIZON} | Warmup : {WARMUP_BARS} barres")
     print("=" * 72)
 
-    t0 = time.time()
-    try:
-        result = fetch_and_backtest(tickers, days=730, debug=debug)
-    except RuntimeError as e:
-        print(f"Erreur : {e}")
-        sys.exit(1)
+    def _run(label, **kw):
+        t0 = time.time()
+        try:
+            r = fetch_and_backtest(tickers, days=_days, data_period=_period, debug=debug, **kw)
+        except RuntimeError as e:
+            print(f"Erreur {label} : {e}"); sys.exit(1)
+        _print_result(r.summary, r, label)
+        print(f"  Duree : {time.time()-t0:.1f}s")
+        return r
 
-    elapsed = time.time() - t0
-    s = result.summary
+    def _delta(label, sn, sb):
+        if sb.get("status") != "ok" or sn.get("status") != "ok":
+            return
+        print(f"\n>>> DELTA ({label} − BASELINE)")
+        print(f"  Expectancy   : {sn['expectancy_pct']:+.2f}%  vs  {sb['expectancy_pct']:+.2f}%"
+              f"  d={sn['expectancy_pct']-sb['expectancy_pct']:+.2f}%")
+        print(f"  Win rate     : {sn['win_rate_pct']:.1f}%  vs  {sb['win_rate_pct']:.1f}%"
+              f"  d={sn['win_rate_pct']-sb['win_rate_pct']:+.1f}%")
+        print(f"  Return total : {sn['total_return_pct']:+.2f}%  vs  {sb['total_return_pct']:+.2f}%"
+              f"  d={sn['total_return_pct']-sb['total_return_pct']:+.2f}%")
+        print(f"  Max drawdown : {sn['max_drawdown_pct']:.1f}%  vs  {sb['max_drawdown_pct']:.1f}%"
+              f"  d={sn['max_drawdown_pct']-sb['max_drawdown_pct']:+.1f}%")
+        print(f"  Duree moy.   : {sn['avg_holding_days']:.0f}j  vs  {sb['avg_holding_days']:.0f}j  "
+              f"  N={sn['n_trades']} vs {sb['n_trades']}")
 
-    if s.get("status") != "ok":
-        print(f"Aucun trade genere ({s.get('status')}).")
-        sys.exit(0)
-
-    print(f"\n  Trades : {s['n_trades']}  (W={s['n_wins']} / L={s['n_losses']})")
-    print(f"  Win rate       : {s['win_rate_pct']}%  (break-even ~33% avec R/R=2.0)")
-    print(f"  Expectancy     : {s['expectancy_pct']:+.2f}%  (ponderee : {s['expectancy_weighted']})")
-    print(f"  Avg R realise  : {s['avg_r_realise']}")
-    print(f"  Duree moy.     : {s['avg_holding_days']:.0f}j")
-    print(f"  Return total   : {s['total_return_pct']:+.2f}%")
-    print(f"  Capital final  : {s['final_capital']:,.0f} FCFA")
-    print(f"  Max drawdown   : {s['max_drawdown_pct']:.1f}%")
-
-    print(f"\n  Distribution des sorties :")
-    for reason, stats in s.get("by_exit_reason", {}).items():
-        print(f"    {reason:<20}  n={stats['n']}  PnL moy={stats['avg_pnl']:+.1f}%  {stats['avg_days']:.0f}j")
-
-    if result.by_confiance:
-        print(f"\n  Performance par confiance (C1) :")
-        for conf, stats in result.by_confiance.items():
-            print(
-                f"    {conf:<12}  n={stats['n']}  "
-                f"hit={stats['win_rate_pct']}%  "
-                f"exp={stats['expectancy_pct']:+.2f}%  "
-                f"{stats['avg_days']:.0f}j"
+    if compare:
+        print("\n>>> BASELINE (stop fixe, sortie timeout/stop/target)")
+        r_base = _run("BASELINE")
+        print("\n>>> TRAIL_ONLY (trailing stop, pas de sortie signal)")
+        r_trail = _run("TRAIL_ONLY", trail_stop=True)
+        print("\n>>> TRAIL+VENTE (trailing stop + sortie sur VENTE uniquement)")
+        r_tv = _run("TRAIL+VENTE", trail_stop=True, close_on_vente=True)
+        print("\n>>> TRAIL+NEUTRE (trailing stop + sortie sur NEUTRE ou VENTE)")
+        r_tn = _run("TRAIL+NEUTRE", trail_stop=True, close_on_non_achat=True)
+        sb = r_base.summary
+        _delta("TRAIL_ONLY",   r_trail.summary, sb)
+        _delta("TRAIL+VENTE",  r_tv.summary,    sb)
+        _delta("TRAIL+NEUTRE", r_tn.summary,    sb)
+    else:
+        t0 = time.time()
+        try:
+            result = fetch_and_backtest(
+                tickers, days=_days, data_period=_period,
+                trail_stop=trail, close_on_non_achat=trail, debug=debug
             )
-
-    if result.by_ticker:
-        print(f"\n  Top tickers (par PnL moyen) :")
-        for ticker, stats in sorted(result.by_ticker.items(), key=lambda x: -x[1]["avg_pnl_pct"])[:10]:
-            print(
-                f"    {ticker:<8}  n={stats['n']}  "
-                f"win={stats['win_rate_pct']}%  "
-                f"avg={stats['avg_pnl_pct']:+.2f}%  "
-                f"{stats['avg_days']:.0f}j"
-            )
-
-    print(f"\n  Duree execution : {elapsed:.1f}s")
+        except RuntimeError as e:
+            print(f"Erreur : {e}"); sys.exit(1)
+        elapsed = time.time() - t0
+        label = "TRAIL+SIGNAL" if trail else "BASELINE"
+        _print_result(result.summary, result, label)
+        if result.by_ticker:
+            print(f"\n  Top tickers (par PnL moyen) :")
+            for ticker, stats in sorted(result.by_ticker.items(), key=lambda x: -x[1]["avg_pnl_pct"])[:10]:
+                print(f"    {ticker:<8}  n={stats['n']}  win={stats['win_rate_pct']}%  avg={stats['avg_pnl_pct']:+.2f}%  {stats['avg_days']:.0f}j")
+        print(f"\n  Duree execution : {elapsed:.1f}s")
     print("=" * 72)

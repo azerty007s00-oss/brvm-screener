@@ -1075,6 +1075,11 @@ def render_backtest_page() -> None:
                 help="Phoenix Capital Management : ~1.43% par côté (entrée sur valeur achat, sortie sur valeur vente).",
                 disabled=not use_fees_bt,
             )
+            trail_stop_bt = st.checkbox(
+                "Trailing stop",
+                value=True,
+                help="À chaque revue, remonte le stop loss sous le prix courant en conservant la distance initiale (entrée − stop). Protège les gains sans brider le potentiel.",
+            )
             debug_bt = st.checkbox("Mode debug (console)", value=False)
 
         st.markdown("**Filtrer par niveau de confiance**")
@@ -1125,6 +1130,7 @@ def render_backtest_page() -> None:
                 min_atr_pct=_min_atr,
                 fee_entry_pct=float(fee_bt) if use_fees_bt else 0.0,
                 fee_exit_pct=float(fee_bt) if use_fees_bt else 0.0,
+                trail_stop=trail_stop_bt,
                 debug=debug_bt,
             )
         except RuntimeError as e:
