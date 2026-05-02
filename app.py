@@ -1442,13 +1442,13 @@ def render_journal_dashboard() -> None:
 
 _PORTFOLIO_FILE = os.path.join(os.path.dirname(__file__), "portfolio.json")
 _GH_PORT_FILE   = "portfolio.json"
+_PORT_SS_KEY    = "_portfolio_data"   # clé session_state
 
 ALERT_STOP_PCT  = 5.0   # rouge si prix à moins de X% du stop
 ALERT_TGT_PCT   = 3.0   # vert si prix à moins de X% du target (ou dépassé)
 
 
 def _gh_port_creds() -> tuple:
-    """Retourne (token, repo) depuis st.secrets, ou (None, None)."""
     try:
         token = st.secrets.get("GITHUB_TOKEN", "")
         repo  = st.secrets.get("GITHUB_REPO",  "")
@@ -1459,7 +1459,8 @@ def _gh_port_creds() -> tuple:
     return None, None
 
 
-def _load_portfolio() -> list[dict]:
+def _portfolio_from_disk() -> list[dict]:
+    """Charge depuis GitHub puis local — utilisé uniquement au démarrage."""
     import base64, requests as _req
     token, repo = _gh_port_creds()
     if token:
@@ -1468,12 +1469,11 @@ def _load_portfolio() -> list[dict]:
             hdrs = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
             resp = _req.get(url, headers=hdrs, timeout=10)
             if resp.status_code == 200:
-                content = base64.b64decode(resp.json()["content"]).decode("utf-8")
-                return json.loads(content)
+                return json.loads(base64.b64decode(resp.json()["content"]).decode("utf-8"))
             if resp.status_code == 404:
                 return []
         except Exception as e:
-            logger.warning(f"[Portfolio] GitHub load failed, fallback local — {e}")
+            logger.warning(f"[Portfolio] GitHub load failed — {e}")
     if os.path.exists(_PORTFOLIO_FILE):
         try:
             with open(_PORTFOLIO_FILE, "r", encoding="utf-8") as f:
@@ -1483,7 +1483,17 @@ def _load_portfolio() -> list[dict]:
     return []
 
 
+def _load_portfolio() -> list[dict]:
+    """Lit depuis session_state (chargé depuis disque au 1er appel de la session)."""
+    if _PORT_SS_KEY not in st.session_state:
+        st.session_state[_PORT_SS_KEY] = _portfolio_from_disk()
+    return list(st.session_state[_PORT_SS_KEY])
+
+
 def _save_portfolio(positions: list[dict]) -> None:
+    """Met à jour session_state immédiatement, puis persiste en arrière-plan."""
+    st.session_state[_PORT_SS_KEY] = list(positions)
+    # Persistance asynchrone (ne bloque pas le rerun si erreur réseau)
     import base64, requests as _req
     token, repo = _gh_port_creds()
     if token:
@@ -1504,8 +1514,7 @@ def _save_portfolio(positions: list[dict]) -> None:
         with open(_PORTFOLIO_FILE, "w", encoding="utf-8") as f:
             json.dump(positions, f, ensure_ascii=False, indent=2)
     except Exception as e:
-        st.error(f"Impossible de sauvegarder le portfolio : {e}")
-        raise
+        logger.warning(f"[Portfolio] Local save failed — {e}")
 
 
 def _fetch_price(ticker: str) -> float | None:
