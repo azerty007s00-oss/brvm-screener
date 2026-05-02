@@ -45,10 +45,5 @@ jobs:
           ALERT_EMAIL_TO:       ${{ secrets.ALERT_EMAIL_TO }}
         run: python alert_checker.py "${{ steps.ctx.outputs.label }}"
 
-      - name: Commit updated portfolio prices
-        run: |
-          git config user.name  "BRVM Alert Bot"
-          git config user.email "actions@github.com"
-          git add portfolio.json
-          git diff --staged --quiet || git commit -m "chore: prix portfolio rafraîchis par alert_checker [skip ci]"
-          git push
+      # Pas de push — branche protégée. Les prix sont rafraîchis en mémoire
+      # uniquement pour la vérification des alertes.
