@@ -1490,31 +1490,39 @@ def _load_portfolio() -> list[dict]:
     return list(st.session_state[_PORT_SS_KEY])
 
 
-def _save_portfolio(positions: list[dict]) -> None:
-    """Met à jour session_state immédiatement, puis persiste en arrière-plan."""
-    st.session_state[_PORT_SS_KEY] = list(positions)
-    # Persistance asynchrone (ne bloque pas le rerun si erreur réseau)
-    import base64, requests as _req
-    token, repo = _gh_port_creds()
-    if token:
+def _persist_portfolio_bg(positions: list[dict]) -> None:
+    """Persiste en arrière-plan (thread) — ne bloque jamais le UI."""
+    import base64, requests as _req, threading
+
+    def _run():
+        token, repo = _gh_port_creds()
+        if token:
+            try:
+                url     = f"https://api.github.com/repos/{repo}/contents/{_GH_PORT_FILE}"
+                hdrs    = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+                content = base64.b64encode(json.dumps(positions, ensure_ascii=False, indent=2).encode()).decode()
+                sha_r   = _req.get(url, headers=hdrs, timeout=10)
+                sha     = sha_r.json().get("sha") if sha_r.status_code == 200 else None
+                payload = {"message": "portfolio: mise à jour", "content": content}
+                if sha:
+                    payload["sha"] = sha
+                _req.put(url, headers=hdrs, json=payload, timeout=15)
+                return
+            except Exception as e:
+                logger.warning(f"[Portfolio] GitHub save failed — {e}")
         try:
-            url     = f"https://api.github.com/repos/{repo}/contents/{_GH_PORT_FILE}"
-            hdrs    = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
-            content = base64.b64encode(json.dumps(positions, ensure_ascii=False, indent=2).encode()).decode()
-            sha_r   = _req.get(url, headers=hdrs, timeout=10)
-            sha     = sha_r.json().get("sha") if sha_r.status_code == 200 else None
-            payload = {"message": "portfolio: mise à jour", "content": content}
-            if sha:
-                payload["sha"] = sha
-            _req.put(url, headers=hdrs, json=payload, timeout=15)
-            return
+            with open(_PORTFOLIO_FILE, "w", encoding="utf-8") as f:
+                json.dump(positions, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger.warning(f"[Portfolio] GitHub save failed, fallback local — {e}")
-    try:
-        with open(_PORTFOLIO_FILE, "w", encoding="utf-8") as f:
-            json.dump(positions, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        logger.warning(f"[Portfolio] Local save failed — {e}")
+            logger.warning(f"[Portfolio] Local save failed — {e}")
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+def _save_portfolio(positions: list[dict]) -> None:
+    """Met à jour session_state immédiatement (sync), puis persiste en background."""
+    st.session_state[_PORT_SS_KEY] = list(positions)
+    _persist_portfolio_bg(positions)
 
 
 def _fetch_price(ticker: str) -> float | None:
