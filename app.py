@@ -403,12 +403,13 @@ def render_signal_card(result: dict) -> None:
                         "confiance":     score.confiance,
                     })
                     _save_portfolio(_positions_now)
-                    st.success(f"**{score.ticker}** ajouté au Portfolio. Mettez à jour la quantité dans l'onglet 💼 Portfolio.")
+                    st.toast(f"✅ {score.ticker} ajouté au Portfolio !", icon="💼")
+                    st.rerun()
             else:
                 st.info(f"**{score.ticker}** est déjà dans votre Portfolio.", icon="✅")
                 c_upd, c_close = st.columns(2)
                 with c_upd:
-                    if st.button("✏️ Mettre à jour le prix", key=f"upd_port_{score.ticker}"):
+                    if st.button("✏️ Mettre à jour", key=f"upd_port_{score.ticker}"):
                         for p in _positions_now:
                             if p["ticker"] == score.ticker:
                                 p["current_price"] = float(ind.cours_actuel)
@@ -416,19 +417,22 @@ def render_signal_card(result: dict) -> None:
                                 p["take_profit"]   = float(score.take_profit) if score.take_profit is not None else p.get("take_profit")
                                 p["refreshed_at"]  = datetime.now().strftime("%Y-%m-%d %H:%M")
                         _save_portfolio(_positions_now)
-                        st.success(f"**{score.ticker}** mis à jour.")
+                        st.toast(f"✅ {score.ticker} mis à jour.", icon="✏️")
+                        st.rerun()
                 with c_close:
-                    if st.button("📤 Clôturer la position", key=f"close_port_{score.ticker}", type="secondary"):
+                    if st.button("📤 Clôturer", key=f"close_port_{score.ticker}", type="secondary"):
                         _positions_now = [p for p in _positions_now if p["ticker"] != score.ticker]
                         _save_portfolio(_positions_now)
-                        st.success(f"Position **{score.ticker}** clôturée.")
+                        st.toast(f"📤 Position {score.ticker} clôturée.", icon="📤")
+                        st.rerun()
 
         elif score.signal == "VENTE" and _in_portfolio:
             st.warning(f"**{score.ticker}** : signal VENTE — vous détenez ce titre.", icon="⚠️")
             if st.button("📤 Clôturer la position", key=f"close_port_sell_{score.ticker}", type="primary"):
                 _positions_now = [p for p in _positions_now if p["ticker"] != score.ticker]
                 _save_portfolio(_positions_now)
-                st.success(f"Position **{score.ticker}** clôturée.")
+                st.toast(f"📤 Position {score.ticker} clôturée.", icon="📤")
+                st.rerun()
 
     # ── Analyse narrative ─────────────────────────────────────────────────────
     with st.expander("🔍 Analyse complète", expanded=True):
@@ -1437,12 +1441,39 @@ def render_journal_dashboard() -> None:
 # ─── Portfolio Tracker ────────────────────────────────────────────────────────
 
 _PORTFOLIO_FILE = os.path.join(os.path.dirname(__file__), "portfolio.json")
+_GH_PORT_FILE   = "portfolio.json"
 
 ALERT_STOP_PCT  = 5.0   # rouge si prix à moins de X% du stop
 ALERT_TGT_PCT   = 3.0   # vert si prix à moins de X% du target (ou dépassé)
 
 
+def _gh_port_creds() -> tuple:
+    """Retourne (token, repo) depuis st.secrets, ou (None, None)."""
+    try:
+        token = st.secrets.get("GITHUB_TOKEN", "")
+        repo  = st.secrets.get("GITHUB_REPO",  "")
+        if token and repo:
+            return token, repo
+    except Exception:
+        pass
+    return None, None
+
+
 def _load_portfolio() -> list[dict]:
+    import base64, requests as _req
+    token, repo = _gh_port_creds()
+    if token:
+        try:
+            url  = f"https://api.github.com/repos/{repo}/contents/{_GH_PORT_FILE}"
+            hdrs = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+            resp = _req.get(url, headers=hdrs, timeout=10)
+            if resp.status_code == 200:
+                content = base64.b64decode(resp.json()["content"]).decode("utf-8")
+                return json.loads(content)
+            if resp.status_code == 404:
+                return []
+        except Exception as e:
+            logger.warning(f"[Portfolio] GitHub load failed, fallback local — {e}")
     if os.path.exists(_PORTFOLIO_FILE):
         try:
             with open(_PORTFOLIO_FILE, "r", encoding="utf-8") as f:
@@ -1453,8 +1484,28 @@ def _load_portfolio() -> list[dict]:
 
 
 def _save_portfolio(positions: list[dict]) -> None:
-    with open(_PORTFOLIO_FILE, "w", encoding="utf-8") as f:
-        json.dump(positions, f, ensure_ascii=False, indent=2)
+    import base64, requests as _req
+    token, repo = _gh_port_creds()
+    if token:
+        try:
+            url     = f"https://api.github.com/repos/{repo}/contents/{_GH_PORT_FILE}"
+            hdrs    = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
+            content = base64.b64encode(json.dumps(positions, ensure_ascii=False, indent=2).encode()).decode()
+            sha_r   = _req.get(url, headers=hdrs, timeout=10)
+            sha     = sha_r.json().get("sha") if sha_r.status_code == 200 else None
+            payload = {"message": "portfolio: mise à jour", "content": content}
+            if sha:
+                payload["sha"] = sha
+            _req.put(url, headers=hdrs, json=payload, timeout=15)
+            return
+        except Exception as e:
+            logger.warning(f"[Portfolio] GitHub save failed, fallback local — {e}")
+    try:
+        with open(_PORTFOLIO_FILE, "w", encoding="utf-8") as f:
+            json.dump(positions, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.error(f"Impossible de sauvegarder le portfolio : {e}")
+        raise
 
 
 def _fetch_price(ticker: str) -> float | None:
