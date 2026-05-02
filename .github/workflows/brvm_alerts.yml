@@ -1,0 +1,54 @@
+name: BRVM Portfolio Alerts
+
+on:
+  schedule:
+    # BRVM (Abidjan, UTC+0) — Lundi au Vendredi
+    - cron: '0 9 * * 1-5'    # Ouverture du marché 09:00 UTC
+    - cron: '0 15 * * 1-5'   # Clôture du marché  15:00 UTC
+  workflow_dispatch:           # Déclenchement manuel depuis l'onglet Actions
+
+permissions:
+  contents: write              # Pour pusher portfolio.json mis à jour
+
+jobs:
+  check-alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Determine market context
+        id: ctx
+        run: |
+          H=$(date -u +%H)
+          if [ "$H" = "09" ]; then
+            echo "label=Ouverture du marché" >> $GITHUB_OUTPUT
+          else
+            echo "label=Clôture du marché"  >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run alert checker
+        env:
+          ALERT_EMAIL_FROM:     ${{ secrets.ALERT_EMAIL_FROM }}
+          ALERT_EMAIL_PASSWORD: ${{ secrets.ALERT_EMAIL_PASSWORD }}
+          ALERT_EMAIL_TO:       ${{ secrets.ALERT_EMAIL_TO }}
+        run: python alert_checker.py "${{ steps.ctx.outputs.label }}"
+
+      - name: Commit updated portfolio prices
+        run: |
+          git config user.name  "BRVM Alert Bot"
+          git config user.email "actions@github.com"
+          git add portfolio.json
+          git diff --staged --quiet || git commit -m "chore: prix portfolio rafraîchis par alert_checker [skip ci]"
+          git push
