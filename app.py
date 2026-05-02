@@ -382,28 +382,53 @@ def render_signal_card(result: dict) -> None:
                     icon="📐",
                 )
 
-    # ── Bouton ajout portfolio ────────────────────────────────────────────────
+    # ── Bouton ajout / clôture portfolio ─────────────────────────────────────
     if score.signal in ("ACHAT", "VENTE"):
-        btn_label = "➕ Ajouter au Portfolio" if score.signal == "ACHAT" else "📌 Suivre dans le Portfolio"
-        btn_key = f"add_port_{score.ticker}_{score.signal}"
-        if st.button(btn_label, key=btn_key, type="primary" if score.signal == "ACHAT" else "secondary"):
-            positions = _load_portfolio()
-            # Remplacer si déjà présent, sinon ajouter
-            positions = [p for p in positions if p["ticker"] != score.ticker]
-            positions.append({
-                "ticker":        score.ticker,
-                "entry_price":   float(ind.cours_actuel),
-                "quantity":      1,
-                "stop_loss":     float(score.stop_loss)   if score.stop_loss   is not None else None,
-                "take_profit":   float(score.take_profit) if score.take_profit is not None else None,
-                "entry_date":    str(date_type.today()),
-                "current_price": float(ind.cours_actuel),
-                "refreshed_at":  datetime.now().strftime("%Y-%m-%d %H:%M"),
-                "signal":        score.signal,
-                "confiance":     score.confiance,
-            })
-            _save_portfolio(positions)
-            st.success(f"**{score.ticker}** ajouté au Portfolio. Mettez à jour la quantité dans l'onglet 💼 Portfolio.")
+        _positions_now = _load_portfolio()
+        _in_portfolio  = any(p["ticker"] == score.ticker for p in _positions_now)
+
+        if score.signal == "ACHAT":
+            if not _in_portfolio:
+                if st.button("➕ Ajouter au Portfolio", key=f"add_port_{score.ticker}", type="primary"):
+                    _positions_now.append({
+                        "ticker":        score.ticker,
+                        "entry_price":   float(ind.cours_actuel),
+                        "quantity":      1,
+                        "stop_loss":     float(score.stop_loss)   if score.stop_loss   is not None else None,
+                        "take_profit":   float(score.take_profit) if score.take_profit is not None else None,
+                        "entry_date":    str(date_type.today()),
+                        "current_price": float(ind.cours_actuel),
+                        "refreshed_at":  datetime.now().strftime("%Y-%m-%d %H:%M"),
+                        "signal":        score.signal,
+                        "confiance":     score.confiance,
+                    })
+                    _save_portfolio(_positions_now)
+                    st.success(f"**{score.ticker}** ajouté au Portfolio. Mettez à jour la quantité dans l'onglet 💼 Portfolio.")
+            else:
+                st.info(f"**{score.ticker}** est déjà dans votre Portfolio.", icon="✅")
+                c_upd, c_close = st.columns(2)
+                with c_upd:
+                    if st.button("✏️ Mettre à jour le prix", key=f"upd_port_{score.ticker}"):
+                        for p in _positions_now:
+                            if p["ticker"] == score.ticker:
+                                p["current_price"] = float(ind.cours_actuel)
+                                p["stop_loss"]     = float(score.stop_loss)   if score.stop_loss   is not None else p.get("stop_loss")
+                                p["take_profit"]   = float(score.take_profit) if score.take_profit is not None else p.get("take_profit")
+                                p["refreshed_at"]  = datetime.now().strftime("%Y-%m-%d %H:%M")
+                        _save_portfolio(_positions_now)
+                        st.success(f"**{score.ticker}** mis à jour.")
+                with c_close:
+                    if st.button("📤 Clôturer la position", key=f"close_port_{score.ticker}", type="secondary"):
+                        _positions_now = [p for p in _positions_now if p["ticker"] != score.ticker]
+                        _save_portfolio(_positions_now)
+                        st.success(f"Position **{score.ticker}** clôturée.")
+
+        elif score.signal == "VENTE" and _in_portfolio:
+            st.warning(f"**{score.ticker}** : signal VENTE — vous détenez ce titre.", icon="⚠️")
+            if st.button("📤 Clôturer la position", key=f"close_port_sell_{score.ticker}", type="primary"):
+                _positions_now = [p for p in _positions_now if p["ticker"] != score.ticker]
+                _save_portfolio(_positions_now)
+                st.success(f"Position **{score.ticker}** clôturée.")
 
     # ── Analyse narrative ─────────────────────────────────────────────────────
     with st.expander("🔍 Analyse complète", expanded=True):
@@ -1080,6 +1105,8 @@ def render_backtest_page() -> None:
     with st.spinner(f"Backtest en cours — {len(tickers_bt)} tickers, {_period_label}, revue /{review_bt}j…"):
         try:
             _days = 60 if data_period_bt == "monthly" else 730
+            _max_atr = 25.0 if data_period_bt == "monthly" else 4.0
+            _min_atr = 3.0  if data_period_bt == "monthly" else 2.0
             result = fetch_and_backtest(
                 tickers_bt,
                 days=_days,
@@ -1090,6 +1117,8 @@ def render_backtest_page() -> None:
                 review_interval_days=review_bt,
                 max_holding_days=holding_bt,
                 confiance_filter=confiances_bt,
+                max_atr_pct=_max_atr,
+                min_atr_pct=_min_atr,
                 fee_entry_pct=float(fee_bt) if use_fees_bt else 0.0,
                 fee_exit_pct=float(fee_bt) if use_fees_bt else 0.0,
                 debug=debug_bt,
@@ -1544,10 +1573,11 @@ def render_portfolio_page() -> None:
         all_tickers = sorted(TICKER_NAMES.keys())
         col1, col2, col3 = st.columns(3)
         with col1:
-            new_ticker = st.selectbox("Ticker", all_tickers, key="port_ticker")
-            new_qty    = st.number_input("Quantité (actions)", min_value=1, value=100, key="port_qty")
+            new_ticker      = st.selectbox("Ticker", all_tickers, key="port_ticker")
+            new_qty         = st.number_input("Quantité (actions)", min_value=1, value=100, key="port_qty")
+        _default_price = _fetch_price(new_ticker) or 1000.0
         with col2:
-            new_entry  = st.number_input("Prix d'entrée (FCFA)", min_value=0.0, value=1000.0,
+            new_entry  = st.number_input("Prix d'entrée (FCFA)", min_value=0.0, value=float(_default_price),
                                           step=1.0, format="%.0f", key="port_entry")
             new_stop   = st.number_input("Stop loss (FCFA, 0 = aucun)", min_value=0.0, value=0.0,
                                           step=1.0, format="%.0f", key="port_stop")
