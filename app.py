@@ -1639,13 +1639,23 @@ def render_portfolio_page() -> None:
     # ── Ajouter une position ───────────────────────────────────────────────────
     with st.expander("➕ Ajouter une position", expanded=not positions):
         all_tickers = sorted(TICKER_NAMES.keys())
+
+        def _on_ticker_change():
+            t = st.session_state.get("port_ticker", all_tickers[0])
+            p = _fetch_price(t)
+            if p:
+                st.session_state["port_entry"] = float(p)
+
         col1, col2, col3 = st.columns(3)
         with col1:
-            new_ticker      = st.selectbox("Ticker", all_tickers, key="port_ticker")
-            new_qty         = st.number_input("Quantité (actions)", min_value=1, value=100, key="port_qty")
-        _default_price = _fetch_price(new_ticker) or 1000.0
+            new_ticker = st.selectbox("Ticker", all_tickers, key="port_ticker",
+                                      on_change=_on_ticker_change)
+            new_qty    = st.number_input("Quantité (actions)", min_value=1, value=100, key="port_qty")
+        if "port_entry" not in st.session_state:
+            _p = _fetch_price(new_ticker)
+            st.session_state["port_entry"] = float(_p) if _p else 1000.0
         with col2:
-            new_entry  = st.number_input("Prix d'entrée (FCFA)", min_value=0.0, value=float(_default_price),
+            new_entry  = st.number_input("Prix d'entrée (FCFA)", min_value=0.0,
                                           step=1.0, format="%.0f", key="port_entry")
             new_stop   = st.number_input("Stop loss (FCFA, 0 = aucun)", min_value=0.0, value=0.0,
                                           step=1.0, format="%.0f", key="port_stop")
@@ -1701,9 +1711,15 @@ def main() -> None:
     st.title("📈 BRVM Stock Screener")
     st.caption("Analyse technique multi-critères pour actions BRVM — Investment Pioneers")
 
+    # Si pas de nouvelle analyse, réutiliser les résultats en cache (pour que les
+    # boutons portfolio survivent au rerun déclenché par le clic sur ces boutons)
     if not analyser_btn or not tickers_combined:
-        st.info("👈 Sélectionnez un ou plusieurs titres dans le panneau gauche puis cliquez sur **Analyser**.")
-        st.markdown(f"""
+        cached = st.session_state.get("screener_valid_results")
+        if cached:
+            valid_results = cached
+        else:
+            st.info("👈 Sélectionnez un ou plusieurs titres dans le panneau gauche puis cliquez sur **Analyser**.")
+            st.markdown("""
 **Horizons disponibles :**
 - ⚡ **Court terme** (1–4 semaines) : MACD×2, Stochastic×2 — paramètres rapides (RSI 7, MA 10/20/50)
 - 📈 **Moyen terme** (1–6 mois) : critères équilibrés — paramètres standards (RSI 14, MA 20/50/200)
@@ -1714,53 +1730,51 @@ RSI, Stochastic, ADX, Moyennes Mobiles adaptatives, Golden/Death Cross, MACD, Ba
 Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chartiste
 
 **Système de scoring :** critères pondérés selon l'horizon → Signal ACHAT / NEUTRE / VENTE
-        """)
-        return
+            """)
+            return
+    else:
+        tickers = list(dict.fromkeys(tickers_combined))
 
-    tickers = list(dict.fromkeys(tickers_combined))
+        if not tickers:
+            st.warning("Aucun ticker valide saisi.")
+            return
 
-    if not tickers:
-        st.warning("Aucun ticker valide saisi.")
-        return
+        results: dict = {}
+        max_workers = min(len(tickers), 5)
 
-    # Analyser les tickers en parallèle (ThreadPoolExecutor)
-    # max_workers = min(nb tickers, 5) pour ne pas surcharger les sources
-    results: dict = {}
-    max_workers = min(len(tickers), 5)
+        with st.spinner(f"Analyse en cours pour {len(tickers)} titre(s)…"):
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_ticker = {
+                    executor.submit(_analyser_ticker_worker, t, days, horizon): t
+                    for t in tickers
+                }
+                for future in as_completed(future_to_ticker):
+                    ticker = future_to_ticker[future]
+                    result = future.result()
 
-    with st.spinner(f"Analyse en cours pour {len(tickers)} titre(s)…"):
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_ticker = {
-                executor.submit(_analyser_ticker_worker, t, days, horizon): t
-                for t in tickers
-            }
-            for future in as_completed(future_to_ticker):
-                ticker = future_to_ticker[future]
-                result = future.result()
-
-                if "error" in result:
-                    e = result["error"]
-                    etype = result.get("error_type", "")
-                    if etype == "TickerNotFoundError":
-                        st.error(f"❌ **{ticker}** : ticker introuvable sur toutes les sources.\n\n{e}")
-                    elif etype == "InsufficientDataError":
-                        st.warning(f"⚠️ **{ticker}** : données insuffisantes.\n\n{e}")
-                    elif etype == "SourceStructureChangedError":
-                        st.error(f"🔧 **{ticker}** : structure du site modifiée.\n\n{e}")
+                    if "error" in result:
+                        e = result["error"]
+                        etype = result.get("error_type", "")
+                        if etype == "TickerNotFoundError":
+                            st.error(f"❌ **{ticker}** : ticker introuvable sur toutes les sources.\n\n{e}")
+                        elif etype == "InsufficientDataError":
+                            st.warning(f"⚠️ **{ticker}** : données insuffisantes.\n\n{e}")
+                        elif etype == "SourceStructureChangedError":
+                            st.error(f"🔧 **{ticker}** : structure du site modifiée.\n\n{e}")
+                        else:
+                            st.error(f"💥 **{ticker}** : erreur inattendue — {e}")
+                        results[ticker] = None
                     else:
-                        st.error(f"💥 **{ticker}** : erreur inattendue — {e}")
-                    results[ticker] = None
-                else:
-                    results[ticker] = result
+                        results[ticker] = result
 
-    # Remettre dans l'ordre de sélection (as_completed ne préserve pas l'ordre)
-    results = {t: results.get(t) for t in tickers}
+        results = {t: results.get(t) for t in tickers}
+        valid_results = {k: v for k, v in results.items() if v is not None}
 
-    valid_results = {k: v for k, v in results.items() if v is not None}
+        if not valid_results:
+            st.error("Aucun ticker n'a pu être analysé.")
+            return
 
-    if not valid_results:
-        st.error("Aucun ticker n'a pu être analysé.")
-        return
+        st.session_state["screener_valid_results"] = valid_results
 
     # ── Mise à jour des trades ouverts (stop / target / timeout) ─────────────
     try:
