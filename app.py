@@ -1552,30 +1552,23 @@ def render_portfolio_page() -> None:
         st.rerun()
 
     # ── Alertes ───────────────────────────────────────────────────────────────
-    alerts_stop   = []
-    alerts_target = []
     for pos in positions:
         cp = pos.get("current_price")
         if cp is None:
             continue
-        ep = pos["entry_price"]
+        tk = pos["ticker"]
         sl = pos.get("stop_loss")
         tp = pos.get("take_profit")
         if sl and sl > 0:
-            dist_stop_pct = (cp - sl) / cp * 100
-            if dist_stop_pct <= ALERT_STOP_PCT:
-                alerts_stop.append((pos["ticker"], cp, sl, dist_stop_pct))
+            if cp <= sl:
+                st.error(f"🚨 **STOP TOUCHÉ — {tk}** | Prix {cp:,.0f} ≤ Stop {sl:,.0f} FCFA — clôture recommandée !")
+            elif (cp - sl) / cp * 100 <= ALERT_STOP_PCT:
+                st.warning(f"⚠️ **{tk}** — Prix {cp:,.0f} FCFA à {(cp-sl)/cp*100:.1f}% du stop ({sl:,.0f} FCFA)")
         if tp and tp > 0:
-            dist_tgt_pct = (tp - cp) / cp * 100
-            if dist_tgt_pct <= ALERT_TGT_PCT:
-                alerts_target.append((pos["ticker"], cp, tp, dist_tgt_pct))
-
-    if alerts_stop:
-        for tk, cp, sl, d in alerts_stop:
-            st.error(f"🔴 **{tk}** — Prix actuel {cp:,.0f} FCFA à seulement {d:.1f}% au-dessus du stop ({sl:,.0f} FCFA)")
-    if alerts_target:
-        for tk, cp, tp, d in alerts_target:
-            st.success(f"🟢 **{tk}** — Target {tp:,.0f} FCFA à portée ! Prix actuel {cp:,.0f} FCFA (écart {d:.1f}%)")
+            if cp >= tp:
+                st.success(f"🎯 **TAKE PROFIT ATTEINT — {tk}** | Prix {cp:,.0f} ≥ Target {tp:,.0f} FCFA — prise de bénéfice !")
+            elif (tp - cp) / cp * 100 <= ALERT_TGT_PCT:
+                st.info(f"🟢 **{tk}** — Target {tp:,.0f} FCFA à portée ({(tp-cp)/cp*100:.1f}% restant)")
 
     # ── Tableau des positions ─────────────────────────────────────────────────
     if positions:
@@ -1681,6 +1674,41 @@ def render_portfolio_page() -> None:
             st.success(f"Position {new_ticker} ajoutée.")
             st.rerun()
 
+    # ── Modifier une position ──────────────────────────────────────────────────
+    if positions:
+        with st.expander("✏️ Modifier une position"):
+            tickers_open = [p["ticker"] for p in positions]
+            edit_ticker = st.selectbox("Position à modifier", tickers_open, key="port_edit_sel")
+            pos_edit = next((p for p in positions if p["ticker"] == edit_ticker), None)
+            if pos_edit:
+                ec1, ec2, ec3 = st.columns(3)
+                with ec1:
+                    e_qty   = st.number_input("Quantité", min_value=1,
+                                              value=int(pos_edit.get("quantity", 1)),
+                                              key="edit_qty")
+                    e_entry = st.number_input("Prix d'entrée (FCFA)", min_value=0.0,
+                                              value=float(pos_edit.get("entry_price", 0)),
+                                              step=1.0, format="%.0f", key="edit_entry")
+                with ec2:
+                    e_sl = st.number_input("Stop loss (0 = aucun)", min_value=0.0,
+                                           value=float(pos_edit.get("stop_loss") or 0.0),
+                                           step=1.0, format="%.0f", key="edit_sl")
+                with ec3:
+                    e_tp = st.number_input("Take profit (0 = aucun)", min_value=0.0,
+                                           value=float(pos_edit.get("take_profit") or 0.0),
+                                           step=1.0, format="%.0f", key="edit_tp")
+                if st.button("💾 Enregistrer", key="port_edit_btn", type="primary"):
+                    for p in positions:
+                        if p["ticker"] == edit_ticker:
+                            p["quantity"]    = int(e_qty)
+                            p["entry_price"] = float(e_entry)
+                            p["stop_loss"]   = float(e_sl)  if e_sl  > 0 else None
+                            p["take_profit"] = float(e_tp)  if e_tp  > 0 else None
+                            p["refreshed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+                    _save_portfolio(positions)
+                    st.toast(f"✅ {edit_ticker} mis à jour.", icon="💾")
+                    st.rerun()
+
     # ── Supprimer une position ─────────────────────────────────────────────────
     if positions:
         with st.expander("🗑️ Supprimer une position"):
@@ -1691,6 +1719,33 @@ def render_portfolio_page() -> None:
                 _save_portfolio(positions)
                 st.success(f"Position {to_delete} supprimée.")
                 st.rerun()
+
+    # ── Auto-refresh alertes ───────────────────────────────────────────────────
+    st.divider()
+    col_ar1, col_ar2 = st.columns([1, 3])
+    with col_ar1:
+        auto_refresh = st.toggle("🔔 Auto-refresh alertes", value=False, key="port_autorefresh",
+                                  help="Rafraîchit les prix et vérifie les alertes automatiquement.")
+    with col_ar2:
+        refresh_min = st.select_slider("Intervalle", options=[1, 2, 5, 10, 15, 30],
+                                        value=5, format_func=lambda x: f"{x} min",
+                                        disabled=not auto_refresh, key="port_refresh_interval")
+    if auto_refresh:
+        st.caption(f"⏱️ Prochain refresh dans {refresh_min} min — garde cet onglet ouvert.")
+        import time as _time
+        _time.sleep(refresh_min * 60)
+        # Rafraîchir les prix
+        positions = _load_portfolio()
+        updated = False
+        for pos in positions:
+            p = _fetch_price(pos["ticker"])
+            if p is not None:
+                pos["current_price"] = p
+                pos["refreshed_at"]  = datetime.now().strftime("%Y-%m-%d %H:%M")
+                updated = True
+        if updated:
+            _save_portfolio(positions)
+        st.rerun()
 
 
 # ─── Routing ──────────────────────────────────────────────────────────────────
