@@ -4,7 +4,37 @@ utils.py — Utilitaires partagés du BRVM Screener.
 Fonctions de formatage, résolution de noms, helpers communs.
 """
 
+from datetime import datetime
+from typing import Optional
+
+import pandas as pd
+
 from config import TICKER_NAMES
+
+
+def _parse_date(date_str: str) -> Optional[str]:
+    """Tente de parser une date depuis différents formats courants BRVM."""
+    formats = [
+        "%d/%m/%Y",     # 23/02/2026 — format Sika Finance
+        "%Y-%m-%d",
+        "%d-%m-%Y",
+        "%d %b %Y",
+        "%d %B %Y",
+        "%Y%m%d",
+        "%d.%m.%Y",
+    ]
+    date_str = str(date_str).strip()
+    for fmt in formats:
+        try:
+            return datetime.strptime(date_str, fmt).strftime("%Y-%m-%d")
+        except ValueError:
+            continue
+
+    # Dernier recours : pandas
+    try:
+        return pd.to_datetime(date_str, dayfirst=True).strftime("%Y-%m-%d")
+    except Exception:
+        return None
 
 
 def get_company_name(ticker: str, fallback_to_ticker: bool = True) -> str:

@@ -294,6 +294,24 @@ def compute_indicators(
     result.horizon = horizon
 
     df = df.copy().sort_index()
+
+    # ── Interpolation des gaps ≤ 3 jours ouvrés (C3, optionnel) ─────────────
+    # Forward-fill OHLC sur les jours manquants, volume=0 pour les jours ajoutés.
+    # Limité à 3 jours consécutifs pour ne pas inventer de données sur les pauses longues.
+    try:
+        full_idx = pd.date_range(df.index.min(), df.index.max(), freq="B")
+        if len(full_idx) > len(df):
+            added_days = full_idx.difference(df.index)
+            df = df.reindex(full_idx)
+            for col in ["open", "high", "low", "close"]:
+                if col in df.columns:
+                    df[col] = df[col].ffill(limit=3)
+            if "volume" in df.columns:
+                df.loc[df.index.isin(added_days), "volume"] = 0
+                df["volume"] = df["volume"].fillna(0)
+    except Exception as _gap_err:
+        logger.debug(f"[Gaps] {ticker}: interpolation ignorée — {_gap_err}")
+
     close = df["close"]
     high = df["high"]
     low = df["low"]

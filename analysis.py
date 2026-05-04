@@ -39,7 +39,7 @@ class AnalyseComplete:
     section_actualites: str = ""
 
     # Actualités scrappées
-    actualites: list[dict] = None
+    actualites: Optional[list[dict]] = None
 
     # Narrative complète
     analyse_narrative: str = ""

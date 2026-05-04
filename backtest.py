@@ -111,8 +111,9 @@ class BacktestEngine:
         min_atr_pct:          float             = 2.0,
         min_price:            float             = MIN_PRICE,
         confiance_filter:     Optional[list]    = None,
-        fee_entry_pct:        float             = 0.0,
-        fee_exit_pct:         float             = 0.0,
+        # Frais BRVM réels : SGI ~0.5% + prélèvements ~0.15% chaque sens
+        fee_entry_pct:        float             = 0.65,
+        fee_exit_pct:         float             = 0.65,
         stop_tolerance_days:  int               = 3,
         regime_filter:        bool              = True,
         df_index:             Optional[pd.DataFrame] = None,
@@ -423,8 +424,9 @@ def run_backtest(
     min_atr_pct:          float          = 2.0,
     min_price:            float          = MIN_PRICE,
     confiance_filter:     Optional[list] = None,
-    fee_entry_pct:        float          = 0.0,
-    fee_exit_pct:         float          = 0.0,
+    # Frais BRVM réels : SGI ~0.5% + prélèvements ~0.15% chaque sens
+    fee_entry_pct:        float          = 0.65,
+    fee_exit_pct:         float          = 0.65,
     stop_tolerance_days:  int            = 3,
     regime_filter:        bool           = True,
     df_index:             Optional[pd.DataFrame] = None,
@@ -518,6 +520,75 @@ def fetch_and_backtest(
             kwargs["min_atr_pct"] = 3.0
 
     return run_backtest(ticker_data, **kwargs)
+
+
+def walk_forward_backtest(
+    ticker_data: dict[str, pd.DataFrame],
+    n_splits: int = 3,
+    train_ratio: float = 0.7,
+    **kwargs,
+) -> list[BacktestResult]:
+    """
+    Walk-forward backtest : divise la période en n_splits fenêtres,
+    entraîne sur train_ratio de chaque fenêtre, teste sur le reste.
+
+    Évite le biais de suroptimisation d'un backtest full-period.
+
+    Args:
+        ticker_data:  Données OHLCV par ticker
+        n_splits:     Nombre de fenêtres (défaut 3)
+        train_ratio:  Part de chaque fenêtre utilisée pour "train" (info)
+        **kwargs:     Paramètres passés à run_backtest()
+
+    Returns:
+        Liste de BacktestResult (un par fenêtre de test)
+    """
+    if not ticker_data:
+        raise ValueError("ticker_data vide")
+
+    # Collecter toutes les dates disponibles
+    all_dates = sorted({
+        idx.date() if hasattr(idx, "date") else idx
+        for df in ticker_data.values()
+        for idx in df.index
+    })
+    if len(all_dates) < 60:
+        raise ValueError("Pas assez de données pour walk-forward (min 60j)")
+
+    total = len(all_dates)
+    window = total // n_splits
+    results = []
+
+    for i in range(n_splits):
+        start_i = i * window
+        end_i   = start_i + window if i < n_splits - 1 else total
+        split_dates = all_dates[start_i:end_i]
+        test_start  = split_dates[int(len(split_dates) * train_ratio)]
+
+        # Filtrer les données sur la fenêtre de test uniquement
+        test_data = {}
+        for ticker, df in ticker_data.items():
+            mask = df.index >= pd.Timestamp(test_start)
+            mask &= df.index <= pd.Timestamp(split_dates[-1])
+            if mask.sum() >= 30:
+                test_data[ticker] = df[mask]
+
+        if not test_data:
+            logger.warning(f"[WalkForward] Fenêtre {i+1} : aucun ticker valide")
+            continue
+
+        logger.info(
+            f"[WalkForward] Fenêtre {i+1}/{n_splits} : "
+            f"test du {test_start} au {split_dates[-1]} "
+            f"({len(test_data)} tickers)"
+        )
+        try:
+            r = run_backtest(test_data, **kwargs)
+            results.append(r)
+        except Exception as e:
+            logger.warning(f"[WalkForward] Fenêtre {i+1} échouée : {e}")
+
+    return results
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

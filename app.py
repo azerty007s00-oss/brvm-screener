@@ -315,6 +315,21 @@ def render_signal_card(result: dict) -> None:
         if ind.adx is not None:
             st.caption(f"ADX: {ind.adx:.0f} ({'forte' if ind.adx > 25 else 'faible'})")
 
+    # Avertissement illiquidité sévère
+    if ind.volume_moy20 is not None and 0 < ind.volume_moy20 < 100:
+        st.error(
+            f"⛔ **Titre très peu liquide** : volume moyen = "
+            f"{ind.volume_moy20:.0f} titres/jour sur 20 séances. "
+            "Les indicateurs techniques ne sont pas fiables sur ce titre. "
+            "Tout signal affiché est à ignorer."
+        )
+    elif ind.volume_moy20 is not None and 100 <= ind.volume_moy20 < 200:
+        st.warning(
+            f"⚠️ **Liquidité faible** : volume moyen = "
+            f"{ind.volume_moy20:.0f} titres/jour. "
+            "Signaux à confirmer par d'autres sources."
+        )
+
     # ── Scorecard détaillée ───────────────────────────────────────────────────
     with st.expander("📋 Scorecard détaillée", expanded=True):
         for critere in score.criteres:

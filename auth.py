@@ -9,6 +9,7 @@ import secrets
 import smtplib
 import string
 import base64
+import bcrypt
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from datetime import datetime
@@ -73,8 +74,19 @@ def _save_users_to_github(users):
 
 # --- Helpers -----------------------------------------------------------------
 
-def _hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
+def _hash_password(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def _verify_password(password: str, stored_hash: str) -> bool:
+    if stored_hash.startswith("$2"):
+        # Hash bcrypt moderne
+        return bcrypt.checkpw(password.encode(), stored_hash.encode())
+    else:
+        # Hash SHA-256 legacy — migration transparente
+        legacy = hashlib.sha256(password.encode()).hexdigest()
+        return hmac.compare_digest(legacy, stored_hash)
+
 
 def _generate_password(length=10):
     chars = string.ascii_letters + string.digits
@@ -230,7 +242,7 @@ def check_auth():
                     users = _get_users_from_github()
                     user = users.get(email)
                     if user and user.get("status") == "approved":
-                        if user.get("password_hash") == _hash_password(password):
+                        if _verify_password(password, user.get("password_hash", "")):
                             st.session_state["authenticated"] = True
                             st.session_state["user_email"] = email
                             st.session_state["user_name"] = user.get("name", email)

@@ -23,3 +23,7 @@ openpyxl>=3.1
 
 # Utilitaires
 python-dateutil>=2.8
+bcrypt>=4.0
+
+# Tests
+pytest>=8.0

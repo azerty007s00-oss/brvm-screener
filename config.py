@@ -361,3 +361,32 @@ HTTP_HEADERS = {
     "Accept-Language": "fr-FR,fr;q=0.9,en;q=0.8",
     "Referer": "https://www.sikafinance.com/",
 }
+
+# ─── Calendrier jours fériés UEMOA (communs à toute la zone) ─────────────────
+
+UEMOA_FIXED_HOLIDAYS: list[tuple[int, int]] = [
+    (1,  1),   # Jour de l'An
+    (5,  1),   # Fête du Travail
+    (8, 15),   # Assomption
+    (11, 1),   # Toussaint
+    (12, 25),  # Noël
+]
+
+CI_FIXED_HOLIDAYS: list[tuple[int, int]] = [
+    (8,  7),   # Fête Nationale CI
+    (11, 15),  # Fête Nationale CI (Proclamation République)
+]
+
+
+def is_brvm_holiday(dt) -> bool:
+    """Retourne True si dt est un jour non ouvré BRVM (week-end ou férié UEMOA/CI)."""
+    if hasattr(dt, "date"):
+        d = dt.date()
+    else:
+        d = dt
+    if d.weekday() >= 5:  # Samedi=5, Dimanche=6
+        return True
+    for m, j in UEMOA_FIXED_HOLIDAYS + CI_FIXED_HOLIDAYS:
+        if d.month == m and d.day == j:
+            return True
+    return False

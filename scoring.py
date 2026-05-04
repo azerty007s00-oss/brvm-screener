@@ -459,6 +459,17 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
             points=0, interpretation="Volume moyen indisponible ou nul"
         ))
 
+    # ── Critère Liquidité — hors groupes (s_autres) ──────────────────────────
+    # Pénalise les titres très peu liquides indépendamment du signal directionnel.
+    # Seuil < 200 titres/jour : exécution difficile, signaux peu fiables sur BRVM.
+    if ind.volume_moy20 is not None and 0 < ind.volume_moy20 < 200:
+        criteres.append(CritereScore(
+            nom="Liquidité",
+            valeur=f"Vol moy20={ind.volume_moy20:.0f} titres/j",
+            points=-1,
+            interpretation="Liquidité très faible — signaux peu fiables, exécution difficile",
+        ))
+
     # ── Calcul score total — Hierarchical Bounded Factor Model (A5-Simple) ────
     # Trois blocs corrélés : chaque critère normalisé à ±1 intra-groupe (vote unique),
     # puis cap ±2 par groupe → mesure un consensus de signaux, pas une addition de magnitudes

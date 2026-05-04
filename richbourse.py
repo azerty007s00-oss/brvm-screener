@@ -25,6 +25,7 @@ from config import (
     REQUEST_BACKOFF_FACTOR,
     RICHBOURSE_BASE_URL,
 )
+from utils import _parse_date
 
 logger = logging.getLogger(__name__)
 
@@ -233,19 +234,3 @@ def _normalize(df: pd.DataFrame) -> Optional[pd.DataFrame]:
     return df[["open", "high", "low", "close", "volume"]]
 
 
-def _parse_date(date_str: str) -> Optional[str]:
-    """Tente de parser une date depuis différents formats."""
-    formats = [
-        "%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y",
-        "%d %b %Y", "%d %B %Y", "%d.%m.%Y", "%Y%m%d",
-    ]
-    s = str(date_str).strip()
-    for fmt in formats:
-        try:
-            return datetime.strptime(s, fmt).strftime("%Y-%m-%d")
-        except ValueError:
-            continue
-    try:
-        return pd.to_datetime(s, dayfirst=True).strftime("%Y-%m-%d")
-    except Exception:
-        return None

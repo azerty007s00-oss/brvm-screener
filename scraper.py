@@ -36,6 +36,7 @@ from config import (
     NEWS_CACHE_TTL_SECONDS,
 )
 from cache import cache
+from utils import _parse_date
 import richbourse
 import rss_feeds
 
@@ -508,6 +509,18 @@ def _validate_ohlcv(df: pd.DataFrame, ticker: str) -> None:
     if zero_rate > 0.05:
         issues.append(f"close=0 sur {zero_rate:.0%} des séances — vérifier le parsing")
 
+    # 5. Heuristique splits/dividendes exceptionnels (variation journalière > 30%)
+    close_clean = df["close"].dropna()
+    if len(close_clean) >= 2:
+        daily_chg = close_clean.pct_change().abs()
+        split_candidates = daily_chg[daily_chg > 0.30]
+        if not split_candidates.empty:
+            dates_str = ", ".join(str(d)[:10] for d in split_candidates.index[:5])
+            issues.append(
+                f"Variation(s) journalière(s) > 30% détectée(s) aux dates : {dates_str} — "
+                "possible split ou dividende exceptionnel. Vérifier sur sikafinance.com"
+            )
+
     for issue in issues:
         logger.warning(f"[DataQuality] {ticker}: {issue}")
 
@@ -516,33 +529,6 @@ def _validate_ohlcv(df: pd.DataFrame, ticker: str) -> None:
             f"[DataQuality] {ticker}: {len(issues)} anomalie(s) détectée(s) — "
             "données utilisées avec réserve"
         )
-
-
-# ─── Utilitaires ──────────────────────────────────────────────────────────────
-
-def _parse_date(date_str: str) -> Optional[str]:
-    """Tente de parser une date depuis différents formats courants BRVM."""
-    formats = [
-        "%d/%m/%Y",     # 23/02/2026 — format Sika Finance
-        "%Y-%m-%d",
-        "%d-%m-%Y",
-        "%d %b %Y",
-        "%d %B %Y",
-        "%Y%m%d",
-        "%d.%m.%Y",
-    ]
-    date_str = date_str.strip()
-    for fmt in formats:
-        try:
-            return datetime.strptime(date_str, fmt).strftime("%Y-%m-%d")
-        except ValueError:
-            continue
-
-    # Dernier recours : pandas
-    try:
-        return pd.to_datetime(date_str, dayfirst=True).strftime("%Y-%m-%d")
-    except Exception:
-        return None
 
 
 # ─── Actualités ──────────────────────────────────────────────────────────────
