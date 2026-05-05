@@ -90,6 +90,31 @@ class BacktestResult:
     by_confiance: dict
 
 
+# ─── Slippage / market impact ────────────────────────────────────────────────
+
+def _apply_slippage(
+    price: float,
+    position_pct: float,
+    volume_moy20: float | None,
+    equity: float,
+    price_per_share: float | None = None,
+) -> float:
+    """
+    Modèle de market impact simplifié pour fixing BRVM illiquide.
+    Si la position représente plus de 10% du volume moyen journalier,
+    on pénalise le prix d'entrée proportionnellement.
+    Impact max plafonné à 2% (cas extrêmes).
+    """
+    if volume_moy20 is None or volume_moy20 <= 0 or price <= 0:
+        return price
+    order_value = equity * position_pct / 100
+    order_shares = order_value / price
+    participation = order_shares / volume_moy20  # fraction du volume journalier
+    # Impact linéaire : 0.5% par tranche de 10% du volume journalier
+    impact_pct = min(participation * 0.05, 0.02)   # plafonné à 2%
+    return price * (1 + impact_pct)
+
+
 # ─── Engine ──────────────────────────────────────────────────────────────────
 
 class BacktestEngine:
@@ -149,6 +174,7 @@ class BacktestEngine:
         self._equity:  float               = initial_capital
         self._equity_history: list[dict]   = []
         self._next_review: dict[str, date] = {}
+        self._pending: dict[str, tuple]    = {}  # ticker → (score, ind, signal_date)
 
     @property
     def _deployed_pct(self) -> float:
@@ -190,6 +216,29 @@ class BacktestEngine:
         for current_date in all_dates:
             ts = pd.Timestamp(current_date)
 
+            # ── Exécution T+1 : entrées en attente du jour précédent ──────────
+            for ticker, (pending_score, pending_ind, signal_date) in list(self._pending.items()):
+                if ticker not in self._open:
+                    ts_exec = pd.Timestamp(current_date)
+                    if ticker in ticker_data and ts_exec in ticker_data[ticker].index:
+                        bar = ticker_data[ticker].loc[ts_exec]
+                        exec_price  = float(bar["close"])
+                        exec_volume = float(bar.get("volume", 0))
+                        if exec_volume == 0:
+                            if self.debug:
+                                print(f"  SKIP T+1 {current_date} {ticker} volume=0")
+                            del self._pending[ticker]
+                            continue
+                        exec_price = _apply_slippage(
+                            exec_price,
+                            pending_score.position_size_pct,
+                            pending_ind.volume_moy20,
+                            self._equity,
+                        )
+                        self._open_position(ticker, pending_score, pending_ind,
+                                            current_date, override_price=exec_price)
+                del self._pending[ticker]
+
             for ticker, df_full in ticker_data.items():
                 df_slice = df_full[df_full.index <= ts]
 
@@ -225,6 +274,11 @@ class BacktestEngine:
                         if not self._is_regime_ok(ts):
                             continue
 
+                        # M2 — Fixing théorique : aucune transaction si volume=0
+                        current_volume = float(current_bar.get("volume", 0))
+                        if current_volume == 0:
+                            continue
+
                         try:
                             ind   = compute_indicators(df_slice, ticker=ticker, horizon=self.horizon)
                             score = compute_score(ind)
@@ -243,7 +297,8 @@ class BacktestEngine:
                                 and (ind.atr_pct is None or ind.atr_pct <= self.max_atr_pct)
                                 and (ind.atr_pct is None or ind.atr_pct >= self.min_atr_pct)
                                 and self._deployed_pct + score.position_size_pct <= 100.0):
-                            self._open_position(ticker, score, ind, current_date)
+                            # Stocker en attente → exécution au fixing J+1
+                            self._pending[ticker] = (score, ind, current_date)
                         elif score.signal == "ACHAT" and self.debug:
                             reason = []
                             if ind.cours_actuel < self.min_price:
@@ -335,17 +390,18 @@ class BacktestEngine:
 
     # ── Ouverture ────────────────────────────────────────────────────────────
 
-    def _open_position(self, ticker, score, ind, current_date: date) -> None:
+    def _open_position(self, ticker, score, ind, current_date: date, override_price: float | None = None) -> None:
+        entry_price = override_price if override_price is not None else ind.cours_actuel
         rr = None
         if ind.atr and ind.atr > 0:
-            k1 = abs(score.stop_loss  - ind.cours_actuel) / ind.atr
-            k2 = abs(score.take_profit - ind.cours_actuel) / ind.atr
+            k1 = abs(score.stop_loss  - entry_price) / ind.atr
+            k2 = abs(score.take_profit - entry_price) / ind.atr
             rr = round(k2 / k1, 2) if k1 > 0 else None
 
         pos = Position(
             ticker              = ticker,
             entry_date          = current_date,
-            entry_price         = ind.cours_actuel,
+            entry_price         = entry_price,
             stop_loss           = score.stop_loss,
             take_profit         = score.take_profit,
             original_stop_loss  = score.stop_loss,
@@ -617,6 +673,59 @@ def walk_forward_backtest(
             logger.warning(f"[WalkForward] Fenêtre {i+1} échouée : {e}")
 
     return results
+
+
+# ─── Monte Carlo ─────────────────────────────────────────────────────────────
+
+def monte_carlo_permutation(
+    result: BacktestResult,
+    n_simulations: int = 1000,
+    risk_free: float = 0.035,
+    seed: int = 42,
+) -> dict:
+    """
+    Teste si le Sharpe de la stratégie est statistiquement significatif.
+    Permute aléatoirement les rendements journaliers N fois,
+    calcule le Sharpe de chaque permutation, compare à la stratégie réelle.
+
+    Retourne :
+      sharpe_reel     : float
+      sharpe_median_mc: float  (médiane des Sharpe permutés)
+      p_value         : float  (fraction des simulations ≥ Sharpe réel)
+      significatif_95 : bool   (p_value < 0.05)
+    """
+    if result.equity_curve.empty or len(result.equity_curve) < 10:
+        return {"erreur": "Données insuffisantes pour Monte Carlo"}
+
+    equity = result.equity_curve.set_index("date")["equity"]
+    rets = equity.pct_change().dropna().values
+    if len(rets) < 5:
+        return {"erreur": "Historique trop court"}
+
+    real_metrics = _compute_metrics(pd.Series(rets).cumsum().apply(lambda x: 1 + x),
+                                    risk_free=risk_free)
+    real_sharpe = real_metrics["sharpe"]
+
+    rng = np.random.default_rng(seed)
+    mc_sharpes = []
+    for _ in range(n_simulations):
+        perm = rng.permutation(rets)
+        eq_sim = pd.Series(np.cumprod(1 + perm))
+        m = _compute_metrics(eq_sim, risk_free=risk_free)
+        mc_sharpes.append(m["sharpe"])
+
+    mc_arr = np.array(mc_sharpes)
+    p_value = float(np.mean(mc_arr >= real_sharpe))
+
+    return {
+        "sharpe_reel":      round(real_sharpe, 3),
+        "sharpe_median_mc": round(float(np.median(mc_arr)), 3),
+        "sharpe_p10_mc":    round(float(np.percentile(mc_arr, 10)), 3),
+        "sharpe_p90_mc":    round(float(np.percentile(mc_arr, 90)), 3),
+        "p_value":          round(p_value, 3),
+        "significatif_95":  p_value < 0.05,
+        "n_simulations":    n_simulations,
+    }
 
 
 # ─── Métriques de risque ─────────────────────────────────────────────────────

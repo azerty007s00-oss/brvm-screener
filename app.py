@@ -1007,7 +1007,7 @@ def score_to_ma_label(ma_signal: str) -> str:
 
 def render_backtest_page() -> None:
     """Page Backtest — stratégie long-only, revue bi-mensuelle, tous tickers BRVM hors indices."""
-    from backtest import fetch_and_backtest, WARMUP_BARS, INITIAL_CAP, REVIEW_INTERVAL_DAYS, ALL_TICKERS, INDICES
+    from backtest import fetch_and_backtest, monte_carlo_permutation, WARMUP_BARS, INITIAL_CAP, REVIEW_INTERVAL_DAYS, ALL_TICKERS, INDICES
 
     st.title("🔬 Backtest BRVM")
     st.caption(
@@ -1210,6 +1210,25 @@ def render_backtest_page() -> None:
             f"Alpha vs BRVM Composite : {s['alpha']*100:+.2f}% annualisé  |  "
             f"Beta : {s.get('beta', '—')}"
         )
+
+    with st.expander("Significativité statistique (Monte Carlo)", expanded=False):
+        mc = monte_carlo_permutation(result)
+        if "erreur" in mc:
+            st.warning(mc["erreur"])
+        else:
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Sharpe réel", f"{mc['sharpe_reel']:.3f}")
+            c2.metric("Sharpe médian MC", f"{mc['sharpe_median_mc']:.3f}",
+                      help="Médiane de 1000 permutations aléatoires")
+            c3.metric("p-value", f"{mc['p_value']:.3f}",
+                      delta="✓ Significatif" if mc["significatif_95"] else "✗ Non significatif",
+                      delta_color="normal" if mc["significatif_95"] else "inverse")
+            if not mc["significatif_95"]:
+                st.warning(
+                    f"La stratégie n'est pas statistiquement significative "
+                    f"(p={mc['p_value']:.2f} > 0.05) — les résultats peuvent "
+                    f"être dus au hasard sur cet historique BRVM."
+                )
 
     st.divider()
 
