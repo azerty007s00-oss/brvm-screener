@@ -335,6 +335,9 @@ def compute_indicators(
     STOCH_D_PERIOD    = p["stoch_d"]
     ADX_PERIOD        = p["adx"]
     BOLLINGER_PERIOD  = p["bollinger"]
+    BOLLINGER_STD_P   = p.get("bb_std", BOLLINGER_STD)
+    RSI_OVERSOLD      = p.get("rsi_oversold", 30)
+    RSI_OVERBOUGHT    = p.get("rsi_overbought", 70)
 
     result.horizon = horizon
 
@@ -384,8 +387,8 @@ def compute_indicators(
             if pd.notna(rsi_val):
                 result.rsi = round(float(rsi_val), 2)
                 result.rsi_signal = (
-                    "survendu" if result.rsi < 30
-                    else "suracheté" if result.rsi > 70
+                    "survendu" if result.rsi < RSI_OVERSOLD
+                    else "suracheté" if result.rsi > RSI_OVERBOUGHT
                     else "neutre"
                 )
                 result.series["rsi"] = rsi_series.dropna().round(2).to_dict()
@@ -408,8 +411,8 @@ def compute_indicators(
                         result.rsi_p10 = round(p10, 2)
                         result.rsi_p90 = round(p90, 2)
                     else:
-                        result.rsi_p10 = 30.0
-                        result.rsi_p90 = 70.0
+                        result.rsi_p10 = float(RSI_OVERSOLD)
+                        result.rsi_p90 = float(RSI_OVERBOUGHT)
 
     # ── Moyennes mobiles ──────────────────────────────────────────────────────
     n = len(close)
@@ -486,7 +489,7 @@ def compute_indicators(
     # ── Bandes de Bollinger ───────────────────────────────────────────────────
     if n >= BOLLINGER_PERIOD:
         bb_upper_s, bb_mid_s, bb_lower_s = _calc_bbands(
-            close, length=BOLLINGER_PERIOD, std=BOLLINGER_STD
+            close, length=BOLLINGER_PERIOD, std=BOLLINGER_STD_P
         )
 
         last_upper = bb_upper_s.iloc[-1]

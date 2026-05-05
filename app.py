@@ -1183,6 +1183,34 @@ def render_backtest_page() -> None:
     r5.metric("Expectancy pondérée", f"{s['expectancy_weighted']:.3f}%" if s.get("expectancy_weighted") else "—",
               help="E × position moy. / 100")
 
+    q1, q2, q3, q4 = st.columns(4)
+    q1.metric(
+        "CAGR",
+        f"{s['cagr']*100:+.1f}%" if s.get("cagr") is not None else "—",
+        help="Rendement annualisé (Compound Annual Growth Rate)"
+    )
+    q2.metric(
+        "Sharpe",
+        f"{s['sharpe']:.2f}" if s.get("sharpe") is not None else "—",
+        help="Rendement excédentaire / risque (taux sans risque OAT UEMOA 3.5%)"
+    )
+    q3.metric(
+        "Sortino",
+        f"{s['sortino']:.2f}" if s.get("sortino") is not None else "—",
+        help="Comme Sharpe mais pénalise uniquement la volatilité baissière"
+    )
+    q4.metric(
+        "Calmar",
+        f"{s['calmar']:.2f}" if s.get("calmar") is not None else "—",
+        help="CAGR / Max Drawdown absolu — ratio qualité/risque"
+    )
+
+    if s.get("alpha") is not None:
+        st.caption(
+            f"Alpha vs BRVM Composite : {s['alpha']*100:+.2f}% annualisé  |  "
+            f"Beta : {s.get('beta', '—')}"
+        )
+
     st.divider()
 
     # ── Equity curve ─────────────────────────────────────────────────────────
