@@ -286,7 +286,7 @@ HORIZON_PROFILES: dict[str, dict] = {
         "label": "Moyen terme (1–6 mois)",
         "emoji": "📈",
         "max_holding_days": 90,
-        "review_interval_days": 7,
+        "review_interval_days": 14,  # bi-mensuel : optimum TF-BRVM (frais/2 vs 7j, Sharpe OOS +1.41)
         "periods": {
             "rsi": BRVM_RSI_PERIOD,
             "ma_short": 20,
