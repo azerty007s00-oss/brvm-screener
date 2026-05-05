@@ -16,6 +16,7 @@ from config import (
     VOLUME_AVG_PERIOD,
     HORIZON_PROFILES,
     DEFAULT_HORIZON,
+    is_brvm_holiday,
 )
 
 logger = logging.getLogger(__name__)
@@ -257,7 +258,12 @@ def _fill_ohlcv_gaps(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DatetimeIndex]:
     Retourne (df_complété, dates_ajoutées).
     """
     try:
-        full_idx = pd.date_range(df.index.min(), df.index.max(), freq="B")
+        # Calendrier BRVM : jours ouvrés hors week-end et jours fériés UEMOA/CI.
+        # On prend l'union avec les dates existantes pour ne jamais supprimer
+        # un prix publié un jour férié (certains courtiers BRVM le font).
+        all_days = pd.date_range(df.index.min(), df.index.max(), freq="D")
+        brvm_days = pd.DatetimeIndex([d for d in all_days if not is_brvm_holiday(d)])
+        full_idx = brvm_days.union(df.index).sort_values()
         if len(full_idx) <= len(df):
             return df, pd.DatetimeIndex([])
         added_days = full_idx.difference(df.index)

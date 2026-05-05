@@ -1,0 +1,16 @@
+# requirements-lock.txt — Versions exactes validées (2026-05-05)
+# Généré depuis l'environnement de développement Python 3.13
+# Usage prod : pip install -r requirements-lock.txt
+
+bcrypt==4.2.1
+beautifulsoup4==4.14.3
+lxml==5.4.0
+numpy==2.4.4
+openpyxl==3.1.5
+pandas==2.3.3
+plotly==5.24.1
+pytest==9.0.3
+python-dateutil==2.9.0.post0
+requests==2.33.1
+streamlit==1.56.0
+urllib3==2.6.3

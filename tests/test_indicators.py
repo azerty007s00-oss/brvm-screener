@@ -41,39 +41,43 @@ def _make_ohlcv_df(n: int = 100, seed: int = 42) -> pd.DataFrame:
 
 def test_gap_interpolation():
     """
-    DataFrame avec 2 jours ouvrés manquants (gap).
+    DataFrame avec 2 jours manquants dans une semaine sans jours fériés BRVM.
     Après _fill_ohlcv_gaps() :
-    - l'index doit être continu (60 jours complets)
-    - le volume des jours ajoutés doit être 0
+    - les 2 jours manquants sont comblés
+    - le volume des jours ajoutés est 0
+    - les jours existants sont conservés (y compris éventuels jours fériés publiés)
+    Utilise une plage en mars (hors jours fériés UEMOA/CI) pour éviter les effets
+    du calendrier BRVM sur le décompte attendu.
     """
-    n = 60
-    df_full = _make_ohlcv_df(n=n, seed=0)
-    dates = df_full.index
+    # Plage sans jours fériés BRVM : 2 mars – 30 avril 2020 (hors 1er mai)
+    idx_full = pd.bdate_range("2020-03-02", "2020-04-30")   # ~43 jours ouvrés
+    n = len(idx_full)
+    np.random.seed(7)
+    close = 1000.0 * np.cumprod(1 + np.random.normal(0.001, 0.01, n))
+    df_full = pd.DataFrame({
+        "open": close, "high": close * 1.01, "low": close * 0.99,
+        "close": close, "volume": np.random.randint(200, 800, n).astype(float),
+    }, index=idx_full)
 
-    # Créer un gap de 2 jours consécutifs
-    gap_dates = dates[30:32]
+    # Créer un gap de 2 jours consécutifs au milieu
+    gap_dates = idx_full[20:22]
     df_gap = df_full.drop(gap_dates)
-    assert len(df_gap) == n - 2, "Le DataFrame initial devrait avoir 2 jours manquants"
+    assert len(df_gap) == n - 2
 
     df_filled, added_days = _fill_ohlcv_gaps(df_gap)
 
-    # Index continu : même longueur que le DataFrame original
-    expected_idx = pd.date_range(df_gap.index.min(), df_gap.index.max(), freq="B")
-    assert len(df_filled) == len(expected_idx), (
-        f"Après remplissage : {len(df_filled)} lignes, attendu {len(expected_idx)}"
-    )
-
-    # 2 jours ont été ajoutés
-    assert len(added_days) == 2, (
-        f"{len(added_days)} jours ajoutés, attendu 2"
-    )
+    # Les 2 jours manquants ont été ajoutés
+    assert len(added_days) == 2, f"{len(added_days)} jours ajoutés, attendu 2"
+    assert df_filled.index.is_monotonic_increasing
 
     # Volume = 0 sur les jours interpolés
     for d in added_days:
         vol = df_filled.loc[d, "volume"]
-        assert vol == 0, (
-            f"Volume le {d} devrait être 0 (jour interpolé), obtenu {vol}"
-        )
+        assert vol == 0, f"Volume le {d} devrait être 0 (jour interpolé), obtenu {vol}"
+
+    # Les jours existants sont tous présents
+    for d in df_gap.index:
+        assert d in df_filled.index, f"Jour existant {d} supprimé après gap-filling"
 
 
 # ─── TEST 2 — RSI dans [0, 100] ───────────────────────────────────────────────

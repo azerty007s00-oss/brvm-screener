@@ -15,5 +15,9 @@ jobs:
         with:
           python-version: '3.11'
           cache: pip
-      - run: pip install -r requirements.txt pytest
-      - run: python -m pytest tests/ -v --tb=short
+      - run: pip install -r requirements.txt pytest pip-audit
+      - name: Tests unitaires
+        run: python -m pytest tests/ -v --tb=short
+      - name: Audit sécurité dépendances
+        run: pip-audit --requirement requirements.txt --skip-editable
+        continue-on-error: true
