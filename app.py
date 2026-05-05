@@ -298,12 +298,15 @@ def render_signal_card(result: dict) -> None:
             f"<div class='{signal_class}'>{score.signal_emoji} {score.signal}</div>",
             unsafe_allow_html=True
         )
-        st.caption(f"Score : {score.score_total:+d} | Confiance : {score.confiance}")
+        mult = score.multiplicateur_liquidite
+        mult_str = f" ×{mult:.2f} liq." if mult < 1.0 else ""
+        st.caption(f"Score : {score.score_total:+d}{mult_str} | Confiance : {score.confiance}")
 
     with col3:
         rsi_label = f"{ind.rsi:.1f}" if ind.rsi else "N/D"
         stoch_label = f"{ind.stoch_k:.0f}/{ind.stoch_d:.0f}" if ind.stoch_k else "N/D"
-        st.metric("RSI (14)", rsi_label)
+        rsi_period = HORIZON_PROFILES.get(ind.horizon, {}).get("periods", {}).get("rsi", 14)
+        st.metric(f"RSI ({rsi_period})", rsi_label)
         st.caption(f"Stoch: {stoch_label}")
 
     with col4:
@@ -347,8 +350,19 @@ def render_signal_card(result: dict) -> None:
                 f"</div>",
                 unsafe_allow_html=True
             )
+        mult = score.multiplicateur_liquidite
+        if mult < 1.0:
+            raw_score = round(score.score_total / mult) if mult > 0 else score.score_total
+            mult_label = {0.75: "liquidité modérée", 0.50: "liquidité faible", 0.25: "liquidité très faible"}.get(mult, f"×{mult}")
+            score_line = (
+                f"Score brut : {raw_score:+d} → "
+                f"<b>Score pondéré : {score.score_total:+d}</b> "
+                f"<span style='color:#BA7517'>(×{mult} — {mult_label})</span>"
+            )
+        else:
+            score_line = f"<b>Score total : {score.score_total:+d}</b>"
         st.markdown(
-            f"<div style='margin-top:8px;font-weight:600'>Score total : {score.score_total:+d}</div>",
+            f"<div style='margin-top:8px'>{score_line}</div>",
             unsafe_allow_html=True
         )
 
@@ -955,6 +969,8 @@ def render_recap_table(results: dict) -> None:
             "MACD": ind.macd_signal.capitalize() if ind.macd_signal else "N/D",
             "Perf 1M": f"{ind.perf_1m:+.1f}%" if ind.perf_1m is not None else "N/D",
             "Score": f"{score.score_total:+d}",
+            "Liq.": f"×{score.multiplicateur_liquidite:.2f}" if score.multiplicateur_liquidite < 1.0 else "✓",
+            "Vol/j": f"{ind.volume_moy20:.0f}" if ind.volume_moy20 else "N/D",
             "Signal": f"{score.signal_emoji} {score.signal}",
             "Confiance": score.confiance.capitalize(),
             "Stop Loss": f"{score.stop_loss:,.0f}" if score.stop_loss is not None else "—",
@@ -1845,7 +1861,7 @@ def main() -> None:
             st.markdown("""
 **Horizons disponibles :**
 - ⚡ **Court terme** (1–4 semaines) : MACD×2, Stochastic×2 — paramètres rapides (RSI 7, MA 10/20/50)
-- 📈 **Moyen terme** (1–6 mois) : critères équilibrés — paramètres standards (RSI 14, MA 20/50/200)
+- 📈 **Moyen terme** (1–6 mois) : critères équilibrés — paramètres BRVM (RSI 20, MACD 8/21/5, BB 1.5σ, MA 20/50/200)
 - 🏦 **Long terme** (6 mois+) : MA Config×2, Tendance LT×2, Perf relative×2 — paramètres lents (RSI 21, MA 50/100/200)
 
 **Indicateurs calculés :**
