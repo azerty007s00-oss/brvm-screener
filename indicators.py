@@ -189,6 +189,9 @@ class TechnicalIndicators:
     volume_actuel: float = 0.0
     volume_moy20: float = 0.0
     volume_relatif_pct: float = 0.0   # % vs moy 20j
+    turnover_moy20_fcfa: float = 0.0  # volume × cours moyen sur 20j (FCFA)
+    zero_volume_days_pct: float = 0.0 # % de jours sans transaction sur 20j (thin trading bias)
+    synthetic_ohlc: bool = False      # True si high=low=close sur >50% des barres (ATR biaisé)
 
     # Stochastic
     stoch_k: Optional[float] = None
@@ -523,11 +526,30 @@ def compute_indicators(
     if volume.sum() > 0:
         result.volume_actuel = float(volume.iloc[-1])
         vol_window = min(VOLUME_AVG_PERIOD, len(volume))
-        result.volume_moy20 = float(volume.iloc[-vol_window:].mean())
+        vol_slice = volume.iloc[-vol_window:]
+        result.volume_moy20 = float(vol_slice.mean())
         if result.volume_moy20 > 0:
             result.volume_relatif_pct = round(
                 (result.volume_actuel / result.volume_moy20 - 1) * 100, 2
             )
+
+        # Turnover FCFA : volume × cours — filtre plus fiable que le volume seul
+        close_slice = close.iloc[-vol_window:]
+        turnover_slice = vol_slice * close_slice
+        result.turnover_moy20_fcfa = round(float(turnover_slice.mean()), 0)
+
+        # Thin trading bias : % de jours sans transaction sur 20j
+        zero_days = int((vol_slice == 0).sum())
+        result.zero_volume_days_pct = round(zero_days / len(vol_slice) * 100, 1)
+
+    # ── OHLC synthétique : high=low=close sur >50% des barres → ATR biaisé ───
+    if "high" in df.columns and "low" in df.columns:
+        ohlc_window = min(20, len(df))
+        recent_high = df["high"].iloc[-ohlc_window:]
+        recent_low  = df["low"].iloc[-ohlc_window:]
+        recent_close = close.iloc[-ohlc_window:]
+        synthetic_bars = ((recent_high == recent_close) & (recent_low == recent_close)).sum()
+        result.synthetic_ohlc = bool(synthetic_bars / ohlc_window > 0.5)
 
     # ── Supports / Résistances (fenêtre adaptée à l'horizon) ────────────────
     sr_windows = {"Court terme": 15, "Moyen terme": 30, "Long terme": 60}

@@ -17,6 +17,7 @@ from indicators import (
     _calc_rsi,
     _calc_bbands,
     compute_indicators,
+    TechnicalIndicators,
 )
 
 
@@ -158,4 +159,99 @@ def test_corporate_action_flag():
     found_30 = any("30%" in w for w in warnings)
     assert found_30, (
         f"Aucun warning ne contient '30%'. Warnings reçus : {warnings}"
+    )
+
+
+# ─── TEST 5 — Turnover FCFA : volume × cours ─────────────────────────────────
+
+def test_turnover_fcfa_computed():
+    """
+    compute_indicators() doit calculer turnover_moy20_fcfa ≈ volume_moy20 × close_moyen.
+    On construit un DataFrame avec volume et close constants pour vérification exacte.
+    """
+    n = 60
+    volume_fixe = 300.0
+    close_fixe  = 5000.0   # 300 × 5000 = 1 500 000 FCFA/j
+    idx = pd.date_range("2021-01-04", periods=n, freq="B")
+    df = pd.DataFrame({
+        "open":   close_fixe,
+        "high":   close_fixe,
+        "low":    close_fixe,
+        "close":  close_fixe,
+        "volume": volume_fixe,
+    }, index=idx)
+
+    result = compute_indicators(df, ticker="TEST")
+
+    attendu = volume_fixe * close_fixe   # 1 500 000
+    assert result.turnover_moy20_fcfa == pytest.approx(attendu, rel=0.01), (
+        f"Turnover attendu ≈ {attendu}, obtenu {result.turnover_moy20_fcfa}"
+    )
+
+
+# ─── TEST 6 — Thin trading bias : % jours volume=0 ───────────────────────────
+
+def test_zero_volume_days_pct():
+    """
+    Avec 10 jours sur 20 sans transaction (volume=0),
+    zero_volume_days_pct doit être exactement 50.0%.
+    """
+    n = 60
+    idx = pd.date_range("2021-01-04", periods=n, freq="B")
+    volumes = [300.0 if i % 2 == 0 else 0.0 for i in range(n)]
+    close_fixe = 2000.0
+    df = pd.DataFrame({
+        "open":   close_fixe,
+        "high":   close_fixe * 1.01,
+        "low":    close_fixe * 0.99,
+        "close":  close_fixe,
+        "volume": volumes,
+    }, index=idx)
+
+    result = compute_indicators(df, ticker="TEST")
+
+    assert result.zero_volume_days_pct == pytest.approx(50.0, abs=1.0), (
+        f"zero_volume_days_pct attendu ≈ 50%, obtenu {result.zero_volume_days_pct}"
+    )
+
+
+# ─── TEST 7 — Détection OHLC synthétique ─────────────────────────────────────
+
+def test_synthetic_ohlc_detected():
+    """
+    Quand high=low=close sur >50% des 20 dernières barres,
+    synthetic_ohlc doit être True.
+    Quand high≠low≠close partout, synthetic_ohlc doit être False.
+    """
+    n = 60
+    idx = pd.date_range("2021-01-04", periods=n, freq="B")
+    np.random.seed(42)
+    close = 1000.0 * np.cumprod(1 + np.random.normal(0.001, 0.005, n))
+
+    # ── Cas 1 : 20 dernières barres toutes synthétiques (high=low=close) ──
+    df_synth = pd.DataFrame({
+        "open":   close,
+        "high":   close,
+        "low":    close,
+        "close":  close,
+        "volume": 200.0,
+    }, index=idx)
+    res_synth = compute_indicators(df_synth, ticker="TEST")
+    assert res_synth.synthetic_ohlc is True, (
+        "synthetic_ohlc devrait être True quand high=low=close partout"
+    )
+
+    # ── Cas 2 : OHLC réels (high≠low) ──
+    high  = close * 1.01
+    low   = close * 0.99
+    df_real = pd.DataFrame({
+        "open":   close,
+        "high":   high,
+        "low":    low,
+        "close":  close,
+        "volume": 200.0,
+    }, index=idx)
+    res_real = compute_indicators(df_real, ticker="TEST")
+    assert res_real.synthetic_ohlc is False, (
+        "synthetic_ohlc devrait être False quand high≠low"
     )

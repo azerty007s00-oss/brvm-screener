@@ -318,19 +318,35 @@ def render_signal_card(result: dict) -> None:
         if ind.adx is not None:
             st.caption(f"ADX: {ind.adx:.0f} ({'forte' if ind.adx > 25 else 'faible'})")
 
-    # Avertissement illiquidité sévère
+    # ── Alertes qualité d'exécution ──────────────────────────────────────────
+    turnover = getattr(ind, "turnover_moy20_fcfa", 0)
+    zero_pct = getattr(ind, "zero_volume_days_pct", 0)
+    synth    = getattr(ind, "synthetic_ohlc", False)
+
     if ind.volume_moy20 is not None and 0 < ind.volume_moy20 < 100:
         st.error(
-            f"⛔ **Titre très peu liquide** : volume moyen = "
-            f"{ind.volume_moy20:.0f} titres/jour sur 20 séances. "
-            "Les indicateurs techniques ne sont pas fiables sur ce titre. "
-            "Tout signal affiché est à ignorer."
+            f"⛔ **Signal non exécutable** : volume moyen = {ind.volume_moy20:.0f} titres/j "
+            f"({turnover:,.0f} FCFA/j). Indicateurs non fiables — ignorer ce signal."
+        )
+    elif turnover > 0 and turnover < 500_000:
+        st.error(
+            f"⛔ **Turnover insuffisant** : {turnover:,.0f} FCFA/j (seuil : 500k). "
+            "Position difficile à constituer sans déplacer le cours."
         )
     elif ind.volume_moy20 is not None and 100 <= ind.volume_moy20 < 200:
         st.warning(
-            f"⚠️ **Liquidité faible** : volume moyen = "
-            f"{ind.volume_moy20:.0f} titres/jour. "
-            "Signaux à confirmer par d'autres sources."
+            f"⚠️ **Liquidité faible** : {ind.volume_moy20:.0f} titres/j "
+            f"({turnover:,.0f} FCFA/j). Signaux à confirmer par d'autres sources."
+        )
+    if zero_pct > 30:
+        st.warning(
+            f"⚠️ **Thin trading** : {zero_pct:.0f}% de jours sans transaction sur 20 séances. "
+            "RSI/MACD calculés sur des cours reconduits — biais statistique élevé."
+        )
+    if synth:
+        st.warning(
+            "⚠️ **OHLC reconstruit** : high/low indisponibles sur la majorité des séances. "
+            "ATR sous-estimé → stops trop serrés, sizing potentiellement gonflé."
         )
 
     # ── Scorecard détaillée ───────────────────────────────────────────────────

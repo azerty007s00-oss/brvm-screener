@@ -471,6 +471,37 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
             interpretation="Liquidité très faible — signaux peu fiables, exécution difficile",
         ))
 
+    # ── Critère Turnover FCFA — filtre d'exploitabilité réelle ──────────────
+    # Volume en titres ne distingue pas 100 titres à 500 FCFA vs 100 titres à 50 000 FCFA.
+    # Seuil 500k FCFA/jour = minimum raisonnable pour exécuter une position meaningful.
+    if getattr(ind, "turnover_moy20_fcfa", 0) > 0:
+        if ind.turnover_moy20_fcfa < 500_000:
+            criteres.append(CritereScore(
+                nom="Turnover",
+                valeur=f"{ind.turnover_moy20_fcfa:,.0f} FCFA/j",
+                points=-1,
+                interpretation=f"Turnover insuffisant (<500k FCFA/j) — position difficile à constituer",
+            ))
+
+    # ── Critère Thin Trading Bias ─────────────────────────────────────────────
+    # >30% de jours sans transaction sur 20j = prix collants, indicateurs biaisés.
+    if getattr(ind, "zero_volume_days_pct", 0) > 30:
+        criteres.append(CritereScore(
+            nom="Thin Trading",
+            valeur=f"{ind.zero_volume_days_pct:.0f}% jours sans transaction",
+            points=-1,
+            interpretation="Prix non-synchrone : indicateurs calculés sur des cours fictifs (reconduits)",
+        ))
+
+    # ── Critère OHLC synthétique — ATR biaisé ────────────────────────────────
+    if getattr(ind, "synthetic_ohlc", False):
+        criteres.append(CritereScore(
+            nom="OHLC Qualité",
+            valeur="OHLC reconstruit depuis close",
+            points=-1,
+            interpretation="ATR, ADX et Stochastic sous-estimés — stops/sizing peu fiables",
+        ))
+
     # ── Calcul score total — Hierarchical Bounded Factor Model (A5-Simple) ────
     # Trois blocs corrélés : chaque critère normalisé à ±1 intra-groupe (vote unique),
     # puis cap ±2 par groupe → mesure un consensus de signaux, pas une addition de magnitudes
