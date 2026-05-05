@@ -3,7 +3,9 @@
     "name": "Tiélina SORO",
     "email": "tielinasoro2206@gmail.com",
     "reason": "",
-    "status": "pending",
-    "requested_at": "2026-05-05T04:55:16.233722"
+    "status": "approved",
+    "requested_at": "2026-05-05T04:55:16.233722",
+    "password_hash": "$2b$12$esrbUHww3.nM6ZxZmWB5IuQgiyIn5RDcep1jKxy260uO349bIgQrq",
+    "approved_at": "2026-05-05T04:56:09.293636"
   }
 }
