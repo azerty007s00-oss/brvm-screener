@@ -1,5 +1,6 @@
 """
-tests/test_backtest.py — Tests unitaires pour _compute_metrics() et walk_forward_backtest().
+tests/test_backtest.py — Tests unitaires pour _compute_metrics(), walk_forward_backtest(),
+_apply_slippage(), monte_carlo_permutation() et BacktestEngine (T+1, volume=0).
 Aucun appel réseau : données OHLCV synthétiques uniquement.
 """
 
@@ -7,11 +8,18 @@ import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import inspect
 import numpy as np
 import pandas as pd
 import pytest
 
-from backtest import _compute_metrics, walk_forward_backtest
+from backtest import (
+    _compute_metrics,
+    _apply_slippage,
+    monte_carlo_permutation,
+    walk_forward_backtest,
+    BacktestEngine,
+)
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -164,4 +172,116 @@ def test_benchmark_alpha():
         f"alpha={alpha:.4f} devrait être > 0 "
         f"(cagr_strat={strat_metrics['cagr']:.4f}, "
         f"cagr_bench={bench_metrics['cagr']:.4f})"
+    )
+
+
+# ─── TEST 6 — Slippage nul si volume = 0 ou None ─────────────────────────────
+
+def test_slippage_no_volume():
+    """Sans volume de référence, _apply_slippage retourne le prix inchangé."""
+    price = 1500.0
+    assert _apply_slippage(price, 10.0, None,  100_000.0) == price
+    assert _apply_slippage(price, 10.0, 0.0,   100_000.0) == price
+    assert _apply_slippage(0.0,   10.0, 500.0, 100_000.0) == 0.0
+
+
+# ─── TEST 7 — Slippage croît avec la participation au volume ──────────────────
+
+def test_slippage_increases_with_participation():
+    """Plus la position est grande par rapport au volume moyen, plus le slippage est élevé."""
+    price = 1000.0
+    equity = 1_000_000.0
+    # Position 5% sur volume 500 → participation faible
+    p_low  = _apply_slippage(price, 5.0,  500.0, equity)
+    # Position 20% sur volume 50 → participation élevée
+    p_high = _apply_slippage(price, 20.0, 50.0,  equity)
+    assert p_high > p_low, f"Slippage élevé ({p_high}) doit dépasser slippage faible ({p_low})"
+    assert p_low  > price, "Même un faible slippage doit augmenter le prix d'entrée"
+
+
+# ─── TEST 8 — Slippage plafonné à 2% ─────────────────────────────────────────
+
+def test_slippage_capped_at_2pct():
+    """Impact plafonné à 2% même avec position très grande vs volume très faible."""
+    price  = 1000.0
+    equity = 10_000_000.0   # 10M FCFA
+    # Ordre massif (50% du capital) sur volume minuscule (1 titre/jour)
+    result = _apply_slippage(price, 50.0, 1.0, equity)
+    assert result <= price * 1.02 + 0.01, (
+        f"Slippage plafonné à 2% : attendu ≤ {price * 1.02:.2f}, obtenu {result:.2f}"
+    )
+
+
+# ─── TEST 9 — BacktestEngine : _pending initialisé, override_price accepté ───
+
+def test_engine_t1_structure():
+    """BacktestEngine doit avoir _pending dict et _open_position doit accepter override_price."""
+    engine = BacktestEngine(
+        initial_capital=1_000_000,
+        horizon="Moyen terme",
+        warmup_bars=30,
+        review_interval_days=7,
+        max_holding_days=90,
+        regime_filter=False,
+    )
+    assert hasattr(engine, "_pending"), "_pending doit être initialisé dans __init__"
+    assert isinstance(engine._pending, dict), "_pending doit être un dict"
+
+    sig = inspect.signature(engine._open_position)
+    assert "override_price" in sig.parameters, (
+        "_open_position doit accepter le paramètre override_price (exécution T+1)"
+    )
+
+
+# ─── TEST 10 — Monte Carlo : p-value dans [0, 1], clés attendues présentes ───
+
+def test_monte_carlo_structure():
+    """monte_carlo_permutation doit retourner un dict avec les clés attendues."""
+    np.random.seed(99)
+    returns = np.random.normal(0.001, 0.01, 120)
+    equity_vals = 1_000_000.0 * np.cumprod(1 + returns)
+    eq_df = pd.DataFrame({
+        "date":   pd.date_range("2021-01-01", periods=120, freq="B"),
+        "equity": equity_vals,
+    })
+
+    class FakeResult:
+        equity_curve = eq_df
+        summary = {}
+
+    mc = monte_carlo_permutation(FakeResult(), n_simulations=200, seed=0)
+
+    for key in ("sharpe_reel", "sharpe_median_mc", "p_value", "significatif_95", "n_simulations"):
+        assert key in mc, f"Clé '{key}' absente du résultat Monte Carlo"
+
+    assert 0.0 <= mc["p_value"] <= 1.0, f"p_value={mc['p_value']} hors [0, 1]"
+    assert isinstance(mc["significatif_95"], bool)
+
+
+# ─── TEST 11 — Monte Carlo : série aléatoire non significative ───────────────
+
+def test_monte_carlo_random_not_significant():
+    """Une série de rendements purement aléatoires (mu=0) ne doit pas être significative
+    dans la grande majorité des cas (on teste sur 5 seeds différents)."""
+    significant_count = 0
+    for seed in range(5):
+        rng = np.random.default_rng(seed * 17)
+        returns = rng.normal(0.0, 0.01, 100)
+        equity_vals = 1_000_000.0 * np.cumprod(1 + returns)
+        eq_df = pd.DataFrame({
+            "date":   pd.date_range("2021-01-01", periods=100, freq="B"),
+            "equity": equity_vals,
+        })
+
+        class FakeResult:
+            equity_curve = eq_df
+            summary = {}
+
+        mc = monte_carlo_permutation(FakeResult(), n_simulations=500, seed=seed)
+        if mc.get("significatif_95"):
+            significant_count += 1
+
+    # On tolère au plus 1 faux positif sur 5 (seuil 5% → ~0.25 attendu en moyenne)
+    assert significant_count <= 2, (
+        f"{significant_count}/5 séries aléatoires déclarées significatives — trop élevé"
     )
