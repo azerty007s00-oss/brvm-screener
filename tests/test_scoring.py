@@ -200,3 +200,118 @@ def test_confiance_faible_donnees_insuffisantes():
     assert result.confiance == "faible", (
         f"Confiance attendue 'faible', obtenu '{result.confiance}'"
     )
+
+
+# ─── TEST 8 — RSI uptrend : pénalité >65 supprimée ───────────────────────────
+
+def test_rsi_uptrend_no_penalty():
+    """
+    RSI=68 (entre 30 et 70) avec MA bullish + ADX=28 → in_uptrend=True.
+    Le critère RSI doit être positif (+1 momentum sain), jamais -1 (hard ceiling).
+    """
+    ind = TechnicalIndicators(
+        ticker="TEST",
+        rsi=68,
+        rsi_p10=30.0,
+        rsi_p90=70.0,
+        ma_signal="bullish",
+        adx=28,
+        volume_moy20=1000,
+        volume_actuel=1000,
+    )
+    result = compute_score(ind)
+
+    rsi_criteres = [c for c in result.criteres if c.nom == "RSI"]
+    assert len(rsi_criteres) == 1, "Un et un seul critère RSI attendu"
+    assert rsi_criteres[0].points > 0, (
+        f"RSI=68 en uptrend (MA bullish, ADX=28) devrait etre positif, "
+        f"obtenu {rsi_criteres[0].points} ({rsi_criteres[0].interpretation})"
+    )
+
+
+# ─── TEST 9 — RSI > 65 hors uptrend : hard ceiling actif ─────────────────────
+
+def test_rsi_no_uptrend_hard_ceiling():
+    """
+    RSI=68 avec MA bearish (in_uptrend=False) → hard ceiling >65 → points=-1.
+    """
+    ind = TechnicalIndicators(
+        ticker="TEST",
+        rsi=68,
+        rsi_p10=30.0,
+        rsi_p90=70.0,
+        ma_signal="bearish",
+        adx=28,
+        volume_moy20=1000,
+        volume_actuel=1000,
+    )
+    result = compute_score(ind)
+
+    rsi_criteres = [c for c in result.criteres if c.nom == "RSI"]
+    assert len(rsi_criteres) == 1
+    assert rsi_criteres[0].points < 0, (
+        f"RSI=68 hors uptrend (MA bearish) devrait etre negatif, "
+        f"obtenu {rsi_criteres[0].points} ({rsi_criteres[0].interpretation})"
+    )
+
+
+# ─── TEST 10 — Stochastic > 80 en uptrend : neutre (pas de pénalité) ─────────
+
+def test_stoch_uptrend_neutral():
+    """
+    stoch_k=85 (>80) avec MA bullish + ADX=25 → in_uptrend=True → points=0.
+    Hors uptrend, stoch_k=85 donnerait -1.
+    """
+    ind = TechnicalIndicators(
+        ticker="TEST",
+        stoch_k=85,
+        stoch_d=80,
+        ma_signal="bullish",
+        adx=25,
+        volume_moy20=1000,
+        volume_actuel=1000,
+    )
+    result = compute_score(ind)
+
+    stoch_criteres = [c for c in result.criteres if c.nom == "Stochastic"]
+    assert len(stoch_criteres) == 1
+    assert stoch_criteres[0].points == 0, (
+        f"Stochastic=85 en uptrend devrait etre neutre (0), "
+        f"obtenu {stoch_criteres[0].points} ({stoch_criteres[0].interpretation})"
+    )
+
+
+# ─── TEST 11 — Signal ACHAT signal TF idéal (RSI uptrend + 3 groupes alignés) ─
+
+def test_signal_achat_tf_uptrend():
+    """
+    Signal TF idéal : RSI=68 en uptrend (MA golden_cross, ADX=28), MACD haussier,
+    cours au-dessus MA LT → 3 groupes alignés → ACHAT, confiance forte.
+    """
+    ind = TechnicalIndicators(
+        ticker="TEST",
+        rsi=68,
+        rsi_p10=30.0,
+        rsi_p90=70.0,
+        ma20=1100.0,
+        ma50=1000.0,
+        ma_lt=900.0,
+        ma_lt_period=200,
+        ma_signal="golden_cross",
+        macd_line=0.05,
+        macd_signal_line=0.03,
+        macd_signal="haussier",
+        stoch_k=75,
+        adx=28,
+        volume_moy20=1000,
+        volume_actuel=1100,
+        cours_actuel=1100.0,
+        prix_vs_ma_lt="au_dessus",
+    )
+    result = compute_score(ind)
+    assert result.signal == "ACHAT", (
+        f"Signal TF ideal attendu ACHAT, obtenu {result.signal} (score={result.score_total})"
+    )
+    assert result.confiance in ("forte", "modérée"), (
+        f"Confiance attendue forte/moderee, obtenu '{result.confiance}'"
+    )

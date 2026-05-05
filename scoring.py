@@ -65,6 +65,14 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
     result = ScoreResult(ticker=ind.ticker)
     criteres = []
 
+    # Tendance haussière confirmée : MA bullish + ADX >= 20 (trend présent)
+    # Conditionne l'interprétation du RSI et du Stochastic (momentum vs oscillateur)
+    in_uptrend = (
+        ind.ma_signal in ("bullish", "golden_cross")
+        and ind.adx is not None
+        and ind.adx >= 20
+    )
+
     # ── Critère 1 : RSI ───────────────────────────────────────────────────────
     w_rsi = w.get("rsi", 1)
     if w_rsi > 0 and ind.rsi is not None:
@@ -73,23 +81,36 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
         rsi_hi = ind.rsi_p90 if ind.rsi_p90 is not None else 70.0
         seuil_str = f"P10={rsi_lo:.0f}/P90={rsi_hi:.0f}" if ind.rsi_p10 is not None else "30/70"
         if ind.rsi < rsi_lo:
+            # Survendu : rebond en MR, mais en uptrend = momentum qui s'affaiblit
+            pts = -1 * w_rsi if in_uptrend else +2 * w_rsi
+            interp = ("RSI bas malgré tendance haussière — momentum s'affaiblit" if in_uptrend
+                      else f"Survendu (< {rsi_lo:.0f}) — potentiel rebond")
             criteres.append(CritereScore(
                 nom="RSI", valeur=f"RSI({ind.rsi}) [{seuil_str}]",
-                points=+2 * w_rsi,
-                interpretation=f"Survendu (< {rsi_lo:.0f}) — potentiel rebond",
+                points=pts, interpretation=interp,
             ))
         elif ind.rsi > rsi_hi:
+            # Au-dessus du P90 adaptatif : pénalité normale hors uptrend, réduite en uptrend
+            pts = -1 * w_rsi if in_uptrend else -2 * w_rsi
+            interp = ("RSI élevé en tendance haussière — momentum fort, prudence" if in_uptrend
+                      else f"Suracheté (> {rsi_hi:.0f}) — risque de retournement")
             criteres.append(CritereScore(
                 nom="RSI", valeur=f"RSI({ind.rsi}) [{seuil_str}]",
-                points=-2 * w_rsi,
-                interpretation=f"Suracheté (> {rsi_hi:.0f}) — risque de retournement",
+                points=pts, interpretation=interp,
             ))
-        elif ind.rsi > 65:
-            # Hard ceiling : RSI élevé même si sous le P90 adaptatif (marché haussier prolongé)
+        elif ind.rsi > 65 and not in_uptrend:
+            # Hard ceiling uniquement hors uptrend confirmé
             criteres.append(CritereScore(
                 nom="RSI", valeur=f"RSI({ind.rsi}) [{seuil_str}]",
                 points=-1 * w_rsi,
                 interpretation="RSI élevé (>65) — zone de prudence même hors P90",
+            ))
+        elif in_uptrend and ind.rsi >= 50:
+            # RSI 50–rsi_hi en uptrend : momentum sain, signal positif
+            criteres.append(CritereScore(
+                nom="RSI", valeur=f"RSI({ind.rsi}) [{seuil_str}]",
+                points=+1 * w_rsi,
+                interpretation="RSI en zone de tendance haussière — momentum sain",
             ))
         else:
             criteres.append(CritereScore(
@@ -375,10 +396,14 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
                     points=+1 * w_stoch, interpretation="Zone de survente — potentiel rebond"
                 ))
             elif ind.stoch_k > 80:
+                # En uptrend confirmé, surachat stochastique = continuation normale → neutre
+                pts = 0 if in_uptrend else -1 * w_stoch
+                interp = ("Surachat en tendance haussière — continuation possible"
+                          if in_uptrend else "Zone de surachat — risque de correction")
                 criteres.append(CritereScore(
                     nom="Stochastic",
                     valeur=f"%K({ind.stoch_k}) / %D({ind.stoch_d})",
-                    points=-1 * w_stoch, interpretation="Zone de surachat — risque de correction"
+                    points=pts, interpretation=interp
                 ))
             else:
                 criteres.append(CritereScore(
