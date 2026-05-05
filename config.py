@@ -217,6 +217,19 @@ BOLLINGER_STD = 2
 VOLUME_AVG_PERIOD = 20
 MIN_DATA_POINTS = 30  # Minimum de jours pour calculer les indicateurs
 
+# ─── Indicateurs techniques calibrés BRVM (fixing journalier) ─────────────────
+# Un tick = un jour de trading réel → périodes plus longues et seuils resserrés
+# vs marchés liquides continus (RSI 30/70, MACD 12/26/9, BB std 2.0).
+
+BRVM_RSI_PERIOD     = 20
+BRVM_RSI_OVERSOLD   = 35
+BRVM_RSI_OVERBOUGHT = 65
+BRVM_MACD_FAST      = 8
+BRVM_MACD_SLOW      = 21
+BRVM_MACD_SIGNAL    = 5
+BRVM_BB_PERIOD      = 20   # inchangé vs standard
+BRVM_BB_STD         = 1.5  # marché moins volatile → bandes plus serrées
+
 # Stochastic
 STOCH_K_PERIOD = 14
 STOCH_D_PERIOD = 3

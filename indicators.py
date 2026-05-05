@@ -248,6 +248,51 @@ class TechnicalIndicators:
     series: dict = field(default_factory=dict)
 
 
+# ─── Helpers qualité des données ─────────────────────────────────────────────
+
+def _fill_ohlcv_gaps(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DatetimeIndex]:
+    """
+    Comble les trous ≤ 3 jours ouvrés dans un DataFrame OHLCV.
+    OHLC : forward-fill (limit=3) ; volume : 0 sur les jours ajoutés.
+    Retourne (df_complété, dates_ajoutées).
+    """
+    try:
+        full_idx = pd.date_range(df.index.min(), df.index.max(), freq="B")
+        if len(full_idx) <= len(df):
+            return df, pd.DatetimeIndex([])
+        added_days = full_idx.difference(df.index)
+        df_filled = df.reindex(full_idx)
+        for col in ["open", "high", "low", "close"]:
+            if col in df_filled.columns:
+                df_filled[col] = df_filled[col].ffill(limit=3)
+        if "volume" in df_filled.columns:
+            df_filled.loc[df_filled.index.isin(added_days), "volume"] = 0
+            df_filled["volume"] = df_filled["volume"].fillna(0)
+        return df_filled, added_days
+    except Exception as exc:
+        logger.debug(f"[Gaps] interpolation ignorée — {exc}")
+        return df, pd.DatetimeIndex([])
+
+
+def _validate_ohlcv(df: pd.DataFrame) -> list[str]:
+    """
+    Détecte les anomalies dans les données OHLCV.
+    Retourne une liste de warnings (chaînes de caractères).
+    Un saut de cours > 30% sur une journée est signalé (action sur le capital probable).
+    """
+    warnings: list[str] = []
+    if "close" not in df.columns or len(df) < 2:
+        return warnings
+    pct_changes = df["close"].pct_change().abs() * 100
+    for ts, pct in pct_changes.items():
+        if pd.notna(pct) and pct > 30:
+            day = ts.date() if hasattr(ts, "date") else ts
+            warnings.append(
+                f"Saut de cours > 30% détecté le {day}: {pct:.1f}%"
+            )
+    return warnings
+
+
 # ─── Calcul principal ─────────────────────────────────────────────────────────
 
 def compute_indicators(
@@ -295,22 +340,9 @@ def compute_indicators(
 
     df = df.copy().sort_index()
 
-    # ── Interpolation des gaps ≤ 3 jours ouvrés (C3, optionnel) ─────────────
+    # ── Interpolation des gaps ≤ 3 jours ouvrés (C3) ─────────────────────────
     # Forward-fill OHLC sur les jours manquants, volume=0 pour les jours ajoutés.
-    # Limité à 3 jours consécutifs pour ne pas inventer de données sur les pauses longues.
-    try:
-        full_idx = pd.date_range(df.index.min(), df.index.max(), freq="B")
-        if len(full_idx) > len(df):
-            added_days = full_idx.difference(df.index)
-            df = df.reindex(full_idx)
-            for col in ["open", "high", "low", "close"]:
-                if col in df.columns:
-                    df[col] = df[col].ffill(limit=3)
-            if "volume" in df.columns:
-                df.loc[df.index.isin(added_days), "volume"] = 0
-                df["volume"] = df["volume"].fillna(0)
-    except Exception as _gap_err:
-        logger.debug(f"[Gaps] {ticker}: interpolation ignorée — {_gap_err}")
+    df, _added_days = _fill_ohlcv_gaps(df)
 
     close = df["close"]
     high = df["high"]

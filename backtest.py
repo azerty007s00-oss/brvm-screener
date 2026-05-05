@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Optional
 
+import numpy as np
 import pandas as pd
 
 from analysis import compute_risk_levels, compute_position_size
@@ -435,8 +436,9 @@ def run_backtest(
     close_on_non_achat:   bool           = False,
     close_on_vente:       bool           = False,
     debug:                bool           = False,
+    benchmark_series:     Optional[pd.Series] = None,
 ) -> BacktestResult:
-    return BacktestEngine(
+    result = BacktestEngine(
         initial_capital      = initial_capital,
         horizon              = horizon,
         warmup_bars          = warmup_bars,
@@ -457,6 +459,32 @@ def run_backtest(
         close_on_vente       = close_on_vente,
         debug                = debug,
     ).run(ticker_data)
+
+    # E1 — Métriques de risque complètes sur la courbe d'équité
+    if len(result.equity_curve) >= 2:
+        equity = result.equity_curve.set_index("date")["equity"]
+        metrics = _compute_metrics(equity)
+        result.summary.update(metrics)
+
+        # E2 — Comparaison indice BRVM Composite (si fourni)
+        if benchmark_series is not None and len(benchmark_series) >= 2:
+            bench_metrics = _compute_metrics(benchmark_series)
+            result.summary["benchmark_total_return"] = bench_metrics["total_return"]
+            result.summary["benchmark_cagr"]         = bench_metrics["cagr"]
+            result.summary["benchmark_sharpe"]       = bench_metrics["sharpe"]
+            result.summary["alpha"] = round(metrics["cagr"] - bench_metrics["cagr"], 4)
+
+            strat_rets = equity.pct_change().dropna()
+            bench_rets = benchmark_series.pct_change().dropna()
+            common_idx = strat_rets.index.intersection(bench_rets.index)
+            if len(common_idx) > 1:
+                s = strat_rets.loc[common_idx].values
+                b = bench_rets.loc[common_idx].values
+                var_b = float(np.var(b, ddof=1))
+                if var_b > 0:
+                    result.summary["beta"] = round(float(np.cov(s, b)[0, 1] / var_b), 4)
+
+    return result
 
 
 def fetch_and_backtest(
@@ -589,6 +617,43 @@ def walk_forward_backtest(
             logger.warning(f"[WalkForward] Fenêtre {i+1} échouée : {e}")
 
     return results
+
+
+# ─── Métriques de risque ─────────────────────────────────────────────────────
+
+def _compute_metrics(equity_curve: pd.Series, risk_free: float = 0.035) -> dict:
+    """
+    equity_curve : série indexée par date, valeurs = valeur du portefeuille
+    risk_free     : taux sans risque annuel (OAT UEMOA ≈ 3.5 %)
+    Retourne : total_return, cagr, sharpe, sortino, max_drawdown, calmar
+    """
+    rets = equity_curve.pct_change().dropna()
+    n_days = len(equity_curve)
+    years = n_days / 252
+
+    total_return = equity_curve.iloc[-1] / equity_curve.iloc[0] - 1
+    cagr = (1 + total_return) ** (1 / years) - 1 if years > 0 else 0.0
+
+    excess = rets - risk_free / 252
+    sharpe = float(excess.mean() / rets.std() * (252 ** 0.5)) if rets.std() > 0 else 0.0
+
+    downside = rets[rets < 0].std()
+    sortino = float(excess.mean() / downside * (252 ** 0.5)) if downside > 0 else 0.0
+
+    roll_max = equity_curve.cummax()
+    drawdown = (equity_curve - roll_max) / roll_max
+    max_drawdown = float(drawdown.min())
+
+    calmar = float(cagr / abs(max_drawdown)) if max_drawdown != 0 else 0.0
+
+    return {
+        "total_return": round(float(total_return), 4),
+        "cagr":         round(float(cagr),         4),
+        "sharpe":       round(sharpe,               4),
+        "sortino":      round(sortino,              4),
+        "max_drawdown": round(max_drawdown,         4),
+        "calmar":       round(calmar,               4),
+    }
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────

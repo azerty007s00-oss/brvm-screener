@@ -1,0 +1,157 @@
+"""
+tests/test_indicators.py — Tests unitaires pour les fonctions d'indicators.py.
+Aucun appel réseau : données synthétiques uniquement.
+"""
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from indicators import (
+    _fill_ohlcv_gaps,
+    _validate_ohlcv,
+    _calc_rsi,
+    _calc_bbands,
+    compute_indicators,
+)
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _make_ohlcv_df(n: int = 100, seed: int = 42) -> pd.DataFrame:
+    """DataFrame OHLCV synthétique avec index DatetimIndex continu."""
+    np.random.seed(seed)
+    close = 1000.0 * np.cumprod(1 + np.random.normal(0.001, 0.01, n))
+    high  = np.maximum(close * np.random.uniform(1.000, 1.015, n), close)
+    low   = np.minimum(close * np.random.uniform(0.985, 1.000, n), close)
+    return pd.DataFrame({
+        "open":   close * np.random.uniform(0.995, 1.005, n),
+        "high":   high,
+        "low":    low,
+        "close":  close,
+        "volume": np.random.randint(200, 1000, n).astype(float),
+    }, index=pd.date_range("2020-01-01", periods=n, freq="B"))
+
+
+# ─── TEST 1 — Interpolation de gaps ──────────────────────────────────────────
+
+def test_gap_interpolation():
+    """
+    DataFrame avec 2 jours ouvrés manquants (gap).
+    Après _fill_ohlcv_gaps() :
+    - l'index doit être continu (60 jours complets)
+    - le volume des jours ajoutés doit être 0
+    """
+    n = 60
+    df_full = _make_ohlcv_df(n=n, seed=0)
+    dates = df_full.index
+
+    # Créer un gap de 2 jours consécutifs
+    gap_dates = dates[30:32]
+    df_gap = df_full.drop(gap_dates)
+    assert len(df_gap) == n - 2, "Le DataFrame initial devrait avoir 2 jours manquants"
+
+    df_filled, added_days = _fill_ohlcv_gaps(df_gap)
+
+    # Index continu : même longueur que le DataFrame original
+    expected_idx = pd.date_range(df_gap.index.min(), df_gap.index.max(), freq="B")
+    assert len(df_filled) == len(expected_idx), (
+        f"Après remplissage : {len(df_filled)} lignes, attendu {len(expected_idx)}"
+    )
+
+    # 2 jours ont été ajoutés
+    assert len(added_days) == 2, (
+        f"{len(added_days)} jours ajoutés, attendu 2"
+    )
+
+    # Volume = 0 sur les jours interpolés
+    for d in added_days:
+        vol = df_filled.loc[d, "volume"]
+        assert vol == 0, (
+            f"Volume le {d} devrait être 0 (jour interpolé), obtenu {vol}"
+        )
+
+
+# ─── TEST 2 — RSI dans [0, 100] ───────────────────────────────────────────────
+
+def test_rsi_range():
+    """
+    Sur n'importe quelle série de prix synthétiques,
+    tous les valeurs de RSI doivent être dans [0, 100].
+    """
+    np.random.seed(123)
+    n = 200
+    close = pd.Series(
+        1000.0 * np.cumprod(1 + np.random.normal(0.0, 0.02, n)),
+        index=pd.date_range("2020-01-01", periods=n, freq="B"),
+    )
+
+    rsi_series = _calc_rsi(close, length=14).dropna()
+
+    assert len(rsi_series) > 0, "La série RSI ne doit pas être vide"
+    assert (rsi_series >= 0).all(), (
+        f"RSI minimum = {rsi_series.min():.2f} — inférieur à 0"
+    )
+    assert (rsi_series <= 100).all(), (
+        f"RSI maximum = {rsi_series.max():.2f} — supérieur à 100"
+    )
+
+
+# ─── TEST 3 — Bandes de Bollinger : upper >= mid >= lower ────────────────────
+
+def test_bollinger_bands_ordering():
+    """
+    Sur toute la série, bb_upper >= bb_middle >= bb_lower doit être vérifié.
+    """
+    np.random.seed(7)
+    n = 150
+    close = pd.Series(
+        1000.0 * np.cumprod(1 + np.random.normal(0.001, 0.01, n)),
+        index=pd.date_range("2020-01-01", periods=n, freq="B"),
+    )
+
+    upper, middle, lower = _calc_bbands(close, length=20, std=2.0)
+
+    valid = pd.DataFrame({
+        "upper":  upper,
+        "middle": middle,
+        "lower":  lower,
+    }).dropna()
+
+    assert len(valid) > 0, "Aucune valeur valide dans les Bandes de Bollinger"
+    assert (valid["upper"] >= valid["middle"]).all(), (
+        "bb_upper >= bb_middle non respecté sur toute la série"
+    )
+    assert (valid["middle"] >= valid["lower"]).all(), (
+        "bb_middle >= bb_lower non respecté sur toute la série"
+    )
+
+
+# ─── TEST 4 — Détection action sur le capital (saut > 30%) ───────────────────
+
+def test_corporate_action_flag():
+    """
+    DataFrame avec un saut de cours > 30% sur une journée.
+    _validate_ohlcv() doit retourner au moins un warning contenant '30%'.
+    """
+    n = 50
+    df = _make_ohlcv_df(n=n, seed=99)
+
+    # Introduire un saut de +50% au jour 25
+    spike_date = df.index[25]
+    df.loc[spike_date, "close"] = df.loc[df.index[24], "close"] * 1.50
+    df.loc[spike_date, "high"]  = df.loc[spike_date, "close"]
+
+    warnings = _validate_ohlcv(df)
+
+    assert len(warnings) >= 1, (
+        "Au moins un warning devrait être retourné pour un saut de +50%"
+    )
+    found_30 = any("30%" in w for w in warnings)
+    assert found_30, (
+        f"Aucun warning ne contient '30%'. Warnings reçus : {warnings}"
+    )

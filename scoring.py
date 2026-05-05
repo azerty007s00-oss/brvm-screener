@@ -42,6 +42,7 @@ class ScoreResult:
     stop_loss: Optional[float] = None    # D1 — ATR-based, conditionné par confiance
     take_profit: Optional[float] = None  # D1 — ATR-based, ratio R/R asymétrique
     position_size_pct: Optional[float] = None  # D2 — % du capital à allouer
+    multiplicateur_liquidite: float = 1.0  # D2 — facteur de pondération par liquidité (0.25–1.0)
 
 
 # ─── Calcul du score ──────────────────────────────────────────────────────────
@@ -502,6 +503,20 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
     # Dampening données lacunaires (E1) : données sparse → signal moins fiable
     if getattr(ind, "data_quality_flag", "ok") == "sparse":
         score = round(score * 0.8)
+
+    # Multiplicateur de confiance basé sur la liquidité (D2)
+    # Volume moyen 20j < 100 titres/jour → signal quasi-inexploitable sur BRVM
+    _vol = ind.volume_moy20 if ind.volume_moy20 is not None else 0.0
+    if _vol >= 500:
+        _mult_liq = 1.0
+    elif _vol >= 200:
+        _mult_liq = 0.75
+    elif _vol >= 100:
+        _mult_liq = 0.50
+    else:
+        _mult_liq = 0.25
+    score = round(score * _mult_liq)
+    result.multiplicateur_liquidite = _mult_liq
 
     points_positifs = [c.points for c in criteres if c.points > 0]
     points_negatifs = [c.points for c in criteres if c.points < 0]
