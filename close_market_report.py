@@ -32,7 +32,9 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+from analysis import nb_actions_entier
 from config import (
+    CAPITAL_DEFAUT,
     DEFAULT_HORIZON,
     TICKER_NAMES,
     TICKER_TO_SIKA_ID,
@@ -41,6 +43,9 @@ from indicators import compute_indicators
 from scraper import get_ohlcv
 from scoring import compute_score
 from tracking import get_open_trades, update_open_trades
+
+# Capital de reference : variable d'environnement CAPITAL_TOTAL ou valeur config
+_CAPITAL = int(os.environ.get("CAPITAL_TOTAL", CAPITAL_DEFAUT))
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -299,7 +304,8 @@ def build_html_report(
             "<th style='padding:8px;text-align:left'>Ticker</th>"
             "<th>Signal</th><th>Entree (FCFA)</th>"
             "<th>Stop Loss</th><th>Take Profit</th>"
-            "<th>R/R</th><th>Taille pos.</th><th>Confiance</th>"
+            f"<th>Nb actions</th><th>Montant</th>"
+            "<th>R/R</th><th>Confiance</th>"
             "</tr>"
         )
         for i, r in enumerate(new_signals):
@@ -307,9 +313,10 @@ def build_html_report(
             sig_color = "#0F6E56" if r["signal"] == "ACHAT" else "#A32D2D"
             sig_arrow = "+" if r["signal"] == "ACHAT" else "-"
             rr_str    = f"{r['rr']:.1f}x" if r["rr"] else "-"
-            pos_str   = f"{r['position_pct']:.0f}%" if r.get("position_pct") else "-"
             sl_str    = f"{r['stop_loss']:,.0f}" if r["stop_loss"] else "-"
             tp_str    = f"{r['take_profit']:,.0f}" if r["take_profit"] else "-"
+            nb        = nb_actions_entier(_CAPITAL, r.get("position_pct"), r["entry_price"])
+            montant   = nb * r["entry_price"] if nb > 0 else 0
             p.append(
                 f"<tr style='background:{bg}'>"
                 f"<td style='padding:7px;border-bottom:1px solid #eee'>"
@@ -320,8 +327,9 @@ def build_html_report(
                 f"<td style='text-align:right'>{r['entry_price']:,.0f}</td>"
                 f"<td style='text-align:right;color:#A32D2D'>{sl_str}</td>"
                 f"<td style='text-align:right;color:#0F6E56'>{tp_str}</td>"
+                f"<td style='text-align:center'><b>{nb}</b></td>"
+                f"<td style='text-align:right'>{montant:,.0f}</td>"
                 f"<td style='text-align:center'><b>{rr_str}</b></td>"
-                f"<td style='text-align:center'>{pos_str}</td>"
                 f"<td style='text-align:center'>{r['confiance']}</td>"
                 f"</tr>"
             )

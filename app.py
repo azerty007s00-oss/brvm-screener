@@ -17,9 +17,9 @@ import plotly.graph_objects as go
 import streamlit as st
 from plotly.subplots import make_subplots
 
-from analysis import build_analyse
+from analysis import build_analyse, nb_actions_entier
 from cache import cache
-from config import PERIODES_DISPONIBLES, BRVM_INDEX_TICKER, HORIZON_PROFILES, DEFAULT_HORIZON, TICKER_NAMES, TICKER_GROUPS
+from config import PERIODES_DISPONIBLES, BRVM_INDEX_TICKER, HORIZON_PROFILES, DEFAULT_HORIZON, TICKER_NAMES, TICKER_GROUPS, CAPITAL_DEFAUT
 from indicators import compute_indicators
 from scoring import compute_score
 from scraper import get_ohlcv, get_news, TickerNotFoundError, InsufficientDataError, SourceStructureChangedError
@@ -165,6 +165,20 @@ with st.sidebar:
         help=f"Horizon sélectionné : {jours_min} jours min. recommandés"
     )
     days = periodes_filtrees[periode_label]
+
+    # ── Capital du portefeuille (pour sizing en actions entières) ─────────────
+    st.markdown("**Capital disponible (FCFA)**")
+    capital = st.number_input(
+        "Capital",
+        min_value=100_000,
+        max_value=1_000_000_000,
+        value=int(st.session_state.get("capital", CAPITAL_DEFAUT)),
+        step=100_000,
+        format="%d",
+        label_visibility="collapsed",
+        help="Utilisé pour calculer le nombre entier d'actions à acheter (pas de fractions sur la BRVM)",
+    )
+    st.session_state["capital"] = capital
 
     analyser_btn = st.button("🔍 Analyser", type="primary", use_container_width=True)
 
@@ -449,9 +463,14 @@ def render_signal_card(result: dict) -> None:
                 f"ATR = {ind.atr_pct:.2f}% ({ind.atr:,.0f} FCFA)"
             )
             if score.position_size_pct is not None:
+                _cap = st.session_state.get("capital", CAPITAL_DEFAUT)
+                _nb  = nb_actions_entier(_cap, score.position_size_pct, ind.cours_actuel)
+                _montant = _nb * ind.cours_actuel if _nb > 0 else 0
                 st.info(
                     f"**Sizing indicatif (risque 1% capital, avec haircut liquidité)** : "
-                    f"allouer ~{score.position_size_pct:.1f}% du portefeuille sur ce titre.",
+                    f"**{_nb} action(s)** à {ind.cours_actuel:,.0f} FCFA = "
+                    f"{_montant:,.0f} FCFA "
+                    f"({score.position_size_pct:.1f}% du capital de {_cap:,.0f} FCFA)",
                     icon="📐",
                 )
 
@@ -1019,7 +1038,11 @@ def render_recap_table(results: dict) -> None:
             "Confiance": score.confiance.capitalize(),
             "Stop Loss": f"{score.stop_loss:,.0f}" if score.stop_loss is not None else "-",
             "Take Profit": f"{score.take_profit:,.0f}" if score.take_profit is not None else "-",
-            "Sizing (%)": f"{score.position_size_pct:.1f}%" if score.position_size_pct is not None else "-",
+            "Nb actions": str(nb_actions_entier(
+                st.session_state.get("capital", CAPITAL_DEFAUT),
+                score.position_size_pct,
+                ind.cours_actuel,
+            )) if score.position_size_pct is not None else "-",
         })
 
     if not rows:

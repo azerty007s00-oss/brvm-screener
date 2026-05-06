@@ -400,6 +400,14 @@ CI_FIXED_HOLIDAYS: list[tuple[int, int]] = [
 ]
 
 
+# ─── Capital de référence (sizing en actions entières) ────────────────────────
+
+# Capital total du portefeuille en FCFA.
+# Utilisé pour convertir position_size_pct en nombre entier d'actions.
+# Modifier selon votre portefeuille réel. Peut être surchargé via la variable
+# d'environnement CAPITAL_TOTAL (GitHub Actions / Streamlit Secrets).
+CAPITAL_DEFAUT: int = 1_000_000   # 1 million FCFA par défaut
+
 # ─── Diagnostique de liquidité ────────────────────────────────────────────────
 
 DIAGNOSTIC_WINDOW_DAYS = 365         # Fenêtre d'analyse (jours calendaires)

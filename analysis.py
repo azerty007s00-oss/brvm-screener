@@ -3,6 +3,7 @@ analysis.py - Analyse chartiste narrative et rapport complet pour un ticker BRVM
 """
 
 import logging
+import math
 from dataclasses import dataclass
 from typing import Optional
 
@@ -108,6 +109,29 @@ def compute_position_size(
             raw *= 0.85
 
     return round(min(10.0, max(1.0, raw)), 1)
+
+
+def nb_actions_entier(
+    capital: float,
+    position_pct: Optional[float],
+    prix: float,
+) -> int:
+    """
+    Nombre entier d'actions achetables sur la BRVM (pas de fractions d'actions).
+
+    Args:
+        capital:      Capital total disponible en FCFA.
+        position_pct: % du capital a allouer (de compute_position_size).
+        prix:         Prix unitaire de l'action en FCFA.
+
+    Returns:
+        Nombre entier d'actions (floor), 0 si donnees invalides.
+    """
+    if not capital or not position_pct or not prix:
+        return 0
+    if capital <= 0 or position_pct <= 0 or prix <= 0:
+        return 0
+    return math.floor(capital * position_pct / 100 / prix)
 
 
 def _vwap_risk_levels(
