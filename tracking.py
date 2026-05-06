@@ -1,5 +1,5 @@
-"""
-tracking.py — Journal de tracking des signaux BRVM.
+﻿"""
+tracking.py - Journal de tracking des signaux BRVM.
 
 Un enregistrement = 1 signal exploitable (ACHAT/VENTE + D1 actif) à t0.
 Persiste dans journal_signaux.csv. Mise à jour des sorties à chaque run.
@@ -43,7 +43,7 @@ _COLUMNS = [
 
 
 # ─── Backend GitHub (Streamlit Cloud) ────────────────────────────────────────
-# Même pattern que auth.py/users.json — fallback local si credentials absents.
+# Même pattern que auth.py/users.json - fallback local si credentials absents.
 
 _GH_FILE = "journal_signaux.csv"
 
@@ -95,7 +95,7 @@ def _load() -> pd.DataFrame:
         try:
             return _load_github(token, repo)
         except Exception as e:
-            logger.warning(f"[Tracking] GitHub load failed, fallback local — {e}")
+            logger.warning(f"[Tracking] GitHub load failed, fallback local - {e}")
     if not JOURNAL_PATH.exists():
         return pd.DataFrame(columns=_COLUMNS)
     df = pd.read_csv(JOURNAL_PATH, dtype=str)
@@ -112,7 +112,7 @@ def _save(df: pd.DataFrame) -> None:
             _save_github(df, token, repo)
             return
         except Exception as e:
-            logger.warning(f"[Tracking] GitHub save failed, fallback local — {e}")
+            logger.warning(f"[Tracking] GitHub save failed, fallback local - {e}")
     df.to_csv(JOURNAL_PATH, index=False)
 
 
@@ -145,7 +145,7 @@ def log_signal(ind, score, today: Optional[date] = None) -> bool:
     Enregistre un signal exploitable dans le journal CSV.
 
     Filtre : signal ACHAT/VENTE ET stop_loss non None (D1 actif).
-    Guard  : 1 trade max par ticker — ignore si un trade est déjà ouvert.
+    Guard  : 1 trade max par ticker - ignore si un trade est déjà ouvert.
     Dédoublonnage : même ticker + même date + même signal → ignoré.
 
     Returns:
@@ -162,7 +162,7 @@ def log_signal(ind, score, today: Optional[date] = None) -> bool:
         open_mask = df["exit_date"].isna() | (df["exit_date"] == "")
         open_tickers = set(df[open_mask]["ticker"].tolist())
         if str(ind.ticker) in open_tickers:
-            logger.debug(f"[Tracking] Trade déjà ouvert — {ind.ticker} ignoré")
+            logger.debug(f"[Tracking] Trade déjà ouvert - {ind.ticker} ignoré")
             return False
 
         # Cooldown post-sortie : évite les ré-entrées bruitées sans changement structurel
@@ -173,7 +173,7 @@ def log_signal(ind, score, today: Optional[date] = None) -> bool:
                 days_since = ((today or date.today()) - exit_d).days
                 if days_since < COOLDOWN_DAYS:
                     logger.debug(
-                        f"[Tracking] Cooldown — {ind.ticker} ({days_since}j < {COOLDOWN_DAYS}j)"
+                        f"[Tracking] Cooldown - {ind.ticker} ({days_since}j < {COOLDOWN_DAYS}j)"
                     )
                     return False
             except (ValueError, TypeError):
@@ -185,7 +185,7 @@ def log_signal(ind, score, today: Optional[date] = None) -> bool:
             & (df["signal"] == score.signal)
         )
         if dup.any():
-            logger.debug(f"[Tracking] Doublon ignoré — {ind.ticker} {today_str}")
+            logger.debug(f"[Tracking] Doublon ignoré - {ind.ticker} {today_str}")
             return False
 
     rr = None
@@ -222,7 +222,7 @@ def log_signal(ind, score, today: Optional[date] = None) -> bool:
 
     df = pd.concat([df, pd.DataFrame([row])], ignore_index=True)
     _save(df)
-    logger.info(f"[Tracking] Signal loggé — {ind.ticker} {score.signal} @ {ind.cours_actuel}")
+    logger.info(f"[Tracking] Signal loggé - {ind.ticker} {score.signal} @ {ind.cours_actuel}")
     return True
 
 
@@ -236,7 +236,7 @@ def update_open_trades(
     Vérifie stop / target / timeout sur tous les trades ouverts.
 
     Args:
-        ticker_prices: {ticker: prix_actuel} — tous les tickers du screener
+        ticker_prices: {ticker: prix_actuel} - tous les tickers du screener
         today:         date du jour (défaut = date.today())
 
     Returns:
@@ -419,7 +419,7 @@ def get_kpis() -> dict:
         ),
     }
 
-    # Ventilation par niveau de confiance — le test clé du modèle C1
+    # Ventilation par niveau de confiance - le test clé du modèle C1
     by_conf = {}
     for conf in ("forte", "modérée", "faible"):
         sub = valid[valid["confiance"] == conf]

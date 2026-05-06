@@ -1,5 +1,5 @@
-"""
-tests/test_scoring.py — Tests unitaires pour compute_score().
+﻿"""
+tests/test_scoring.py - Tests unitaires pour compute_score().
 Aucun appel réseau, aucun scraping : TechnicalIndicators construits à la main.
 """
 
@@ -52,7 +52,7 @@ def _make_achat() -> TechnicalIndicators:
     )
 
 
-# ─── TEST 1 — Signal NEUTRE quand tous les indicateurs sont neutres ────────────
+# ─── TEST 1 - Signal NEUTRE quand tous les indicateurs sont neutres ────────────
 
 def test_signal_neutre():
     """Flags bullish/haussier sans valeurs numériques → N/D → score=0 → NEUTRE."""
@@ -63,7 +63,7 @@ def test_signal_neutre():
     )
 
 
-# ─── TEST 2 — Signal ACHAT quand 3 groupes haussiers alignés ──────────────────
+# ─── TEST 2 - Signal ACHAT quand 3 groupes haussiers alignés ──────────────────
 
 def test_signal_achat():
     """3 groupes alignés → ACHAT avec confiance forte ou modérée."""
@@ -77,7 +77,7 @@ def test_signal_achat():
     )
 
 
-# ─── TEST 3 — Signal VENTE quand 3 groupes baissiers alignés ──────────────────
+# ─── TEST 3 - Signal VENTE quand 3 groupes baissiers alignés ──────────────────
 
 def test_signal_vente():
     """3 groupes baissiers alignés → VENTE."""
@@ -107,7 +107,7 @@ def test_signal_vente():
     )
 
 
-# ─── TEST 4 — Cap ±2 par groupe respecté ──────────────────────────────────────
+# ─── TEST 4 - Cap ±2 par groupe respecté ──────────────────────────────────────
 
 def test_cap_par_groupe():
     """Timing brut = RSI(+1)+DivRSI(+1)+Stoch(+1) = 3, cappé à 2 → score_total <= 2."""
@@ -143,7 +143,7 @@ def test_cap_par_groupe():
     )
 
 
-# ─── TEST 5 — Dampening sparse : score réduit à 80% ──────────────────────────
+# ─── TEST 5 - Dampening sparse : score réduit à 80% ──────────────────────────
 
 def test_dampening_sparse():
     """data_quality_flag='sparse' → score réduit à ~80% du score normal."""
@@ -165,7 +165,7 @@ def test_dampening_sparse():
     )
 
 
-# ─── TEST 6 — Filtre liquidité : volume_moy20=100 → critère Liquidité -1 ──────
+# ─── TEST 6 - Filtre liquidité : volume_moy20=100 → critère Liquidité -1 ──────
 
 def test_filtre_liquidite():
     """volume_moy20 très bas → critère Liquidité présent avec points=-1."""
@@ -185,7 +185,7 @@ def test_filtre_liquidite():
     )
 
 
-# ─── TEST 7 — Confiance faible si données insuffisantes ───────────────────────
+# ─── TEST 7 - Confiance faible si données insuffisantes ───────────────────────
 
 def test_confiance_faible_donnees_insuffisantes():
     """Tous les indicateurs clés à None → nb_groupes_actifs=0 → confiance faible."""
@@ -202,7 +202,7 @@ def test_confiance_faible_donnees_insuffisantes():
     )
 
 
-# ─── TEST 8 — RSI uptrend : pénalité >65 supprimée ───────────────────────────
+# ─── TEST 8 - RSI uptrend : pénalité >65 supprimée ───────────────────────────
 
 def test_rsi_uptrend_no_penalty():
     """
@@ -229,7 +229,7 @@ def test_rsi_uptrend_no_penalty():
     )
 
 
-# ─── TEST 9 — RSI > 65 hors uptrend : hard ceiling actif ─────────────────────
+# ─── TEST 9 - RSI > 65 hors uptrend : hard ceiling actif ─────────────────────
 
 def test_rsi_no_uptrend_hard_ceiling():
     """
@@ -255,7 +255,7 @@ def test_rsi_no_uptrend_hard_ceiling():
     )
 
 
-# ─── TEST 10 — Stochastic > 80 en uptrend : neutre (pas de pénalité) ─────────
+# ─── TEST 10 - Stochastic > 80 en uptrend : neutre (pas de pénalité) ─────────
 
 def test_stoch_uptrend_neutral():
     """
@@ -281,7 +281,7 @@ def test_stoch_uptrend_neutral():
     )
 
 
-# ─── TEST 11 — Signal ACHAT signal TF idéal (RSI uptrend + 3 groupes alignés) ─
+# ─── TEST 11 - Signal ACHAT signal TF idéal (RSI uptrend + 3 groupes alignés) ─
 
 def test_signal_achat_tf_uptrend():
     """

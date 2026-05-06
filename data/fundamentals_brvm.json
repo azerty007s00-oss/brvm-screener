@@ -1,8 +1,8 @@
-{
+﻿{
   "_meta": {
     "version": "1.1",
-    "description": "Données fondamentales BRVM — fichier statique curated",
-    "sources": "Rapports annuels BRVM, SikaFinance, BRVM.org — données publiques",
+    "description": "Données fondamentales BRVM - fichier statique curated",
+    "sources": "Rapports annuels BRVM, SikaFinance, BRVM.org - données publiques",
     "annee_donnees": 2023,
     "date_mise_a_jour": "2025-01-01",
     "note": "BPA et dividende issus des résultats FY2023. PER et rendement calculés dynamiquement avec le cours live. À mettre à jour après chaque publication annuelle.",
@@ -74,7 +74,7 @@
       "confiance": "moyenne"
     },
     "SIBC": {
-      "nom": "SIB — Société Ivoirienne de Banque",
+      "nom": "SIB - Société Ivoirienne de Banque",
       "pays": "Côte d'Ivoire",
       "secteur": "Banques",
       "nb_actions_millions": 15.0,
@@ -132,7 +132,7 @@
       "dividende": 3,
       "annee_dividende": 2023,
       "confiance": "haute",
-      "note": "Très grand nombre d'actions — cours en FCFA <20"
+      "note": "Très grand nombre d'actions - cours en FCFA <20"
     },
     "ORGT": {
       "nom": "Oragroup Togo",
@@ -225,7 +225,7 @@
       "confiance": "estimee"
     },
     "SPHC": {
-      "nom": "SAPH CI — Caoutchouc",
+      "nom": "SAPH CI - Caoutchouc",
       "pays": "Côte d'Ivoire",
       "secteur": "Agro-industrie",
       "nb_actions_millions": 4.0,
@@ -295,7 +295,7 @@
       "confiance": "estimee"
     },
     "STBC": {
-      "nom": "SITAB CI — Tabac",
+      "nom": "SITAB CI - Tabac",
       "pays": "Côte d'Ivoire",
       "secteur": "Industrie",
       "nb_actions_millions": 1.5,
@@ -305,7 +305,7 @@
       "confiance": "estimee"
     },
     "CIEC": {
-      "nom": "CIE — Électricité CI",
+      "nom": "CIE - Électricité CI",
       "pays": "Côte d'Ivoire",
       "secteur": "Énergie & Utilities",
       "nb_actions_millions": 10.0,
@@ -315,7 +315,7 @@
       "confiance": "moyenne"
     },
     "SDCC": {
-      "nom": "SODECI — Eau CI",
+      "nom": "SODECI - Eau CI",
       "pays": "Côte d'Ivoire",
       "secteur": "Énergie & Utilities",
       "nb_actions_millions": 5.0,

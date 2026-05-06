@@ -1,11 +1,45 @@
 {
-  "tielinasoro2206@gmail.com": {
+  "s.tielina.a@gmail.com": {
     "name": "Tiélina SORO",
+    "email": "s.tielina.a@gmail.com",
+    "reason": "JE SUIS LE BOSS",
+    "status": "rejected",
+    "requested_at": "2026-04-14T22:02:28.574086",
+    "rejected_at": "2026-04-14T22:03:05.361045"
+  },
+  "s.tielina.a1@gmail.com": {
+    "name": "Tiélina SORO",
+    "email": "s.tielina.a1@gmail.com",
+    "reason": "JE SUIS LE BOSS.",
+    "status": "rejected",
+    "requested_at": "2026-04-14T22:04:05.942973",
+    "rejected_at": "2026-04-14T22:05:33.725204"
+  },
+  "AZERTY007S00@gmail.com": {
+    "name": "Tiélina SORO",
+    "email": "AZERTY007S00@gmail.com",
+    "reason": "JE SUIS LE BOSS.",
+    "status": "approved",
+    "requested_at": "2026-04-14T22:04:39.787087",
+    "password_hash": "e0928eadc5e7873594e1008ec05d303455bd59070a80e6e3aa6955299ca9a7c6",
+    "approved_at": "2026-04-14T22:06:06.223935"
+  },
+  "tsoro@ca-agilauto.fr": {
+    "name": "Tiélina PRO",
+    "email": "tsoro@ca-agilauto.fr",
+    "reason": "",
+    "status": "approved",
+    "requested_at": "2026-04-17T09:14:45.971904",
+    "password_hash": "6f328e4a88c662cb7b6937929e6fec6c454d7267a52af4b1ff2b87a7861d94aa",
+    "approved_at": "2026-04-17T09:16:13.857778"
+  },
+  "tielinasoro2206@gmail.com": {
+    "name": "Tiélina 2",
     "email": "tielinasoro2206@gmail.com",
     "reason": "",
     "status": "approved",
-    "requested_at": "2026-05-05T04:55:16.233722",
-    "password_hash": "$2b$12$esrbUHww3.nM6ZxZmWB5IuQgiyIn5RDcep1jKxy260uO349bIgQrq",
-    "approved_at": "2026-05-05T04:56:09.293636"
+    "requested_at": "2026-04-21T22:02:25.894718",
+    "password_hash": "e03a38dbfee1c9d4f92ba904df3c40a79a86ed0d270fe8342867909ce95a731e",
+    "approved_at": "2026-04-21T22:02:48.756839"
   }
 }

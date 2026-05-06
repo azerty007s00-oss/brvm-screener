@@ -1,4 +1,4 @@
-# BRVM Screener — Dépendances
+﻿# BRVM Screener - Dépendances
 # Python 3.10+
 # Installation : pip install -r requirements.txt
 

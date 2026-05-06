@@ -1,5 +1,5 @@
-"""
-auth.py — Systeme d'authentification pour BRVM Screener
+﻿"""
+auth.py - Systeme d'authentification pour BRVM Screener
 Gestion des demandes d'acces par email avec approbation admin.
 """
 import hashlib
@@ -30,7 +30,7 @@ def get_config():
     """Recupere la configuration depuis st.secrets."""
     secret_key = st.secrets.get("SECRET_KEY", "")
     if not secret_key:
-        st.error("⛔ SECRET_KEY manquant dans st.secrets — configurer .streamlit/secrets.toml")
+        st.error("⛔ SECRET_KEY manquant dans st.secrets - configurer .streamlit/secrets.toml")
         st.stop()
     return {
         "admin_email": st.secrets.get("ADMIN_EMAIL", ""),
@@ -92,7 +92,7 @@ def _verify_password(password: str, stored_hash: str) -> bool:
         # Hash bcrypt moderne
         return bcrypt.checkpw(password.encode(), stored_hash.encode())
     else:
-        # Hash SHA-256 legacy — migration transparente au prochain login
+        # Hash SHA-256 legacy - migration transparente au prochain login
         legacy = hashlib.sha256(password.encode()).hexdigest()
         return hmac.compare_digest(legacy, stored_hash)
 
@@ -131,7 +131,7 @@ def _verify_token(email: str, token: str) -> bool:
 
 
 def _invalidate_token(email: str) -> None:
-    """Supprime le token après usage unique — empêche toute réutilisation du lien."""
+    """Supprime le token après usage unique - empêche toute réutilisation du lien."""
     users = _get_users_from_github()
     if email in users:
         users[email].pop("approval_token", None)

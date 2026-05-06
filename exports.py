@@ -1,5 +1,5 @@
-"""
-exports.py — Export Excel/CSV des résultats d'analyse BRVM.
+﻿"""
+exports.py - Export Excel/CSV des résultats d'analyse BRVM.
 
 Génère un fichier Excel multi-onglets avec :
 - Résumé (signal, score, indicateurs clés)

@@ -1,4 +1,4 @@
-# requirements-lock.txt — Versions exactes validées (2026-05-05)
+﻿# requirements-lock.txt - Versions exactes validées (2026-05-05)
 # Généré depuis l'environnement de développement Python 3.13
 # Usage prod : pip install -r requirements-lock.txt
 

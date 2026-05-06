@@ -1,5 +1,5 @@
-"""
-rss_feeds.py — Agrégateur d'actualités BRVM via flux RSS et scraping ciblé.
+﻿"""
+rss_feeds.py - Agrégateur d'actualités BRVM via flux RSS et scraping ciblé.
 
 Stratégie en cascade :
 1. Flux RSS de sikafinance.com (si dispo)

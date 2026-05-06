@@ -1,5 +1,5 @@
-"""
-fundamentals.py — Analyse fondamentale pour actions BRVM.
+﻿"""
+fundamentals.py - Analyse fondamentale pour actions BRVM.
 
 Stratégie :
   1. Source PRIMAIRE : data/fundamentals_brvm.json (fichier statique curated)
@@ -7,7 +7,7 @@ Stratégie :
      → PER et rendement calculés dynamiquement avec le cours live
      → Capitalisation calculée dynamiquement avec cours live × nb_actions
   2. Source SECONDAIRE : scraper SikaFinance (52 semaines high/low uniquement)
-     → Ces données changent chaque jour — impossible à mettre en statique
+     → Ces données changent chaque jour - impossible à mettre en statique
 """
 
 import json
@@ -108,7 +108,7 @@ class FundamentalData:
     # Cours actuel (pour calculs)
     cours_actuel: Optional[float] = None
 
-    # Score fondamental (0–10)
+    # Score fondamental (0-10)
     score_fondamental: Optional[float] = None
     score_detail: dict = field(default_factory=dict)
 
@@ -221,7 +221,7 @@ def _compute_derived(data: FundamentalData, cours: float) -> None:
 def _fetch_52w_from_sika(data: FundamentalData, sika_id: str) -> None:
     """
     Récupère uniquement le plus haut et plus bas 52 semaines depuis SikaFinance.
-    Ces valeurs changent chaque jour — impossible à mettre en statique.
+    Ces valeurs changent chaque jour - impossible à mettre en statique.
     """
     url = f"{SIKA_BASE_URL}/marches/cotation/{sika_id}"
 
@@ -277,11 +277,11 @@ def _fetch_52w_from_sika(data: FundamentalData, sika_id: str) -> None:
 
 def _compute_fundamental_score(data: FundamentalData) -> tuple:
     """
-    Score fondamental 0–10 :
-    - Valorisation (PER)       : 0–3 pts
-    - Rendement dividende       : 0–3 pts
-    - Position vs 52 semaines   : 0–2 pts
-    - Capitalisation            : 0–2 pts
+    Score fondamental 0-10 :
+    - Valorisation (PER)       : 0-3 pts
+    - Rendement dividende       : 0-3 pts
+    - Position vs 52 semaines   : 0-2 pts
+    - Capitalisation            : 0-2 pts
     """
     detail = {}
     total = 0.0
@@ -291,15 +291,15 @@ def _compute_fundamental_score(data: FundamentalData) -> tuple:
     if data.per is not None and data.per > 0:
         max_possible += 3
         if data.per < 8:
-            pts, comment = 3.0, f"PER={data.per:.1f} — très attractif"
+            pts, comment = 3.0, f"PER={data.per:.1f} - très attractif"
         elif data.per < 12:
-            pts, comment = 2.0, f"PER={data.per:.1f} — raisonnable"
+            pts, comment = 2.0, f"PER={data.per:.1f} - raisonnable"
         elif data.per < 20:
-            pts, comment = 1.0, f"PER={data.per:.1f} — moyen"
+            pts, comment = 1.0, f"PER={data.per:.1f} - moyen"
         elif data.per < 30:
-            pts, comment = 0.5, f"PER={data.per:.1f} — élevé"
+            pts, comment = 0.5, f"PER={data.per:.1f} - élevé"
         else:
-            pts, comment = 0.0, f"PER={data.per:.1f} — très élevé"
+            pts, comment = 0.0, f"PER={data.per:.1f} - très élevé"
         total += pts
         detail["valorisation"] = {"points": pts, "max": 3, "comment": comment}
 
@@ -308,13 +308,13 @@ def _compute_fundamental_score(data: FundamentalData) -> tuple:
         max_possible += 3
         rdt = data.rendement_dividende
         if rdt >= 6:
-            pts, comment = 3.0, f"Rendement {rdt:.1f}% — très attractif"
+            pts, comment = 3.0, f"Rendement {rdt:.1f}% - très attractif"
         elif rdt >= 4:
-            pts, comment = 2.0, f"Rendement {rdt:.1f}% — bon"
+            pts, comment = 2.0, f"Rendement {rdt:.1f}% - bon"
         elif rdt >= 2:
-            pts, comment = 1.0, f"Rendement {rdt:.1f}% — modeste"
+            pts, comment = 1.0, f"Rendement {rdt:.1f}% - modeste"
         elif rdt > 0:
-            pts, comment = 0.5, f"Rendement {rdt:.1f}% — faible"
+            pts, comment = 0.5, f"Rendement {rdt:.1f}% - faible"
         else:
             pts, comment = 0.0, "Pas de dividende"
         total += pts
@@ -325,13 +325,13 @@ def _compute_fundamental_score(data: FundamentalData) -> tuple:
         max_possible += 2
         pct = data.pct_from_52w_high
         if pct > -5:
-            pts, comment = 0.5, f"{pct:+.1f}% du plus haut — près du sommet"
+            pts, comment = 0.5, f"{pct:+.1f}% du plus haut - près du sommet"
         elif pct > -15:
-            pts, comment = 1.0, f"{pct:+.1f}% du plus haut — zone médiane"
+            pts, comment = 1.0, f"{pct:+.1f}% du plus haut - zone médiane"
         elif pct > -30:
-            pts, comment = 1.5, f"{pct:+.1f}% du plus haut — potentiel de rattrapage"
+            pts, comment = 1.5, f"{pct:+.1f}% du plus haut - potentiel de rattrapage"
         else:
-            pts, comment = 2.0, f"{pct:+.1f}% du plus haut — forte décote"
+            pts, comment = 2.0, f"{pct:+.1f}% du plus haut - forte décote"
         total += pts
         detail["position_52s"] = {"points": pts, "max": 2, "comment": comment}
 
@@ -340,13 +340,13 @@ def _compute_fundamental_score(data: FundamentalData) -> tuple:
         max_possible += 2
         cap = data.capitalisation
         if cap > 500_000:
-            pts, comment = 2.0, f"{cap:,.0f}M FCFA — grande cap (liquidité)"
+            pts, comment = 2.0, f"{cap:,.0f}M FCFA - grande cap (liquidité)"
         elif cap > 50_000:
-            pts, comment = 1.5, f"{cap:,.0f}M FCFA — cap moyenne"
+            pts, comment = 1.5, f"{cap:,.0f}M FCFA - cap moyenne"
         elif cap > 10_000:
-            pts, comment = 1.0, f"{cap:,.0f}M FCFA — petite cap"
+            pts, comment = 1.0, f"{cap:,.0f}M FCFA - petite cap"
         else:
-            pts, comment = 0.5, f"{cap:,.0f}M FCFA — micro cap"
+            pts, comment = 0.5, f"{cap:,.0f}M FCFA - micro cap"
         total += pts
         detail["capitalisation"] = {"points": pts, "max": 2, "comment": comment}
 

@@ -1,5 +1,5 @@
-"""
-analysis.py — Analyse chartiste narrative et rapport complet pour un ticker BRVM.
+﻿"""
+analysis.py - Analyse chartiste narrative et rapport complet pour un ticker BRVM.
 """
 
 import logging
@@ -48,7 +48,7 @@ class AnalyseComplete:
     alertes: list[str] = None
 
     # Horizon recommandé
-    horizon: str = "Moyen terme (1–6 mois)"
+    horizon: str = "Moyen terme (1-6 mois)"
 
     def __post_init__(self):
         if self.alertes is None:
@@ -63,7 +63,7 @@ def compute_position_size(
     risk_pct: float = 1.0,
 ) -> Optional[float]:
     """
-    D2 — Position sizing hiérarchisé par confiance et potentiel de gain.
+    D2 - Position sizing hiérarchisé par confiance et potentiel de gain.
 
     base        = risk_pct / stop_distance_pct × 100
     conf_factor = forte=1.0 | modérée=0.65 | faible=0.35
@@ -237,7 +237,7 @@ def compute_risk_levels(
         if stop is not None and target is not None:
             return stop, target
 
-    # ── Fallback 1 : VWAP (daily uniquement — sans sens sur barres mensuelles) ─
+    # ── Fallback 1 : VWAP (daily uniquement - sans sens sur barres mensuelles) ─
     if not monthly and df is not None and p["vwap_window"] > 0 and len(df) >= p["vwap_window"]:
         stop, target = _vwap_risk_levels(
             prix, df, ind.atr, score.signal,
@@ -317,16 +317,16 @@ def build_analyse(
     # ── Alertes ───────────────────────────────────────────────────────────────
     analyse.alertes = _build_alertes(ind, score)
 
-    # ── Risk levels D1 + position sizing D2 — enrichit score in-place ──────────
+    # ── Risk levels D1 + position sizing D2 - enrichit score in-place ──────────
     score.stop_loss, score.take_profit = compute_risk_levels(score, ind, df)
     score.position_size_pct = compute_position_size(score, ind)
 
-    # ── Journal de tracking J1 — log automatique des signaux exploitables ─────
+    # ── Journal de tracking J1 - log automatique des signaux exploitables ─────
     try:
         from tracking import log_signal
         log_signal(ind, score)
     except Exception as _e:
-        logger.debug(f"[Tracking] Skipped — {_e}")
+        logger.debug(f"[Tracking] Skipped - {_e}")
 
     # ── Synthèse courte (format one-liner) ───────────────────────────────────
     analyse.synthese_courte = _build_synthese_courte(ind, score)
@@ -386,7 +386,7 @@ def _build_tendance(ind: TechnicalIndicators, df: Optional[pd.DataFrame]) -> str
     if perf_str:
         parts.append(perf_str.strip(" |"))
 
-    return " — ".join(parts)
+    return " - ".join(parts)
 
 
 def _build_momentum(ind: TechnicalIndicators) -> str:
@@ -412,7 +412,7 @@ def _build_momentum(ind: TechnicalIndicators) -> str:
             }
             label = div_labels.get(ind.rsi_divergence, "")
             detail = ind.rsi_divergence_detail if ind.rsi_divergence_detail else ""
-            parts.append(f"{label} — {detail}" if detail else label)
+            parts.append(f"{label} - {detail}" if detail else label)
 
     # MACD
     if ind.macd_line is not None and ind.macd_signal_line is not None:
@@ -452,19 +452,19 @@ def _build_chartiste(ind: TechnicalIndicators) -> str:
     """Décrit la configuration chartiste détectée."""
     configs = {
         "canal_ascendant": (
-            "Canal ascendant — série de hauts et bas croissants sur 20 séances. "
+            "Canal ascendant - série de hauts et bas croissants sur 20 séances. "
             "Tendance clairement haussière à court terme."
         ),
         "canal_descendant": (
-            "Canal descendant — série de hauts et bas décroissants sur 20 séances. "
+            "Canal descendant - série de hauts et bas décroissants sur 20 séances. "
             "Pression vendeuse persistante."
         ),
         "range_lateral": (
-            "Range latéral — oscillation < 5% sur 20 séances. "
+            "Range latéral - oscillation < 5% sur 20 séances. "
             "Attendre une sortie de range pour prendre position."
         ),
         "squeeze_bollinger": (
-            "Squeeze Bollinger — bandes très resserrées. "
+            "Squeeze Bollinger - bandes très resserrées. "
             "Forte contraction de la volatilité, explosion imminente possible dans les deux sens."
         ),
         "indéterminé": "Configuration chartiste indéterminée sur la période d'analyse.",
@@ -504,7 +504,7 @@ def _build_volume(ind: TechnicalIndicators) -> str:
 
     return (
         f"Volume actuel {ind.volume_actuel:,.0f} titres "
-        f"({sign}{ind.volume_relatif_pct:.0f}% vs moy. 20j) — {niveau}"
+        f"({sign}{ind.volume_relatif_pct:.0f}% vs moy. 20j) - {niveau}"
     )
 
 
@@ -514,9 +514,9 @@ def _build_alertes(ind: TechnicalIndicators, score: ScoreResult) -> list[str]:
 
     if ind.rsi is not None:
         if ind.rsi < 20:
-            alertes.append("⚠️ RSI extrêmement bas (< 20) — survente excessive, rebond technique probable")
+            alertes.append("⚠️ RSI extrêmement bas (< 20) - survente excessive, rebond technique probable")
         elif ind.rsi > 80:
-            alertes.append("⚠️ RSI extrêmement haut (> 80) — surachat excessif, risque de correction")
+            alertes.append("⚠️ RSI extrêmement haut (> 80) - surachat excessif, risque de correction")
 
     # Divergence RSI
     if ind.rsi_divergence in ("haussiere_forte", "baissiere_forte"):
@@ -524,31 +524,31 @@ def _build_alertes(ind: TechnicalIndicators, score: ScoreResult) -> list[str]:
         alertes.append(f"{emoji} {ind.rsi_divergence_detail}")
 
     if ind.bb_squeeze:
-        alertes.append("⚡ Squeeze Bollinger actif — explosion de volatilité imminente")
+        alertes.append("⚡ Squeeze Bollinger actif - explosion de volatilité imminente")
 
     if ind.volume_relatif_pct > 100:
-        alertes.append(f"📊 Volume exceptionnel (+{ind.volume_relatif_pct:.0f}% vs moy20j) — surveiller la direction")
+        alertes.append(f"📊 Volume exceptionnel (+{ind.volume_relatif_pct:.0f}% vs moy20j) - surveiller la direction")
 
     if ind.ma_signal == "golden_cross":
-        alertes.append("🚀 Golden Cross confirmé — signal d'achat fort")
+        alertes.append("🚀 Golden Cross confirmé - signal d'achat fort")
 
     if ind.ma_signal == "death_cross":
-        alertes.append("💀 Death Cross confirmé — signal de vente fort")
+        alertes.append("💀 Death Cross confirmé - signal de vente fort")
 
     # Convergence RSI + Stochastic
     if ind.rsi is not None and ind.stoch_k is not None:
         if ind.rsi < 30 and ind.stoch_k < 20:
-            alertes.append("🔥 Double survente RSI + Stochastic — signal de rebond renforcé")
+            alertes.append("🔥 Double survente RSI + Stochastic - signal de rebond renforcé")
         elif ind.rsi > 70 and ind.stoch_k > 80:
-            alertes.append("🔥 Double surachat RSI + Stochastic — signal de correction renforcé")
+            alertes.append("🔥 Double surachat RSI + Stochastic - signal de correction renforcé")
 
     # ADX tendance forte
     if ind.adx is not None and ind.adx > 40:
         di_dir = "haussière" if (ind.plus_di or 0) > (ind.minus_di or 0) else "baissière"
-        alertes.append(f"💪 ADX très élevé ({ind.adx}) — tendance {di_dir} très forte")
+        alertes.append(f"💪 ADX très élevé ({ind.adx}) - tendance {di_dir} très forte")
 
     if score.confiance == "faible":
-        alertes.append("ℹ️ Données partielles — signaux à confirmer avant toute décision")
+        alertes.append("ℹ️ Données partielles - signaux à confirmer avant toute décision")
 
     if ind.perf_vs_index_1m and abs(ind.perf_vs_index_1m) > 10:
         direction = "surperformance" if ind.perf_vs_index_1m > 0 else "sous-performance"
@@ -561,7 +561,7 @@ def _build_alertes(ind: TechnicalIndicators, score: ScoreResult) -> list[str]:
 
     # Drawdown sévère
     if hasattr(ind, "drawdown_current") and ind.drawdown_current is not None and ind.drawdown_current < -15:
-        alertes.append(f"📉 Drawdown important ({ind.drawdown_current:.1f}%) — prix bien en-dessous du plus haut récent")
+        alertes.append(f"📉 Drawdown important ({ind.drawdown_current:.1f}%) - prix bien en-dessous du plus haut récent")
 
     # Événements techniques forts récents
     events = getattr(ind, "events", [])
@@ -631,7 +631,7 @@ def _build_divergence(ind: TechnicalIndicators) -> str:
     }
     label = labels.get(ind.rsi_divergence, "Divergence détectée")
     detail = ind.rsi_divergence_detail or ""
-    return f"{label} — {detail}" if detail else label
+    return f"{label} - {detail}" if detail else label
 
 
 def _build_synthese_courte(ind: TechnicalIndicators, score: ScoreResult) -> str:
@@ -645,7 +645,7 @@ def _build_synthese_courte(ind: TechnicalIndicators, score: ScoreResult) -> str:
         "death_cross": "Baissier fort",
         "neutre": "Neutre",
     }
-    tendance = tendance_labels.get(ind.ma_signal, "—")
+    tendance = tendance_labels.get(ind.ma_signal, "-")
 
     rsi_str = f"RSI={ind.rsi}" if ind.rsi else "RSI=N/D"
     macd_str = f"MACD {ind.macd_signal}" if ind.macd_signal != "neutre" else ""
@@ -731,4 +731,4 @@ def _build_events(ind: TechnicalIndicators) -> str:
         for e in moderate[:2]:
             parts.append(f"  [{e['date']}] {e['description']}")
 
-    return " — ".join(parts) if len(parts) <= 3 else "\n".join(parts)
+    return " - ".join(parts) if len(parts) <= 3 else "\n".join(parts)

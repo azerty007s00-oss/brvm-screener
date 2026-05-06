@@ -1,5 +1,5 @@
-"""
-sanity_check.py — Validation rapide du pipeline Phase 2 + D1.
+﻿"""
+sanity_check.py - Validation rapide du pipeline Phase 2 + D1.
 
 5 profils synthétiques :
   1. Haussier fort (large cap liquide)
@@ -35,7 +35,7 @@ def _df(prices, volumes=None, n=None):
 
 
 def make_trending_up(n=250):
-    """Tendance haussière régulière — score positif attendu."""
+    """Tendance haussière régulière - score positif attendu."""
     rng = np.random.RandomState(1)
     returns = rng.normal(0.006, 0.008, n)
     prices = 1000 * np.exp(np.cumsum(returns))
@@ -44,7 +44,7 @@ def make_trending_up(n=250):
 
 
 def make_trending_down(n=250):
-    """Tendance baissière régulière — score négatif attendu."""
+    """Tendance baissière régulière - score négatif attendu."""
     rng = np.random.RandomState(2)
     returns = rng.normal(-0.006, 0.008, n)
     prices = 1000 * np.exp(np.cumsum(returns))
@@ -53,7 +53,7 @@ def make_trending_down(n=250):
 
 
 def make_range(n=250):
-    """Marché en range — score proche de 0 attendu."""
+    """Marché en range - score proche de 0 attendu."""
     rng = np.random.RandomState(3)
     t = np.linspace(0, 4 * np.pi, n)
     prices = 1000 + 40 * np.sin(t) + rng.normal(0, 5, n)
@@ -62,7 +62,7 @@ def make_range(n=250):
 
 
 def make_illiquid_small_cap(n=250):
-    """Small cap illiquide — volume faible, prix quasi-flat → _vol_mult clamp attendu."""
+    """Small cap illiquide - volume faible, prix quasi-flat → _vol_mult clamp attendu."""
     rng = np.random.RandomState(4)
     returns = rng.normal(0.0005, 0.002, n)      # volatilité très faible
     prices = 500 * np.exp(np.cumsum(returns))
@@ -138,9 +138,9 @@ def report(label: str, df: pd.DataFrame):
     if score.score_total != 0 and score.confiance == "forte" and s_m == 0 and s_t == 0:
         issues.append("⚠ confiance forte sans groupes momentum/trend actifs")
     if stop is not None and score.signal == "ACHAT" and stop >= ind.cours_actuel:
-        issues.append("⚠ stop > prix sur ACHAT — incohérence directionnelle")
+        issues.append("⚠ stop > prix sur ACHAT - incohérence directionnelle")
     if stop is not None and score.signal == "VENTE" and stop <= ind.cours_actuel:
-        issues.append("⚠ stop < prix sur VENTE — incohérence directionnelle")
+        issues.append("⚠ stop < prix sur VENTE - incohérence directionnelle")
 
     if issues:
         for iss in issues:
@@ -153,7 +153,7 @@ def report(label: str, df: pd.DataFrame):
 
 if __name__ == "__main__":
     np.random.seed(0)
-    print("\nSANITY CHECK — Phase 2 + D1")
+    print("\nSANITY CHECK - Phase 2 + D1")
     report("1. Haussier fort (large cap)",    make_trending_up())
     report("2. Baissier clair",               make_trending_down())
     report("3. Range complet",                make_range())

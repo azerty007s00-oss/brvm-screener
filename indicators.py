@@ -1,7 +1,7 @@
-"""
-indicators.py — Calcul des indicateurs techniques sur données OHLCV BRVM.
+﻿"""
+indicators.py - Calcul des indicateurs techniques sur données OHLCV BRVM.
 
-Implémentation pure pandas/numpy (sans pandas-ta) pour compatibilité Python 3.10–3.13.
+Implémentation pure pandas/numpy (sans pandas-ta) pour compatibilité Python 3.10-3.13.
 """
 
 import logging
@@ -132,7 +132,7 @@ def _calc_atr(
     high: pd.Series, low: pd.Series, close: pd.Series,
     period: int = 14,
 ) -> Optional[pd.Series]:
-    """ATR de Wilder — formule identique à _calc_adx pour cohérence interne."""
+    """ATR de Wilder - formule identique à _calc_adx pour cohérence interne."""
     if len(close) < period + 1:
         return None
     tr1 = high - low
@@ -158,8 +158,8 @@ class TechnicalIndicators:
     # RSI
     rsi: Optional[float] = None
     rsi_signal: str = "neutre"        # survendu | neutre | suracheté
-    rsi_p10: Optional[float] = None   # seuil survendu adaptatif (C2) — percentile 10 local
-    rsi_p90: Optional[float] = None   # seuil suracheté adaptatif (C2) — percentile 90 local
+    rsi_p10: Optional[float] = None   # seuil survendu adaptatif (C2) - percentile 10 local
+    rsi_p90: Optional[float] = None   # seuil suracheté adaptatif (C2) - percentile 90 local
 
     # Moyennes mobiles
     ma20: Optional[float] = None
@@ -204,7 +204,7 @@ class TechnicalIndicators:
     minus_di: Optional[float] = None
     adx_signal: str = "neutre"        # tendance_forte | tendance_moderee | pas_de_tendance
     atr: Optional[float] = None           # ATR absolu (Wilder, période ADX)
-    atr_pct: Optional[float] = None       # ATR / close[-1] × 100 — comparable cross-tickers BRVM
+    atr_pct: Optional[float] = None       # ATR / close[-1] × 100 - comparable cross-tickers BRVM
 
     # Supports / Résistances
     support: Optional[float] = None
@@ -214,7 +214,7 @@ class TechnicalIndicators:
     perf_1m: Optional[float] = None   # % sur 1 mois
     perf_3m: Optional[float] = None   # % sur 3 mois
     perf_vs_index_1m: Optional[float] = None        # alpha brut vs BRVMC (%)
-    perf_vs_index_1m_atr_norm: Optional[float] = None  # alpha / atr_pct — ATR space (B3)
+    perf_vs_index_1m_atr_norm: Optional[float] = None  # alpha / atr_pct - ATR space (B3)
 
     # Divergence RSI
     rsi_divergence: str = "aucune"       # aucune | haussiere | baissiere | haussiere_forte | baissiere_forte
@@ -246,7 +246,11 @@ class TechnicalIndicators:
     pct_from_52w_high: Optional[float] = None  # % par rapport au plus haut 52 semaines
 
     # Qualité des données (E1)
-    data_quality_flag: str = "ok"   # ok | gaps | sparse — dégrade C1 confiance
+    data_quality_flag: str = "ok"   # ok | gaps | sparse - dégrade C1 confiance
+
+    # ── BRVM-aware (Phase 2) ──
+    liquidity_tier: str = "INCONNU"         # LIQUIDE | SEMI_LIQUIDE | ILLIQUIDE | INCONNU
+    volume_median_nonzero: float = 0.0      # médiane volume séances non-zéro (20j)
 
     # Séries temporelles pour les graphiques
     series: dict = field(default_factory=dict)
@@ -279,7 +283,7 @@ def _fill_ohlcv_gaps(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DatetimeIndex]:
             df_filled["volume"] = df_filled["volume"].fillna(0)
         return df_filled, added_days
     except Exception as exc:
-        logger.debug(f"[Gaps] interpolation ignorée — {exc}")
+        logger.debug(f"[Gaps] interpolation ignorée - {exc}")
         return df, pd.DatetimeIndex([])
 
 
@@ -361,7 +365,7 @@ def compute_indicators(
     low = df["low"]
     volume = df["volume"] if "volume" in df.columns else pd.Series(0, index=df.index)
 
-    # ── Gap detection (E1) — trous de cotation impactent indicateurs temporels ─
+    # ── Gap detection (E1) - trous de cotation impactent indicateurs temporels ─
     if len(df) >= 5:
         date_diffs = pd.Series(df.index).diff().dt.days.dropna()
         n_gaps = int((date_diffs > 10).sum())   # > 10 jours cal. = trou non-férié
@@ -377,7 +381,7 @@ def compute_indicators(
             (close.iloc[-1] / close.iloc[-2] - 1) * 100, 2
         )
 
-    # ── ATR — calculé avant RSI pour que atr_pct soit disponible (B1) ────────
+    # ── ATR - calculé avant RSI pour que atr_pct soit disponible (B1) ────────
     # Même période qu'ADX → cohérence Wilder ; close.iloc[-1] pour référence temporelle
     atr_s = _calc_atr(high, low, close, period=ADX_PERIOD)
     if atr_s is not None:
@@ -409,7 +413,7 @@ def compute_indicators(
                     atr_pct=result.atr_pct,
                 )
 
-                # Seuils adaptatifs RSI (C2) — percentile local, fenêtre adaptative
+                # Seuils adaptatifs RSI (C2) - percentile local, fenêtre adaptative
                 # Fallback 30/70 si distribution comprimée (spread < 15 pts RSI)
                 rsi_clean = rsi_series.dropna()
                 if len(rsi_clean) >= 60:
@@ -436,7 +440,7 @@ def compute_indicators(
         if ma50_s is not None:
             result.ma50 = round(float(ma50_s.iloc[-1]), 2) if pd.notna(ma50_s.iloc[-1]) else None
             result.series["ma50"] = ma50_s.dropna().round(2).to_dict()
-            # Pente normalisée % sur 5 séances — comparable cross-tickers (BRVM multi-cap)
+            # Pente normalisée % sur 5 séances - comparable cross-tickers (BRVM multi-cap)
             # Robuste aux gaps : on travaille sur la série clean, pas sur iloc absolu
             ma50_clean = ma50_s.dropna()
             if len(ma50_clean) >= 6:
@@ -533,7 +537,7 @@ def compute_indicators(
                 (result.volume_actuel / result.volume_moy20 - 1) * 100, 2
             )
 
-        # Turnover FCFA : volume × cours — filtre plus fiable que le volume seul
+        # Turnover FCFA : volume × cours - filtre plus fiable que le volume seul
         close_slice = close.iloc[-vol_window:]
         turnover_slice = vol_slice * close_slice
         result.turnover_moy20_fcfa = round(float(turnover_slice.mean()), 0)
@@ -541,6 +545,10 @@ def compute_indicators(
         # Thin trading bias : % de jours sans transaction sur 20j
         zero_days = int((vol_slice == 0).sum())
         result.zero_volume_days_pct = round(zero_days / len(vol_slice) * 100, 1)
+
+        # Médiane volume séances non-zéro (brvm_aware - Phase 2)
+        nonzero_vols = vol_slice[vol_slice > 0]
+        result.volume_median_nonzero = float(nonzero_vols.median()) if len(nonzero_vols) > 0 else 0.0
 
     # ── OHLC synthétique : high=low=close sur >50% des barres → ATR biaisé ───
     if "high" in df.columns and "low" in df.columns:
@@ -609,7 +617,7 @@ def compute_indicators(
         index_perf_1m = _compute_perf(df_index["close"], 21)
         if index_perf_1m is not None and result.perf_1m is not None:
             result.perf_vs_index_1m = round(result.perf_1m - index_perf_1m, 2)
-            # ATR-normalized alpha (B3) — atr_pct déjà disponible (calculé avant RSI)
+            # ATR-normalized alpha (B3) - atr_pct déjà disponible (calculé avant RSI)
             if result.atr_pct is not None and result.atr_pct > 0:
                 result.perf_vs_index_1m_atr_norm = round(
                     result.perf_vs_index_1m / result.atr_pct, 3
@@ -658,6 +666,12 @@ def compute_indicators(
         result.series["plus_di"] = plus_di_s.dropna().round(2).to_dict()
         result.series["minus_di"] = minus_di_s.dropna().round(2).to_dict()
 
+    # ── Tier de liquidité BRVM-aware (Phase 2) ────────────────────────────────
+    # Résolution depuis LIQUIDITY_TIERS dans config.py.
+    # Le dict est vide par défaut ; peuplé après run de diagnostics.py.
+    from config import LIQUIDITY_TIERS as _LT
+    result.liquidity_tier = _LT.get(ticker, "INCONNU")
+
     return result
 
 
@@ -696,10 +710,10 @@ _VOL_MULT_HI      = 2.0   # plafond  : marché violent / illiquidité extrême
 
 
 def _vol_mult(atr_pct: Optional[float]) -> float:
-    """Multiplicateur volatilité borné — appliqué à TOUS les seuils adaptatifs."""
+    """Multiplicateur volatilité borné - appliqué à TOUS les seuils adaptatifs."""
     if atr_pct is None or atr_pct <= 0:
         return 1.0
-    if atr_pct < 0.3 * _BRVM_REF_ATR_PCT:   # titre quasi-figé — ATR non représentatif
+    if atr_pct < 0.3 * _BRVM_REF_ATR_PCT:   # titre quasi-figé - ATR non représentatif
         return 1.0
     return max(_VOL_MULT_LO, min(_VOL_MULT_HI, atr_pct / _BRVM_REF_ATR_PCT))
 
@@ -751,7 +765,7 @@ def _detect_rsi_divergence(
             if not np.isnan(r[i]):
                 pivot_lows.append((i, c[i], r[i]))
 
-    # Seuil forte adaptatif — via VNL (B2) : 3.0% × vol_mult, borné [2.0%, 6.0%]
+    # Seuil forte adaptatif - via VNL (B2) : 3.0% × vol_mult, borné [2.0%, 6.0%]
     seuil_forte = 3.0 * _vol_mult(atr_pct)
 
     # === Divergence baissière : comparer les 2 derniers pivot highs ===
@@ -875,7 +889,7 @@ def _compute_drawdown(close: pd.Series, window: int = 63) -> tuple[Optional[floa
     Calcule le drawdown max et le drawdown courant sur une fenêtre glissante.
 
     Returns:
-        (drawdown_max_pct, drawdown_current_pct) — valeurs négatives
+        (drawdown_max_pct, drawdown_current_pct) - valeurs négatives
     """
     if len(close) < window:
         return None, None
@@ -922,7 +936,7 @@ def _detect_macd_divergence(
         if m[i] > m[i-1] and m[i] > m[i+1] and m[i] > 0:
             peaks.append((i, c[i], m[i]))
 
-    # Swing minimum adaptatif — via VNL (B2) : 1.0% × vol_mult
+    # Swing minimum adaptatif - via VNL (B2) : 1.0% × vol_mult
     seuil_min = 1.0 * _vol_mult(atr_pct)
 
     # Divergence haussière : prix descend, MACD hist remonte
@@ -992,7 +1006,7 @@ def _detect_events(
                     events.append({
                         "type": "golden_cross",
                         "date": str(idx)[:10],
-                        "description": "Golden Cross — MA courte croise au-dessus de la MA longue",
+                        "description": "Golden Cross - MA courte croise au-dessus de la MA longue",
                         "importance": "forte",
                     })
                 # Death cross : MA20 passe en-dessous de MA50
@@ -1000,7 +1014,7 @@ def _detect_events(
                     events.append({
                         "type": "death_cross",
                         "date": str(idx)[:10],
-                        "description": "Death Cross — MA courte croise en-dessous de la MA longue",
+                        "description": "Death Cross - MA courte croise en-dessous de la MA longue",
                         "importance": "forte",
                     })
 
@@ -1056,14 +1070,14 @@ def _detect_events(
                     events.append({
                         "type": "macd_crossover",
                         "date": str(idx)[:10],
-                        "description": "MACD croise au-dessus du signal — momentum haussier",
+                        "description": "MACD croise au-dessus du signal - momentum haussier",
                         "importance": "modérée",
                     })
                 elif diff.iloc[i] < 0 and diff.iloc[i - 1] >= 0:
                     events.append({
                         "type": "macd_crossover",
                         "date": str(idx)[:10],
-                        "description": "MACD croise en-dessous du signal — momentum baissier",
+                        "description": "MACD croise en-dessous du signal - momentum baissier",
                         "importance": "modérée",
                     })
 
@@ -1076,14 +1090,14 @@ def _detect_events(
                 events.append({
                     "type": "rsi_extreme",
                     "date": str(rsi_s.index[i])[:10],
-                    "description": f"RSI extrêmement bas ({val:.0f}) — survente excessive",
+                    "description": f"RSI extrêmement bas ({val:.0f}) - survente excessive",
                     "importance": "forte",
                 })
             elif val > 80:
                 events.append({
                     "type": "rsi_extreme",
                     "date": str(rsi_s.index[i])[:10],
-                    "description": f"RSI extrêmement haut ({val:.0f}) — surachat excessif",
+                    "description": f"RSI extrêmement haut ({val:.0f}) - surachat excessif",
                     "importance": "forte",
                 })
 

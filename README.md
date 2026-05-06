@@ -1,21 +1,21 @@
-# 📈 BRVM Stock Screener — Investment Pioneers
+﻿# 📈 BRVM Stock Screener - Investment Pioneers
 
 Analyse technique multi-critères pour actions BRVM (Bourse Régionale des Valeurs Mobilières).
 
 ## Fonctionnalités
 
 ### Indicateurs techniques
-- **RSI (14)** — Relative Strength Index
-- **Stochastic (14,3)** — Oscillateur stochastique (%K / %D)
-- **ADX (14)** — Average Directional Index (force de la tendance)
-- **Moyennes Mobiles** — MA20, MA50, MA200 (ou MA100 en fallback adaptatif)
-- **Golden / Death Cross** — croisements MA
-- **MACD (12,26,9)** — ligne, signal, histogramme
-- **Bandes de Bollinger (20,2)** — squeeze détecté automatiquement
-- **Volume relatif** — vs moyenne 20 jours
-- **Performance relative** — alpha vs indice BRVMC
-- **Supports / Résistances** — extrema locaux sur 20 séances
-- **Configuration chartiste** — canal ascendant/descendant, range, squeeze
+- **RSI (14)** - Relative Strength Index
+- **Stochastic (14,3)** - Oscillateur stochastique (%K / %D)
+- **ADX (14)** - Average Directional Index (force de la tendance)
+- **Moyennes Mobiles** - MA20, MA50, MA200 (ou MA100 en fallback adaptatif)
+- **Golden / Death Cross** - croisements MA
+- **MACD (12,26,9)** - ligne, signal, histogramme
+- **Bandes de Bollinger (20,2)** - squeeze détecté automatiquement
+- **Volume relatif** - vs moyenne 20 jours
+- **Performance relative** - alpha vs indice BRVMC
+- **Supports / Résistances** - extrema locaux sur 20 séances
+- **Configuration chartiste** - canal ascendant/descendant, range, squeeze
 
 ### Scoring multi-critères
 7 critères → score de -8 à +8 :
@@ -52,10 +52,10 @@ streamlit run app.py
 
 ## Changelog v2
 
-- ✅ **Fix Tendance LT** — MA adaptative (MA200 → MA100 fallback) : plus de "N/D" systématique
-- ✅ **Stochastic Oscillator** — nouvel indicateur + critère de scoring + graphique
-- ✅ **ADX** — force de tendance avec +DI/-DI
-- ✅ **Actualités** — scraping news Sika Finance par titre
-- ✅ **Alertes enrichies** — convergence RSI+Stochastic, ADX forte tendance
-- ✅ **Tableau récap** — colonnes Stoch %K et ADX ajoutées
-- ✅ **Scoring étendu** — 7 critères (ajout Stochastic), range -8/+8
+- ✅ **Fix Tendance LT** - MA adaptative (MA200 → MA100 fallback) : plus de "N/D" systématique
+- ✅ **Stochastic Oscillator** - nouvel indicateur + critère de scoring + graphique
+- ✅ **ADX** - force de tendance avec +DI/-DI
+- ✅ **Actualités** - scraping news Sika Finance par titre
+- ✅ **Alertes enrichies** - convergence RSI+Stochastic, ADX forte tendance
+- ✅ **Tableau récap** - colonnes Stoch %K et ADX ajoutées
+- ✅ **Scoring étendu** - 7 critères (ajout Stochastic), range -8/+8

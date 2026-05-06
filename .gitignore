@@ -1,10 +1,10 @@
-__pycache__/
+﻿__pycache__/
 *.pyc
 *.pyo
 .cache/
 .env
 *.log
 
-# Fichiers locaux — gérés via GitHub API en production
+# Fichiers locaux - gérés via GitHub API en production
 journal_signaux.csv
 portfolio.json

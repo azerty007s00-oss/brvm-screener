@@ -1,5 +1,5 @@
-"""
-test_sr_rr.py — Test de 3 méthodes S/R pour améliorer le placement stop/target.
+﻿"""
+test_sr_rr.py - Test de 3 méthodes S/R pour améliorer le placement stop/target.
 
 Méthodes testées :
   SR1. Pivots price action  : stop = dernier swing low, target = dernier swing high
@@ -320,7 +320,7 @@ def row(label, r: BacktestResult, base: BacktestResult = None):
 
 def detail(label, r: BacktestResult):
     df = r.trades
-    print(f"\n  {label} — sorties détaillées :")
+    print(f"\n  {label} - sorties détaillées :")
     for reason, grp in df.groupby("exit_reason"):
         wr  = (grp["pnl_pct"] > 0).mean() * 100
         avg = grp["pnl_pct"].mean()
@@ -335,20 +335,20 @@ print(f"{'='*125}")
 print(f"  {'Méthode':<42}  {'n':>4}  {'WR':>7}  {'Exp':>8}  {'Return':>9}  {'DD':>5}  "
       f"{'RR':>5}  {'stops':>6}  {'tgts':>5}  Delta")
 print(f"  {'-'*42}  {'-'*4}  {'-'*7}  {'-'*8}  {'-'*9}  {'-'*5}  {'-'*5}  {'-'*6}  {'-'*5}")
-print("  [calcul en cours — baseline...]")
+print("  [calcul en cours - baseline...]")
 
 r_base = BacktestEngineSR(**BASE_KWARGS, sr_method="baseline").run(data_all)
 row("0. Baseline (ATR-only, 2% frais)", r_base)
 
-print("  [SR1 — Pivots price action...]")
+print("  [SR1 - Pivots price action...]")
 r_pivot = BacktestEngineSR(**BASE_KWARGS, sr_method="pivot").run(data_all)
 row("SR1. Pivots price action", r_pivot, r_base)
 
-print("  [SR2 — Fibonacci retracements...]")
+print("  [SR2 - Fibonacci retracements...]")
 r_fib = BacktestEngineSR(**BASE_KWARGS, sr_method="fib").run(data_all)
 row("SR2. Fibonacci 61.8%/161.8%", r_fib, r_base)
 
-print("  [SR3 — Volume profile (VWAP)...]")
+print("  [SR3 - Volume profile (VWAP)...]")
 r_vol = BacktestEngineSR(**BASE_KWARGS, sr_method="volume").run(data_all)
 row("SR3. Volume profile / VWAP", r_vol, r_base)
 

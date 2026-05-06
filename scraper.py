@@ -1,5 +1,5 @@
-"""
-scraper.py — Collecte de données OHLCV depuis Sika Finance pour la BRVM.
+﻿"""
+scraper.py - Collecte de données OHLCV depuis Sika Finance pour la BRVM.
 
 Stratégie :
 1. Résoudre le ticker en identifiant Sika Finance (ex: BICC → BICC.ci)
@@ -75,7 +75,7 @@ class InsufficientDataError(Exception):
 
 
 class SourceStructureChangedError(Exception):
-    """La structure HTML/JSON de la source a changé — mise à jour du scraper requise."""
+    """La structure HTML/JSON de la source a changé - mise à jour du scraper requise."""
 
 
 # ─── Résolution du ticker → ID Sika Finance ──────────────────────────────────
@@ -415,7 +415,7 @@ def get_ohlcv(ticker: str, days: int = 365, period: str = "daily") -> pd.DataFra
     df = None
     errors = []
 
-    # 3. API POST GetHistos — source primaire
+    # 3. API POST GetHistos - source primaire
     try:
         df = _fetch_sika_api(sika_id, days, period=period)
     except Exception as e:
@@ -455,10 +455,10 @@ def get_ohlcv(ticker: str, days: int = 365, period: str = "daily") -> pd.DataFra
             "Le titre a peut-être trop peu d'historique ou est peu coté."
         )
 
-    # Validation qualité (E1) — log sans bloquer
+    # Validation qualité (E1) - log sans bloquer
     _validate_ohlcv(df, ticker)
 
-    # Mise en cache — convertir l'index DatetimeIndex en str pour JSON
+    # Mise en cache - convertir l'index DatetimeIndex en str pour JSON
     df_cache = df.copy()
     df_cache.index = df_cache.index.strftime("%Y-%m-%d")
     cache.set(cache_key, df_cache.to_dict())
@@ -469,7 +469,7 @@ def get_ohlcv(ticker: str, days: int = 365, period: str = "daily") -> pd.DataFra
 
 def _validate_ohlcv(df: pd.DataFrame, ticker: str) -> None:
     """
-    Contrôle qualité post-scrape — log des anomalies sans bloquer le pipeline.
+    Contrôle qualité post-scrape - log des anomalies sans bloquer le pipeline.
     Détecte : données trop sparse, OHLCV incohérent, staleness.
     """
     if df is None or df.empty:
@@ -482,7 +482,7 @@ def _validate_ohlcv(df: pd.DataFrame, ticker: str) -> None:
     nan_rate = df["close"].isna().mean()
     if nan_rate > 0.20:
         issues.append(
-            f"close NaN rate={nan_rate:.0%} — possible structure change on Sika Finance"
+            f"close NaN rate={nan_rate:.0%} - possible structure change on Sika Finance"
         )
 
     # 2. Cohérence OHLCV (high >= low et close dans [low, high])
@@ -495,7 +495,7 @@ def _validate_ohlcv(df: pd.DataFrame, ticker: str) -> None:
         if pct_c_ok < 0.90:
             issues.append(f"close hors [low,high] sur {1-pct_c_ok:.0%} des séances")
 
-    # 3. Staleness — dernière date > 15 jours ouvrés
+    # 3. Staleness - dernière date > 15 jours ouvrés
     try:
         last_date = pd.to_datetime(df.index[-1])
         lag_days = (pd.Timestamp.today() - last_date).days
@@ -507,7 +507,7 @@ def _validate_ohlcv(df: pd.DataFrame, ticker: str) -> None:
     # 4. Zéros pathologiques sur close (erreur de parsing, non NaN)
     zero_rate = (df["close"] == 0).mean()
     if zero_rate > 0.05:
-        issues.append(f"close=0 sur {zero_rate:.0%} des séances — vérifier le parsing")
+        issues.append(f"close=0 sur {zero_rate:.0%} des séances - vérifier le parsing")
 
     # 5. Heuristique splits/dividendes exceptionnels (variation journalière > 30%)
     close_clean = df["close"].dropna()
@@ -517,7 +517,7 @@ def _validate_ohlcv(df: pd.DataFrame, ticker: str) -> None:
         if not split_candidates.empty:
             dates_str = ", ".join(str(d)[:10] for d in split_candidates.index[:5])
             issues.append(
-                f"Variation(s) journalière(s) > 30% détectée(s) aux dates : {dates_str} — "
+                f"Variation(s) journalière(s) > 30% détectée(s) aux dates : {dates_str} - "
                 "possible split ou dividende exceptionnel. Vérifier sur sikafinance.com"
             )
 
@@ -526,7 +526,7 @@ def _validate_ohlcv(df: pd.DataFrame, ticker: str) -> None:
 
     if issues:
         logger.warning(
-            f"[DataQuality] {ticker}: {len(issues)} anomalie(s) détectée(s) — "
+            f"[DataQuality] {ticker}: {len(issues)} anomalie(s) détectée(s) - "
             "données utilisées avec réserve"
         )
 

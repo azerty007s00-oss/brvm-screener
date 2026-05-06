@@ -1,9 +1,9 @@
-"""
-backtest.py — Backtest bi-mensuel BRVM (stratégie long-only).
+﻿"""
+backtest.py - Backtest bi-mensuel BRVM (stratégie long-only).
 
 Stratégie :
   - Revue de portefeuille toutes les REVIEW_INTERVAL_DAYS (défaut 14j)
-  - Entrée uniquement sur signal ACHAT (pas de short — interdit sur la BRVM)
+  - Entrée uniquement sur signal ACHAT (pas de short - interdit sur la BRVM)
   - Sortie sur :
       1. Stop loss intraday (vérifié à chaque barre)
       2. Take profit intraday (vérifié à chaque barre)
@@ -48,7 +48,7 @@ MIN_PRICE             = 500.0  # prix min en FCFA (exclut les penny stocks type 
 
 # Tous les tickers actions (hors indices)
 INDICES   = {"BRVMC", "BRVM30", "BRVM-IN", "BRVM-TEL", "BRVM-EN"}
-BLACKLIST = {"SPHC"}   # WR 20%, exp -2.01% sur 5 ans — exclu définitivement
+BLACKLIST = {"SPHC"}   # WR 20%, exp -2.01% sur 5 ans - exclu définitivement
 ALL_TICKERS = [t for t in TICKER_NAMES if t not in INDICES and t not in BLACKLIST]
 
 
@@ -261,7 +261,7 @@ class BacktestEngine:
                     if days_held >= self.max_holding_days:
                         self._close(ticker, current_price, current_date, "timeout_3m")
                     else:
-                        # 2. Stop / target — vérifié sur high/low intraday
+                        # 2. Stop / target - vérifié sur high/low intraday
                         self._check_stop_target(ticker, current_low, current_high, current_date)
 
                 # ── Revue bi-mensuelle ────────────────────────────────────
@@ -274,7 +274,7 @@ class BacktestEngine:
                         if not self._is_regime_ok(ts):
                             continue
 
-                        # M2 — Fixing théorique : aucune transaction si volume=0
+                        # M2 - Fixing théorique : aucune transaction si volume=0
                         current_volume = float(current_bar.get("volume", 0))
                         if current_volume == 0:
                             continue
@@ -371,7 +371,7 @@ class BacktestEngine:
         if self.stop_tolerance_days > 0:
             days_held = (current_date - pos.entry_date).days
             if days_held < self.stop_tolerance_days:
-                # Stop normal suspendu — seul un stop extrême (2× distance) déclenche la sortie
+                # Stop normal suspendu - seul un stop extrême (2× distance) déclenche la sortie
                 stop_distance = pos.entry_price - pos.stop_loss
                 extreme_stop  = pos.stop_loss - stop_distance  # = 2*stop_loss - entry_price
                 if low <= extreme_stop:
@@ -516,13 +516,13 @@ def run_backtest(
         debug                = debug,
     ).run(ticker_data)
 
-    # E1 — Métriques de risque complètes sur la courbe d'équité
+    # E1 - Métriques de risque complètes sur la courbe d'équité
     if len(result.equity_curve) >= 2:
         equity = result.equity_curve.set_index("date")["equity"]
         metrics = _compute_metrics(equity)
         result.summary.update(metrics)
 
-        # E2 — Comparaison indice BRVM Composite (si fourni)
+        # E2 - Comparaison indice BRVM Composite (si fourni)
         if benchmark_series is not None and len(benchmark_series) >= 2:
             bench_metrics = _compute_metrics(benchmark_series)
             result.summary["benchmark_total_return"] = bench_metrics["total_return"]
@@ -560,11 +560,11 @@ def fetch_and_backtest(
         try:
             df = get_ohlcv(ticker, days=days, period=data_period)
             ticker_data[ticker] = df
-            logger.info(f"[Backtest] {ticker} — {len(df)} barres ({data_period})")
+            logger.info(f"[Backtest] {ticker} - {len(df)} barres ({data_period})")
         except (TickerNotFoundError, InsufficientDataError) as exc:
-            logger.warning(f"[Backtest] {ticker} ignore — {exc}")
+            logger.warning(f"[Backtest] {ticker} ignore - {exc}")
         except Exception as exc:
-            logger.warning(f"[Backtest] {ticker} erreur fetch — {exc}")
+            logger.warning(f"[Backtest] {ticker} erreur fetch - {exc}")
 
     if not ticker_data:
         raise RuntimeError("Aucun ticker disponible pour le backtest")

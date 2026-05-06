@@ -1,5 +1,5 @@
-"""
-tests/test_indicators.py — Tests unitaires pour les fonctions d'indicators.py.
+﻿"""
+tests/test_indicators.py - Tests unitaires pour les fonctions d'indicators.py.
 Aucun appel réseau : données synthétiques uniquement.
 """
 
@@ -38,7 +38,7 @@ def _make_ohlcv_df(n: int = 100, seed: int = 42) -> pd.DataFrame:
     }, index=pd.date_range("2020-01-01", periods=n, freq="B"))
 
 
-# ─── TEST 1 — Interpolation de gaps ──────────────────────────────────────────
+# ─── TEST 1 - Interpolation de gaps ──────────────────────────────────────────
 
 def test_gap_interpolation():
     """
@@ -50,7 +50,7 @@ def test_gap_interpolation():
     Utilise une plage en mars (hors jours fériés UEMOA/CI) pour éviter les effets
     du calendrier BRVM sur le décompte attendu.
     """
-    # Plage sans jours fériés BRVM : 2 mars – 30 avril 2020 (hors 1er mai)
+    # Plage sans jours fériés BRVM : 2 mars - 30 avril 2020 (hors 1er mai)
     idx_full = pd.bdate_range("2020-03-02", "2020-04-30")   # ~43 jours ouvrés
     n = len(idx_full)
     np.random.seed(7)
@@ -81,7 +81,7 @@ def test_gap_interpolation():
         assert d in df_filled.index, f"Jour existant {d} supprimé après gap-filling"
 
 
-# ─── TEST 2 — RSI dans [0, 100] ───────────────────────────────────────────────
+# ─── TEST 2 - RSI dans [0, 100] ───────────────────────────────────────────────
 
 def test_rsi_range():
     """
@@ -99,14 +99,14 @@ def test_rsi_range():
 
     assert len(rsi_series) > 0, "La série RSI ne doit pas être vide"
     assert (rsi_series >= 0).all(), (
-        f"RSI minimum = {rsi_series.min():.2f} — inférieur à 0"
+        f"RSI minimum = {rsi_series.min():.2f} - inférieur à 0"
     )
     assert (rsi_series <= 100).all(), (
-        f"RSI maximum = {rsi_series.max():.2f} — supérieur à 100"
+        f"RSI maximum = {rsi_series.max():.2f} - supérieur à 100"
     )
 
 
-# ─── TEST 3 — Bandes de Bollinger : upper >= mid >= lower ────────────────────
+# ─── TEST 3 - Bandes de Bollinger : upper >= mid >= lower ────────────────────
 
 def test_bollinger_bands_ordering():
     """
@@ -136,7 +136,7 @@ def test_bollinger_bands_ordering():
     )
 
 
-# ─── TEST 4 — Détection action sur le capital (saut > 30%) ───────────────────
+# ─── TEST 4 - Détection action sur le capital (saut > 30%) ───────────────────
 
 def test_corporate_action_flag():
     """
@@ -162,7 +162,7 @@ def test_corporate_action_flag():
     )
 
 
-# ─── TEST 5 — Turnover FCFA : volume × cours ─────────────────────────────────
+# ─── TEST 5 - Turnover FCFA : volume × cours ─────────────────────────────────
 
 def test_turnover_fcfa_computed():
     """
@@ -189,7 +189,7 @@ def test_turnover_fcfa_computed():
     )
 
 
-# ─── TEST 6 — Thin trading bias : % jours volume=0 ───────────────────────────
+# ─── TEST 6 - Thin trading bias : % jours volume=0 ───────────────────────────
 
 def test_zero_volume_days_pct():
     """
@@ -215,7 +215,7 @@ def test_zero_volume_days_pct():
     )
 
 
-# ─── TEST 7 — Détection OHLC synthétique ─────────────────────────────────────
+# ─── TEST 7 - Détection OHLC synthétique ─────────────────────────────────────
 
 def test_synthetic_ohlc_detected():
     """

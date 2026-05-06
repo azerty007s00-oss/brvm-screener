@@ -1,5 +1,5 @@
-"""
-news_cleaner.py — Filtrage par date, déduplication, tri des actualités BRVM.
+﻿"""
+news_cleaner.py - Filtrage par date, déduplication, tri des actualités BRVM.
 """
 import re
 import logging

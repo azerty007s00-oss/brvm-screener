@@ -1,5 +1,5 @@
-"""
-batch_brvm_test.py — Validation empirique sur 12 tickers BRVM réels.
+﻿"""
+batch_brvm_test.py - Validation empirique sur 12 tickers BRVM réels.
 
 Couvre : large caps, mid caps, small caps illiquides.
 Métriques : score, signal, confiance, R/R, sizing, data_quality_flag.
@@ -94,9 +94,9 @@ def print_row(r: dict):
         return
 
     signal_icon = {"ACHAT": "+", "VENTE": "-", "NEUTRE": "~"}.get(r["signal"], "?")
-    rr_str = f"{r['rr']:.2f}" if r["rr"] else "  —  "
+    rr_str = f"{r['rr']:.2f}" if r["rr"] else "  -  "
     rr_flag = "" if r["rr"] is None else (" !" if r["rr"] < RR_MIN else "")
-    sz_str = f"{r['sizing_pct']:.1f}%" if r["sizing_pct"] else " — "
+    sz_str = f"{r['sizing_pct']:.1f}%" if r["sizing_pct"] else " - "
     dq = r["data_quality"]
     dq_flag = " [GAP]" if dq == "gaps" else " [SPARSE]" if dq == "sparse" else ""
     atr = f"{r['atr_pct']:.2f}%" if r["atr_pct"] else " N/A"
@@ -140,7 +140,7 @@ def print_summary(results: list[dict]):
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("\nBATCH TEST BRVM — modele Phase 2 + D1/D2")
+    print("\nBATCH TEST BRVM - modele Phase 2 + D1/D2")
     print("=" * 78)
     print(f"  {'Ticker':<10} {'':2} {'Signal':<6}  {'Score':>5}  {'Conf':<8}  "
           f"{'ATR':>6}  {'RSI':<5} {'ADX':<5} {'R/R':<6}  {'Sizing'}")

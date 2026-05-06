@@ -1,5 +1,5 @@
-"""
-app.py — Interface Streamlit du BRVM Stock Screener (Investment Pioneers)
+﻿"""
+app.py - Interface Streamlit du BRVM Stock Screener (Investment Pioneers)
 
 Lancement : streamlit run app.py
 """
@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # ─── Configuration Streamlit ──────────────────────────────────────────────────
 
 st.set_page_config(
-    page_title="BRVM Screener — Investment Pioneers",
+    page_title="BRVM Screener - Investment Pioneers",
     page_icon="📈",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -93,7 +93,7 @@ with st.sidebar:
     all_ticker_options = []
     for group, tickers_in_group in TICKER_GROUPS.items():
         for t in tickers_in_group:
-            label = f"{t} — {TICKER_NAMES.get(t, t)}"
+            label = f"{t} - {TICKER_NAMES.get(t, t)}"
             all_ticker_options.append((t, label, group))
 
     option_labels = [opt[1] for opt in all_ticker_options]
@@ -169,15 +169,43 @@ with st.sidebar:
     analyser_btn = st.button("🔍 Analyser", type="primary", use_container_width=True)
 
     st.divider()
-    with st.expander("ℹ️ Aide — Tickers BRVM"):
+    # ── Régime de marché (Phase 3) ───────────────────────────────────────────
+    try:
+        from market_regime import get_cached_regime, get_cached_breadth
+        from config import REGIME_EMOJIS, REGIME_COLORS
+        _regime_now = get_cached_regime()
+        if _regime_now:
+            _emoji = REGIME_EMOJIS.get(_regime_now, "📊")
+            _color = REGIME_COLORS.get(_regime_now, "#888")
+            _breadth = get_cached_breadth()
+            _details = (
+                f"MA50 {_breadth.pct_above_ma50:.0f}% · "
+                f"MA200 {_breadth.pct_above_ma200:.0f}% · "
+                f"{_breadth.nb_tickers_analyzed}/{_breadth.nb_tickers_total} titres"
+                if _breadth else ""
+            )
+            st.markdown(
+                f"<div style='padding:6px 0'>"
+                f"<span style='color:{_color};font-weight:bold'>"
+                f"{_emoji} Régime : {_regime_now}</span>"
+                f"<br><span style='font-size:0.8em;color:#888'>{_details}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.caption("📊 Régime : non calculé - analysez plusieurs titres")
+    except ImportError:
+        pass  # market_regime optionnel
+
+    with st.expander("ℹ️ Aide - Tickers BRVM"):
         st.markdown("""
 **Exemples de tickers :**
-- `BICC` — Bici Côte d'Ivoire
-- `SGBC` — Société Générale CI
-- `ONTBF` — Onatel Burkina Faso
-- `PALC` — Palm CI
-- `SNTS` — Sonatel Sénégal
-- `ETIT` — Ecobank Transnational
+- `BICC` - Bici Côte d'Ivoire
+- `SGBC` - Société Générale CI
+- `ONTBF` - Onatel Burkina Faso
+- `PALC` - Palm CI
+- `SNTS` - Sonatel Sénégal
+- `ETIT` - Ecobank Transnational
 
 [Liste complète sur sikafinance.com](https://www.sikafinance.com)
         """)
@@ -257,9 +285,9 @@ def analyser_ticker(ticker: str, days: int, horizon: str = DEFAULT_HORIZON) -> O
         elif etype == "InsufficientDataError":
             st.warning(f"⚠️ **{ticker}** : données insuffisantes.\n\n{e}")
         elif etype == "SourceStructureChangedError":
-            st.error(f"🔧 **{ticker}** : structure du site modifiée — mise à jour du scraper requise.\n\n{e}")
+            st.error(f"🔧 **{ticker}** : structure du site modifiée - mise à jour du scraper requise.\n\n{e}")
         else:
-            st.error(f"💥 **{ticker}** : erreur inattendue — {e}")
+            st.error(f"💥 **{ticker}** : erreur inattendue - {e}")
         return None
 
     return result
@@ -278,7 +306,7 @@ def render_signal_card(result: dict) -> None:
     col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
 
     with col1:
-        st.markdown(f"### {score.ticker} — {company}")
+        st.markdown(f"### {score.ticker} - {company}")
         var_text, var_color = format_variation(ind.variation_j1_pct)
         st.markdown(
             f"**{format_fcfa(ind.cours_actuel)}** &nbsp;"
@@ -288,9 +316,9 @@ def render_signal_card(result: dict) -> None:
         )
         # Plus haut / plus bas 52 semaines
         if ind.high_52w and ind.low_52w:
-            st.caption(f"52S : {ind.low_52w:,.0f} — {ind.high_52w:,.0f} FCFA"
+            st.caption(f"52S : {ind.low_52w:,.0f} - {ind.high_52w:,.0f} FCFA"
                        f" ({ind.pct_from_52w_high:+.1f}% du plus haut)" if ind.pct_from_52w_high is not None
-                       else f"52S : {ind.low_52w:,.0f} — {ind.high_52w:,.0f} FCFA")
+                       else f"52S : {ind.low_52w:,.0f} - {ind.high_52w:,.0f} FCFA")
 
     with col2:
         signal_class = f"signal-{score.signal.lower()}"
@@ -326,7 +354,7 @@ def render_signal_card(result: dict) -> None:
     if ind.volume_moy20 is not None and 0 < ind.volume_moy20 < 100:
         st.error(
             f"⛔ **Signal non exécutable** : volume moyen = {ind.volume_moy20:.0f} titres/j "
-            f"({turnover:,.0f} FCFA/j). Indicateurs non fiables — ignorer ce signal."
+            f"({turnover:,.0f} FCFA/j). Indicateurs non fiables - ignorer ce signal."
         )
     elif turnover > 0 and turnover < 500_000:
         st.error(
@@ -341,7 +369,7 @@ def render_signal_card(result: dict) -> None:
     if zero_pct > 30:
         st.warning(
             f"⚠️ **Thin trading** : {zero_pct:.0f}% de jours sans transaction sur 20 séances. "
-            "RSI/MACD calculés sur des cours reconduits — biais statistique élevé."
+            "RSI/MACD calculés sur des cours reconduits - biais statistique élevé."
         )
     if synth:
         st.warning(
@@ -361,7 +389,7 @@ def render_signal_card(result: dict) -> None:
             st.markdown(
                 f"<div class='critere-row'>"
                 f"<span style='color:{points_color};font-weight:600;min-width:28px;display:inline-block'>{points_str}</span> "
-                f"<b>{critere.nom}</b> : {critere.valeur} — "
+                f"<b>{critere.nom}</b> : {critere.valeur} - "
                 f"<span style='color:#666'>{critere.interpretation}</span>"
                 f"</div>",
                 unsafe_allow_html=True
@@ -373,7 +401,7 @@ def render_signal_card(result: dict) -> None:
             score_line = (
                 f"Score brut : {raw_score:+d} → "
                 f"<b>Score pondéré : {score.score_total:+d}</b> "
-                f"<span style='color:#BA7517'>(×{mult} — {mult_label})</span>"
+                f"<span style='color:#BA7517'>(×{mult} - {mult_label})</span>"
             )
         else:
             score_line = f"<b>Score total : {score.score_total:+d}</b>"
@@ -472,7 +500,7 @@ def render_signal_card(result: dict) -> None:
                         st.rerun()
 
         elif score.signal == "VENTE" and _in_portfolio:
-            st.warning(f"**{score.ticker}** : signal VENTE — vous détenez ce titre.", icon="⚠️")
+            st.warning(f"**{score.ticker}** : signal VENTE - vous détenez ce titre.", icon="⚠️")
             if st.button("📤 Clôturer la position", key=f"close_port_sell_{score.ticker}", type="primary"):
                 _positions_now = [p for p in _positions_now if p["ticker"] != score.ticker]
                 _save_portfolio(_positions_now)
@@ -536,7 +564,7 @@ def render_signal_card(result: dict) -> None:
 
         expander_title = "🏦 Données fondamentales"
         if fundamentals.secteur:
-            expander_title += f" — {fundamentals.secteur}"
+            expander_title += f" - {fundamentals.secteur}"
         with st.expander(expander_title, expanded=True):
             # Ligne info : secteur / pays / qualité donnée
             meta_parts = []
@@ -667,7 +695,7 @@ def render_signal_card(result: dict) -> None:
                 from news_sources import TICKER_IR_URLS
                 ir_url = TICKER_IR_URLS.get(ticker_for_news)
                 if ir_url:
-                    st.markdown(f"<div style='margin-top:10px;font-size:0.8rem'>📋 <a href='{ir_url}' target='_blank'>Relations Investisseurs — page officielle</a></div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='margin-top:10px;font-size:0.8rem'>📋 <a href='{ir_url}' target='_blank'>Relations Investisseurs - page officielle</a></div>", unsafe_allow_html=True)
             except ImportError:
                 pass
         else:
@@ -702,7 +730,7 @@ def _render_charts(result: dict) -> None:
             row_heights=[0.35, 0.12, 0.12, 0.11, 0.12, 0.18],
             vertical_spacing=0.025,
             subplot_titles=(
-                f"{company} — Prix + MM + Bollinger",
+                f"{company} - Prix + MM + Bollinger",
                 "MACD", "RSI", "Stochastic",
                 "ADX / +DI / -DI", "Volume",
             ),
@@ -956,7 +984,7 @@ def _render_heatmap(df: pd.DataFrame, company_name: str) -> None:
     ))
 
     fig.update_layout(
-        title=f"Rendements hebdomadaires — {company_name}",
+        title=f"Rendements hebdomadaires - {company_name}",
         height=300,
         plot_bgcolor="white",
         paper_bgcolor="white",
@@ -974,11 +1002,11 @@ def render_recap_table(results: dict) -> None:
         ind = result["ind"]
         score = result["score"]
         rows.append({
-            "Titre": f"{ticker} — {get_company_name(ticker)}",
+            "Titre": f"{ticker} - {get_company_name(ticker)}",
             "Cours (FCFA)": f"{ind.cours_actuel:,.0f}",
             "Var J-1 (%)": f"{ind.variation_j1_pct:+.2f}%",
             "RSI": f"{ind.rsi:.1f}" if ind.rsi else "N/D",
-            "Div. RSI": {"haussiere_forte": "↗↗", "haussiere": "↗", "baissiere_forte": "↘↘", "baissiere": "↘"}.get(ind.rsi_divergence, "—"),
+            "Div. RSI": {"haussiere_forte": "↗↗", "haussiere": "↗", "baissiere_forte": "↘↘", "baissiere": "↘"}.get(ind.rsi_divergence, "-"),
             "Stoch %K": f"{ind.stoch_k:.0f}" if ind.stoch_k else "N/D",
             "ADX": f"{ind.adx:.0f}" if ind.adx else "N/D",
             "MA Signal": score_to_ma_label(ind.ma_signal),
@@ -989,9 +1017,9 @@ def render_recap_table(results: dict) -> None:
             "Vol/j": f"{ind.volume_moy20:.0f}" if ind.volume_moy20 else "N/D",
             "Signal": f"{score.signal_emoji} {score.signal}",
             "Confiance": score.confiance.capitalize(),
-            "Stop Loss": f"{score.stop_loss:,.0f}" if score.stop_loss is not None else "—",
-            "Take Profit": f"{score.take_profit:,.0f}" if score.take_profit is not None else "—",
-            "Sizing (%)": f"{score.position_size_pct:.1f}%" if score.position_size_pct is not None else "—",
+            "Stop Loss": f"{score.stop_loss:,.0f}" if score.stop_loss is not None else "-",
+            "Take Profit": f"{score.take_profit:,.0f}" if score.take_profit is not None else "-",
+            "Sizing (%)": f"{score.position_size_pct:.1f}%" if score.position_size_pct is not None else "-",
         })
 
     if not rows:
@@ -1038,7 +1066,7 @@ def score_to_ma_label(ma_signal: str) -> str:
 # ─── Backtest ────────────────────────────────────────────────────────────────
 
 def render_backtest_page() -> None:
-    """Page Backtest — stratégie long-only, revue bi-mensuelle, tous tickers BRVM hors indices."""
+    """Page Backtest - stratégie long-only, revue bi-mensuelle, tous tickers BRVM hors indices."""
     from backtest import fetch_and_backtest, monte_carlo_permutation, WARMUP_BARS, INITIAL_CAP, REVIEW_INTERVAL_DAYS, ALL_TICKERS, INDICES
 
     st.title("🔬 Backtest BRVM")
@@ -1057,15 +1085,15 @@ def render_backtest_page() -> None:
                 "Tickers (hors indices)",
                 options=ALL_TICKERS,
                 default=ALL_TICKERS,
-                format_func=lambda t: f"{t} — {TICKER_NAMES.get(t, t)}",
+                format_func=lambda t: f"{t} - {TICKER_NAMES.get(t, t)}",
                 help="Tous les tickers actions BRVM. Les indices sont exclus.",
             )
             data_period_bt = st.radio(
                 "Historique",
                 options=["daily", "monthly"],
-                format_func=lambda x: "📅 1 an — journalier (~260 barres)" if x == "daily" else "📆 5 ans — mensuel (~60 barres)",
+                format_func=lambda x: "📅 1 an - journalier (~260 barres)" if x == "daily" else "📆 5 ans - mensuel (~60 barres)",
                 index=0,
-                help="Journalier : API SikaFinance ~260 barres. Mensuel : ~60 barres mensuelles couvrant 5 ans (2021–2026).",
+                help="Journalier : API SikaFinance ~260 barres. Mensuel : ~60 barres mensuelles couvrant 5 ans (2021-2026).",
             )
 
         with col2:
@@ -1158,7 +1186,7 @@ def render_backtest_page() -> None:
         return
 
     _period_label = "mensuel 5 ans" if data_period_bt == "monthly" else "journalier 1 an"
-    with st.spinner(f"Backtest en cours — {len(tickers_bt)} tickers, {_period_label}, revue /{review_bt}j…"):
+    with st.spinner(f"Backtest en cours - {len(tickers_bt)} tickers, {_period_label}, revue /{review_bt}j…"):
         try:
             _days = 60 if data_period_bt == "monthly" else 730
             _max_atr = 25.0 if data_period_bt == "monthly" else 4.0
@@ -1210,37 +1238,37 @@ def render_backtest_page() -> None:
     r2.metric("Gain net", f"{gain_net:+,.0f} FCFA",
               delta=f"{s['total_return_pct']:+.2f}%",
               delta_color="normal")
-    r3.metric("R réalisé moy.", f"{s['avg_r_realise']}R" if s.get("avg_r_realise") else "—")
+    r3.metric("R réalisé moy.", f"{s['avg_r_realise']}R" if s.get("avg_r_realise") else "-")
     r4.metric("Durée moy.", f"{s['avg_holding_days']:.0f}j")
-    r5.metric("Expectancy pondérée", f"{s['expectancy_weighted']:.3f}%" if s.get("expectancy_weighted") else "—",
+    r5.metric("Expectancy pondérée", f"{s['expectancy_weighted']:.3f}%" if s.get("expectancy_weighted") else "-",
               help="E × position moy. / 100")
 
     q1, q2, q3, q4 = st.columns(4)
     q1.metric(
         "CAGR",
-        f"{s['cagr']*100:+.1f}%" if s.get("cagr") is not None else "—",
+        f"{s['cagr']*100:+.1f}%" if s.get("cagr") is not None else "-",
         help="Rendement annualisé (Compound Annual Growth Rate)"
     )
     q2.metric(
         "Sharpe",
-        f"{s['sharpe']:.2f}" if s.get("sharpe") is not None else "—",
+        f"{s['sharpe']:.2f}" if s.get("sharpe") is not None else "-",
         help="Rendement excédentaire / risque (taux sans risque OAT UEMOA 3.5%)"
     )
     q3.metric(
         "Sortino",
-        f"{s['sortino']:.2f}" if s.get("sortino") is not None else "—",
+        f"{s['sortino']:.2f}" if s.get("sortino") is not None else "-",
         help="Comme Sharpe mais pénalise uniquement la volatilité baissière"
     )
     q4.metric(
         "Calmar",
-        f"{s['calmar']:.2f}" if s.get("calmar") is not None else "—",
-        help="CAGR / Max Drawdown absolu — ratio qualité/risque"
+        f"{s['calmar']:.2f}" if s.get("calmar") is not None else "-",
+        help="CAGR / Max Drawdown absolu - ratio qualité/risque"
     )
 
     if s.get("alpha") is not None:
         st.caption(
             f"Alpha vs BRVM Composite : {s['alpha']*100:+.2f}% annualisé  |  "
-            f"Beta : {s.get('beta', '—')}"
+            f"Beta : {s.get('beta', '-')}"
         )
 
     with st.expander("Significativité statistique (Monte Carlo)", expanded=False):
@@ -1258,7 +1286,7 @@ def render_backtest_page() -> None:
             if not mc["significatif_95"]:
                 st.warning(
                     f"La stratégie n'est pas statistiquement significative "
-                    f"(p={mc['p_value']:.2f} > 0.05) — les résultats peuvent "
+                    f"(p={mc['p_value']:.2f} > 0.05) - les résultats peuvent "
                     f"être dus au hasard sur cet historique BRVM."
                 )
 
@@ -1332,12 +1360,12 @@ def render_backtest_page() -> None:
             stats = result.by_confiance.get(conf)
             with cc[i]:
                 if stats:
-                    st.markdown(f"**{conf.capitalize()}** — n={stats['n']}")
+                    st.markdown(f"**{conf.capitalize()}** - n={stats['n']}")
                     st.metric("Win Rate",   f"{stats['win_rate_pct']}%")
                     st.metric("Expectancy", f"{stats['expectancy_pct']:+.2f}%")
                     st.caption(f"Durée moy. : {stats['avg_days']:.0f}j")
                 else:
-                    st.markdown(f"**{conf.capitalize()}** — aucun trade")
+                    st.markdown(f"**{conf.capitalize()}** - aucun trade")
         st.divider()
 
     # ── Par ticker ────────────────────────────────────────────────────────────
@@ -1346,7 +1374,7 @@ def render_backtest_page() -> None:
         bt_rows = []
         for ticker, stats in result.by_ticker.items():
             bt_rows.append({
-                "Ticker": f"{ticker} — {TICKER_NAMES.get(ticker, ticker)}",
+                "Ticker": f"{ticker} - {TICKER_NAMES.get(ticker, ticker)}",
                 "Trades": stats["n"],
                 "Win Rate": f"{stats['win_rate_pct']}%",
                 "PnL moyen": f"{stats['avg_pnl_pct']:+.2f}%",
@@ -1398,7 +1426,7 @@ def render_backtest_page() -> None:
                 "Gain (FCFA)":            "{:+,.0f}",
                 "PnL (%)":                "{:+.2f}",
                 "Alloc %":                "{:.1f}%",
-            }, na_rep="—")
+            }, na_rep="-")
         )
         st.dataframe(styled, use_container_width=True, hide_index=True)
 
@@ -1433,7 +1461,7 @@ def render_journal_dashboard() -> None:
     # date_type already imported at module level
 
     st.title("📒 Journal de Trading")
-    st.caption("Signaux ACHAT/VENTE enregistrés automatiquement — sortie sur stop / target / timeout 20 séances")
+    st.caption("Signaux ACHAT/VENTE enregistrés automatiquement - sortie sur stop / target / timeout 20 séances")
 
     kpis  = get_kpis()
     today = date_type.today()
@@ -1457,22 +1485,22 @@ def render_journal_dashboard() -> None:
               help="Break-even ≈ 0%. Avec R/R=2.0, rentable dès ~33% hit rate.")
     c5.metric("Durée moy.", f"{kpis['avg_holding_days']:.0f}j")
 
-    # Ligne 2 — métriques capital-adjusted
+    # Ligne 2 - métriques capital-adjusted
     r1, r2, r3, r4 = st.columns(4)
     exp_w = kpis.get("expectancy_weighted_pct")
     avg_r = kpis.get("avg_r_realise")
     avg_p = kpis.get("avg_position_pct")
     r1.metric("Expectancy pondérée",
-              f"{exp_w:.2f}%" if exp_w is not None else "—",
-              help="E × position moy. / 100 — rendement réel sur capital alloué")
+              f"{exp_w:.2f}%" if exp_w is not None else "-",
+              help="E × position moy. / 100 - rendement réel sur capital alloué")
     r2.metric("R réalisé moyen",
-              f"{avg_r:.2f}R" if avg_r is not None else "—",
+              f"{avg_r:.2f}R" if avg_r is not None else "-",
               help="PnL / risque initial normalisé (cross-tickers)")
     r3.metric("Position moy.",
-              f"{avg_p:.1f}%" if avg_p is not None else "—",
+              f"{avg_p:.1f}%" if avg_p is not None else "-",
               help="Taille moyenne allouée par trade (D2)")
     r4.metric("Break-even hit rate",
-              "33%" if kpis.get("win_loss_ratio") else "—",
+              "33%" if kpis.get("win_loss_ratio") else "-",
               help="Avec R/R=2.0 : seuil de profitabilité théorique")
 
     st.divider()
@@ -1494,12 +1522,12 @@ def render_journal_dashboard() -> None:
             with cols[i]:
                 if stats:
                     delta_color = "normal" if stats["hit_rate_pct"] >= 50 else "inverse"
-                    st.markdown(f"**{conf.capitalize()}** — n={stats['n']}")
+                    st.markdown(f"**{conf.capitalize()}** - n={stats['n']}")
                     st.metric("Hit Rate",   f"{stats['hit_rate_pct']}%")
                     st.metric("Expectancy", f"{stats['expectancy_pct']:+.1f}%")
                     st.caption(f"Durée moy. : {stats['avg_days']:.0f}j")
                 else:
-                    st.markdown(f"**{conf.capitalize()}** — aucun trade")
+                    st.markdown(f"**{conf.capitalize()}** - aucun trade")
         st.divider()
 
     # ── Section 4 : distribution des sorties ─────────────────────────────────
@@ -1560,7 +1588,7 @@ def _gh_port_creds() -> tuple:
 
 
 def _portfolio_from_disk() -> list[dict]:
-    """Charge depuis GitHub puis local — utilisé uniquement au démarrage."""
+    """Charge depuis GitHub puis local - utilisé uniquement au démarrage."""
     import base64, requests as _req
     token, repo = _gh_port_creds()
     if token:
@@ -1573,7 +1601,7 @@ def _portfolio_from_disk() -> list[dict]:
             if resp.status_code == 404:
                 return []
         except Exception as e:
-            logger.warning(f"[Portfolio] GitHub load failed — {e}")
+            logger.warning(f"[Portfolio] GitHub load failed - {e}")
     if os.path.exists(_PORTFOLIO_FILE):
         try:
             with open(_PORTFOLIO_FILE, "r", encoding="utf-8") as f:
@@ -1591,7 +1619,7 @@ def _load_portfolio() -> list[dict]:
 
 
 def _persist_portfolio_bg(positions: list[dict]) -> None:
-    """Persiste en arrière-plan (thread) — ne bloque jamais le UI."""
+    """Persiste en arrière-plan (thread) - ne bloque jamais le UI."""
     import base64, requests as _req, threading
 
     def _run():
@@ -1609,12 +1637,12 @@ def _persist_portfolio_bg(positions: list[dict]) -> None:
                 _req.put(url, headers=hdrs, json=payload, timeout=15)
                 return
             except Exception as e:
-                logger.warning(f"[Portfolio] GitHub save failed — {e}")
+                logger.warning(f"[Portfolio] GitHub save failed - {e}")
         try:
             with open(_PORTFOLIO_FILE, "w", encoding="utf-8") as f:
                 json.dump(positions, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger.warning(f"[Portfolio] Local save failed — {e}")
+            logger.warning(f"[Portfolio] Local save failed - {e}")
 
     threading.Thread(target=_run, daemon=True).start()
 
@@ -1637,7 +1665,7 @@ def _fetch_price(ticker: str) -> float | None:
 
 def render_portfolio_page() -> None:
     st.title("💼 Portfolio Tracker")
-    st.caption("Suivi en temps réel de vos positions — P&L, distance stop/target, alertes")
+    st.caption("Suivi en temps réel de vos positions - P&L, distance stop/target, alertes")
 
     positions = _load_portfolio()
 
@@ -1661,14 +1689,14 @@ def render_portfolio_page() -> None:
         tp = pos.get("take_profit")
         if sl and sl > 0:
             if cp <= sl:
-                st.error(f"🚨 **STOP TOUCHÉ — {tk}** | Prix {cp:,.0f} ≤ Stop {sl:,.0f} FCFA — clôture recommandée !")
+                st.error(f"🚨 **STOP TOUCHÉ - {tk}** | Prix {cp:,.0f} ≤ Stop {sl:,.0f} FCFA - clôture recommandée !")
             elif (cp - sl) / cp * 100 <= ALERT_STOP_PCT:
-                st.warning(f"⚠️ **{tk}** — Prix {cp:,.0f} FCFA à {(cp-sl)/cp*100:.1f}% du stop ({sl:,.0f} FCFA)")
+                st.warning(f"⚠️ **{tk}** - Prix {cp:,.0f} FCFA à {(cp-sl)/cp*100:.1f}% du stop ({sl:,.0f} FCFA)")
         if tp and tp > 0:
             if cp >= tp:
-                st.success(f"🎯 **TAKE PROFIT ATTEINT — {tk}** | Prix {cp:,.0f} ≥ Target {tp:,.0f} FCFA — prise de bénéfice !")
+                st.success(f"🎯 **TAKE PROFIT ATTEINT - {tk}** | Prix {cp:,.0f} ≥ Target {tp:,.0f} FCFA - prise de bénéfice !")
             elif (tp - cp) / cp * 100 <= ALERT_TGT_PCT:
-                st.info(f"🟢 **{tk}** — Target {tp:,.0f} FCFA à portée ({(tp-cp)/cp*100:.1f}% restant)")
+                st.info(f"🟢 **{tk}** - Target {tp:,.0f} FCFA à portée ({(tp-cp)/cp*100:.1f}% restant)")
 
     # ── Tableau des positions ─────────────────────────────────────────────────
     if positions:
@@ -1707,16 +1735,16 @@ def render_portfolio_page() -> None:
                 "Ticker": pos["ticker"],
                 "Entrée": f"{ep:,.0f}",
                 "Qté": qty,
-                "Actuel": f"{cp:,.0f}" if cp else "—",
-                "PnL %": f"{pnl_pct:+.2f}%" if pnl_pct is not None else "—",
-                "PnL FCFA": f"{pnl_fcfa:+,.0f}" if pnl_fcfa is not None else "—",
+                "Actuel": f"{cp:,.0f}" if cp else "-",
+                "PnL %": f"{pnl_pct:+.2f}%" if pnl_pct is not None else "-",
+                "PnL FCFA": f"{pnl_fcfa:+,.0f}" if pnl_fcfa is not None else "-",
                 "Investi FCFA": f"{inv:,.0f}",
-                "Dist. Stop": f"{dist_stop_pct:.1f}%" if dist_stop_pct is not None else "—",
-                "Dist. Target": f"{dist_tgt_pct:.1f}%" if dist_tgt_pct is not None else "—",
-                "Stop": f"{sl:,.0f}" if sl else "—",
-                "Target": f"{tp:,.0f}" if tp else "—",
-                "Date entrée": pos.get("entry_date", "—"),
-                "MàJ": pos.get("refreshed_at", "—"),
+                "Dist. Stop": f"{dist_stop_pct:.1f}%" if dist_stop_pct is not None else "-",
+                "Dist. Target": f"{dist_tgt_pct:.1f}%" if dist_tgt_pct is not None else "-",
+                "Stop": f"{sl:,.0f}" if sl else "-",
+                "Target": f"{tp:,.0f}" if tp else "-",
+                "Date entrée": pos.get("entry_date", "-"),
+                "MàJ": pos.get("refreshed_at", "-"),
             })
 
         st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
@@ -1831,7 +1859,7 @@ def render_portfolio_page() -> None:
                                         value=5, format_func=lambda x: f"{x} min",
                                         disabled=not auto_refresh, key="port_refresh_interval")
     if auto_refresh:
-        st.caption(f"⏱️ Prochain refresh dans {refresh_min} min — garde cet onglet ouvert.")
+        st.caption(f"⏱️ Prochain refresh dans {refresh_min} min - garde cet onglet ouvert.")
         import time as _time
         _time.sleep(refresh_min * 60)
         # Rafraîchir les prix
@@ -1864,7 +1892,7 @@ def main() -> None:
         return
 
     st.title("📈 BRVM Stock Screener")
-    st.caption("Analyse technique multi-critères pour actions BRVM — Investment Pioneers")
+    st.caption("Analyse technique multi-critères pour actions BRVM - Investment Pioneers")
 
     # Si pas de nouvelle analyse, réutiliser les résultats en cache (pour que les
     # boutons portfolio survivent au rerun déclenché par le clic sur ces boutons)
@@ -1876,9 +1904,9 @@ def main() -> None:
             st.info("👈 Sélectionnez un ou plusieurs titres dans le panneau gauche puis cliquez sur **Analyser**.")
             st.markdown("""
 **Horizons disponibles :**
-- ⚡ **Court terme** (1–4 semaines) : MACD×2, Stochastic×2 — paramètres rapides (RSI 7, MA 10/20/50)
-- 📈 **Moyen terme** (1–6 mois) : critères équilibrés — paramètres BRVM (RSI 20, MACD 8/21/5, BB 1.5σ, MA 20/50/200)
-- 🏦 **Long terme** (6 mois+) : MA Config×2, Tendance LT×2, Perf relative×2 — paramètres lents (RSI 21, MA 50/100/200)
+- ⚡ **Court terme** (1-4 semaines) : MACD×2, Stochastic×2 - paramètres rapides (RSI 7, MA 10/20/50)
+- 📈 **Moyen terme** (1-6 mois) : critères équilibrés - paramètres BRVM (RSI 20, MACD 8/21/5, BB 1.5σ, MA 20/50/200)
+- 🏦 **Long terme** (6 mois+) : MA Config×2, Tendance LT×2, Perf relative×2 - paramètres lents (RSI 21, MA 50/100/200)
 
 **Indicateurs calculés :**
 RSI, Stochastic, ADX, Moyennes Mobiles adaptatives, Golden/Death Cross, MACD, Bandes de Bollinger,
@@ -1917,7 +1945,7 @@ Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chart
                         elif etype == "SourceStructureChangedError":
                             st.error(f"🔧 **{ticker}** : structure du site modifiée.\n\n{e}")
                         else:
-                            st.error(f"💥 **{ticker}** : erreur inattendue — {e}")
+                            st.error(f"💥 **{ticker}** : erreur inattendue - {e}")
                         results[ticker] = None
                     else:
                         results[ticker] = result
@@ -1939,14 +1967,14 @@ Volume relatif, Performance vs BRVMC, Supports/Résistances, Configuration chart
             for c in closed:
                 sign = "+" if c["pnl_pct"] >= 0 else ""
                 st.toast(
-                    f"📒 {c['ticker']} clôturé ({c['exit_reason']}) — "
+                    f"📒 {c['ticker']} clôturé ({c['exit_reason']}) - "
                     f"{sign}{c['pnl_pct']:.1f}% en {c['days_held']}j",
                     icon="✅" if c["pnl_pct"] >= 0 else "🔴",
                 )
     except Exception:
         logger.debug("[Tracking] update_open_trades KO")
 
-    # ── Tableau de synthèse — signaux forts, anomalies, tendances ────────────
+    # ── Tableau de synthèse - signaux forts, anomalies, tendances ────────────
     _render_synthesis_dashboard(valid_results)
 
     # ── Tableau récapitulatif (si plusieurs tickers) ─────────────────────────
@@ -1987,31 +2015,31 @@ def _render_synthesis_dashboard(results: dict) -> None:
 
         # Signaux forts
         if score.signal == "ACHAT" and score.confiance in ("forte", "modérée"):
-            signals_forts.append(f"🟢 {label} — ACHAT (score {score.score_total:+d}, confiance {score.confiance})")
+            signals_forts.append(f"🟢 {label} - ACHAT (score {score.score_total:+d}, confiance {score.confiance})")
         elif score.signal == "VENTE" and score.confiance in ("forte", "modérée"):
-            signals_forts.append(f"🔴 {label} — VENTE (score {score.score_total:+d}, confiance {score.confiance})")
+            signals_forts.append(f"🔴 {label} - VENTE (score {score.score_total:+d}, confiance {score.confiance})")
 
         # Anomalies
         if ind.rsi is not None and (ind.rsi < 20 or ind.rsi > 80):
             zone = "survente extrême" if ind.rsi < 20 else "surachat extrême"
-            anomalies.append(f"⚠️ {label} — RSI {ind.rsi:.0f} ({zone})")
+            anomalies.append(f"⚠️ {label} - RSI {ind.rsi:.0f} ({zone})")
         if ind.volume_relatif_pct > 100:
-            anomalies.append(f"📊 {label} — Volume +{ind.volume_relatif_pct:.0f}% vs moy20j")
+            anomalies.append(f"📊 {label} - Volume +{ind.volume_relatif_pct:.0f}% vs moy20j")
         if hasattr(ind, "drawdown_current") and ind.drawdown_current is not None and ind.drawdown_current < -15:
-            anomalies.append(f"📉 {label} — Drawdown {ind.drawdown_current:.1f}%")
+            anomalies.append(f"📉 {label} - Drawdown {ind.drawdown_current:.1f}%")
         if ind.rsi_divergence in ("haussiere_forte", "baissiere_forte"):
-            anomalies.append(f"🔀 {label} — Divergence RSI {ind.rsi_divergence.replace('_', ' ')}")
+            anomalies.append(f"🔀 {label} - Divergence RSI {ind.rsi_divergence.replace('_', ' ')}")
 
         # Tendances
         if ind.ma_signal == "golden_cross":
-            tendances.append(f"🚀 {label} — Golden Cross actif")
+            tendances.append(f"🚀 {label} - Golden Cross actif")
         elif ind.ma_signal == "death_cross":
-            tendances.append(f"💀 {label} — Death Cross actif")
+            tendances.append(f"💀 {label} - Death Cross actif")
 
         events = getattr(ind, "events", [])
         strong_events = [e for e in events if e.get("importance") == "forte"]
         for e in strong_events[:1]:
-            tendances.append(f"🔔 {label} — {e['description']} ({e['date']})")
+            tendances.append(f"🔔 {label} - {e['description']} ({e['date']})")
 
     if signals_forts or anomalies or tendances:
         st.subheader("🎯 Synthèse rapide")
@@ -2059,7 +2087,7 @@ def _render_comparator(results: dict) -> None:
             company = get_company_name(ticker)
             fig_perf.add_trace(go.Scatter(
                 x=normalized.index, y=normalized.values,
-                name=f"{ticker} — {company}",
+                name=f"{ticker} - {company}",
                 mode="lines",
                 hovertemplate=f"{ticker}: %{{y:.1f}}<extra></extra>",
             ))
@@ -2090,7 +2118,7 @@ def _render_comparator(results: dict) -> None:
             score = result["score"]
             fundamentals = result.get("fundamentals")
             comp_rows.append({
-                "Titre": f"{ticker} — {get_company_name(ticker)}",
+                "Titre": f"{ticker} - {get_company_name(ticker)}",
                 "Perf 1M": f"{ind.perf_1m:+.1f}%" if ind.perf_1m is not None else "N/D",
                 "Perf 3M": f"{ind.perf_3m:+.1f}%" if ind.perf_3m is not None else "N/D",
                 "Volatilité": f"{ind.volatilite_3m:.1f}%" if getattr(ind, "volatilite_3m", None) else "N/D",

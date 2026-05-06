@@ -1,8 +1,8 @@
-name: BRVM Portfolio Alerts
+﻿name: BRVM Portfolio Alerts
 
 on:
   schedule:
-    # BRVM (Abidjan, UTC+0) — Lundi au Vendredi
+    # BRVM (Abidjan, UTC+0) - Lundi au Vendredi
     - cron: '0 9 * * 1-5'    # Ouverture du marché 09:00 UTC
     - cron: '0 15 * * 1-5'   # Clôture du marché  15:00 UTC
   workflow_dispatch:           # Déclenchement manuel depuis l'onglet Actions
@@ -45,5 +45,5 @@ jobs:
           ALERT_EMAIL_TO:       ${{ secrets.ALERT_EMAIL_TO }}
         run: python alert_checker.py "${{ steps.ctx.outputs.label }}"
 
-      # Pas de push — branche protégée. Les prix sont rafraîchis en mémoire
+      # Pas de push - branche protégée. Les prix sont rafraîchis en mémoire
       # uniquement pour la vérification des alertes.

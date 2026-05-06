@@ -1,5 +1,5 @@
-"""
-config.py — Constantes et configuration du BRVM Screener
+﻿"""
+config.py - Constantes et configuration du BRVM Screener
 """
 
 # ─── Sources de données ────────────────────────────────────────────────────────
@@ -116,40 +116,40 @@ TICKER_TO_SIKA_ID: dict[str, str] = {
 
 TICKER_NAMES: dict[str, str] = {
     # ── Côte d'Ivoire ──
-    "BICC":    "BICICI — Banque Int. CI",
+    "BICC":    "BICICI - Banque Int. CI",
     "BNBC":    "NSIA Banque CI",
     "BOAC":    "Bank of Africa CI",
     "CABC":    "Sicable CI",
     "CFAC":    "CFAO Motors CI",
-    "CIEC":    "CIE — Électricité CI",
+    "CIEC":    "CIE - Électricité CI",
     "ECOC":    "Ecobank CI",
     "FTSC":    "Filtisac CI",
     "NEIC":    "NEI-CEDA CI",
     "NSBC":    "NSIA Assurances CI",
     "NTLC":    "Nestlé CI",
     "ORAC":    "Orange CI",
-    "PALC":    "Palm CI — Palmiculture",
+    "PALC":    "Palm CI - Palmiculture",
     "PRSC":    "Bernabé CI",
     "SAFC":    "SAFCA CI",
-    "SDCC":    "SODECI — Eau CI",
+    "SDCC":    "SODECI - Eau CI",
     "SDSC":    "Africa Global Logistics CI",
     "SEMC":    "Crown SIEM CI",
     "SGBC":    "Société Générale CI",
     "SHEC":    "Vivo Energy CI",
-    "SIBC":    "SIB — Soc. Ivoirienne de Banque",
+    "SIBC":    "SIB - Soc. Ivoirienne de Banque",
     "SICC":    "SICOR CI",
     "SIVC":    "Servair Abidjan CI",
     "SLBC":    "Solibra CI",
     "SMBC":    "SMB CI",
     "SOGC":    "SOGB CI",
-    "SPHC":    "SAPH CI — Caoutchouc",
+    "SPHC":    "SAPH CI - Caoutchouc",
     "STAC":    "SETAO CI",
-    "STBC":    "SITAB CI — Tabac",
+    "STBC":    "SITAB CI - Tabac",
     "TTLC":    "TotalEnergies CI",
     "UNLC":    "Unilever CI",
     "UNXC":    "Uniwax CI",
     # ── Sénégal ──
-    "SNTS":    "Sonatel — Orange Sénégal",
+    "SNTS":    "Sonatel - Orange Sénégal",
     "TTLS":    "TotalEnergies Sénégal",
     "BOAS":    "Bank of Africa Sénégal",
     # ── Togo ──
@@ -175,8 +175,8 @@ TICKER_NAMES: dict[str, str] = {
 
 # Groupes de tickers pour la liste déroulante
 TICKER_GROUPS: dict[str, list[str]] = {
-    "🇨🇮 Côte d'Ivoire — Finance":             ["BICC", "BNBC", "BOAC", "ECOC", "SGBC", "SIBC", "NSBC"],
-    "🇨🇮 Côte d'Ivoire — Industrie & Services": ["CABC", "CFAC", "CIEC", "FTSC", "NEIC", "NTLC", "ORAC", "PALC", "PRSC", "SAFC", "SDCC", "SDSC", "SEMC", "SHEC", "SICC", "SIVC", "SLBC", "SMBC", "SOGC", "SPHC", "STAC", "STBC", "TTLC", "UNLC", "UNXC"],
+    "🇨🇮 Côte d'Ivoire - Finance":             ["BICC", "BNBC", "BOAC", "ECOC", "SGBC", "SIBC", "NSBC"],
+    "🇨🇮 Côte d'Ivoire - Industrie & Services": ["CABC", "CFAC", "CIEC", "FTSC", "NEIC", "NTLC", "ORAC", "PALC", "PRSC", "SAFC", "SDCC", "SDSC", "SEMC", "SHEC", "SICC", "SIVC", "SLBC", "SMBC", "SOGC", "SPHC", "STAC", "STBC", "TTLC", "UNLC", "UNXC"],
     "🇸🇳 Sénégal":                              ["SNTS", "TTLS", "BOAS"],
     "🇹🇬 Togo":                                 ["ETIT", "ORGT"],
     "🇧🇫 Burkina Faso":                         ["ONTBF", "BOABF", "CBIBF"],
@@ -189,7 +189,7 @@ COUNTRY_SUFFIXES = [".ci", ".sn", ".tg", ".bf", ".bj", ".ml", ".ne", ""]
 # ─── Cache ─────────────────────────────────────────────────────────────────────
 
 CACHE_DIR = ".cache"
-CACHE_TTL_SECONDS = 3600       # 1 heure (OHLCV — valeur par défaut)
+CACHE_TTL_SECONDS = 3600       # 1 heure (OHLCV - valeur par défaut)
 NEWS_CACHE_TTL_SECONDS = 1800  # 30 minutes (actualités)
 NEWS_MAX_AGE_DAYS = 90
 NEWS_MAX_ITEMS_DEFAULT = 10
@@ -202,7 +202,7 @@ REQUEST_TIMEOUT = 15
 REQUEST_MAX_RETRIES = 3
 REQUEST_BACKOFF_FACTOR = 1.0
 
-# ─── Indicateurs techniques (valeurs par défaut — moyen terme) ─────────────────
+# ─── Indicateurs techniques (valeurs par défaut - moyen terme) ─────────────────
 
 RSI_PERIOD = 14
 MA_SHORT = 20
@@ -248,7 +248,7 @@ ADX_PERIOD = 14
 
 HORIZON_PROFILES: dict[str, dict] = {
     "Court terme": {
-        "label": "Court terme (1–4 semaines)",
+        "label": "Court terme (1-4 semaines)",
         "emoji": "⚡",
         "max_holding_days": 30,
         "review_interval_days": 5,
@@ -283,7 +283,7 @@ HORIZON_PROFILES: dict[str, dict] = {
         "jours_min": 60,
     },
     "Moyen terme": {
-        "label": "Moyen terme (1–6 mois)",
+        "label": "Moyen terme (1-6 mois)",
         "emoji": "📈",
         "max_holding_days": 90,
         "review_interval_days": 14,  # bi-mensuel : optimum TF-BRVM (frais/2 vs 7j, Sharpe OOS +1.41)
@@ -398,6 +398,59 @@ CI_FIXED_HOLIDAYS: list[tuple[int, int]] = [
     (8,  7),   # Fête Nationale CI
     (11, 15),  # Fête Nationale CI (Proclamation République)
 ]
+
+
+# ─── Diagnostique de liquidité ────────────────────────────────────────────────
+
+DIAGNOSTIC_WINDOW_DAYS = 365         # Fenêtre d'analyse (jours calendaires)
+DIAGNOSTIC_JUMP_THRESHOLD_PCT = 30.0 # Seuil saut anormal en 1 séance (%)
+
+LIQUIDITY_THRESHOLDS: dict[str, float] = {
+    "LIQUIDE":      80.0,  # ≥80 % séances avec volume > 0
+    "SEMI_LIQUIDE": 40.0,  # 40-80 %
+    # < 40 % → ILLIQUIDE
+}
+
+# Classement de liquidité par ticker.
+# Valeur initiale vide ; à mettre à jour après run de diagnostics.run_full_diagnostic().
+# Le rapport généré (report.md) fournit le bloc Python prêt à coller.
+LIQUIDITY_TIERS: dict[str, str] = {}
+
+
+# ─── Régime de marché (Phase 3) ──────────────────────────────────────────────
+# Seuils sur pct_above_ma50 (% de titres au-dessus de leur MA50).
+# Classification séquentielle : premier critère vrai gagne.
+# BULL_BROAD requiert en plus pct_above_ma200 ≥ REGIME_MA200_BULL_BROAD_MIN.
+
+REGIME_MA50_THRESHOLDS: dict[str, float] = {
+    "BULL_BROAD":  65.0,   # ≥ 65 % titres > MA50 (+ condition MA200)
+    "BULL_NARROW": 50.0,   # ≥ 50 %
+    "RANGE":       35.0,   # ≥ 35 %
+    "BEAR_NARROW": 20.0,   # ≥ 20 %
+    # < 20 % → BEAR_BROAD
+}
+REGIME_MA200_BULL_BROAD_MIN: float = 55.0  # % titres > MA200 requis pour BULL_BROAD
+
+# Fenêtre 52 semaines : seuil de proximité ±5 % pour classer "near high/low"
+REGIME_52W_PROXIMITY_PCT: float = 5.0
+
+# Emojis et couleurs d'affichage UI (sidebar Streamlit)
+REGIME_EMOJIS: dict[str, str] = {
+    "BULL_BROAD":  "🟢",
+    "BULL_NARROW": "🔵",
+    "RANGE":       "🟡",
+    "BEAR_NARROW": "🟠",
+    "BEAR_BROAD":  "🔴",
+    "INCONNU":     "⚫",
+}
+REGIME_COLORS: dict[str, str] = {
+    "BULL_BROAD":  "#0F6E56",
+    "BULL_NARROW": "#1A6E9A",
+    "RANGE":       "#BA7517",
+    "BEAR_NARROW": "#C45C1A",
+    "BEAR_BROAD":  "#A32D2D",
+    "INCONNU":     "#666666",
+}
 
 
 def is_brvm_holiday(dt) -> bool:

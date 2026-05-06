@@ -1,5 +1,5 @@
-"""
-richbourse.py — Scraper RichBourse.com comme source OHLCV de fallback pour la BRVM.
+﻿"""
+richbourse.py - Scraper RichBourse.com comme source OHLCV de fallback pour la BRVM.
 
 Utilisé par scraper.py quand SikaFinance est indisponible ou renvoie des données
 insuffisantes.

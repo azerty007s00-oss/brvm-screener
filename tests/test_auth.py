@@ -1,5 +1,5 @@
-"""
-tests/test_auth.py — Tests unitaires pour les fonctions de hachage/vérification/token.
+﻿"""
+tests/test_auth.py - Tests unitaires pour les fonctions de hachage/vérification/token.
 Aucun appel réseau, aucun st.secrets.
 """
 
@@ -26,14 +26,14 @@ sys.modules["streamlit"] = st_mock
 from auth import _hash_password, _verify_password, _generate_password
 
 
-# ─── TEST 1 — Hash bcrypt commence par $2b$ ───────────────────────────────────
+# ─── TEST 1 - Hash bcrypt commence par $2b$ ───────────────────────────────────
 
 def test_hash_bcrypt_prefix():
     h = _hash_password("monmotdepasse")
     assert h.startswith("$2"), f"Hash devrait commencer par '$2' (bcrypt), obtenu : {h[:10]}..."
 
 
-# ─── TEST 2 — Vérification bcrypt correcte ────────────────────────────────────
+# ─── TEST 2 - Vérification bcrypt correcte ────────────────────────────────────
 
 def test_verify_bcrypt_correct():
     h = _hash_password("monmotdepasse")
@@ -41,7 +41,7 @@ def test_verify_bcrypt_correct():
     assert _verify_password("mauvais", h) is False
 
 
-# ─── TEST 3 — Migration SHA-256 legacy fonctionne ─────────────────────────────
+# ─── TEST 3 - Migration SHA-256 legacy fonctionne ─────────────────────────────
 
 def test_verify_legacy_sha256():
     legacy_hash = hashlib.sha256("motdepasse123".encode()).hexdigest()
@@ -49,7 +49,7 @@ def test_verify_legacy_sha256():
     assert _verify_password("mauvais", legacy_hash) is False
 
 
-# ─── TEST 4 — Hash différent à chaque appel (salt aléatoire) ──────────────────
+# ─── TEST 4 - Hash différent à chaque appel (salt aléatoire) ──────────────────
 
 def test_hash_unique_par_appel():
     h1 = _hash_password("test")
@@ -57,7 +57,7 @@ def test_hash_unique_par_appel():
     assert h1 != h2, "Deux hashes du même mot de passe devraient être différents (salt aléatoire)"
 
 
-# ─── TEST 5 — Mot de passe généré : longueur et jeu de caractères ─────────────
+# ─── TEST 5 - Mot de passe généré : longueur et jeu de caractères ─────────────
 
 def test_generate_password_format():
     pwd = _generate_password(12)
@@ -66,7 +66,7 @@ def test_generate_password_format():
     assert all(c in allowed for c in pwd), "Caractères non autorisés dans le mot de passe généré"
 
 
-# ─── TEST 6 — Tokens aléatoires distincts (secrets.token_urlsafe) ─────────────
+# ─── TEST 6 - Tokens aléatoires distincts (secrets.token_urlsafe) ─────────────
 
 def test_token_urlsafe_uniqueness():
     t1 = _secrets.token_urlsafe(32)
@@ -75,7 +75,7 @@ def test_token_urlsafe_uniqueness():
     assert len(t1) >= 40, f"Token trop court : {len(t1)} chars"
 
 
-# ─── TEST 7 — TTL expiry détecté correctement ─────────────────────────────────
+# ─── TEST 7 - TTL expiry détecté correctement ─────────────────────────────────
 
 def test_token_ttl_expired():
     from datetime import datetime, timedelta

@@ -1,5 +1,5 @@
-"""
-utils.py — Utilitaires partagés du BRVM Screener.
+﻿"""
+utils.py - Utilitaires partagés du BRVM Screener.
 
 Fonctions de formatage, résolution de noms, helpers communs.
 """
@@ -15,7 +15,7 @@ from config import TICKER_NAMES
 def _parse_date(date_str: str) -> Optional[str]:
     """Tente de parser une date depuis différents formats courants BRVM."""
     formats = [
-        "%d/%m/%Y",     # 23/02/2026 — format Sika Finance
+        "%d/%m/%Y",     # 23/02/2026 - format Sika Finance
         "%Y-%m-%d",
         "%d-%m-%Y",
         "%d %b %Y",
@@ -46,7 +46,7 @@ def get_company_name(ticker: str, fallback_to_ticker: bool = True) -> str:
         fallback_to_ticker: Si True, retourne le ticker si le nom est inconnu
 
     Returns:
-        Nom complet (ex: "Sonatel — Orange Sénégal") ou le ticker en fallback
+        Nom complet (ex: "Sonatel - Orange Sénégal") ou le ticker en fallback
     """
     ticker = ticker.upper().strip()
     name = TICKER_NAMES.get(ticker)
@@ -57,13 +57,13 @@ def get_company_name(ticker: str, fallback_to_ticker: bool = True) -> str:
 
 def format_ticker_display(ticker: str) -> str:
     """
-    Formate un ticker pour l'affichage : TICKER — Nom Complet.
+    Formate un ticker pour l'affichage : TICKER - Nom Complet.
 
-    Ex: "SNTS — Sonatel — Orange Sénégal"
+    Ex: "SNTS - Sonatel - Orange Sénégal"
     """
     name = get_company_name(ticker, fallback_to_ticker=False)
     if name:
-        return f"{ticker} — {name}"
+        return f"{ticker} - {name}"
     return ticker
 
 

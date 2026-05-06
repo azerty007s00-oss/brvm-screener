@@ -1,13 +1,13 @@
-"""
-alert_checker.py — Vérification automatique des alertes portfolio BRVM.
+﻿"""
+alert_checker.py - Vérification automatique des alertes portfolio BRVM.
 
 Déclenché par GitHub Actions à l'ouverture (09:00 UTC) et à la clôture
 (15:00 UTC) du marché, du lundi au vendredi.
 
 Variables d'environnement requises (GitHub Secrets) :
-  ALERT_EMAIL_FROM      — adresse Gmail expéditrice
-  ALERT_EMAIL_PASSWORD  — mot de passe d'application Google (App Password)
-  ALERT_EMAIL_TO        — adresse destinataire (peut être identique à FROM)
+  ALERT_EMAIL_FROM      - adresse Gmail expéditrice
+  ALERT_EMAIL_PASSWORD  - mot de passe d'application Google (App Password)
+  ALERT_EMAIL_TO        - adresse destinataire (peut être identique à FROM)
 
 Usage manuel :
   python alert_checker.py "Ouverture du marché"
@@ -95,7 +95,7 @@ def check_alerts(positions: list[dict]) -> list[dict]:
 def build_email_body(alerts: list[dict], context: str) -> str:
     ts = datetime.now().strftime("%d/%m/%Y à %H:%M UTC")
     lines = [
-        f"<h2 style='color:#1a3c5e'>📊 BRVM Portfolio — {context}</h2>",
+        f"<h2 style='color:#1a3c5e'>📊 BRVM Portfolio - {context}</h2>",
         f"<p style='color:#666'>Vérification automatique du {ts}</p>",
         "<hr style='border:1px solid #ddd'>",
     ]
@@ -110,7 +110,7 @@ def build_email_body(alerts: list[dict], context: str) -> str:
             if a["type"] == "STOP_TOUCHE":
                 lines.append(
                     f"<div style='background:#fff0f0;border-left:4px solid red;padding:12px;margin:8px 0'>"
-                    f"<b style='color:red'>🚨 STOP TOUCHÉ — {a['ticker']}</b><br>"
+                    f"<b style='color:red'>🚨 STOP TOUCHÉ - {a['ticker']}</b><br>"
                     f"Prix actuel : <b>{a['price']:,.0f} FCFA</b> | "
                     f"Stop : {a['threshold']:,.0f} FCFA | "
                     f"Entrée : {a['entry']:,.0f} FCFA | "
@@ -121,7 +121,7 @@ def build_email_body(alerts: list[dict], context: str) -> str:
             elif a["type"] == "TARGET_ATTEINT":
                 lines.append(
                     f"<div style='background:#f0fff0;border-left:4px solid green;padding:12px;margin:8px 0'>"
-                    f"<b style='color:green'>🎯 TARGET ATTEINT — {a['ticker']}</b><br>"
+                    f"<b style='color:green'>🎯 TARGET ATTEINT - {a['ticker']}</b><br>"
                     f"Prix actuel : <b>{a['price']:,.0f} FCFA</b> | "
                     f"Target : {a['threshold']:,.0f} FCFA | "
                     f"Entrée : {a['entry']:,.0f} FCFA | "
@@ -136,19 +136,19 @@ def build_email_body(alerts: list[dict], context: str) -> str:
             if a["type"] == "STOP_PROCHE":
                 dist = (a["price"] - a["threshold"]) / a["price"] * 100
                 lines.append(
-                    f"<p>⚠️ <b>{a['ticker']}</b> — prix {a['price']:,.0f} FCFA "
+                    f"<p>⚠️ <b>{a['ticker']}</b> - prix {a['price']:,.0f} FCFA "
                     f"à {dist:.1f}% du stop ({a['threshold']:,.0f} FCFA)</p>"
                 )
             elif a["type"] == "TARGET_PROCHE":
                 dist = (a["threshold"] - a["price"]) / a["price"] * 100
                 lines.append(
-                    f"<p>🟢 <b>{a['ticker']}</b> — target {a['threshold']:,.0f} FCFA "
+                    f"<p>🟢 <b>{a['ticker']}</b> - target {a['threshold']:,.0f} FCFA "
                     f"à {dist:.1f}% ({a['price']:,.0f} FCFA actuel)</p>"
                 )
 
     lines.append(
         "<hr><p style='color:#aaa;font-size:12px'>"
-        "Alerte automatique BRVM Screener — "
+        "Alerte automatique BRVM Screener - "
         "<a href='https://brvm-screener.streamlit.app'>Ouvrir le screener</a></p>"
     )
     return "\n".join(lines)
@@ -160,15 +160,15 @@ def send_email(alerts: list[dict], context: str) -> None:
     email_to   = os.environ.get("ALERT_EMAIL_TO", email_from).strip()
 
     if not email_from or not email_pass:
-        print("[Alert] Email non configuré — ajoutez ALERT_EMAIL_FROM et ALERT_EMAIL_PASSWORD dans les GitHub Secrets")
+        print("[Alert] Email non configuré - ajoutez ALERT_EMAIL_FROM et ALERT_EMAIL_PASSWORD dans les GitHub Secrets")
         return
 
     n_critical = sum(1 for a in alerts if a["level"] in ("CRITICAL", "SUCCESS"))
     prefix = "🚨" if any(a["level"] == "CRITICAL" for a in alerts) else \
              "🎯" if any(a["level"] == "SUCCESS"  for a in alerts) else "⚠️"
     subject = (
-        f"{prefix} [BRVM] {len(alerts)} alerte(s) — {context} "
-        f"— {datetime.now().strftime('%d/%m/%Y')}"
+        f"{prefix} [BRVM] {len(alerts)} alerte(s) - {context} "
+        f"- {datetime.now().strftime('%d/%m/%Y')}"
     )
 
     msg = MIMEMultipart("alternative")
@@ -189,11 +189,11 @@ def send_email(alerts: list[dict], context: str) -> None:
 
 if __name__ == "__main__":
     context = sys.argv[1] if len(sys.argv) > 1 else "Vérification manuelle"
-    print(f"[Alert] === {context} — {datetime.now().strftime('%Y-%m-%d %H:%M UTC')} ===")
+    print(f"[Alert] === {context} - {datetime.now().strftime('%Y-%m-%d %H:%M UTC')} ===")
 
     positions = load_portfolio()
     if not positions:
-        print("[Alert] Portfolio vide — rien à vérifier")
+        print("[Alert] Portfolio vide - rien à vérifier")
         sys.exit(0)
 
     print(f"[Alert] {len(positions)} position(s) dans le portfolio")
@@ -204,9 +204,9 @@ if __name__ == "__main__":
 
     print(f"[Alert] {len(alerts)} alerte(s) détectée(s)")
     for a in alerts:
-        print(f"  [{a['level']}] {a['ticker']} — {a['type']} | prix={a['price']:,.0f} seuil={a['threshold']:,.0f}")
+        print(f"  [{a['level']}] {a['ticker']} - {a['type']} | prix={a['price']:,.0f} seuil={a['threshold']:,.0f}")
 
     if alerts:
         send_email(alerts, context)
     else:
-        print("[Alert] Tout nominal — aucun email envoyé")
+        print("[Alert] Tout nominal - aucun email envoyé")

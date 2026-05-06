@@ -1,5 +1,5 @@
-"""
-cache.py — Cache JSON local avec TTL pour éviter le re-scraping systématique
+﻿"""
+cache.py - Cache JSON local avec TTL pour éviter le re-scraping systématique
 """
 
 import json

@@ -1,5 +1,5 @@
-"""
-news_sources.py — Registre centralisé de toutes les sources d'actualités BRVM.
+﻿"""
+news_sources.py - Registre centralisé de toutes les sources d'actualités BRVM.
 """
 from dataclasses import dataclass
 from typing import Optional
@@ -17,17 +17,17 @@ class NewsSource:
     notes: str = ""
 
 NEWS_SOURCES: list[NewsSource] = [
-    NewsSource(name="Sika Finance — Actualités", url="https://www.sikafinance.com/rss/actualites", source_type="rss", reliability=5, brvm_focus=True),
-    NewsSource(name="Sika Finance — Feed général", url="https://www.sikafinance.com/feed", source_type="rss", reliability=5, brvm_focus=True),
+    NewsSource(name="Sika Finance - Actualités", url="https://www.sikafinance.com/rss/actualites", source_type="rss", reliability=5, brvm_focus=True),
+    NewsSource(name="Sika Finance - Feed général", url="https://www.sikafinance.com/feed", source_type="rss", reliability=5, brvm_focus=True),
     NewsSource(name="Financial Afrik", url="https://www.financialafrik.com/feed/", source_type="rss", reliability=4, brvm_focus=True),
     NewsSource(name="Agence Ecofin", url="https://www.agenceecofin.com/feed", source_type="rss", reliability=4, brvm_focus=True),
     NewsSource(name="La Réussite Financière", url="https://lereussitefinanciere.com/feed/", source_type="rss", reliability=3, brvm_focus=True),
     NewsSource(name="Invest.ci", url="https://www.invest.ci/feed/", source_type="rss", reliability=3, brvm_focus=True),
-    NewsSource(name="Abidjan.net — Économie", url="https://www.abidjan.net/services/rss/economie.asp", source_type="rss", reliability=3, brvm_focus=False),
+    NewsSource(name="Abidjan.net - Économie", url="https://www.abidjan.net/services/rss/economie.asp", source_type="rss", reliability=3, brvm_focus=False),
     NewsSource(name="APA News", url="https://apanews.net/feed/", source_type="rss", reliability=3, brvm_focus=False),
     NewsSource(name="Jeune Afrique", url="https://www.jeuneafrique.com/feed/", source_type="rss", reliability=3, brvm_focus=False),
     NewsSource(name="BRVM Officielle", url="https://www.brvm.org/fr/actualites", source_type="scrape", reliability=5, brvm_focus=True, scrape_selector="article, .views-row, .node, .card"),
-    NewsSource(name="Richbourse — Actualités", url="https://www.richbourse.com/actualites/", source_type="scrape", reliability=3, brvm_focus=True, scrape_selector=".post, article, .news"),
+    NewsSource(name="Richbourse - Actualités", url="https://www.richbourse.com/actualites/", source_type="scrape", reliability=3, brvm_focus=True, scrape_selector=".post, article, .news"),
 ]
 
 def get_active_rss_sources() -> list[NewsSource]:

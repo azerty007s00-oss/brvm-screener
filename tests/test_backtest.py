@@ -1,5 +1,5 @@
-"""
-tests/test_backtest.py — Tests unitaires pour _compute_metrics(), walk_forward_backtest(),
+﻿"""
+tests/test_backtest.py - Tests unitaires pour _compute_metrics(), walk_forward_backtest(),
 _apply_slippage(), monte_carlo_permutation() et BacktestEngine (T+1, volume=0).
 Aucun appel réseau : données OHLCV synthétiques uniquement.
 """
@@ -58,7 +58,7 @@ def _make_ohlcv(n: int = 500, seed: int = 42) -> pd.DataFrame:
     }, index=pd.date_range("2020-01-01", periods=n, freq="B"))
 
 
-# ─── TEST 1 — Sharpe positif sur equity croissante ────────────────────────────
+# ─── TEST 1 - Sharpe positif sur equity croissante ────────────────────────────
 
 def test_fees_applied():
     """
@@ -80,7 +80,7 @@ def test_fees_applied():
     )
 
 
-# ─── TEST 2 — Max drawdown correct (100→150→120 ≈ -20%) ──────────────────────
+# ─── TEST 2 - Max drawdown correct (100→150→120 ≈ -20%) ──────────────────────
 
 def test_max_drawdown_correct():
     """
@@ -104,7 +104,7 @@ def test_max_drawdown_correct():
     )
 
 
-# ─── TEST 3 — Calmar positif sur equity croissante avec petit drawdown ────────
+# ─── TEST 3 - Calmar positif sur equity croissante avec petit drawdown ────────
 
 def test_calmar_positive():
     """
@@ -124,7 +124,7 @@ def test_calmar_positive():
     )
 
 
-# ─── TEST 4 — walk_forward_backtest retourne une liste non vide ───────────────
+# ─── TEST 4 - walk_forward_backtest retourne une liste non vide ───────────────
 
 def test_walk_forward_returns_list():
     """
@@ -153,11 +153,11 @@ def test_walk_forward_returns_list():
         )
 
 
-# ─── TEST 5 — Alpha positif : stratégie surperforme le benchmark ─────────────
+# ─── TEST 5 - Alpha positif : stratégie surperforme le benchmark ─────────────
 
 def test_benchmark_alpha():
     """
-    Stratégie : +0.15%/j  —  Benchmark : +0.03%/j.
+    Stratégie : +0.15%/j  -  Benchmark : +0.03%/j.
     alpha = cagr_stratégie − cagr_benchmark doit être > 0.
     """
     strat_equity = _make_equity(n=252, daily_return=0.0015)
@@ -175,7 +175,7 @@ def test_benchmark_alpha():
     )
 
 
-# ─── TEST 6 — Slippage nul si volume = 0 ou None ─────────────────────────────
+# ─── TEST 6 - Slippage nul si volume = 0 ou None ─────────────────────────────
 
 def test_slippage_no_volume():
     """Sans volume de référence, _apply_slippage retourne le prix inchangé."""
@@ -185,7 +185,7 @@ def test_slippage_no_volume():
     assert _apply_slippage(0.0,   10.0, 500.0, 100_000.0) == 0.0
 
 
-# ─── TEST 7 — Slippage croît avec la participation au volume ──────────────────
+# ─── TEST 7 - Slippage croît avec la participation au volume ──────────────────
 
 def test_slippage_increases_with_participation():
     """Plus la position est grande par rapport au volume moyen, plus le slippage est élevé."""
@@ -199,7 +199,7 @@ def test_slippage_increases_with_participation():
     assert p_low  > price, "Même un faible slippage doit augmenter le prix d'entrée"
 
 
-# ─── TEST 8 — Slippage plafonné à 2% ─────────────────────────────────────────
+# ─── TEST 8 - Slippage plafonné à 2% ─────────────────────────────────────────
 
 def test_slippage_capped_at_2pct():
     """Impact plafonné à 2% même avec position très grande vs volume très faible."""
@@ -212,7 +212,7 @@ def test_slippage_capped_at_2pct():
     )
 
 
-# ─── TEST 9 — BacktestEngine : _pending initialisé, override_price accepté ───
+# ─── TEST 9 - BacktestEngine : _pending initialisé, override_price accepté ───
 
 def test_engine_t1_structure():
     """BacktestEngine doit avoir _pending dict et _open_position doit accepter override_price."""
@@ -233,7 +233,7 @@ def test_engine_t1_structure():
     )
 
 
-# ─── TEST 10 — Monte Carlo : p-value dans [0, 1], clés attendues présentes ───
+# ─── TEST 10 - Monte Carlo : p-value dans [0, 1], clés attendues présentes ───
 
 def test_monte_carlo_structure():
     """monte_carlo_permutation doit retourner un dict avec les clés attendues."""
@@ -258,7 +258,7 @@ def test_monte_carlo_structure():
     assert isinstance(mc["significatif_95"], bool)
 
 
-# ─── TEST 11 — Monte Carlo : série aléatoire non significative ───────────────
+# ─── TEST 11 - Monte Carlo : série aléatoire non significative ───────────────
 
 def test_monte_carlo_random_not_significant():
     """Une série de rendements purement aléatoires (mu=0) ne doit pas être significative
@@ -283,5 +283,5 @@ def test_monte_carlo_random_not_significant():
 
     # On tolère au plus 1 faux positif sur 5 (seuil 5% → ~0.25 attendu en moyenne)
     assert significant_count <= 2, (
-        f"{significant_count}/5 séries aléatoires déclarées significatives — trop élevé"
+        f"{significant_count}/5 séries aléatoires déclarées significatives - trop élevé"
     )
