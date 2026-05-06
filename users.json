@@ -41,5 +41,12 @@
     "requested_at": "2026-04-21T22:02:25.894718",
     "password_hash": "e03a38dbfee1c9d4f92ba904df3c40a79a86ed0d270fe8342867909ce95a731e",
     "approved_at": "2026-04-21T22:02:48.756839"
+  },
+  "azerty007s00@gmail.com": {
+    "name": "AZERTY",
+    "email": "azerty007s00@gmail.com",
+    "reason": "",
+    "status": "pending",
+    "requested_at": "2026-05-06T05:30:21.103981"
   }
 }
