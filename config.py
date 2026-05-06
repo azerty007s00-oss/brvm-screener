@@ -408,6 +408,13 @@ CI_FIXED_HOLIDAYS: list[tuple[int, int]] = [
 # d'environnement CAPITAL_TOTAL (GitHub Actions / Streamlit Secrets).
 CAPITAL_DEFAUT: int = 1_000_000   # 1 million FCFA par défaut
 
+# ─── Politique d'allocation optimale (grid search sur donnees BRVM 2 ans) ─────
+# Resultats optimizer : risk=3.0% / max=20% / min_shares=False
+# Total return +37.8% | Win rate 60.3% | 63 trades | Taille moy 12.4%
+ALLOCATION_RISK_PCT: float        = 3.0    # % de capital risqué par trade
+ALLOCATION_MAX_POSITION_PCT: float = 20.0  # taille max d'une position
+ALLOCATION_MIN_SHARES_POLICY: bool = False  # ne pas forcer l'achat d'1 action minimum
+
 # ─── Diagnostique de liquidité ────────────────────────────────────────────────
 
 DIAGNOSTIC_WINDOW_DAYS = 365         # Fenêtre d'analyse (jours calendaires)

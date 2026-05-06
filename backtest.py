@@ -31,7 +31,13 @@ import numpy as np
 import pandas as pd
 
 from analysis import compute_risk_levels, compute_position_size
-from config import DEFAULT_HORIZON, TICKER_NAMES
+from config import (
+    DEFAULT_HORIZON,
+    TICKER_NAMES,
+    ALLOCATION_RISK_PCT,
+    ALLOCATION_MAX_POSITION_PCT,
+    ALLOCATION_MIN_SHARES_POLICY,
+)
 from indicators import compute_indicators
 from scoring import compute_score
 
@@ -149,10 +155,10 @@ class BacktestEngine:
         trail_stop:           bool              = False,
         close_on_non_achat:   bool              = False,
         close_on_vente:       bool              = False,
-        # Allocation
-        risk_pct:             float             = 1.0,
-        max_position_pct:     float             = 10.0,
-        min_shares_policy:    bool              = False,
+        # Allocation (politique optimale - cf. optimize_allocation.py)
+        risk_pct:             float             = ALLOCATION_RISK_PCT,
+        max_position_pct:     float             = ALLOCATION_MAX_POSITION_PCT,
+        min_shares_policy:    bool              = ALLOCATION_MIN_SHARES_POLICY,
         debug:                bool              = False,
     ):
         self.initial_capital      = initial_capital
@@ -541,10 +547,10 @@ def run_backtest(
     trail_stop:           bool           = False,
     close_on_non_achat:   bool           = False,
     close_on_vente:       bool           = False,
-    # Politique d'allocation (actions entieres BRVM)
-    risk_pct:             float          = 1.0,
-    max_position_pct:     float          = 10.0,
-    min_shares_policy:    bool           = False,
+    # Politique d'allocation (politique optimale - cf. optimize_allocation.py)
+    risk_pct:             float          = ALLOCATION_RISK_PCT,
+    max_position_pct:     float          = ALLOCATION_MAX_POSITION_PCT,
+    min_shares_policy:    bool           = ALLOCATION_MIN_SHARES_POLICY,
     debug:                bool           = False,
     benchmark_series:     Optional[pd.Series] = None,
 ) -> BacktestResult:

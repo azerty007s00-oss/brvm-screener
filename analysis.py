@@ -10,6 +10,7 @@ from typing import Optional
 import pandas as pd
 import numpy as np
 
+from config import ALLOCATION_RISK_PCT, ALLOCATION_MAX_POSITION_PCT
 from indicators import TechnicalIndicators
 from scoring import ScoreResult
 
@@ -61,8 +62,8 @@ class AnalyseComplete:
 def compute_position_size(
     score: ScoreResult,
     ind: TechnicalIndicators,
-    risk_pct: float = 1.0,
-    max_pct: float = 10.0,
+    risk_pct: float = ALLOCATION_RISK_PCT,
+    max_pct: float = ALLOCATION_MAX_POSITION_PCT,
 ) -> Optional[float]:
     """
     D2 - Position sizing hiérarchisé par confiance et potentiel de gain.
