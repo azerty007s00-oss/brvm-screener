@@ -2,14 +2,17 @@
 scraper.py - Collecte de données OHLCV depuis Sika Finance pour la BRVM.
 
 Stratégie :
+0. CSV local data/daily/{ticker}.csv (base journalière bootstrappée par brvm_playwright.py)
 1. Résoudre le ticker en identifiant Sika Finance (ex: BICC → BICC.ci)
-2. Scraper le tableau HTML de la page /marches/historiques/{sika_id}
-3. Fallback : tenter les différents suffixes pays si le mapping est inconnu
+2. API POST /api/general/GetHistos — source primaire (~260 barres daily, ~60 monthly)
+3. Fallback HTML historiques — scraping pagination
+4. Fallback RichBourse si toujours insuffisant
 """
 
 import time
 import logging
 import re
+from pathlib import Path
 from typing import Optional
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -76,6 +79,48 @@ class InsufficientDataError(Exception):
 
 class SourceStructureChangedError(Exception):
     """La structure HTML/JSON de la source a changé - mise à jour du scraper requise."""
+
+
+# ─── CSV local (base journalière bootstrappée) ───────────────────────────────
+
+_LOCAL_DATA_DIR = Path(__file__).parent / "data" / "daily"
+
+
+def _load_local_ohlcv(ticker: str, days: int) -> Optional[pd.DataFrame]:
+    """
+    Charge les données depuis le CSV local data/daily/{ticker}.csv.
+
+    Retourne les `days` dernières barres, ou None si le fichier est absent,
+    vide, ou trop vieux (dernière date > 10 jours ouvrés depuis aujourd'hui).
+    """
+    p = _local_data_dir(ticker)
+    if not p.exists():
+        return None
+    try:
+        df = pd.read_csv(p, index_col="date", parse_dates=True)
+        df.index = pd.to_datetime(df.index)
+        df = df.sort_index()
+        if df.empty or "close" not in df.columns:
+            return None
+
+        last_date = df.index.max()
+        staleness_days = (datetime.now() - last_date).days
+        if staleness_days > 14:
+            logger.warning(
+                f"[LocalCSV] {ticker}: CSV périmé ({staleness_days}j depuis {last_date.date()}) — fallback API"
+            )
+            return None
+
+        df = df[["open", "high", "low", "close", "volume"]]
+        logger.info(f"[LocalCSV] {ticker}: {len(df)} barres chargées (dernière: {last_date.date()})")
+        return df.tail(days)
+    except Exception as e:
+        logger.debug(f"[LocalCSV] {ticker}: erreur lecture CSV: {e}")
+        return None
+
+
+def _local_data_dir(ticker: str) -> Path:
+    return _LOCAL_DATA_DIR / f"{ticker.upper()}.csv"
 
 
 # ─── Résolution du ticker → ID Sika Finance ──────────────────────────────────
@@ -408,20 +453,30 @@ def get_ohlcv(ticker: str, days: int = 365, period: str = "daily") -> pd.DataFra
         df.index = pd.to_datetime(df.index)
         return df
 
-    # 2. Résoudre le ticker
+    # 2. CSV local (base journalière pré-bootstrappée, mise à jour daily)
+    if period == "daily":
+        df_local = _load_local_ohlcv(ticker, days)
+        if df_local is not None and len(df_local) >= min(days, MIN_DATA_POINTS):
+            _validate_ohlcv(df_local, ticker)
+            df_local_cache = df_local.copy()
+            df_local_cache.index = df_local_cache.index.strftime("%Y-%m-%d")
+            cache.set(cache_key, df_local_cache.to_dict())
+            return df_local
+
+    # 3. Résoudre le ticker
     sika_id = _resolve_sika_id(ticker)
     logger.info(f"Ticker {ticker} → Sika ID: {sika_id}")
 
     df = None
     errors = []
 
-    # 3. API POST GetHistos - source primaire
+    # 4. API POST GetHistos - source primaire
     try:
         df = _fetch_sika_api(sika_id, days, period=period)
     except Exception as e:
         errors.append(f"SikaFinance API: {e}")
 
-    # 4. Fallback HTML historiques (daily seulement)
+    # 5. Fallback HTML historiques (daily seulement)
     if period == "daily" and (df is None or len(df) < MIN_DATA_POINTS):
         try:
             df_html = _fetch_sika_historiques(sika_id, days)
@@ -430,7 +485,7 @@ def get_ohlcv(ticker: str, days: int = 365, period: str = "daily") -> pd.DataFra
         except Exception as e:
             errors.append(f"SikaFinance HTML: {e}")
 
-    # 5. Fallback RichBourse si toujours insuffisant (daily seulement)
+    # 6. Fallback RichBourse si toujours insuffisant (daily seulement)
     if period == "daily" and (df is None or len(df) < MIN_DATA_POINTS):
         try:
             df_rb = richbourse.fetch_ohlcv(sika_id, days)

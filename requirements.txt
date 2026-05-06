@@ -15,6 +15,10 @@ urllib3>=1.26
 beautifulsoup4>=4.12
 lxml>=4.9
 
+# Bootstrap base de données (optionnel - bootstrap une seule fois en local)
+# pip install playwright && python -m playwright install chromium
+# playwright>=1.44
+
 # Graphiques
 plotly>=5.18
 

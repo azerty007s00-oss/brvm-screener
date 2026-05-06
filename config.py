@@ -366,9 +366,12 @@ BRVM_INDEX_TICKER = "BRVMC"
 # ─── Périodes disponibles dans l'interface ────────────────────────────────────
 
 PERIODES_DISPONIBLES = {
-    "90 jours": 90,
+    "90 jours":  90,
     "180 jours": 180,
     "365 jours": 365,
+    "2 ans":     500,
+    "3 ans":     750,
+    "5 ans":     1250,
 }
 
 # ─── Headers HTTP (éviter les blocages basiques) ──────────────────────────────

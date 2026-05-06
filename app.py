@@ -1211,7 +1211,7 @@ def render_backtest_page() -> None:
     _period_label = "mensuel 5 ans" if data_period_bt == "monthly" else "journalier 1 an"
     with st.spinner(f"Backtest en cours - {len(tickers_bt)} tickers, {_period_label}, revue /{review_bt}j…"):
         try:
-            _days = 60 if data_period_bt == "monthly" else 730
+            _days = 60 if data_period_bt == "monthly" else 1250
             _max_atr = 25.0 if data_period_bt == "monthly" else 4.0
             _min_atr = 3.0  if data_period_bt == "monthly" else 2.0
             result = fetch_and_backtest(

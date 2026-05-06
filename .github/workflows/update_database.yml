@@ -1,0 +1,44 @@
+name: BRVM Daily Database Update
+
+on:
+  schedule:
+    - cron: '15 15 * * 1-5'   # 15:15 UTC lun-ven (15 min après clôture BRVM 15:00 UTC)
+  workflow_dispatch:            # Déclenchement manuel depuis l'onglet Actions
+
+permissions:
+  contents: write               # Nécessaire pour git push des CSV mis à jour
+
+jobs:
+  update-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run database update
+        run: python update_database.py
+
+      - name: Commit updated CSVs
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/daily/*.csv
+          if git diff --cached --quiet; then
+            echo "Aucune nouvelle donnée à committer."
+          else
+            git commit -m "data: mise à jour journalière OHLCV $(date -u '+%Y-%m-%d')"
+            git push
+          fi

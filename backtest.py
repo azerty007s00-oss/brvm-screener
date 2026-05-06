@@ -1025,7 +1025,7 @@ if __name__ == "__main__":
     tickers_arg = [a for a in args if not a.startswith("--")]
     tickers = tickers_arg if tickers_arg else ALL_TICKERS
 
-    _days   = 60  if monthly else 730
+    _days   = 60  if monthly else 1250
     _period = "monthly" if monthly else "daily"
 
     print(f"\nBACKTEST BRVM (long-only, revue /{REVIEW_INTERVAL_DAYS}j, {_period})")
