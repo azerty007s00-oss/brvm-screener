@@ -11,7 +11,7 @@ permissions:
 jobs:
   close-market-report:
     runs-on: ubuntu-latest
-    timeout-minutes: 25       # Le scan de 46 tickers prend ~15 min
+    timeout-minutes: 10       # Seulement les tickers du portefeuille
 
     steps:
       - name: Checkout

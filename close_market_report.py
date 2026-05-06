@@ -2,19 +2,22 @@
 close_market_report.py - Rapport de cloture BRVM.
 
 Declenche par GitHub Actions a 15:00 UTC (cloture marche BRVM).
-Scanne les 46 titres de l'univers, compare avec les positions ouvertes
-du journal de trading (tracking.py) et envoie un email actionnable.
+Verifie UNIQUEMENT les positions ouvertes du journal de trading (tracking.py).
+N'envoie aucun email si toutes les positions sont stables (CONSERVER).
 
-Contenu du rapport :
-  1. Nouvelles opportunites  - signaux ACHAT/VENTE avec entree / TP / SL
-  2. Positions a fermer      - TP/SL atteints ou signal inverse
-  3. Ajustements SL          - trailing stop vers breakeven ou +25% gain
-  4. Positions stables       - rien a faire, recap PnL courant
+Actions detectees :
+  FERMER_TP      - target atteint, prendre les benefices
+  FERMER_SL      - stop touche, couper la perte
+  FERMER_SIGNAL  - signal inverse
+  AJUSTER_SL_BE  - trailing stop vers breakeven (>= 50% du chemin vers TP)
+  AJUSTER_SL_25  - SL securise +25% gain (>= 75% du chemin)
+  CONSERVER      - rien a faire
 
 Variables d'environnement (GitHub Secrets) :
   ALERT_EMAIL_FROM      - adresse Gmail expeditrice
   ALERT_EMAIL_PASSWORD  - mot de passe d'application Google (App Password)
   ALERT_EMAIL_TO        - adresse destinataire
+  CAPITAL_TOTAL         - capital en FCFA (defaut : config.CAPITAL_DEFAUT)
 
 Usage manuel :
   python close_market_report.py
@@ -33,108 +36,65 @@ from typing import Optional
 sys.path.insert(0, str(Path(__file__).parent))
 
 from analysis import nb_actions_entier
-from config import (
-    CAPITAL_DEFAUT,
-    DEFAULT_HORIZON,
-    TICKER_NAMES,
-    TICKER_TO_SIKA_ID,
-)
+from config import CAPITAL_DEFAUT, DEFAULT_HORIZON, TICKER_NAMES
 from indicators import compute_indicators
 from scraper import get_ohlcv
 from scoring import compute_score
 from tracking import get_open_trades, update_open_trades
 
-# Capital de reference : variable d'environnement CAPITAL_TOTAL ou valeur config
 _CAPITAL = int(os.environ.get("CAPITAL_TOTAL", CAPITAL_DEFAUT))
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
-# Tickers exclus du scan (indices composes)
-_INDEX_TICKERS: frozenset = frozenset(
-    {"BRVMC", "BRVM30", "BRVM-IN", "BRVM-TEL", "BRVM-EN"}
-)
-
-# Trailing stop : seuils de progression vers le TP
 _TRAIL_BREAKEVEN_PCT = 0.50   # >= 50% du chemin vers TP -> SL au breakeven
 _TRAIL_LOCK25_PCT    = 0.75   # >= 75% -> SL a +25% du gain potentiel
 
 
 # ---------------------------------------------------------------------------
-# 1. Scan de l'univers
+# 1. Fetch prix courants pour les tickers du portefeuille uniquement
 # ---------------------------------------------------------------------------
 
-def scan_all_tickers(horizon: str = DEFAULT_HORIZON) -> list[dict]:
+def fetch_portfolio_prices(
+    tickers: list,
+    horizon: str = DEFAULT_HORIZON,
+) -> dict:
     """
-    Scanne tous les tickers BRVM et retourne les resultats de scoring.
+    Fetche OHLCV + indicateurs + score pour chaque ticker du portefeuille.
 
     Returns:
-        Liste de dicts {ticker, nom, signal, score, confiance,
-                        entry_price, take_profit, stop_loss, rr, position_pct}
+        {ticker: {current_price, signal, confiance, take_profit, stop_loss, position_pct}}
     """
-    tickers = [t for t in TICKER_TO_SIKA_ID if t not in _INDEX_TICKERS]
-    results = []
-
+    results = {}
     for ticker in tickers:
-        logger.info("[Scan] %s...", ticker)
+        logger.info("[Portfolio] Fetch %s...", ticker)
         try:
             df = get_ohlcv(ticker, days=365)
             if df is None or df.empty:
-                logger.warning("[Scan] %s - donnees vides", ticker)
+                logger.warning("[Portfolio] %s - donnees vides", ticker)
                 continue
-
             ind   = compute_indicators(df, ticker=ticker, horizon=horizon)
             score = compute_score(ind)
-
-            results.append({
-                "ticker":       ticker,
-                "nom":          TICKER_NAMES.get(ticker, ticker),
-                "signal":       score.signal,
-                "score":        score.score_total,
-                "confiance":    score.confiance,
-                "entry_price":  ind.cours_actuel,
-                "take_profit":  score.take_profit,
-                "stop_loss":    score.stop_loss,
-                "rr":           _compute_rr(
-                    ind.cours_actuel, score.stop_loss,
-                    score.take_profit, score.signal,
-                ),
-                "position_pct": score.position_size_pct,
-            })
+            results[ticker] = {
+                "current_price": ind.cours_actuel,
+                "signal":        score.signal,
+                "confiance":     score.confiance,
+                "take_profit":   score.take_profit,
+                "stop_loss":     score.stop_loss,
+                "position_pct":  score.position_size_pct,
+            }
         except Exception as exc:
-            logger.warning("[Scan] %s - erreur : %s", ticker, exc)
-
+            logger.warning("[Portfolio] %s - erreur : %s", ticker, exc)
     return results
-
-
-def _compute_rr(
-    entry: float,
-    sl: Optional[float],
-    tp: Optional[float],
-    signal: str,
-) -> Optional[float]:
-    if None in (entry, sl, tp) or entry <= 0:
-        return None
-    risk   = abs(entry - sl)
-    reward = abs(tp - entry)
-    return round(reward / risk, 2) if risk > 0 else None
 
 
 # ---------------------------------------------------------------------------
 # 2. Actions sur positions ouvertes
 # ---------------------------------------------------------------------------
 
-def get_position_actions(scan_results: list[dict]) -> list[dict]:
+def get_position_actions(portfolio_data: dict) -> list:
     """
-    Pour chaque trade ouvert dans le journal, determine l'action recommandee.
-
-    Actions possibles :
-      FERMER_TP      - target atteint, prendre les benefices
-      FERMER_SL      - stop touche, couper la perte
-      FERMER_SIGNAL  - signal inverse (ACHAT -> VENTE ou vice versa)
-      AJUSTER_SL_BE  - deplacer SL au breakeven (>= 50% chemin vers TP)
-      AJUSTER_SL_25  - SL a +25% gain potentiel (>= 75% chemin)
-      CONSERVER      - rien a faire
+    Determine l'action recommandee pour chaque position ouverte du journal.
 
     Returns:
         Liste triee : fermetures en premier, ajustements ensuite, stable en fin.
@@ -143,26 +103,24 @@ def get_position_actions(scan_results: list[dict]) -> list[dict]:
     if open_trades.empty:
         return []
 
-    scan_by_ticker = {r["ticker"]: r for r in scan_results}
     actions = []
-
     for _, row in open_trades.iterrows():
         ticker = str(row["ticker"])
         signal = str(row["signal"])
 
         try:
-            entry  = float(row["entry_price"])
-            sl     = float(row["stop_loss"])
-            tp     = float(row["take_profit"])
+            entry = float(row["entry_price"])
+            sl    = float(row["stop_loss"])
+            tp    = float(row["take_profit"])
         except (ValueError, TypeError):
             continue
 
-        scan_row = scan_by_ticker.get(ticker)
-        if scan_row is None:
+        pdata = portfolio_data.get(ticker)
+        if pdata is None:
             continue
 
-        current        = float(scan_row["entry_price"])
-        current_signal = scan_row.get("signal", "NEUTRE")
+        current        = float(pdata["current_price"])
+        current_signal = pdata.get("signal", "NEUTRE")
 
         # Priorite 1 - cloture TP/SL
         action = _check_close(signal, sl, tp, current)
@@ -179,8 +137,6 @@ def get_position_actions(scan_results: list[dict]) -> list[dict]:
         if action == "CONSERVER":
             action, new_sl = _check_trail(signal, entry, sl, tp, current)
 
-        pnl_pct = _pnl(signal, entry, current)
-
         actions.append({
             "ticker":         ticker,
             "nom":            TICKER_NAMES.get(ticker, ticker),
@@ -190,12 +146,11 @@ def get_position_actions(scan_results: list[dict]) -> list[dict]:
             "stop_loss":      sl,
             "take_profit":    tp,
             "new_sl":         new_sl,
-            "pnl_pct":        round(pnl_pct, 2),
+            "pnl_pct":        round(_pnl(signal, entry, current), 2),
             "action":         action,
             "current_signal": current_signal,
         })
 
-    # Tri : fermetures > ajustements > stable
     _priority = {"FERMER": 0, "AJUSTER": 1, "CONSERVER": 2}
     return sorted(actions, key=lambda x: _priority.get(x["action"][:7], 2))
 
@@ -221,7 +176,6 @@ def _check_trail(
     tp: float,
     current: float,
 ) -> tuple:
-    """Retourne (action, new_sl) ou ("CONSERVER", None)."""
     distance = abs(tp - entry)
     if distance <= 0:
         return "CONSERVER", None
@@ -265,82 +219,23 @@ def _pnl(signal: str, entry: float, current: float) -> float:
 # 3. Construction de l'email HTML
 # ---------------------------------------------------------------------------
 
-def build_html_report(
-    scan_results: list[dict],
-    position_actions: list[dict],
-) -> str:
-    ts          = datetime.now().strftime("%d/%m/%Y a %H:%M UTC")
-    open_tickers = {a["ticker"] for a in position_actions}
-
-    # Nouvelles opportunites = signaux hors positions deja ouvertes
-    new_signals = [
-        r for r in scan_results
-        if r["signal"] in ("ACHAT", "VENTE")
-        and r["ticker"] not in open_tickers
-        and r["stop_loss"] is not None
-    ]
-    new_signals.sort(key=lambda x: x.get("score", 0), reverse=True)
+def build_html_report(position_actions: list) -> str:
+    ts = datetime.now().strftime("%d/%m/%Y a %H:%M UTC")
 
     fermer    = [a for a in position_actions if a["action"].startswith("FERMER")]
     ajuster   = [a for a in position_actions if a["action"].startswith("AJUSTER")]
     conserver = [a for a in position_actions if a["action"] == "CONSERVER"]
+    n_actions = len(fermer) + len(ajuster)
 
     p = []
     p.append(
         "<div style='font-family:Arial,sans-serif;max-width:720px;margin:auto'>"
         "<h2 style='color:#1a3c5e;border-bottom:2px solid #1a3c5e;padding-bottom:8px'>"
-        "BRVM - Rapport de cloture</h2>"
+        "BRVM - Rapport de cloture (Portefeuille)</h2>"
         f"<p style='color:#666;font-size:13px'>Rapport automatique du {ts}</p>"
     )
 
-    # --- Section 1 : nouvelles opportunites ---
-    p.append(
-        f"<h3 style='color:#0F6E56'>Nouvelles opportunites ({len(new_signals)})</h3>"
-    )
-    if new_signals:
-        p.append(
-            "<table style='width:100%;border-collapse:collapse;font-size:13px'>"
-            "<tr style='background:#1a3c5e;color:white'>"
-            "<th style='padding:8px;text-align:left'>Ticker</th>"
-            "<th>Signal</th><th>Entree (FCFA)</th>"
-            "<th>Stop Loss</th><th>Take Profit</th>"
-            f"<th>Nb actions</th><th>Montant</th>"
-            "<th>R/R</th><th>Confiance</th>"
-            "</tr>"
-        )
-        for i, r in enumerate(new_signals):
-            bg        = "#f9f9f9" if i % 2 else "white"
-            sig_color = "#0F6E56" if r["signal"] == "ACHAT" else "#A32D2D"
-            sig_arrow = "+" if r["signal"] == "ACHAT" else "-"
-            rr_str    = f"{r['rr']:.1f}x" if r["rr"] else "-"
-            sl_str    = f"{r['stop_loss']:,.0f}" if r["stop_loss"] else "-"
-            tp_str    = f"{r['take_profit']:,.0f}" if r["take_profit"] else "-"
-            nb        = nb_actions_entier(_CAPITAL, r.get("position_pct"), r["entry_price"])
-            montant   = nb * r["entry_price"] if nb > 0 else 0
-            p.append(
-                f"<tr style='background:{bg}'>"
-                f"<td style='padding:7px;border-bottom:1px solid #eee'>"
-                f"<b>{r['ticker']}</b>"
-                f"<br><span style='color:#888;font-size:11px'>{r['nom'][:25]}</span></td>"
-                f"<td style='text-align:center;color:{sig_color}'>"
-                f"<b>{sig_arrow} {r['signal']}</b></td>"
-                f"<td style='text-align:right'>{r['entry_price']:,.0f}</td>"
-                f"<td style='text-align:right;color:#A32D2D'>{sl_str}</td>"
-                f"<td style='text-align:right;color:#0F6E56'>{tp_str}</td>"
-                f"<td style='text-align:center'><b>{nb}</b></td>"
-                f"<td style='text-align:right'>{montant:,.0f}</td>"
-                f"<td style='text-align:center'><b>{rr_str}</b></td>"
-                f"<td style='text-align:center'>{r['confiance']}</td>"
-                f"</tr>"
-            )
-        p.append("</table>")
-    else:
-        p.append(
-            "<p style='color:#888;font-style:italic'>"
-            "Aucune nouvelle opportunite detectee aujourd'hui.</p>"
-        )
-
-    # --- Section 2 : positions a fermer ---
+    # --- Section 1 : positions a fermer ---
     if fermer:
         p.append(
             f"<h3 style='color:#A32D2D'>Positions a fermer ({len(fermer)})</h3>"
@@ -375,7 +270,7 @@ def build_html_report(
                 f"</div>"
             )
 
-    # --- Section 3 : ajustements SL ---
+    # --- Section 2 : ajustements SL ---
     if ajuster:
         p.append(
             f"<h3 style='color:#BA7517'>Ajustements SL recommandes ({len(ajuster)})</h3>"
@@ -410,10 +305,10 @@ def build_html_report(
                 f"</div>"
             )
 
-    # --- Section 4 : positions stables ---
+    # --- Section 3 : positions stables (recap) ---
     if conserver:
         p.append(
-            f"<h3 style='color:#1A6E9A'>Positions stables - rien a faire ({len(conserver)})</h3>"
+            f"<h3 style='color:#1A6E9A'>Positions stables ({len(conserver)})</h3>"
         )
         p.append(
             "<table style='width:100%;border-collapse:collapse;font-size:13px'>"
@@ -443,11 +338,9 @@ def build_html_report(
         p.append("</table>")
 
     # Footer
-    n_actions = len(fermer) + len(ajuster)
     p.append(
         "<hr style='border:1px solid #ddd;margin-top:20px'>"
         f"<p style='color:#888;font-size:12px'>"
-        f"{len(new_signals)} nouvelle(s) opportunite(s) | "
         f"{n_actions} action(s) requise(s) | "
         f"{len(conserver)} position(s) stable(s)<br>"
         "Rapport automatique BRVM Screener - "
@@ -462,7 +355,7 @@ def build_html_report(
 # 4. Envoi de l'email
 # ---------------------------------------------------------------------------
 
-def send_report(html_body: str, n_new: int, n_actions: int) -> None:
+def send_report(html_body: str, n_actions: int) -> None:
     email_from = os.environ.get("ALERT_EMAIL_FROM", "").strip()
     email_pass = os.environ.get("ALERT_EMAIL_PASSWORD", "").strip()
     email_to   = os.environ.get("ALERT_EMAIL_TO", email_from).strip()
@@ -474,12 +367,8 @@ def send_report(html_body: str, n_new: int, n_actions: int) -> None:
         )
         return
 
-    today  = datetime.now().strftime("%d/%m/%Y")
-    prefix = "URGENT" if n_actions > 0 else "INFO"
-    subject = (
-        f"[BRVM] Cloture {today} - "
-        f"{n_new} opportunite(s) | {n_actions} action(s) requise(s) [{prefix}]"
-    )
+    today   = datetime.now().strftime("%d/%m/%Y")
+    subject = f"[BRVM] Cloture {today} - {n_actions} action(s) requise(s) [URGENT]"
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
@@ -507,13 +396,26 @@ if __name__ == "__main__":
         f"{datetime.now().strftime('%Y-%m-%d %H:%M UTC')} ==="
     )
 
-    # Scan complet de l'univers
-    print("[Rapport] Scan en cours sur tous les tickers...")
-    scan_results = scan_all_tickers()
-    print(f"[Rapport] {len(scan_results)} tickers analyses")
+    # Charger les positions ouvertes du journal
+    open_trades = get_open_trades()
+    if open_trades.empty:
+        print("[Rapport] Portefeuille vide - aucun email envoye.")
+        sys.exit(0)
 
-    # Mise a jour du journal : cloture automatique stop/target/timeout
-    ticker_prices = {r["ticker"]: r["entry_price"] for r in scan_results}
+    portfolio_tickers = open_trades["ticker"].unique().tolist()
+    print(
+        f"[Rapport] {len(portfolio_tickers)} position(s) ouverte(s) : "
+        f"{', '.join(portfolio_tickers)}"
+    )
+
+    # Fetch prix actuels uniquement pour les tickers du portefeuille
+    portfolio_data = fetch_portfolio_prices(portfolio_tickers)
+    if not portfolio_data:
+        print("[Rapport] Impossible de recuperer les prix - aucun email envoye.")
+        sys.exit(0)
+
+    # Mise a jour du journal (cloture automatique stop/target/timeout)
+    ticker_prices = {t: d["current_price"] for t, d in portfolio_data.items()}
     closed_today  = update_open_trades(ticker_prices)
     if closed_today:
         print(f"[Rapport] {len(closed_today)} trade(s) cloture(s) par le journal")
@@ -523,20 +425,22 @@ if __name__ == "__main__":
                 f"pnl={t['pnl_pct']:+.1f}% ({t['days_held']}j)"
             )
 
-    # Actions sur positions encore ouvertes
-    position_actions = get_position_actions(scan_results)
+    # Determiner les actions requises
+    position_actions = get_position_actions(portfolio_data)
 
-    n_new     = sum(1 for r in scan_results if r["signal"] in ("ACHAT", "VENTE"))
     n_actions = sum(1 for a in position_actions if a["action"] != "CONSERVER")
-
-    print(f"[Rapport] Nouvelles opportunites : {n_new}")
-    print(f"[Rapport] Actions sur positions  : {n_actions}")
+    print(f"[Rapport] Actions requises : {n_actions}")
     for a in position_actions:
         if a["action"] != "CONSERVER":
             print(f"  {a['ticker']} -> {a['action']} (PnL {a['pnl_pct']:+.2f}%)")
 
-    # Construction et envoi
-    html = build_html_report(scan_results, position_actions)
-    send_report(html, n_new, n_actions)
+    # Pas d'email si toutes les positions sont stables
+    if n_actions == 0:
+        print("[Rapport] Toutes les positions sont stables - aucun email envoye.")
+        sys.exit(0)
+
+    # Construction et envoi de l'email
+    html = build_html_report(position_actions)
+    send_report(html, n_actions)
 
     print("[Rapport] Termine.")
