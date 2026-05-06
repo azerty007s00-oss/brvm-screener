@@ -62,6 +62,7 @@ def compute_position_size(
     score: ScoreResult,
     ind: TechnicalIndicators,
     risk_pct: float = 1.0,
+    max_pct: float = 10.0,
 ) -> Optional[float]:
     """
     D2 - Position sizing hiérarchisé par confiance et potentiel de gain.
@@ -70,7 +71,7 @@ def compute_position_size(
     conf_factor = forte=1.0 | modérée=0.65 | faible=0.35
     gain_factor = score_total / score_max mappé → [0.75, 1.25]
     final       = base × conf_factor × gain_factor × haircut_liquidité
-    Clampé [1%, 10%].
+    Clampé [1%, max_pct].
     """
     if score.stop_loss is None or ind.atr_pct is None or ind.atr_pct <= 0:
         return None
@@ -108,7 +109,7 @@ def compute_position_size(
         else:
             raw *= 0.85
 
-    return round(min(10.0, max(1.0, raw)), 1)
+    return round(min(max_pct, max(1.0, raw)), 1)
 
 
 def nb_actions_entier(

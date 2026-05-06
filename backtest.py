@@ -149,6 +149,10 @@ class BacktestEngine:
         trail_stop:           bool              = False,
         close_on_non_achat:   bool              = False,
         close_on_vente:       bool              = False,
+        # Allocation
+        risk_pct:             float             = 1.0,
+        max_position_pct:     float             = 10.0,
+        min_shares_policy:    bool              = False,
         debug:                bool              = False,
     ):
         self.initial_capital      = initial_capital
@@ -169,6 +173,9 @@ class BacktestEngine:
         self.trail_stop           = trail_stop
         self.close_on_non_achat   = close_on_non_achat
         self.close_on_vente       = close_on_vente
+        self.risk_pct             = risk_pct
+        self.max_position_pct     = max_position_pct
+        self.min_shares_policy    = min_shares_policy
         self.debug                = debug or DEBUG_MODE
 
         self._open:    dict[str, Position] = {}
@@ -285,7 +292,11 @@ class BacktestEngine:
                             ind   = compute_indicators(df_slice, ticker=ticker, horizon=self.horizon)
                             score = compute_score(ind)
                             score.stop_loss, score.take_profit = compute_risk_levels(score, ind, df_slice)
-                            score.position_size_pct = compute_position_size(score, ind)
+                            score.position_size_pct = compute_position_size(
+                                score, ind,
+                                risk_pct=self.risk_pct,
+                                max_pct=self.max_position_pct,
+                            )
                         except Exception as exc:
                             logger.debug(f"[Backtest] {ticker} {current_date} indicators KO: {exc}")
                             continue
@@ -401,13 +412,26 @@ class BacktestEngine:
         ) if entry_price > 0 else 0
 
         if nb_actions == 0:
-            if self.debug:
-                print(
-                    f"  SKIP  {current_date}  {ticker:<8}  "
-                    f"capital insuffisant pour 1 action a {entry_price:,.0f} FCFA "
-                    f"(alloc={score.position_size_pct:.1f}% de {self._equity:,.0f})"
-                )
-            return
+            # min_shares_policy : acheter 1 action si son cout <= max_position_pct
+            if self.min_shares_policy and entry_price > 0:
+                one_share_pct = entry_price / self._equity * 100
+                if one_share_pct <= self.max_position_pct:
+                    nb_actions = 1
+                else:
+                    if self.debug:
+                        print(
+                            f"  SKIP  {current_date}  {ticker:<8}  "
+                            f"1 action = {one_share_pct:.1f}% > max {self.max_position_pct:.0f}%"
+                        )
+                    return
+            else:
+                if self.debug:
+                    print(
+                        f"  SKIP  {current_date}  {ticker:<8}  "
+                        f"0 action avec alloc {score.position_size_pct:.1f}% "
+                        f"a {entry_price:,.0f} FCFA / equity {self._equity:,.0f}"
+                    )
+                return
 
         # Position reelle apres arrondi (toujours <= position_size_pct)
         capital_investi   = nb_actions * entry_price
@@ -517,6 +541,10 @@ def run_backtest(
     trail_stop:           bool           = False,
     close_on_non_achat:   bool           = False,
     close_on_vente:       bool           = False,
+    # Politique d'allocation (actions entieres BRVM)
+    risk_pct:             float          = 1.0,
+    max_position_pct:     float          = 10.0,
+    min_shares_policy:    bool           = False,
     debug:                bool           = False,
     benchmark_series:     Optional[pd.Series] = None,
 ) -> BacktestResult:
@@ -539,6 +567,9 @@ def run_backtest(
         trail_stop           = trail_stop,
         close_on_non_achat   = close_on_non_achat,
         close_on_vente       = close_on_vente,
+        risk_pct             = risk_pct,
+        max_position_pct     = max_position_pct,
+        min_shares_policy    = min_shares_policy,
         debug                = debug,
     ).run(ticker_data)
 
@@ -570,27 +601,32 @@ def run_backtest(
 
 
 def fetch_and_backtest(
-    tickers:     list[str],
-    days:        int = 730,
-    data_period: str = "daily",
+    tickers:              list[str],
+    days:                 int = 730,
+    data_period:          str = "daily",
+    ticker_data_override: Optional[dict] = None,
     **kwargs,
 ) -> BacktestResult:
     from scraper import get_ohlcv, TickerNotFoundError, InsufficientDataError
 
-    # Données mensuelles : 60 barres = 5 ans
-    if data_period == "monthly" and days == 730:
-        days = 60
+    # Donnees pre-fetches (evite un double fetch dans l'optimiseur)
+    if ticker_data_override is not None:
+        ticker_data = {t: df for t, df in ticker_data_override.items() if t in tickers}
+    else:
+        # Données mensuelles : 60 barres = 5 ans
+        if data_period == "monthly" and days == 730:
+            days = 60
 
-    ticker_data: dict[str, pd.DataFrame] = {}
-    for ticker in tickers:
-        try:
-            df = get_ohlcv(ticker, days=days, period=data_period)
-            ticker_data[ticker] = df
-            logger.info(f"[Backtest] {ticker} - {len(df)} barres ({data_period})")
-        except (TickerNotFoundError, InsufficientDataError) as exc:
-            logger.warning(f"[Backtest] {ticker} ignore - {exc}")
-        except Exception as exc:
-            logger.warning(f"[Backtest] {ticker} erreur fetch - {exc}")
+        ticker_data: dict[str, pd.DataFrame] = {}
+        for ticker in tickers:
+            try:
+                df = get_ohlcv(ticker, days=days, period=data_period)
+                ticker_data[ticker] = df
+                logger.info(f"[Backtest] {ticker} - {len(df)} barres ({data_period})")
+            except (TickerNotFoundError, InsufficientDataError) as exc:
+                logger.warning(f"[Backtest] {ticker} ignore - {exc}")
+            except Exception as exc:
+                logger.warning(f"[Backtest] {ticker} erreur fetch - {exc}")
 
     if not ticker_data:
         raise RuntimeError("Aucun ticker disponible pour le backtest")
