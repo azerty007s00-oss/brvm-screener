@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "ticker": "BOAB",
+    "entry_price": 9250.0,
+    "quantity": 110,
+    "stop_loss": null,
+    "take_profit": null,
+    "entry_date": "2026-05-06",
+    "current_price": 9250.0,
+    "refreshed_at": "2026-05-06 12:27"
+  }
+]
