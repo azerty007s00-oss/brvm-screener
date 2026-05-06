@@ -1114,9 +1114,9 @@ def render_backtest_page() -> None:
             data_period_bt = st.radio(
                 "Historique",
                 options=["daily", "monthly"],
-                format_func=lambda x: "📅 1 an - journalier (~260 barres)" if x == "daily" else "📆 5 ans - mensuel (~60 barres)",
+                format_func=lambda x: "📅 5 ans - journalier (~1 250 barres)" if x == "daily" else "📆 5 ans - mensuel (~60 barres)",
                 index=0,
-                help="Journalier : API SikaFinance ~260 barres. Mensuel : ~60 barres mensuelles couvrant 5 ans (2021-2026).",
+                help="Journalier : base CSV locale data/daily/ (~1 250 barres, 5 ans). Mensuel : ~60 barres mensuelles SikaFinance.",
             )
 
         with col2:
@@ -1208,7 +1208,7 @@ def render_backtest_page() -> None:
         st.warning("Cochez au moins un niveau de confiance.")
         return
 
-    _period_label = "mensuel 5 ans" if data_period_bt == "monthly" else "journalier 1 an"
+    _period_label = "mensuel 5 ans" if data_period_bt == "monthly" else "journalier 5 ans"
     with st.spinner(f"Backtest en cours - {len(tickers_bt)} tickers, {_period_label}, revue /{review_bt}j…"):
         try:
             _days = 60 if data_period_bt == "monthly" else 1250
