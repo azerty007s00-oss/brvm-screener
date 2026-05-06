@@ -38,7 +38,7 @@ from config import (
     ALLOCATION_MAX_POSITION_PCT,
     ALLOCATION_MIN_SHARES_POLICY,
 )
-from indicators import compute_indicators
+from indicators import compute_indicators, _fill_ohlcv_gaps, precompute_backtest_indicators
 from scoring import compute_score
 
 logger = logging.getLogger(__name__)
@@ -212,6 +212,20 @@ class BacktestEngine:
         if not ticker_data:
             raise ValueError("ticker_data est vide")
 
+        # Pré-remplissage des gaps une fois par ticker
+        ticker_data = {t: _fill_ohlcv_gaps(df)[0] for t, df in ticker_data.items()}
+
+        # Précompute vectorisé de tous les indicateurs (une seule passe par ticker)
+        _precomp: dict[str, dict] = {}
+        for t, df_full in ticker_data.items():
+            _precomp[t] = precompute_backtest_indicators(
+                df_full, ticker=t,
+                df_index=self.df_index,
+                horizon=self.horizon,
+                warmup_bars=self.warmup_bars,
+            )
+        logger.info(f"[Backtest] Précompute terminé pour {len(_precomp)} tickers")
+
         all_dates: list[date] = sorted({
             idx.date() if hasattr(idx, "date") else idx
             for df in ticker_data.values()
@@ -256,12 +270,10 @@ class BacktestEngine:
                 del self._pending[ticker]
 
             for ticker, df_full in ticker_data.items():
-                df_slice = df_full[df_full.index <= ts]
-
                 if ts not in df_full.index:
                     continue
-                if len(df_slice) < self.warmup_bars:
-                    continue
+                if ts not in _precomp.get(ticker, {}):
+                    continue  # pas encore assez de barres (warmup)
 
                 current_bar   = df_full.loc[ts]
                 current_price = float(current_bar["close"])
@@ -295,9 +307,12 @@ class BacktestEngine:
                         if current_volume == 0:
                             continue
 
+                        ind = _precomp.get(ticker, {}).get(ts)
+                        if ind is None:
+                            continue
                         try:
-                            ind   = compute_indicators(df_slice, ticker=ticker, horizon=self.horizon)
                             score = compute_score(ind)
+                            df_slice = df_full[df_full.index <= ts].iloc[-50:]
                             score.stop_loss, score.take_profit = compute_risk_levels(score, ind, df_slice)
                             score.position_size_pct = compute_position_size(
                                 score, ind,
@@ -305,7 +320,7 @@ class BacktestEngine:
                                 max_pct=self.max_position_pct,
                             )
                         except Exception as exc:
-                            logger.debug(f"[Backtest] {ticker} {current_date} indicators KO: {exc}")
+                            logger.debug(f"[Backtest] {ticker} {current_date} score KO: {exc}")
                             continue
 
                         if (score.signal == "ACHAT"
@@ -332,8 +347,10 @@ class BacktestEngine:
                         # Réévaluation du signal pour position ouverte
                         _need = self.trail_stop or self.close_on_non_achat or self.close_on_vente or self.tp_trail_signal
                         if _need:
+                            ind = _precomp.get(ticker, {}).get(ts)
+                            if ind is None:
+                                continue
                             try:
-                                ind   = compute_indicators(df_slice, ticker=ticker, horizon=self.horizon)
                                 score = compute_score(ind)
                                 pos   = self._open[ticker]
 

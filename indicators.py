@@ -107,10 +107,14 @@ def _calc_adx(
     length: int = 14,
 ) -> tuple[pd.Series, pd.Series, pd.Series]:
     """Calcule l'ADX, +DI et -DI."""
+    prev_close = close.shift(1)
     tr1 = high - low
-    tr2 = (high - close.shift(1)).abs()
-    tr3 = (low - close.shift(1)).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    tr2 = (high - prev_close).abs()
+    tr3 = (low - prev_close).abs()
+    tr = pd.Series(
+        np.maximum(tr1.values, np.maximum(tr2.values, tr3.values)),
+        index=high.index,
+    )
 
     plus_dm = high.diff()
     minus_dm = -low.diff()
@@ -135,10 +139,14 @@ def _calc_atr(
     """ATR de Wilder - formule identique à _calc_adx pour cohérence interne."""
     if len(close) < period + 1:
         return None
+    prev_close = close.shift(1)
     tr1 = high - low
-    tr2 = (high - close.shift(1)).abs()
-    tr3 = (low - close.shift(1)).abs()
-    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+    tr2 = (high - prev_close).abs()
+    tr3 = (low - prev_close).abs()
+    tr = pd.Series(
+        np.maximum(tr1.values, np.maximum(tr2.values, tr3.values)),
+        index=high.index,
+    )
     return tr.ewm(alpha=1.0 / period, min_periods=period, adjust=False).mean()
 
 
@@ -313,6 +321,8 @@ def compute_indicators(
     ticker: str,
     df_index: Optional[pd.DataFrame] = None,
     horizon: str = DEFAULT_HORIZON,
+    compute_events: bool = True,
+    fill_gaps: bool = True,
 ) -> TechnicalIndicators:
     """
     Calcule tous les indicateurs techniques sur un DataFrame OHLCV.
@@ -358,7 +368,11 @@ def compute_indicators(
 
     # ── Interpolation des gaps ≤ 3 jours ouvrés (C3) ─────────────────────────
     # Forward-fill OHLC sur les jours manquants, volume=0 pour les jours ajoutés.
-    df, _added_days = _fill_ohlcv_gaps(df)
+    # fill_gaps=False quand le DataFrame parent a déjà été interpolé (ex: backtest).
+    if fill_gaps:
+        df, _added_days = _fill_ohlcv_gaps(df)
+    else:
+        _added_days = pd.DatetimeIndex([])
 
     close = df["close"]
     high = df["high"]
@@ -404,7 +418,8 @@ def compute_indicators(
                     else "suracheté" if result.rsi > RSI_OVERBOUGHT
                     else "neutre"
                 )
-                result.series["rsi"] = rsi_series.dropna().round(2).to_dict()
+                if compute_events:
+                    result.series["rsi"] = rsi_series.dropna().round(2).to_dict()
 
                 # Détection divergence RSI vs prix
                 div_window = {"Court terme": 20, "Moyen terme": 40, "Long terme": 60}.get(horizon, 40)
@@ -433,13 +448,15 @@ def compute_indicators(
         ma20_s = _calc_sma(close, length=MA_SHORT)
         if ma20_s is not None:
             result.ma20 = round(float(ma20_s.iloc[-1]), 2) if pd.notna(ma20_s.iloc[-1]) else None
-            result.series["ma20"] = ma20_s.dropna().round(2).to_dict()
+            if compute_events:
+                result.series["ma20"] = ma20_s.dropna().round(2).to_dict()
 
     if n >= MA_MID:
         ma50_s = _calc_sma(close, length=MA_MID)
         if ma50_s is not None:
             result.ma50 = round(float(ma50_s.iloc[-1]), 2) if pd.notna(ma50_s.iloc[-1]) else None
-            result.series["ma50"] = ma50_s.dropna().round(2).to_dict()
+            if compute_events:
+                result.series["ma50"] = ma50_s.dropna().round(2).to_dict()
             # Pente normalisée % sur 5 séances - comparable cross-tickers (BRVM multi-cap)
             # Robuste aux gaps : on travaille sur la série clean, pas sur iloc absolu
             ma50_clean = ma50_s.dropna()
@@ -453,7 +470,8 @@ def compute_indicators(
         ma200_s = _calc_sma(close, length=MA_LONG)
         if ma200_s is not None:
             result.ma200 = round(float(ma200_s.iloc[-1]), 2) if pd.notna(ma200_s.iloc[-1]) else None
-            result.series["ma200"] = ma200_s.dropna().round(2).to_dict()
+            if compute_events:
+                result.series["ma200"] = ma200_s.dropna().round(2).to_dict()
 
     # MA long terme adaptative : MA200 si dispo, sinon MA100 fallback
     if result.ma200 is not None:
@@ -464,7 +482,8 @@ def compute_indicators(
         if ma_lt_s is not None and pd.notna(ma_lt_s.iloc[-1]):
             result.ma_lt = round(float(ma_lt_s.iloc[-1]), 2)
             result.ma_lt_period = MA_LONG_FALLBACK
-            result.series["ma_lt"] = ma_lt_s.dropna().round(2).to_dict()
+            if compute_events:
+                result.series["ma_lt"] = ma_lt_s.dropna().round(2).to_dict()
 
     # Signal MA
     result.ma_signal = _compute_ma_signal(result.cours_actuel, result.ma20, result.ma50, result.ma_lt)
@@ -475,23 +494,27 @@ def compute_indicators(
     )
 
     # ── MACD ──────────────────────────────────────────────────────────────────
+    _macd_clean_local = None
     if n >= MACD_SLOW + MACD_SIGNAL_P:
         macd_l, macd_s, macd_h = _calc_macd(close, fast=MACD_FAST, slow=MACD_SLOW, signal=MACD_SIGNAL_P)
 
         v = macd_l.iloc[-1]
         result.macd_line = round(float(v), 4) if pd.notna(v) else None
-        result.series["macd"] = macd_l.dropna().round(4).to_dict()
 
         v = macd_s.iloc[-1]
         result.macd_signal_line = round(float(v), 4) if pd.notna(v) else None
-        result.series["macd_signal"] = macd_s.dropna().round(4).to_dict()
 
         macd_clean = macd_h.dropna()
         v = macd_clean.iloc[-1] if len(macd_clean) >= 1 else None
         result.macd_histogram = round(float(v), 4) if v is not None and pd.notna(v) else None
         v_prev = macd_clean.iloc[-2] if len(macd_clean) >= 2 else None
         result.macd_histogram_prev = round(float(v_prev), 4) if v_prev is not None and pd.notna(v_prev) else None
-        result.series["macd_hist"] = macd_clean.round(4).to_dict()
+        if compute_events:
+            result.series["macd"] = macd_l.dropna().round(4).to_dict()
+            result.series["macd_signal"] = macd_s.dropna().round(4).to_dict()
+            result.series["macd_hist"] = macd_clean.round(4).to_dict()
+        # Garder macd_clean accessible pour divergence MACD ci-dessous
+        _macd_clean_local = macd_clean
 
         if result.macd_line is not None and result.macd_signal_line is not None:
             result.macd_signal = (
@@ -523,8 +546,9 @@ def compute_indicators(
                 squeeze_ratio = bw / result.bb_middle
                 result.bb_squeeze = squeeze_ratio < 0.02
 
-            result.series["bb_upper"] = bb_upper_s.dropna().round(2).to_dict()
-            result.series["bb_lower"] = bb_lower_s.dropna().round(2).to_dict()
+            if compute_events:
+                result.series["bb_upper"] = bb_upper_s.dropna().round(2).to_dict()
+                result.series["bb_lower"] = bb_lower_s.dropna().round(2).to_dict()
 
     # ── Volume ────────────────────────────────────────────────────────────────
     if volume.sum() > 0:
@@ -588,8 +612,9 @@ def compute_indicators(
                 else "suracheté" if result.stoch_k > 80
                 else "neutre"
             )
-            result.series["stoch_k"] = stoch_k_s.dropna().round(2).to_dict()
-            result.series["stoch_d"] = stoch_d_s.dropna().round(2).to_dict()
+            if compute_events:
+                result.series["stoch_k"] = stoch_k_s.dropna().round(2).to_dict()
+                result.series["stoch_d"] = stoch_d_s.dropna().round(2).to_dict()
 
     # ── ADX (Average Directional Index) ───────────────────────────────────────
     if n >= ADX_PERIOD * 2:
@@ -604,7 +629,8 @@ def compute_indicators(
                 else "tendance_moderee" if result.adx > 20
                 else "pas_de_tendance"
             )
-            result.series["adx"] = adx_s.dropna().round(2).to_dict()
+            if compute_events:
+                result.series["adx"] = adx_s.dropna().round(2).to_dict()
 
     # ── Configuration chartiste ───────────────────────────────────────────────
     result.config_chartiste = _detect_chart_config(df, result.bb_squeeze)
@@ -644,33 +670,319 @@ def compute_indicators(
             )
 
     # ── Divergence MACD ──────────────────────────────────────────────────────
-    if "macd_hist" in result.series and len(result.series["macd_hist"]) >= 20:
-        macd_hist_s = pd.Series(result.series["macd_hist"])
+    if _macd_clean_local is not None and len(_macd_clean_local) >= 20:
         result.macd_divergence, result.macd_divergence_detail = _detect_macd_divergence(
-            close, macd_hist_s, atr_pct=result.atr_pct,
+            close, _macd_clean_local, atr_pct=result.atr_pct,
         )
 
     # ── Détection d'événements techniques ────────────────────────────────────
-    result.events = _detect_events(df, result, close, high, low, volume)
+    result.events = _detect_events(df, result, close, high, low, volume) if compute_events else []
 
     # ── Séries pour graphiques ────────────────────────────────────────────────
-    result.series["close"] = close.round(2).to_dict()
-    result.series["open"] = df["open"].round(2).to_dict()
-    result.series["high"] = high.round(2).to_dict()
-    result.series["low"] = low.round(2).to_dict()
-    result.series["volume"] = volume.round(0).to_dict()
+    if compute_events:
+        result.series["close"] = close.round(2).to_dict()
+        result.series["open"] = df["open"].round(2).to_dict()
+        result.series["high"] = high.round(2).to_dict()
+        result.series["low"] = low.round(2).to_dict()
+        result.series["volume"] = volume.round(0).to_dict()
 
-    # Séries ADX (+DI, -DI) pour graphique
-    if n >= ADX_PERIOD * 2:
-        adx_s, plus_di_s, minus_di_s = _calc_adx(high, low, close, length=ADX_PERIOD)
-        result.series["plus_di"] = plus_di_s.dropna().round(2).to_dict()
-        result.series["minus_di"] = minus_di_s.dropna().round(2).to_dict()
+        # Séries ADX (+DI, -DI) pour graphique
+        if n >= ADX_PERIOD * 2:
+            adx_s, plus_di_s, minus_di_s = _calc_adx(high, low, close, length=ADX_PERIOD)
+            result.series["plus_di"] = plus_di_s.dropna().round(2).to_dict()
+            result.series["minus_di"] = minus_di_s.dropna().round(2).to_dict()
 
     # ── Tier de liquidité BRVM-aware (Phase 2) ────────────────────────────────
     # Résolution depuis LIQUIDITY_TIERS dans config.py.
     # Le dict est vide par défaut ; peuplé après run de diagnostics.py.
     from config import LIQUIDITY_TIERS as _LT
     result.liquidity_tier = _LT.get(ticker, "INCONNU")
+
+    return result
+
+
+# ─── Precompute vectorisé pour le backtest ────────────────────────────────────
+
+def precompute_backtest_indicators(
+    df: pd.DataFrame,
+    ticker: str,
+    df_index: Optional[pd.DataFrame] = None,
+    horizon: str = DEFAULT_HORIZON,
+    warmup_bars: int = 30,
+) -> dict:
+    """
+    Calcule tous les indicateurs pour toutes les dates en une passe vectorisée.
+    Retourne un dict {pd.Timestamp: TechnicalIndicators}.
+    Utilisé par le backtest pour éviter de recalculer depuis zéro à chaque barre.
+    Toutes les séries sont converties en numpy pour un accès indexé O(1).
+    """
+    if df is None or len(df) < warmup_bars + 5:
+        return {}
+
+    profile = HORIZON_PROFILES.get(horizon, HORIZON_PROFILES[DEFAULT_HORIZON])
+    p = profile["periods"]
+
+    RSI_PERIOD       = p["rsi"]
+    MA_SHORT         = p["ma_short"]
+    MA_MID           = p["ma_mid"]
+    MA_LONG          = p["ma_long"]
+    MA_LONG_FALLBACK = p.get("ma_long_fallback", 100)
+    MACD_FAST        = p["macd_fast"]
+    MACD_SLOW        = p["macd_slow"]
+    MACD_SIGNAL_P    = p["macd_signal"]
+    STOCH_K          = p["stoch_k"]
+    STOCH_D          = p["stoch_d"]
+    ADX_P            = p["adx"]
+    BB_P             = p["bollinger"]
+    BB_STD           = p.get("bb_std", BOLLINGER_STD)
+    RSI_LO           = p.get("rsi_oversold", 30)
+    RSI_HI           = p.get("rsi_overbought", 70)
+
+    close  = df["close"]
+    high   = df["high"]
+    low    = df["low"]
+    volume = df["volume"] if "volume" in df.columns else pd.Series(0.0, index=df.index)
+
+    # ── Calcul unique de toutes les séries (pandas) ───────────────────────────
+    rsi_s                            = _calc_rsi(close, length=RSI_PERIOD)
+    ma20_s                           = _calc_sma(close, length=MA_SHORT)
+    ma50_s                           = _calc_sma(close, length=MA_MID)
+    ma200_s                          = _calc_sma(close, length=MA_LONG)
+    ma_lt_s                          = _calc_sma(close, length=MA_LONG_FALLBACK)
+    macd_l_s, macd_sig_s, macd_h_s  = _calc_macd(close, fast=MACD_FAST, slow=MACD_SLOW, signal=MACD_SIGNAL_P)
+    adx_s, plus_di_s, minus_di_s    = _calc_adx(high, low, close, length=ADX_P)
+    atr_s                            = _calc_atr(high, low, close, period=ADX_P)
+    stoch_k_s, stoch_d_s             = _calc_stochastic(high, low, close, k_period=STOCH_K, d_period=STOCH_D)
+    bb_upper_s, bb_mid_s, bb_lower_s = _calc_bbands(close, length=BB_P, std=BB_STD)
+
+    rsi_p10_s    = rsi_s.rolling(120, min_periods=60).quantile(0.10)
+    rsi_p90_s    = rsi_s.rolling(120, min_periods=60).quantile(0.90)
+    ma50_slope_s = ma50_s.pct_change(5, fill_method=None) * 100
+    vol_ma_s     = volume.rolling(VOLUME_AVG_PERIOD, min_periods=1).mean()
+    turnover_s   = (volume * close).rolling(VOLUME_AVG_PERIOD, min_periods=1).mean()
+    zero_pct_s   = (volume == 0).rolling(VOLUME_AVG_PERIOD, min_periods=1).mean() * 100
+    perf1m_s     = close.pct_change(21, fill_method=None) * 100
+    perf3m_s     = close.pct_change(63, fill_method=None) * 100
+    high_52w_s   = high.rolling(252, min_periods=1).max()
+    low_52w_s    = low.rolling(252, min_periods=1).min()
+    sr_w         = {"Court terme": 15, "Moyen terme": 30, "Long terme": 60}.get(horizon, 30)
+    support_s    = low.rolling(sr_w, min_periods=1).min()
+    resistance_s = high.rolling(sr_w, min_periods=1).max()
+
+    idx_p1m = idx_p3m = None
+    if df_index is not None and len(df_index) >= 21:
+        ic = df_index["close"].reindex(df.index, method="ffill")
+        idx_p1m = (ic.pct_change(21) * 100).values
+        if len(df_index) >= 63:
+            idx_p3m = (ic.pct_change(63) * 100).values
+
+    from config import LIQUIDITY_TIERS as _LT
+    liq_tier = _LT.get(ticker, "INCONNU")
+
+    # ── Conversion numpy (accès O(1) sans overhead pandas) ───────────────────
+    nan = float("nan")
+    _nan = np.nan
+
+    def _arr(s):
+        return s.values if s is not None else None
+
+    A_close  = close.values
+    A_rsi    = _arr(rsi_s)
+    A_p10    = _arr(rsi_p10_s)
+    A_p90    = _arr(rsi_p90_s)
+    A_ma20   = _arr(ma20_s)
+    A_ma50   = _arr(ma50_s)
+    A_sl50   = _arr(ma50_slope_s)
+    A_ma200  = _arr(ma200_s)
+    A_malt   = _arr(ma_lt_s)
+    A_macd_l = _arr(macd_l_s)
+    A_macd_s = _arr(macd_sig_s)
+    A_macd_h = _arr(macd_h_s)
+    A_adx    = _arr(adx_s)
+    A_pdi    = _arr(plus_di_s)
+    A_mdi    = _arr(minus_di_s)
+    A_atr    = _arr(atr_s)
+    A_sk     = _arr(stoch_k_s)
+    A_sd     = _arr(stoch_d_s)
+    A_bbu    = _arr(bb_upper_s)
+    A_bbl    = _arr(bb_lower_s)
+    A_bbm    = _arr(bb_mid_s)
+    A_vol    = volume.values
+    A_volma  = _arr(vol_ma_s)
+    A_turn   = _arr(turnover_s)
+    A_zeropt = _arr(zero_pct_s)
+    A_p1m    = _arr(perf1m_s)
+    A_p3m    = _arr(perf3m_s)
+    A_h52    = _arr(high_52w_s)
+    A_l52    = _arr(low_52w_s)
+    A_sup    = _arr(support_s)
+    A_res    = _arr(resistance_s)
+
+    timestamps = df.index
+    result: dict = {}
+
+    for i in range(warmup_bars, len(df)):
+        ts  = timestamps[i]
+        ind = TechnicalIndicators(ticker=ticker)
+        ind.horizon       = horizon
+        ind.liquidity_tier = liq_tier
+
+        cur = float(A_close[i])
+        ind.cours_actuel = round(cur, 2)
+
+        # ATR
+        if A_atr is not None:
+            av = A_atr[i]
+            if not np.isnan(av):
+                ind.atr = round(float(av), 2)
+                if cur > 0:
+                    ind.atr_pct = round(float(av) / cur * 100, 2)
+
+        # RSI
+        rv = A_rsi[i]
+        if not np.isnan(rv):
+            rsi_v = float(rv)
+            ind.rsi = round(rsi_v, 2)
+            ind.rsi_signal = (
+                "survendu"   if rsi_v < RSI_LO
+                else "suracheté" if rsi_v > RSI_HI
+                else "neutre"
+            )
+            p10v = A_p10[i]; p90v = A_p90[i]
+            if not np.isnan(p10v) and not np.isnan(p90v) and (p90v - p10v) >= 15:
+                ind.rsi_p10 = round(float(p10v), 2)
+                ind.rsi_p90 = round(float(p90v), 2)
+
+        # MA20
+        mv = A_ma20[i]
+        if not np.isnan(mv):
+            ind.ma20 = round(float(mv), 2)
+
+        # MA50 + pente
+        mv = A_ma50[i]
+        if not np.isnan(mv):
+            ind.ma50 = round(float(mv), 2)
+            sv = A_sl50[i]
+            if not np.isnan(sv):
+                ind.ma50_slope_pct = round(float(sv), 3)
+
+        # MA LT (MA200 prioritaire, sinon fallback)
+        mv = A_ma200[i]
+        if not np.isnan(mv):
+            ind.ma200     = round(float(mv), 2)
+            ind.ma_lt     = ind.ma200
+            ind.ma_lt_period = MA_LONG
+        else:
+            mv = A_malt[i]
+            if not np.isnan(mv):
+                ind.ma_lt        = round(float(mv), 2)
+                ind.ma_lt_period = MA_LONG_FALLBACK
+
+        ind.ma_signal = _compute_ma_signal(ind.cours_actuel, ind.ma20, ind.ma50, ind.ma_lt)
+        ind.prix_vs_ma_lt = (
+            "au_dessus"  if ind.ma_lt and cur > ind.ma_lt
+            else "en_dessous" if ind.ma_lt
+            else "inconnu"
+        )
+
+        # MACD
+        ml = A_macd_l[i]; ms = A_macd_s[i]; mh = A_macd_h[i]
+        if not np.isnan(ml):
+            ind.macd_line = round(float(ml), 4)
+        if not np.isnan(ms):
+            ind.macd_signal_line = round(float(ms), 4)
+        if not np.isnan(mh):
+            ind.macd_histogram = round(float(mh), 4)
+        if i > 0:
+            mh_prev = A_macd_h[i - 1]
+            if not np.isnan(mh_prev):
+                ind.macd_histogram_prev = round(float(mh_prev), 4)
+        if ind.macd_line is not None and ind.macd_signal_line is not None:
+            ind.macd_signal = "haussier" if ml > ms else "baissier"
+
+        # Bollinger
+        bbu = A_bbu[i]; bbl = A_bbl[i]; bbm = A_bbm[i]
+        if not np.isnan(bbu) and not np.isnan(bbl) and not np.isnan(bbm):
+            ind.bb_upper  = round(float(bbu), 2)
+            ind.bb_lower  = round(float(bbl), 2)
+            ind.bb_middle = round(float(bbm), 2)
+            bw = bbu - bbl
+            if bw > 0:
+                ind.bb_pct = round((cur - bbl) / bw, 4)
+            if bbm > 0:
+                ind.bb_squeeze = (bw / bbm) < 0.02
+
+        # Stochastic
+        kv = A_sk[i]; dv = A_sd[i]
+        if not np.isnan(kv):
+            ind.stoch_k = round(float(kv), 2)
+        if not np.isnan(dv):
+            ind.stoch_d = round(float(dv), 2)
+        if ind.stoch_k is not None:
+            ind.stoch_signal = (
+                "survendu"   if kv < 20
+                else "suracheté" if kv > 80
+                else "neutre"
+            )
+
+        # ADX
+        av = A_adx[i]
+        if not np.isnan(av):
+            adx_v = float(av)
+            ind.adx = round(adx_v, 2)
+            pdi = A_pdi[i]; mdi = A_mdi[i]
+            if not np.isnan(pdi):
+                ind.plus_di  = round(float(pdi), 2)
+            if not np.isnan(mdi):
+                ind.minus_di = round(float(mdi), 2)
+            ind.adx_signal = (
+                "tendance_forte"    if adx_v > 25
+                else "tendance_moderee" if adx_v > 20
+                else "pas_de_tendance"
+            )
+
+        # Volume
+        ind.volume_actuel        = float(A_vol[i])
+        vol_ma                   = float(A_volma[i])
+        ind.volume_moy20         = vol_ma
+        if vol_ma > 0:
+            ind.volume_relatif_pct = round((ind.volume_actuel / vol_ma - 1) * 100, 2)
+        ind.turnover_moy20_fcfa  = round(float(A_turn[i]), 0)
+        ind.zero_volume_days_pct = round(float(A_zeropt[i]), 1)
+
+        # Perf 1m / 3m
+        pv = A_p1m[i]
+        if not np.isnan(pv):
+            ind.perf_1m = round(float(pv), 2)
+        pv = A_p3m[i]
+        if not np.isnan(pv):
+            ind.perf_3m = round(float(pv), 2)
+
+        if idx_p1m is not None:
+            ip = idx_p1m[i]
+            if not np.isnan(ip) and ind.perf_1m is not None:
+                ind.perf_vs_index_1m = round(ind.perf_1m - float(ip), 2)
+                if ind.atr_pct and ind.atr_pct > 0:
+                    ind.perf_vs_index_1m_atr_norm = round(ind.perf_vs_index_1m / ind.atr_pct, 3)
+        if idx_p3m is not None:
+            ip = idx_p3m[i]
+            if not np.isnan(ip) and ind.perf_3m is not None:
+                ind.perf_vs_index_3m = round(ind.perf_3m - float(ip), 2)
+
+        # Support / résistance
+        ind.support    = round(float(A_sup[i]), 2)
+        ind.resistance = round(float(A_res[i]), 2)
+
+        # 52-week high/low
+        h52 = A_h52[i]; l52 = A_l52[i]
+        if not np.isnan(h52):
+            ind.high_52w = round(float(h52), 2)
+            if ind.high_52w > 0:
+                ind.pct_from_52w_high = round((cur / ind.high_52w - 1) * 100, 2)
+        if not np.isnan(l52):
+            ind.low_52w = round(float(l52), 2)
+
+        result[ts] = ind
 
     return result
 
