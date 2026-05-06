@@ -1098,6 +1098,34 @@ def render_backtest_page() -> None:
         "Tous les tickers actions BRVM (hors indices) · Aucun look-ahead."
     )
 
+    # ── Diagnostic base de données locale ─────────────────────────────────────
+    from pathlib import Path as _Path
+    _csv_dir = _Path(__file__).parent / "data" / "daily"
+    _n_csv = len(list(_csv_dir.glob("*.csv")))
+    if _n_csv == 0:
+        st.warning(
+            "**Base de données locale vide** — Le backtest utilisera l'API SikaFinance "
+            "(max ~260 jours). Pour obtenir 5 ans de données journalières, "
+            "lancez en local : `pip install playwright && python -m playwright install chromium` "
+            "puis `python brvm_playwright.py`"
+        )
+    else:
+        import pandas as _pd
+        _sizes = []
+        for _f in _csv_dir.glob("*.csv"):
+            try:
+                _df = _pd.read_csv(_f, usecols=["date"])
+                _sizes.append(len(_df))
+            except Exception:
+                pass
+        _avg = int(sum(_sizes) / len(_sizes)) if _sizes else 0
+        _min = min(_sizes) if _sizes else 0
+        _max = max(_sizes) if _sizes else 0
+        st.info(
+            f"**Base locale** : {_n_csv} tickers · {_avg} barres en moyenne "
+            f"(min {_min} / max {_max})"
+        )
+
     # ── Paramètres ────────────────────────────────────────────────────────────
     with st.form("backtest_form"):
         col1, col2, col3 = st.columns(3)
@@ -1372,6 +1400,43 @@ def render_backtest_page() -> None:
                     f"PnL moy : {stats['avg_pnl']:+.1f}%",
                 )
                 st.caption(f"Durée moy. : {stats['avg_days']:.0f}j")
+        st.divider()
+
+    # ── Par année ─────────────────────────────────────────────────────────────
+    if result.by_year:
+        st.subheader("Performance par année")
+        yr_rows = []
+        for yr, stats in result.by_year.items():
+            ret = stats.get("return_pct")
+            dd  = stats.get("max_dd_pct")
+            yr_rows.append({
+                "Année":        yr,
+                "Return":       f"{ret:+.1f}%" if ret is not None else "—",
+                "Max DD":       f"{dd:.1f}%"   if dd  is not None else "—",
+                "Trades":       stats.get("n_trades", 0),
+                "Win Rate":     f"{stats['win_rate_pct']:.0f}%" if stats.get("win_rate_pct") is not None else "—",
+                "PnL moy/trade":f"{stats['avg_pnl_pct']:+.2f}%" if stats.get("avg_pnl_pct") is not None else "—",
+                "_ret_raw":     ret if ret is not None else 0.0,
+            })
+        yr_df = pd.DataFrame(yr_rows)
+
+        def _color_ret(val):
+            if val == "—":
+                return ""
+            try:
+                v = float(val.replace("%", "").replace("+", ""))
+                return "color: #2ecc71" if v > 0 else "color: #e74c3c"
+            except Exception:
+                return ""
+
+        display_cols = ["Année", "Return", "Max DD", "Trades", "Win Rate", "PnL moy/trade"]
+        st.dataframe(
+            yr_df[display_cols].style.applymap(_color_ret, subset=["Return", "PnL moy/trade"]),
+            use_container_width=True, hide_index=True,
+        )
+        n_pos = sum(1 for r in yr_rows if r["_ret_raw"] > 0)
+        n_neg = sum(1 for r in yr_rows if r["_ret_raw"] < 0)
+        st.caption(f"{n_pos} année(s) positive(s) · {n_neg} négative(s) sur {len(yr_rows)} an(s) de données")
         st.divider()
 
     # ── Par confiance ─────────────────────────────────────────────────────────

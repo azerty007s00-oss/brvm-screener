@@ -96,6 +96,7 @@ class BacktestResult:
     summary:      dict
     by_ticker:    dict
     by_confiance: dict
+    by_year:      dict = None
 
 
 # ─── Slippage / market impact ────────────────────────────────────────────────
@@ -521,7 +522,8 @@ class BacktestEngine:
         summary      = _compute_summary(trades, self._equity, self.initial_capital, equity_curve)
         by_ticker    = _compute_by_ticker(trades)
         by_confiance = _compute_by_confiance(trades)
-        return BacktestResult(trades, equity_curve, summary, by_ticker, by_confiance)
+        by_year      = _compute_by_year(trades, equity_curve)
+        return BacktestResult(trades, equity_curve, summary, by_ticker, by_confiance, by_year)
 
 
 # ─── API publique ─────────────────────────────────────────────────────────────
@@ -985,6 +987,45 @@ def _compute_by_confiance(trades: pd.DataFrame) -> dict:
             "avg_days":       round(float(sub["holding_days"].mean()), 1),
         }
     return out
+
+
+def _compute_by_year(trades: pd.DataFrame, equity_curve: pd.DataFrame) -> dict:
+    """
+    Retourne un dict {année: {return_pct, n_trades, win_rate_pct, avg_pnl_pct, max_dd_pct}}
+    calculé depuis la courbe d'équité (return annuel réel) et les trades (statistiques).
+    """
+    out = {}
+
+    # ── Return annuel depuis la courbe d'équité ───────────────────────────────
+    if not equity_curve.empty and "equity" in equity_curve.columns:
+        eq = equity_curve.set_index("date")["equity"] if "date" in equity_curve.columns else equity_curve["equity"]
+        eq.index = pd.to_datetime(eq.index)
+        for year, grp in eq.groupby(eq.index.year):
+            if len(grp) < 2:
+                continue
+            ret = grp.iloc[-1] / grp.iloc[0] - 1
+            roll_max = grp.cummax()
+            dd = ((grp - roll_max) / roll_max).min()
+            out[int(year)] = {
+                "return_pct":   round(float(ret) * 100, 2),
+                "max_dd_pct":   round(float(dd) * 100, 2),
+                "n_trades":     0,
+                "win_rate_pct": None,
+                "avg_pnl_pct":  None,
+            }
+
+    # ── Statistiques trades par année (date d'entrée) ─────────────────────────
+    if not trades.empty:
+        valid = trades.dropna(subset=["pnl_pct"]).copy()
+        valid["year"] = pd.to_datetime(valid["entry_date"]).dt.year
+        for year, grp in valid.groupby("year"):
+            wins = grp[grp["pnl_pct"] > 0]
+            yr = out.setdefault(int(year), {"return_pct": None, "max_dd_pct": None})
+            yr["n_trades"]     = len(grp)
+            yr["win_rate_pct"] = round(len(wins) / len(grp) * 100, 1)
+            yr["avg_pnl_pct"]  = round(float(grp["pnl_pct"].mean()), 2)
+
+    return dict(sorted(out.items()))
 
 
 # ─── CLI ─────────────────────────────────────────────────────────────────────
