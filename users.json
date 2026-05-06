@@ -47,6 +47,8 @@
     "email": "azerty007s00@gmail.com",
     "reason": "",
     "status": "pending",
-    "requested_at": "2026-05-06T05:30:21.103981"
+    "requested_at": "2026-05-06T05:30:21.103981",
+    "approval_token": "3bfJyF-3opZYCW9ibEBocfaGTozYB6x_1m7wPHjy4nM",
+    "token_expires_at": "2026-05-08T05:30:22.098962"
   }
 }
