@@ -1030,6 +1030,7 @@ if __name__ == "__main__":
 
     print(f"\nBACKTEST BRVM (long-only, revue /{REVIEW_INTERVAL_DAYS}j, {_period})")
     print(f"Tickers : {len(tickers)} | Horizon : {DEFAULT_HORIZON} | Warmup : {WARMUP_BARS} barres")
+    print(f"Allocation : risk={ALLOCATION_RISK_PCT}% | max_pos={ALLOCATION_MAX_POSITION_PCT}% | min_shares={ALLOCATION_MIN_SHARES_POLICY}")
     print("=" * 72)
 
     def _run(label, **kw):
