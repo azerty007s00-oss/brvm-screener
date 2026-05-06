@@ -46,7 +46,10 @@
     "name": "AZERTY",
     "email": "azerty007s00@gmail.com",
     "reason": "",
-    "status": "pending",
-    "requested_at": "2026-05-06T05:30:21.103981"
+    "status": "approved",
+    "requested_at": "2026-05-06T05:30:21.103981",
+    "password_hash": "$2b$12$/r5Aac1xOWN.cHgVeAKPduOcXEsVhfABYNXH0esqzKJOBuQWyCt5K",
+    "must_change_password": true,
+    "approved_at": "2026-05-06T05:30:49.998242"
   }
 }
