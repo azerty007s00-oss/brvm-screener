@@ -772,9 +772,9 @@ def precompute_backtest_indicators(
     idx_p1m = idx_p3m = None
     if df_index is not None and len(df_index) >= 21:
         ic = df_index["close"].reindex(df.index, method="ffill")
-        idx_p1m = (ic.pct_change(21) * 100).values
+        idx_p1m = (ic.pct_change(21, fill_method=None) * 100).values
         if len(df_index) >= 63:
-            idx_p3m = (ic.pct_change(63) * 100).values
+            idx_p3m = (ic.pct_change(63, fill_method=None) * 100).values
 
     from config import LIQUIDITY_TIERS as _LT
     liq_tier = _LT.get(ticker, "INCONNU")
@@ -1189,7 +1189,7 @@ def _compute_volatility(close: pd.Series, window: int = 63) -> Optional[float]:
     """
     if len(close) < window:
         return None
-    returns = close.iloc[-window:].pct_change().dropna()
+    returns = close.iloc[-window:].pct_change(fill_method=None).dropna()
     if len(returns) < 10:
         return None
     vol = float(returns.std() * np.sqrt(252) * 100)
