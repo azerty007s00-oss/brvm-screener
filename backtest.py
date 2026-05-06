@@ -22,6 +22,7 @@ Usage :
 """
 
 import logging
+import math
 from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Optional
@@ -77,6 +78,7 @@ class Position:
     capital_gain_pct:     Optional[float] = None
     capital_investi_fcfa: Optional[float] = None
     gain_fcfa:            Optional[float] = None
+    nb_actions:           int             = 0
     tp_active:            bool            = True
     original_stop_loss:   Optional[float] = None
 
@@ -392,6 +394,25 @@ class BacktestEngine:
 
     def _open_position(self, ticker, score, ind, current_date: date, override_price: float | None = None) -> None:
         entry_price = override_price if override_price is not None else ind.cours_actuel
+
+        # BRVM : pas de fractions d'actions - arrondir au nombre entier inferieur
+        nb_actions = math.floor(
+            self._equity * (score.position_size_pct / 100) / entry_price
+        ) if entry_price > 0 else 0
+
+        if nb_actions == 0:
+            if self.debug:
+                print(
+                    f"  SKIP  {current_date}  {ticker:<8}  "
+                    f"capital insuffisant pour 1 action a {entry_price:,.0f} FCFA "
+                    f"(alloc={score.position_size_pct:.1f}% de {self._equity:,.0f})"
+                )
+            return
+
+        # Position reelle apres arrondi (toujours <= position_size_pct)
+        capital_investi   = nb_actions * entry_price
+        position_pct_reel = capital_investi / self._equity * 100
+
         rr = None
         if ind.atr and ind.atr > 0:
             k1 = abs(score.stop_loss  - entry_price) / ind.atr
@@ -406,7 +427,8 @@ class BacktestEngine:
             take_profit         = score.take_profit,
             original_stop_loss  = score.stop_loss,
             rr                  = rr,
-            position_pct        = score.position_size_pct,
+            position_pct        = position_pct_reel,
+            nb_actions          = nb_actions,
             confiance           = score.confiance,
             score               = score.score_total,
             atr_pct             = ind.atr_pct,
@@ -420,7 +442,9 @@ class BacktestEngine:
                 f"  OPEN  {current_date}  {ticker:<8}  "
                 f"score={score.score_total:+d}  conf={score.confiance:<9}  "
                 f"stop={score.stop_loss:,.0f}  target={score.take_profit:,.0f}  "
-                f"R/R={rr or '?'}  sz={score.position_size_pct:.1f}%"
+                f"R/R={rr or '?'}  "
+                f"{nb_actions} actions x {entry_price:,.0f} = {capital_investi:,.0f} FCFA "
+                f"({position_pct_reel:.1f}%)"
             )
 
     # ── Clôture ──────────────────────────────────────────────────────────────
@@ -442,10 +466,12 @@ class BacktestEngine:
         risk_pct = abs(pos.entry_price - pos.stop_loss) / pos.entry_price * 100 if pos.stop_loss else 1.0
         pos.r_realise = round(pos.pnl_pct / risk_pct, 2) if risk_pct > 0 else None
 
-        pos.capital_gain_pct     = round(pos.position_pct / 100 * pos.pnl_pct, 2)
-        pos.capital_investi_fcfa = round(pos.equity_at_entry * pos.position_pct / 100, 0)
+        # Calcul exact en FCFA depuis le nombre entier d'actions
+        # pnl_pct est deja net de frais - on l'applique au capital investi reel
+        pos.capital_investi_fcfa = round(pos.nb_actions * pos.entry_price, 0)
         pos.gain_fcfa            = round(pos.capital_investi_fcfa * pos.pnl_pct / 100, 0)
-        self._equity *= 1 + pos.capital_gain_pct / 100
+        pos.capital_gain_pct     = round(pos.gain_fcfa / pos.equity_at_entry * 100, 4) if pos.equity_at_entry > 0 else 0.0
+        self._equity            += pos.gain_fcfa
 
         self._closed.append(pos)
 
@@ -788,6 +814,7 @@ def _positions_to_df(positions: list[Position]) -> pd.DataFrame:
             "capital_gain_pct":     p.capital_gain_pct,
             "capital_investi_fcfa": p.capital_investi_fcfa,
             "gain_fcfa":            p.gain_fcfa,
+            "nb_actions":           p.nb_actions,
             "position_pct":         p.position_pct,
             "holding_days":         p.holding_days,
             "rr":               p.rr,
