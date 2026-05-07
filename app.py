@@ -1139,12 +1139,17 @@ def render_backtest_page() -> None:
                 format_func=lambda t: f"{t} - {TICKER_NAMES.get(t, t)}",
                 help="Tous les tickers actions BRVM. Les indices sont exclus.",
             )
+            _bt_labels = {
+                "daily":     "📅 5 ans journalier  (~1 250 barres)",
+                "daily_1y":  "📅 1 an  journalier  (~260 barres)",
+                "monthly":   "📆 5 ans mensuel      (~60 barres)",
+            }
             data_period_bt = st.radio(
                 "Historique",
-                options=["daily", "monthly"],
-                format_func=lambda x: "📅 5 ans - journalier (~1 250 barres)" if x == "daily" else "📆 5 ans - mensuel (~60 barres)",
+                options=["daily", "daily_1y", "monthly"],
+                format_func=lambda x: _bt_labels[x],
                 index=0,
-                help="Journalier : base CSV locale data/daily/ (~1 250 barres, 5 ans). Mensuel : ~60 barres mensuelles SikaFinance.",
+                help="5 ans journalier : base CSV locale (~1 250 barres, plus lent). 1 an journalier : 260 barres, rapide. Mensuel : ~60 barres SikaFinance.",
             )
 
         with col2:
@@ -1155,7 +1160,8 @@ def render_backtest_page() -> None:
                 format_func=lambda k: f"{HORIZON_PROFILES[k]['emoji']} {HORIZON_PROFILES[k]['label']}",
             )
             _hp = HORIZON_PROFILES.get(horizon_bt, {})
-            if data_period_bt == "monthly":
+            _is_monthly = (data_period_bt == "monthly")
+            if _is_monthly:
                 _default_review  = 30
                 _default_holding = _hp.get("max_holding_days", 90) * 2
                 _rev_max, _hold_max = 60, 730
@@ -1183,8 +1189,8 @@ def render_backtest_page() -> None:
                 step=100_000,
                 format="%d",
             )
-            _warmup_default = 12 if data_period_bt == "monthly" else WARMUP_BARS
-            _warmup_max     = 20 if data_period_bt == "monthly" else 55
+            _warmup_default = 12 if _is_monthly else WARMUP_BARS
+            _warmup_max     = 20 if _is_monthly else 55
             warmup_bt = st.slider(
                 "Warmup (barres min)",
                 min_value=5, max_value=_warmup_max, value=_warmup_default, step=1,
@@ -1236,16 +1242,28 @@ def render_backtest_page() -> None:
         st.warning("Cochez au moins un niveau de confiance.")
         return
 
-    _period_label = "mensuel 5 ans" if data_period_bt == "monthly" else "journalier 5 ans"
+    _is_monthly = (data_period_bt == "monthly")
+    if _is_monthly:
+        _days = 60
+        _period_label = "mensuel 5 ans"
+        _bt_period = "monthly"
+    elif data_period_bt == "daily_1y":
+        _days = 365
+        _period_label = "journalier 1 an"
+        _bt_period = "daily"
+    else:  # "daily" — 5 ans
+        _days = 1250
+        _period_label = "journalier 5 ans"
+        _bt_period = "daily"
+
     with st.spinner(f"Backtest en cours - {len(tickers_bt)} tickers, {_period_label}, revue /{review_bt}j…"):
         try:
-            _days = 60 if data_period_bt == "monthly" else 1250
-            _max_atr = 25.0 if data_period_bt == "monthly" else 4.0
-            _min_atr = 3.0  if data_period_bt == "monthly" else 2.0
+            _max_atr = 25.0 if _is_monthly else 4.0
+            _min_atr = 3.0  if _is_monthly else 2.0
             result = fetch_and_backtest(
                 tickers_bt,
                 days=_days,
-                data_period=data_period_bt,
+                data_period=_bt_period,
                 initial_capital=float(capital_bt),
                 horizon=horizon_bt,
                 warmup_bars=warmup_bt,
@@ -1431,7 +1449,7 @@ def render_backtest_page() -> None:
 
         display_cols = ["Année", "Return", "Max DD", "Trades", "Win Rate", "PnL moy/trade"]
         st.dataframe(
-            yr_df[display_cols].style.applymap(_color_ret, subset=["Return", "PnL moy/trade"]),
+            yr_df[display_cols].style.map(_color_ret, subset=["Return", "PnL moy/trade"]),
             use_container_width=True, hide_index=True,
         )
         n_pos = sum(1 for r in yr_rows if r["_ret_raw"] > 0)
