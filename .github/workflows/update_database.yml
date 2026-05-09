@@ -35,10 +35,13 @@ jobs:
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/daily/*.csv
+          # Ajoute tous les CSV présents dans data/daily/ (|| true évite l'échec si aucun fichier)
+          git add data/daily/ 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "Aucune nouvelle donnée à committer."
           else
             git commit -m "data: mise à jour journalière OHLCV $(date -u '+%Y-%m-%d')"
+            # Rebase local avant push pour éviter le rejet si une autre run a poussé entretemps
+            git pull --rebase origin main
             git push
           fi

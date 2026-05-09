@@ -381,9 +381,16 @@ def send_report(html_body: str, n_actions: int) -> None:
             server.login(email_from, email_pass)
             server.sendmail(email_from, email_to, msg.as_string())
         print(f"[Rapport] Email envoye -> {email_to}")
+    except smtplib.SMTPAuthenticationError as exc:
+        # Mot de passe applicatif invalide ou revoque — avertit sans faire echouer le job CI
+        print(
+            f"[Rapport] Echec authentification SMTP : {exc}\n"
+            "[Rapport] ACTION REQUISE : regenerer un App Password Gmail et mettre a jour "
+            "le secret GitHub ALERT_EMAIL_PASSWORD."
+        )
     except Exception as exc:
-        print(f"[Rapport] Echec envoi : {exc}")
-        sys.exit(1)
+        # Erreur reseau / timeout / autre — non bloquante pour le job CI
+        print(f"[Rapport] Echec envoi email (non bloquant) : {exc}")
 
 
 # ---------------------------------------------------------------------------
