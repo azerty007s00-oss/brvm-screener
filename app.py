@@ -250,6 +250,22 @@ def _analyser_ticker_worker(ticker: str, days: int, horizon: str) -> dict:
             logger.debug(f"Indice BRVMC non disponible pour {ticker}")
 
         ind = compute_indicators(df, ticker, df_index=df_index, horizon=horizon)
+
+        # ── Enrichissement fondamentaux (live mode) ──────────────────────────
+        try:
+            from fundamentals_loader import get_loader as _fl
+            from datetime import date as _date
+            _floader = _fl()
+            if _floader.is_available() and ind.cours_actuel > 0:
+                _dy, _per, _annee = _floader.get_signals(
+                    ticker, _date.today(), ind.cours_actuel
+                )
+                ind.fund_div_yield   = _dy
+                ind.fund_per_implied = _per
+                ind.fund_annee       = _annee
+        except Exception:
+            pass  # Fondamentaux optionnels — n'interrompt pas le scoring
+
         score = compute_score(ind)
         analyse = build_analyse(ind, score, df)
 
@@ -1153,10 +1169,11 @@ def render_backtest_page() -> None:
             )
 
         with col2:
+            _BT_DEFAULT_HORIZON = "Moyen terme"  # optimisé Phase 2 : 4/6 années, +16.4%, scoring recalibré
             horizon_bt = st.selectbox(
                 "Horizon d'analyse",
                 options=list(HORIZON_PROFILES.keys()),
-                index=list(HORIZON_PROFILES.keys()).index(DEFAULT_HORIZON),
+                index=list(HORIZON_PROFILES.keys()).index(_BT_DEFAULT_HORIZON),
                 format_func=lambda k: f"{HORIZON_PROFILES[k]['emoji']} {HORIZON_PROFILES[k]['label']}",
             )
             _hp = HORIZON_PROFILES.get(horizon_bt, {})
@@ -1215,13 +1232,22 @@ def render_backtest_page() -> None:
             debug_bt = st.checkbox("Mode debug (console)", value=False)
 
         st.markdown("**Filtrer par niveau de confiance**")
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         with c1:
-            cb_forte   = st.checkbox("💪 Forte",   value=True, key="bt_conf_forte")
+            cb_forte   = st.checkbox("💪 Forte",   value=True,  key="bt_conf_forte")
         with c2:
-            cb_moderee = st.checkbox("📊 Modérée", value=True, key="bt_conf_moderee")
+            cb_moderee = st.checkbox("📊 Modérée", value=False, key="bt_conf_moderee",
+                                     help="Inclure signaux modérés (↑ trades, ↓ qualité)")
         with c3:
-            cb_faible  = st.checkbox("🔸 Faible",  value=True, key="bt_conf_faible")
+            cb_faible  = st.checkbox("🔸 Faible",  value=False, key="bt_conf_faible",
+                                     help="Inclure signaux faibles (↑↑ trades, ↓↓ qualité)")
+        with c4:
+            close_on_vente_bt = st.checkbox(
+                "⚡ Sortie signal VENTE",
+                value=True,
+                key="bt_close_vente",
+                help="Ferme la position immédiatement sur signal VENTE (recommandé : réduit le drawdown)",
+            )
 
         run_btn = st.form_submit_button("▶ Lancer le backtest", type="primary", use_container_width=True)
 
@@ -1243,12 +1269,19 @@ def render_backtest_page() -> None:
         return
 
     _is_monthly = (data_period_bt == "monthly")
+    _bt_start_date = None
     if _is_monthly:
         _days = 60
         _period_label = "mensuel 5 ans"
         _bt_period = "monthly"
     elif data_period_bt == "daily_1y":
-        _days = 365
+        # Charger 1250 barres pour le warmup des indicateurs,
+        # mais ne simuler que les 365 derniers jours calendaires.
+        # Sans ça, les tickers illiquides BRVM avec 365 barres
+        # pourraient remonter jusqu'en 2022-2023.
+        from datetime import date as _date, timedelta as _td
+        _days = 1250
+        _bt_start_date = _date.today() - _td(days=365)
         _period_label = "journalier 1 an"
         _bt_period = "daily"
     else:  # "daily" — 5 ans
@@ -1264,6 +1297,7 @@ def render_backtest_page() -> None:
                 tickers_bt,
                 days=_days,
                 data_period=_bt_period,
+                start_date=_bt_start_date,
                 initial_capital=float(capital_bt),
                 horizon=horizon_bt,
                 warmup_bars=warmup_bt,
@@ -1275,6 +1309,7 @@ def render_backtest_page() -> None:
                 fee_entry_pct=float(fee_bt) if use_fees_bt else 0.0,
                 fee_exit_pct=float(fee_bt) if use_fees_bt else 0.0,
                 trail_stop=trail_stop_bt,
+                close_on_vente=close_on_vente_bt,
                 debug=debug_bt,
             )
         except RuntimeError as e:

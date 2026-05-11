@@ -40,6 +40,7 @@ from config import (
 )
 from indicators import compute_indicators, _fill_ohlcv_gaps, precompute_backtest_indicators
 from scoring import compute_score
+from fundamentals_loader import get_loader as _get_fund_loader
 
 logger = logging.getLogger(__name__)
 
@@ -161,6 +162,9 @@ class BacktestEngine:
         max_position_pct:     float             = ALLOCATION_MAX_POSITION_PCT,
         min_shares_policy:    bool              = ALLOCATION_MIN_SHARES_POLICY,
         debug:                bool              = False,
+        # Filtre temporel : ne démarre le backtest qu'à partir de cette date calendaire
+        # (les données antérieures servent uniquement au warmup des indicateurs)
+        start_date:           Optional[date]    = None,
     ):
         self.initial_capital      = initial_capital
         self.horizon              = horizon
@@ -184,6 +188,7 @@ class BacktestEngine:
         self.max_position_pct     = max_position_pct
         self.min_shares_policy    = min_shares_policy
         self.debug                = debug or DEBUG_MODE
+        self.start_date           = start_date
 
         self._open:    dict[str, Position] = {}
         self._closed:  list[Position]      = []
@@ -208,23 +213,49 @@ class BacktestEngine:
 
     # ── Boucle principale ────────────────────────────────────────────────────
 
-    def run(self, ticker_data: dict[str, pd.DataFrame]) -> BacktestResult:
+    def run(
+        self,
+        ticker_data: dict[str, pd.DataFrame],
+        _precomp_cache: Optional[dict] = None,
+    ) -> BacktestResult:
         if not ticker_data:
             raise ValueError("ticker_data est vide")
 
         # Pré-remplissage des gaps une fois par ticker
         ticker_data = {t: _fill_ohlcv_gaps(df)[0] for t, df in ticker_data.items()}
 
-        # Précompute vectorisé de tous les indicateurs (une seule passe par ticker)
-        _precomp: dict[str, dict] = {}
-        for t, df_full in ticker_data.items():
-            _precomp[t] = precompute_backtest_indicators(
-                df_full, ticker=t,
-                df_index=self.df_index,
-                horizon=self.horizon,
-                warmup_bars=self.warmup_bars,
-            )
+        # Précompute vectorisé — réutilise le cache si fourni (optimiseur)
+        if _precomp_cache is not None:
+            _precomp = _precomp_cache
+        else:
+            _precomp: dict[str, dict] = {}
+            for t, df_full in ticker_data.items():
+                _precomp[t] = precompute_backtest_indicators(
+                    df_full, ticker=t,
+                    df_index=self.df_index,
+                    horizon=self.horizon,
+                    warmup_bars=self.warmup_bars,
+                )
         logger.info(f"[Backtest] Précompute terminé pour {len(_precomp)} tickers")
+
+        # ── Enrichissement fondamentaux ───────────────────────────────────────
+        # Ajoute fund_div_yield / fund_per_implied à chaque TechnicalIndicators
+        # en évitant le look-ahead bias (résultats Y-1 si date >= juin, Y-2 sinon)
+        _fund = _get_fund_loader()
+        if _fund.is_available():
+            _enriched = 0
+            for ticker, date_map in _precomp.items():
+                for ts, ind in date_map.items():
+                    rev_date = ts.date() if hasattr(ts, "date") else ts
+                    cours = ind.cours_actuel
+                    dy, per, annee = _fund.get_signals(ticker, rev_date, cours)
+                    ind.fund_div_yield   = dy
+                    ind.fund_per_implied = per
+                    ind.fund_annee       = annee
+                    if dy is not None or per is not None:
+                        _enriched += 1
+            logger.info(f"[Backtest] Fondamentaux enrichis : {_enriched} points ticker×date")
+        # ─────────────────────────────────────────────────────────────────────
 
         all_dates: list[date] = sorted({
             idx.date() if hasattr(idx, "date") else idx
@@ -234,6 +265,17 @@ class BacktestEngine:
 
         if not all_dates:
             raise ValueError("Aucune date dans ticker_data")
+
+        # Filtre calendaire : ignorer les dates antérieures à start_date.
+        # Les données antérieures restent dans ticker_data/_precomp pour le warmup des indicateurs.
+        if self.start_date is not None:
+            all_dates = [d for d in all_dates if d >= self.start_date]
+            if not all_dates:
+                raise ValueError(
+                    f"Aucune date >= start_date={self.start_date} dans les données. "
+                    "Augmentez l'historique chargé ou reculez start_date."
+                )
+            logger.info(f"[Backtest] start_date={self.start_date} → {len(all_dates)} jours de simulation")
 
         logger.info(
             f"[Backtest] {len(ticker_data)} ticker(s) | "
@@ -572,6 +614,8 @@ def run_backtest(
     min_shares_policy:    bool           = ALLOCATION_MIN_SHARES_POLICY,
     debug:                bool           = False,
     benchmark_series:     Optional[pd.Series] = None,
+    _precomp_cache:       Optional[dict] = None,   # cache indicateurs précomputes
+    start_date:           Optional[date] = None,   # filtre calendaire (warmup reste intact)
 ) -> BacktestResult:
     result = BacktestEngine(
         initial_capital      = initial_capital,
@@ -596,7 +640,8 @@ def run_backtest(
         max_position_pct     = max_position_pct,
         min_shares_policy    = min_shares_policy,
         debug                = debug,
-    ).run(ticker_data)
+        start_date           = start_date,
+    ).run(ticker_data, _precomp_cache=_precomp_cache)
 
     # E1 - Métriques de risque complètes sur la courbe d'équité
     if len(result.equity_curve) >= 2:
@@ -630,6 +675,7 @@ def fetch_and_backtest(
     days:                 int = 730,
     data_period:          str = "daily",
     ticker_data_override: Optional[dict] = None,
+    start_date:           Optional[date] = None,   # filtre calendaire (transmis à run_backtest)
     **kwargs,
 ) -> BacktestResult:
     from scraper import get_ohlcv, TickerNotFoundError, InsufficientDataError
@@ -690,7 +736,7 @@ def fetch_and_backtest(
         if "min_atr_pct" not in kwargs:
             kwargs["min_atr_pct"] = 3.0
 
-    return run_backtest(ticker_data, **kwargs)
+    return run_backtest(ticker_data, start_date=start_date, **kwargs)
 
 
 def walk_forward_backtest(
@@ -823,7 +869,7 @@ def _compute_metrics(equity_curve: pd.Series, risk_free: float = 0.035) -> dict:
     risk_free     : taux sans risque annuel (OAT UEMOA ≈ 3.5 %)
     Retourne : total_return, cagr, sharpe, sortino, max_drawdown, calmar
     """
-    rets = equity_curve.pct_change().dropna()
+    rets = equity_curve.pct_change(fill_method=None).dropna()
     n_days = len(equity_curve)
     years = n_days / 252
 
