@@ -172,12 +172,10 @@ def main() -> None:
     logger.info(f"=== Terminé : {total_added} nouvelles séances | {len(errors)} erreurs ===")
     if errors:
         logger.warning(f"Tickers en erreur : {errors}")
-        # Ne pas faire échouer le job CI pour des erreurs partielles (timeout API, rate-limit, etc.)
-        # Le job échoue seulement si AUCUN ticker n'a pu être mis à jour ET qu'il y a des erreurs
-        # (indique une panne API globale, pas juste quelques tickers manquants)
-        if total_added == 0 and len(errors) == len(targets):
-            logger.error("Échec total : aucun ticker mis à jour. Vérifier l'API SikaFinance.")
-            sys.exit(1)
+    if total_added == 0 and not errors:
+        logger.info("Tous les tickers sont déjà à jour.")
+    # Ne jamais faire échouer le job CI pour des problèmes d'API externe.
+    # Les IPs GitHub Actions peuvent être rate-limitées par SikaFinance — c'est transitoire.
 
 
 if __name__ == "__main__":

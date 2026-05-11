@@ -30,6 +30,7 @@ jobs:
 
       - name: Run database update
         run: python update_database.py
+        continue-on-error: true   # L'API SikaFinance peut bloquer les IPs CI — non bloquant
 
       - name: Commit updated CSVs
         run: |
