@@ -172,7 +172,12 @@ def main() -> None:
     logger.info(f"=== Terminé : {total_added} nouvelles séances | {len(errors)} erreurs ===")
     if errors:
         logger.warning(f"Tickers en erreur : {errors}")
-        sys.exit(1)
+        # Ne pas faire échouer le job CI pour des erreurs partielles (timeout API, rate-limit, etc.)
+        # Le job échoue seulement si AUCUN ticker n'a pu être mis à jour ET qu'il y a des erreurs
+        # (indique une panne API globale, pas juste quelques tickers manquants)
+        if total_added == 0 and len(errors) == len(targets):
+            logger.error("Échec total : aucun ticker mis à jour. Vérifier l'API SikaFinance.")
+            sys.exit(1)
 
 
 if __name__ == "__main__":
