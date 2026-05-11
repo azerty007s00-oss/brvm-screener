@@ -182,9 +182,14 @@ def send_email(alerts: list[dict], context: str) -> None:
             server.login(email_from, email_pass)
             server.sendmail(email_from, email_to, msg.as_string())
         print(f"[Alert] Email envoyé → {email_to} ({len(alerts)} alerte(s))")
+    except smtplib.SMTPAuthenticationError as e:
+        print(
+            f"[Alert] Échec authentification SMTP : {e}\n"
+            "[Alert] ACTION REQUISE : régénérer un App Password Gmail et mettre à jour "
+            "le secret GitHub ALERT_EMAIL_PASSWORD."
+        )
     except Exception as e:
-        print(f"[Alert] Échec envoi email : {e}")
-        sys.exit(1)
+        print(f"[Alert] Échec envoi email (non bloquant) : {e}")
 
 
 if __name__ == "__main__":
