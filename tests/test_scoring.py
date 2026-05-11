@@ -8,8 +8,10 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
+from unittest.mock import patch
 from indicators import TechnicalIndicators
 from scoring import compute_score
+import config as _cfg
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -110,7 +112,8 @@ def test_signal_vente():
 # ─── TEST 4 - Cap ±2 par groupe respecté ──────────────────────────────────────
 
 def test_cap_par_groupe():
-    """Timing brut = RSI(+1)+DivRSI(+1)+Stoch(+1) = 3, cappé à 2 → score_total <= 2."""
+    """Timing brut = RSI(+1)+DivRSI(+1)+Stoch(+1) = 3, cappé à 2 → score_total <= 2.
+    On force stochastic=1 pour tester la logique de cap indépendamment de la config courante."""
     ind = TechnicalIndicators(
         ticker="TEST",
         rsi=25,
@@ -123,7 +126,13 @@ def test_cap_par_groupe():
         volume_moy20=1000,
         volume_actuel=1000,
     )
-    result = compute_score(ind)
+    # Patcher stochastic=1 pour que le critère soit actif quelle que soit la config optimisée
+    import copy
+    horizon = _cfg.DEFAULT_HORIZON
+    patched = copy.deepcopy(_cfg.HORIZON_PROFILES)
+    patched[horizon]["weights"]["stochastic"] = 1
+    with patch.dict(_cfg.HORIZON_PROFILES, patched):
+        result = compute_score(ind)
 
     CAP = 2
     timing_group = {"RSI", "Divergence RSI", "Stochastic"}
@@ -261,6 +270,7 @@ def test_stoch_uptrend_neutral():
     """
     stoch_k=85 (>80) avec MA bullish + ADX=25 → in_uptrend=True → points=0.
     Hors uptrend, stoch_k=85 donnerait -1.
+    On force stochastic=1 pour tester la logique indépendamment de la config courante.
     """
     ind = TechnicalIndicators(
         ticker="TEST",
@@ -271,10 +281,18 @@ def test_stoch_uptrend_neutral():
         volume_moy20=1000,
         volume_actuel=1000,
     )
-    result = compute_score(ind)
+    # Patcher stochastic=1 pour que le critère soit actif quelle que soit la config optimisée
+    import copy
+    horizon = _cfg.DEFAULT_HORIZON
+    patched = copy.deepcopy(_cfg.HORIZON_PROFILES)
+    patched[horizon]["weights"]["stochastic"] = 1
+    with patch.dict(_cfg.HORIZON_PROFILES, patched):
+        result = compute_score(ind)
 
     stoch_criteres = [c for c in result.criteres if c.nom == "Stochastic"]
-    assert len(stoch_criteres) == 1
+    assert len(stoch_criteres) == 1, (
+        f"Critère Stochastic absent de result.criteres (stochastic forcé à 1)"
+    )
     assert stoch_criteres[0].points == 0, (
         f"Stochastic=85 en uptrend devrait etre neutre (0), "
         f"obtenu {stoch_criteres[0].points} ({stoch_criteres[0].interpretation})"
