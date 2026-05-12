@@ -1,0 +1,57 @@
+name: BRVM Fundamentals Update
+
+on:
+  schedule:
+    - cron: '0 6 * * 0'   # Chaque dimanche 06:00 UTC (marchés fermés)
+  workflow_dispatch:        # Déclenchement manuel depuis l'onglet Actions
+
+permissions:
+  contents: write           # Nécessaire pour git push du JSON mis à jour
+
+jobs:
+  update-fundamentals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Scrape fundamentals
+        run: python build_fundamentals_history.py --force --delay 2.0
+        continue-on-error: true   # SikaFinance peut bloquer les IPs CI — non bloquant
+
+      - name: Commit updated fundamentals
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/fundamentals_history.json
+          if git diff --cached --quiet; then
+            echo "Aucune mise a jour des fondamentaux detectee."
+          else
+            TICKERS=$(python - <<'EOF'
+import json, sys
+try:
+    d = json.load(open("data/fundamentals_history.json"))
+    stocks = d.get("stocks", {})
+    n = len([t for t in stocks if stocks[t].get("history")])
+    print(f"{n}/{len(stocks)} tickers")
+except Exception as e:
+    print("?")
+EOF
+)
+            git commit -m "data: mise a jour fondamentaux BRVM $(date -u '+%Y-%m-%d') — ${TICKERS}"
+            git pull --rebase origin main
+            git push
+          fi
