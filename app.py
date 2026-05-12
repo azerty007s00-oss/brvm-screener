@@ -231,6 +231,13 @@ with st.sidebar:
             n = cache.clear_all()
             st.success(f"{n} entrée(s) supprimée(s)")
 
+    st.divider()
+    st.markdown(
+        "**[📊 Tableau de bord](http://localhost:8502)**  \n"
+        "<span style='font-size:.75rem;color:#888'>Scan marché complet · données locales</span>",
+        unsafe_allow_html=True,
+    )
+
 
 # ─── Logique principale ───────────────────────────────────────────────────────
 
