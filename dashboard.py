@@ -267,9 +267,21 @@ def render_breadth_gauge(pct: float, label: str) -> go.Figure:
 
 
 def render_sector_bars(sector_scores: dict) -> go.Figure:
-    # Exclure indices
+    # Exclure indices — conserver le label complet (pays + sous-groupe si CI)
+    # Exemples : "🇨🇮 CI – Finance", "🇸🇳 Sénégal", "🇹🇬 Togo"
+    def _short_label(k: str) -> str:
+        # "🇨🇮 Côte d'Ivoire - Finance" → "🇨🇮 CI – Finance"
+        # "🇸🇳 Sénégal"                 → "🇸🇳 Sénégal"
+        parts = k.split(" - ", 1)
+        flag  = parts[0].split()[0] if parts[0].split() else ""
+        if len(parts) == 2:
+            return f"{flag} CI – {parts[1].strip()}"
+        # Pays sans sous-groupe : garder flag + premier mot significatif
+        words = parts[0].split()
+        return " ".join(words[:2]) if len(words) >= 2 else parts[0]
+
     scores = {
-        k.split(" - ")[-1].strip(): v
+        _short_label(k): v
         for k, v in sector_scores.items()
         if "Indic" not in k
     }
@@ -355,7 +367,7 @@ def section_regime(breadth: MarketBreadth) -> None:
         )
 
     with col_sectors:
-        st.markdown("**Force par secteur (% > MA50)**")
+        st.markdown("**Force par pays / groupe (% > MA50)**")
         st.plotly_chart(render_sector_bars(breadth.sector_scores),
                         use_container_width=True)
 
