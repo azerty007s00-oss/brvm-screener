@@ -31,10 +31,12 @@ def _make_neutral() -> TechnicalIndicators:
 
 
 def _make_achat() -> TechnicalIndicators:
-    """Indicateurs fortement haussiers : 3 groupes alignés."""
+    """Indicateurs fortement haussiers : TREND (golden cross) + TIMING (RSI bullish + stoch oversold).
+    RSI=60 (momentum haussier, +1) — RSI < P10 serait de la faiblesse (-1) dans le modèle momentum.
+    MACD non inclus : désactivé en Moyen terme (macd=0) depuis optimisation G2."""
     return TechnicalIndicators(
         ticker="TEST",
-        rsi=25,
+        rsi=60,
         rsi_p10=30.0,
         rsi_p90=70.0,
         ma20=120.0,
@@ -82,7 +84,9 @@ def test_signal_achat():
 # ─── TEST 3 - Signal VENTE quand 3 groupes baissiers alignés ──────────────────
 
 def test_signal_vente():
-    """3 groupes baissiers alignés → VENTE."""
+    """TREND (death cross) + TIMING (RSI overbought + stoch overbought) → VENTE.
+    MACD désactivé en MT (macd=0). ADX=10 (tendance faible = neutre, évite le +1 ADX
+    qui diluerait le signal vente sous le seuil=-3)."""
     ind = TechnicalIndicators(
         ticker="TEST",
         rsi=80,
@@ -97,7 +101,7 @@ def test_signal_vente():
         macd_signal_line=0.0001,
         macd_signal="baissier",
         stoch_k=85,
-        adx=30,
+        adx=10,
         volume_moy20=1000,
         volume_actuel=500,
         cours_actuel=40.0,
