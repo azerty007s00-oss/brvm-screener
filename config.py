@@ -250,8 +250,8 @@ HORIZON_PROFILES: dict[str, dict] = {
     "Court terme": {
         "label": "Court terme (1-4 semaines)",
         "emoji": "⚡",
-        "max_holding_days": 30,
-        "review_interval_days": 5,
+        "max_holding_days": 45,      # optimisé P1 : 45j (score=33.8, 4/6 années+)
+        "review_interval_days": 14,  # optimisé P1 : 14j > 7j
         "periods": {
             "rsi": 7,
             "ma_short": 10,
@@ -271,22 +271,23 @@ HORIZON_PROFILES: dict[str, dict] = {
         },
         "weights": {
             # Critère : multiplicateur (1 = poids normal, 2 = double, 0 = ignoré)
-            "rsi": 1,
-            "ma_config": 1,
-            "tendance_lt": 0,    # LT non pertinent pour CT
-            "macd": 2,           # MACD prioritaire en CT
-            "perf_relative": 0,  # Non pertinent en CT
-            "stochastic": 2,     # Stochastic prioritaire en CT
+            "rsi": 1,            # optimisé G1-CT : seul signal robuste en CT BRVM (oversold bounce)
+            "ma_config": 0,      # optimisé G1-CT : désactivé — MA/ADX nuit en CT (signal bruité)
+            "tendance_lt": 0,    # optimisé P2 : non pertinent en CT
+            "macd": 0,           # optimisé G1-CT : désactivé — MACD néfaste en CT (mean-reverting BRVM)
+            "perf_relative": 0,  # optimisé P2 : non pertinent en CT
+            "stochastic": 0,     # optimisé P2 : néfaste en CT BRVM
+            "valorisation": 0,   # optimisé P2 : fondamentaux trop lents pour CT
         },
-        "seuil_achat": 2,   # recalibré post-A5 (group caps réduisent le range pratique)
-        "seuil_vente": -2,
+        "seuil_achat": 3,   # confirmé G1-CT : seuil=3 plus sélectif
+        "seuil_vente": -3,
         "jours_min": 60,
     },
     "Moyen terme": {
         "label": "Moyen terme (1-6 mois)",
         "emoji": "📈",
-        "max_holding_days": 90,
-        "review_interval_days": 14,  # bi-mensuel : optimum TF-BRVM (frais/2 vs 7j, Sharpe OOS +1.41)
+        "max_holding_days": 90,      # optimisé P1+P2 : 90j (score=38.6, +34.8%, Sharpe=+0.30)
+        "review_interval_days": 14,  # bi-mensuel
         "periods": {
             "rsi": BRVM_RSI_PERIOD,
             "ma_short": 20,
@@ -306,21 +307,22 @@ HORIZON_PROFILES: dict[str, dict] = {
         },
         "weights": {
             "rsi": 1,
-            "ma_config": 1,
-            "tendance_lt": 1,
-            "macd": 1,
-            "perf_relative": 1,
-            "stochastic": 1,
+            "ma_config": 2,      # optimisé G1 : +0.22 Sharpe marginal (golden/death cross + ADX, meilleur signal MT)
+            "tendance_lt": 0,    # optimisé G2 : désactivé — lt nuit en MT BRVM (signal ambigu court/long)
+            "macd": 0,           # optimisé G2 : désactivé — MACD contre-productif (marché mean-reverting AC1=-0.137)
+            "perf_relative": 2,  # optimisé P2 : critère libre, impact direct (poids=2 optimal)
+            "stochastic": 1,     # optimisé G2 : réactivé — H1=+0.286 ET H2=+0.231 (consistance > IS Sharpe)
+            "valorisation": 1,   # optimisé P2 : rho div_yield=+0.401*** — signal fondamental conservé
         },
-        "seuil_achat": 2,   # recalibré post-A5
-        "seuil_vente": -2,
+        "seuil_achat": 3,   # optimisé G1 : seuil=3 plus sélectif → moins de frais, signal plus pur
+        "seuil_vente": -3,
         "jours_min": 120,
     },
     "Long terme": {
         "label": "Long terme (6 mois+)",
         "emoji": "🏦",
-        "max_holding_days": 180,
-        "review_interval_days": 14,
+        "max_holding_days": 180,     # optimisé P1 : 180j (score=28.0)
+        "review_interval_days": 14,  # optimisé P1 : 14j
         "periods": {
             "rsi": 21,
             "ma_short": 50,
@@ -340,13 +342,14 @@ HORIZON_PROFILES: dict[str, dict] = {
         },
         "weights": {
             "rsi": 1,
-            "ma_config": 2,       # Configuration MA très importante en LT
-            "tendance_lt": 2,     # Tendance LT capitale
+            "ma_config": 2,       # Configuration MA importante en LT
+            "tendance_lt": 0,     # optimisé P2 : désactivé (paradoxalement néfaste sur 5 ans BRVM LT)
             "macd": 1,
-            "perf_relative": 2,   # Alpha vs indice clé en LT
+            "perf_relative": 1,   # optimisé P2 : poids=1 (vs 2 précédemment) meilleur en LT
             "stochastic": 0,      # Stochastic peu fiable sur LT
+            "valorisation": 1,    # optimisé P2 : fondamentaux utiles en LT (score 28.0 vs <28 sans)
         },
-        "seuil_achat": 3,   # recalibré post-A5 (reste plus sélectif que CT/MT)
+        "seuil_achat": 3,   # optimisé G1-LT : seuil 4->3 confirmé (H2 +0.619 Sharpe, 2/3 critères) — T reste faible (<30), résultats indicatifs
         "seuil_vente": -3,
         "jours_min": 250,
     },

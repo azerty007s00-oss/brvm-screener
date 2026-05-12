@@ -312,6 +312,66 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
                 points=0, interpretation="Historique insuffisant"
             ))
 
+    # ── Critère F : Valorisation fondamentale (div_yield + PER) ─────────────
+    # Critère "libre" (hors groupes → s_autres, non cappé par groupe)
+    # Source : fundamentals_history.json via fundamentals_loader
+    # Timing sans look-ahead : résultats Y-1 si date >= juin, Y-2 sinon
+    # Mesure validée : div_yield rho=+0.401***, per_implied rho=-0.248***
+    w_val = w.get("valorisation", 0)
+    if w_val > 0 and (ind.fund_div_yield is not None or ind.fund_per_implied is not None):
+        pts_div = 0
+        pts_per = 0
+        parts   = []
+        annee_str = f" ({ind.fund_annee})" if ind.fund_annee else ""
+
+        # ── Rendement dividende (signal le plus fort, rho=+0.40) ──
+        if ind.fund_div_yield is not None:
+            dy = ind.fund_div_yield
+            if dy >= 0.05:      # ≥ 5% → fort signal income sur BRVM
+                pts_div = +1
+                parts.append(f"DivYield={dy:.1%} (élevé)")
+            elif dy >= 0.025:   # 2.5-5% → yield décent
+                pts_div = 0
+                parts.append(f"DivYield={dy:.1%} (correct)")
+            elif dy > 0:        # < 2.5% → faible attractivité dividende
+                pts_div = -1
+                parts.append(f"DivYield={dy:.1%} (faible)")
+            # dy == 0 ou None : pas de dividende connu → silencieux
+
+        # ── PER implicite (signal plus faible, rho=-0.25) ──
+        if ind.fund_per_implied is not None:
+            per = ind.fund_per_implied
+            if per <= 0 or per > 100:   # valeur aberrante → ignorer
+                pass
+            elif per < 6:       # Très bon marché vs médiane BRVM (7.7x)
+                pts_per = +1
+                parts.append(f"PER={per:.1f}x (bon marché)")
+            elif per <= 12:     # Zone raisonnable pour la BRVM
+                pts_per = 0
+                parts.append(f"PER={per:.1f}x (raisonnable)")
+            else:               # Cher ou surévalué vs médiane BRVM
+                pts_per = -1
+                parts.append(f"PER={per:.1f}x (cher)")
+
+        pts_total = (pts_div + pts_per) * w_val
+
+        if parts:
+            # Interprétation
+            if pts_total > 0:
+                interp = f"Valorisation attractive{annee_str} — " + " | ".join(parts)
+            elif pts_total < 0:
+                interp = f"Valorisation défavorable{annee_str} — " + " | ".join(parts)
+            else:
+                interp = f"Valorisation neutre{annee_str} — " + " | ".join(parts)
+
+            valeur_str = " | ".join(parts)
+            criteres.append(CritereScore(
+                nom="Valorisation",
+                valeur=valeur_str,
+                points=pts_total,
+                interpretation=interp,
+            ))
+
     # ── Critère 6 : Divergence MACD ─────────────────────────────────────────
     w_macd_div = w.get("macd", 1)
     if w_macd_div > 0 and hasattr(ind, "macd_divergence") and ind.macd_divergence != "aucune":

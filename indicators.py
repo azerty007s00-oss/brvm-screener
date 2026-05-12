@@ -260,6 +260,11 @@ class TechnicalIndicators:
     liquidity_tier: str = "INCONNU"         # LIQUIDE | SEMI_LIQUIDE | ILLIQUIDE | INCONNU
     volume_median_nonzero: float = 0.0      # médiane volume séances non-zéro (20j)
 
+    # ── Fondamentaux (enrichis par fundamentals_loader après precompute) ───────
+    fund_div_yield:    Optional[float] = None   # Dividende / cours_actuel (ex: 0.055 = 5.5%)
+    fund_per_implied:  Optional[float] = None   # cours_actuel / BNPA (ex: 8.2x)
+    fund_annee:        Optional[int]   = None   # Année des données fondamentales utilisées
+
     # Séries temporelles pour les graphiques
     series: dict = field(default_factory=dict)
 
