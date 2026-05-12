@@ -37,3 +37,4 @@ date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k
 2026-05-01,BRVMC,VENTE,-3,modérée,403.93,407.34,397.1,2.0,2.0,4.0,10.0,0.42,ok,,,,,
 2026-05-01,BRVM-TEL,VENTE,-3,modérée,103.03,104.71,99.66,2.01,2.0,4.0,10.0,0.82,ok,,,,,
 2026-05-12,SMBC,VENTE,-3,modérée,11500.0,11405.0,11900.0,4.21,0.63,2.66,20.0,1.31,ok,,,,,
+2026-05-12,ONTBF,VENTE,-3,modérée,2710.0,2610.0,2900.0,1.9,2.46,4.68,20.0,1.5,ok,,,,,
