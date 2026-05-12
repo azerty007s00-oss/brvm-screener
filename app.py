@@ -486,14 +486,17 @@ def render_signal_card(result: dict) -> None:
                 f"ATR = {ind.atr_pct:.2f}% ({ind.atr:,.0f} FCFA)"
             )
             if score.position_size_pct is not None:
-                _cap = st.session_state.get("capital", CAPITAL_DEFAUT)
-                _nb  = nb_actions_entier(_cap, score.position_size_pct, ind.cours_actuel)
+                from config import ALLOCATION_RISK_PCT
+                _cap     = st.session_state.get("capital", CAPITAL_DEFAUT)
+                _nb      = nb_actions_entier(_cap, score.position_size_pct, ind.cours_actuel)
                 _montant = _nb * ind.cours_actuel if _nb > 0 else 0
+                # Perte réelle si le stop est touché = risk_pct% du capital
+                _perte_max = round(_cap * ALLOCATION_RISK_PCT / 100)
                 st.info(
-                    f"**Sizing indicatif (risque 1% capital, avec haircut liquidité)** : "
-                    f"**{_nb} action(s)** à {ind.cours_actuel:,.0f} FCFA = "
-                    f"{_montant:,.0f} FCFA "
-                    f"({score.position_size_pct:.1f}% du capital de {_cap:,.0f} FCFA)",
+                    f"**Sizing indicatif** : **{_nb} action(s)** à {ind.cours_actuel:,.0f} FCFA "
+                    f"= **{_montant:,.0f} FCFA ({score.position_size_pct:.1f}% du capital)**  \n"
+                    f"Perte max si stop touché : {_perte_max:,.0f} FCFA "
+                    f"({ALLOCATION_RISK_PCT:.0f}% du capital · haircut liquidité appliqué)",
                     icon="📐",
                 )
 
