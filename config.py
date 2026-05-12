@@ -347,7 +347,7 @@ HORIZON_PROFILES: dict[str, dict] = {
             "macd": 1,
             "perf_relative": 1,   # optimisé P2 : poids=1 (vs 2 précédemment) meilleur en LT
             "stochastic": 0,      # Stochastic peu fiable sur LT
-            "valorisation": 1,    # optimisé P2 : fondamentaux utiles en LT (score 28.0 vs <28 sans)
+            "valorisation": 2,    # optimisé G1-val : val=2 optimal en LT (IS +0.482, H1 +0.514, H2 stable +0.444)
         },
         "seuil_achat": 3,   # optimisé G1-LT : seuil 4->3 confirmé (H2 +0.619 Sharpe, 2/3 critères) — T reste faible (<30), résultats indicatifs
         "seuil_vente": -3,
