@@ -357,6 +357,18 @@ HORIZON_PROFILES: dict[str, dict] = {
 
 DEFAULT_HORIZON = "Moyen terme"
 
+# Filtre R/R naturel Donchian par horizon (0 = désactivé).
+# Calculé SANS étirement du TP (contrairement à compute_risk_levels qui force >=1.5).
+# Validé par optimize_rr_filter.py — critère : F1 > F0 sur IS ET OOS (Sharpe).
+#   CT  : 0.0  → filtre trop restrictif sur 10 barres (6 trades vs 49, WR 0%)
+#   MT  : 1.5  → VALIDE : SH_IS +0.309 vs -0.216 | SH_OOS +1.126 vs +0.839
+#   LT  : 0.0  → filtre KO (IS dégradé : +0.005 vs +0.248)
+HORIZON_MIN_RR: dict[str, float] = {
+    "Court terme":  0.0,
+    "Moyen terme":  1.5,
+    "Long terme":   0.0,
+}
+
 # ─── Scoring ──────────────────────────────────────────────────────────────────
 
 SCORE_ACHAT_SEUIL = 3

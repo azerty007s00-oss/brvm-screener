@@ -165,6 +165,9 @@ class BacktestEngine:
         # Filtre temporel : ne démarre le backtest qu'à partir de cette date calendaire
         # (les données antérieures servent uniquement au warmup des indicateurs)
         start_date:           Optional[date]    = None,
+        # Filtre R/R naturel : refus d'entrée si R/R Donchian < min_rr (0 = désactivé)
+        # Le R/R "naturel" est calculé sans étirement du TP (contrairement à compute_risk_levels)
+        min_rr:               float             = 0.0,
     ):
         self.initial_capital      = initial_capital
         self.horizon              = horizon
@@ -189,6 +192,7 @@ class BacktestEngine:
         self.min_shares_policy    = min_shares_policy
         self.debug                = debug or DEBUG_MODE
         self.start_date           = start_date
+        self.min_rr               = min_rr
 
         self._open:    dict[str, Position] = {}
         self._closed:  list[Position]      = []
@@ -364,6 +368,31 @@ class BacktestEngine:
                         except Exception as exc:
                             logger.debug(f"[Backtest] {ticker} {current_date} score KO: {exc}")
                             continue
+
+                        # ── Filtre R/R naturel Donchian ───────────────────────
+                        # Calcule le R/R sans étirement du TP (brut marché).
+                        # Si inférieur au seuil, le setup est rejeté.
+                        if self.min_rr > 0 and score.stop_loss is not None:
+                            _n_bars = {"Court terme": 10, "Moyen terme": 20, "Long terme": 40}.get(
+                                self.horizon, 20
+                            )
+                            if len(df_slice) >= _n_bars:
+                                _sl_nat = float(df_slice["low"].iloc[-_n_bars:].min())
+                                _tp_nat = float(df_slice["high"].iloc[-_n_bars:].max())
+                                _px     = ind.cours_actuel
+                                if _sl_nat < _px < _tp_nat:
+                                    _dist_stop = _px - _sl_nat
+                                    _dist_tgt  = _tp_nat - _px
+                                    if _dist_stop > 0:
+                                        _nat_rr = _dist_tgt / _dist_stop
+                                        if _nat_rr < self.min_rr:
+                                            if self.debug:
+                                                print(
+                                                    f"  SKIP  {current_date}  {ticker:<8}"
+                                                    f"  nat_rr={_nat_rr:.2f} < {self.min_rr:.1f}"
+                                                )
+                                            continue
+                        # ─────────────────────────────────────────────────────
 
                         if (score.signal == "ACHAT"
                                 and score.confiance in self.confiance_filter
@@ -616,6 +645,7 @@ def run_backtest(
     benchmark_series:     Optional[pd.Series] = None,
     _precomp_cache:       Optional[dict] = None,   # cache indicateurs précomputes
     start_date:           Optional[date] = None,   # filtre calendaire (warmup reste intact)
+    min_rr:               float          = 0.0,    # filtre R/R naturel Donchian (0 = désactivé)
 ) -> BacktestResult:
     result = BacktestEngine(
         initial_capital      = initial_capital,
@@ -641,6 +671,7 @@ def run_backtest(
         min_shares_policy    = min_shares_policy,
         debug                = debug,
         start_date           = start_date,
+        min_rr               = min_rr,
     ).run(ticker_data, _precomp_cache=_precomp_cache)
 
     # E1 - Métriques de risque complètes sur la courbe d'équité

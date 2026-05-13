@@ -414,6 +414,24 @@ def render_signal_card(result: dict) -> None:
             "ATR sous-estimé → stops trop serrés, sizing potentiellement gonflé."
         )
 
+    # ── Avertissement calibration horizon ────────────────────────────────────
+    if ind.horizon == "Court terme":
+        st.info(
+            "⏱️ **Horizon Court terme — calibration limitée.** "
+            "Signal basé quasi-exclusivement sur le RSI (rebond de survente). "
+            "Moins de 50 trades générés sur 5 ans de backtest, Sharpe négatif sur la période IS. "
+            "À utiliser uniquement en complément d'une analyse manuelle — ne pas trader en aveugle.",
+            icon="⚠️",
+        )
+    elif ind.horizon == "Long terme":
+        st.info(
+            "🏦 **Horizon Long terme — statistiques peu robustes.** "
+            "Moins de 30 trades sur 5 ans : les métriques (WR, Sharpe) sont indicatives. "
+            "Privilégier l'analyse fondamentale en complément (PER, dividende). "
+            "Conviction plus forte requise avant prise de position.",
+            icon="⚠️",
+        )
+
     # ── Scorecard détaillée ───────────────────────────────────────────────────
     with st.expander("📋 Scorecard détaillée", expanded=True):
         for critere in score.criteres:
@@ -449,6 +467,21 @@ def render_signal_card(result: dict) -> None:
 
     # ── Niveaux de risque D1 ─────────────────────────────────────────────────
     if score.stop_loss is not None and score.take_profit is not None and ind.atr and ind.atr > 0:
+        # R/R naturel Donchian (sans étirement du TP) — filtre de qualité de setup
+        from config import HORIZON_MIN_RR
+        _df_raw   = result.get("df")
+        _nat_rr   = None
+        _min_rr   = HORIZON_MIN_RR.get(ind.horizon, 0.0)
+        _n_bars   = {"Court terme": 10, "Moyen terme": 20, "Long terme": 40}.get(ind.horizon, 20)
+        if _df_raw is not None and len(_df_raw) >= _n_bars:
+            _sl_nat = float(_df_raw["low"].iloc[-_n_bars:].min())
+            _tp_nat = float(_df_raw["high"].iloc[-_n_bars:].max())
+            _px     = ind.cours_actuel
+            if _sl_nat < _px < _tp_nat:
+                _ds = _px - _sl_nat
+                if _ds > 0:
+                    _nat_rr = round((_tp_nat - _px) / _ds, 2)
+
         with st.expander("🎯 Niveaux de risque (ATR-based)", expanded=True):
             prix = ind.cours_actuel
             k1 = abs(score.stop_loss  - prix) / ind.atr
@@ -475,17 +508,38 @@ def render_signal_card(result: dict) -> None:
                     delta=f"{pct_target:+.1f}% / +{k2:.1f} ATR",
                 )
             with r4:
-                st.metric("R/R", f"{rr:.2f}")
+                st.metric("R/R (TP ajusté)", f"{rr:.2f}")
                 st.markdown(
                     f"<span style='color:{rr_color};font-size:0.8em;font-weight:600'>"
                     f"{rr_label}</span>",
                     unsafe_allow_html=True,
                 )
-            st.caption(
-                f"Confiance {score.confiance} → k1={k1:.1f}×ATR / k2={k2:.1f}×ATR  |  "
-                f"ATR = {ind.atr_pct:.2f}% ({ind.atr:,.0f} FCFA)"
-            )
-            if score.position_size_pct is not None:
+            # R/R naturel Donchian (brut marché, sans étirement)
+            if _nat_rr is not None:
+                _nat_color = "#0F6E56" if _nat_rr >= 2.0 else ("#BA7517" if _nat_rr >= 1.5 else "#A32D2D")
+                _nat_label = "Excellent" if _nat_rr >= 2.0 else ("Acceptable" if _nat_rr >= 1.5 else "Faible")
+                st.caption(
+                    f"Confiance {score.confiance} · k1={k1:.1f}×ATR / k2={k2:.1f}×ATR  |  "
+                    f"ATR = {ind.atr_pct:.2f}% ({ind.atr:,.0f} FCFA)  |  "
+                    f"R/R naturel Donchian ({_n_bars}j) : "
+                    f"<span style='color:{_nat_color};font-weight:600'>{_nat_rr:.2f} ({_nat_label})</span>",
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.caption(
+                    f"Confiance {score.confiance} → k1={k1:.1f}×ATR / k2={k2:.1f}×ATR  |  "
+                    f"ATR = {ind.atr_pct:.2f}% ({ind.atr:,.0f} FCFA)"
+                )
+
+            # Alerte R/R naturel insuffisant (filtre de gestion - validé optimize_rr_filter.py)
+            if _min_rr > 0 and _nat_rr is not None and _nat_rr < _min_rr:
+                st.warning(
+                    f"⚠️ **R/R naturel insuffisant ({_nat_rr:.2f} < {_min_rr:.1f})** — "
+                    f"Le signal ACHAT est présent mais le setup {ind.horizon} ne remplit pas "
+                    f"le critère de qualité. **Pas de prise de position recommandée.**",
+                    icon="🚫",
+                )
+            elif score.position_size_pct is not None:
                 from config import ALLOCATION_RISK_PCT
                 _cap     = st.session_state.get("capital", CAPITAL_DEFAUT)
                 _nb      = nb_actions_entier(_cap, score.position_size_pct, ind.cours_actuel)
@@ -1303,6 +1357,7 @@ def render_backtest_page() -> None:
         try:
             _max_atr = 25.0 if _is_monthly else 4.0
             _min_atr = 3.0  if _is_monthly else 2.0
+            from config import HORIZON_MIN_RR as _HMR
             result = fetch_and_backtest(
                 tickers_bt,
                 days=_days,
@@ -1321,6 +1376,7 @@ def render_backtest_page() -> None:
                 trail_stop=trail_stop_bt,
                 close_on_vente=close_on_vente_bt,
                 debug=debug_bt,
+                min_rr=_HMR.get(horizon_bt, 0.0),
             )
         except RuntimeError as e:
             st.error(f"Erreur : {e}")
