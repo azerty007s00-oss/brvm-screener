@@ -417,18 +417,16 @@ def render_signal_card(result: dict) -> None:
     # ── Avertissement calibration horizon ────────────────────────────────────
     if ind.horizon == "Court terme":
         st.info(
-            "⏱️ **Horizon Court terme — calibration limitée.** "
-            "Signal basé quasi-exclusivement sur le RSI (rebond de survente). "
-            "Moins de 50 trades générés sur 5 ans de backtest, Sharpe négatif sur la période IS. "
-            "À utiliser uniquement en complément d'une analyse manuelle — ne pas trader en aveugle.",
+            "Court terme peu fiable sur la BRVM. "
+            "Le signal repose presque uniquement sur le RSI. "
+            "Sur 5 ans de backtest : moins de 50 trades, Sharpe négatif. "
+            "Ne pas agir sur ce signal seul.",
             icon="⚠️",
         )
     elif ind.horizon == "Long terme":
         st.info(
-            "🏦 **Horizon Long terme — statistiques peu robustes.** "
-            "Moins de 30 trades sur 5 ans : les métriques (WR, Sharpe) sont indicatives. "
-            "Privilégier l'analyse fondamentale en complément (PER, dividende). "
-            "Conviction plus forte requise avant prise de position.",
+            "Long terme : moins de 30 trades sur 5 ans, les stats sont fragiles. "
+            "Regarder aussi les fondamentaux (PER, dividende) avant de décider.",
             icon="⚠️",
         )
 
@@ -534,9 +532,8 @@ def render_signal_card(result: dict) -> None:
             # Alerte R/R naturel insuffisant (filtre de gestion - validé optimize_rr_filter.py)
             if _min_rr > 0 and _nat_rr is not None and _nat_rr < _min_rr:
                 st.warning(
-                    f"⚠️ **R/R naturel insuffisant ({_nat_rr:.2f} < {_min_rr:.1f})** — "
-                    f"Le signal ACHAT est présent mais le setup {ind.horizon} ne remplit pas "
-                    f"le critère de qualité. **Pas de prise de position recommandée.**",
+                    f"R/R naturel trop faible ({_nat_rr:.2f} sur {_n_bars} bougies). "
+                    f"Le signal existe mais le setup ne justifie pas d'entrée. Passer.",
                     icon="🚫",
                 )
             elif score.position_size_pct is not None:
