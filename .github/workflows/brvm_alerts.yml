@@ -44,6 +44,7 @@ jobs:
           ALERT_EMAIL_PASSWORD: ${{ secrets.ALERT_EMAIL_PASSWORD }}
           ALERT_EMAIL_TO:       ${{ secrets.ALERT_EMAIL_TO }}
         run: python alert_checker.py "${{ steps.ctx.outputs.label }}"
+        continue-on-error: true   # SikaFinance bloque les IPs CI — non bloquant
 
       # Pas de push - branche protégée. Les prix sont rafraîchis en mémoire
       # uniquement pour la vérification des alertes.

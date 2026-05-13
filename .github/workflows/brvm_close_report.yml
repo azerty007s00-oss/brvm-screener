@@ -33,3 +33,4 @@ jobs:
           ALERT_EMAIL_TO:       ${{ secrets.ALERT_EMAIL_TO }}
           CAPITAL_TOTAL:        ${{ secrets.CAPITAL_TOTAL }}
         run: python close_market_report.py
+        continue-on-error: true   # SikaFinance bloque les IPs CI — non bloquant
