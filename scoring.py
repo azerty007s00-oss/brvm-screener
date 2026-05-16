@@ -395,7 +395,9 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
     # Histogramme > 0 ET pente < 0 : momentum haussier s'épuise → -1
     # Histogramme < 0 ET pente > 0 : momentum baissier se retourne → +1
     # Critère silencieux si aucune inflexion détectée (pas de ligne N/D)
-    if ind.macd_histogram is not None and ind.macd_histogram_prev is not None:
+    # Garde de poids : désactivé si macd=0 dans le profil d'horizon (cohérence avec 6a)
+    w_macd_6b = w.get("macd", 1)
+    if w_macd_6b > 0 and ind.macd_histogram is not None and ind.macd_histogram_prev is not None:
         hist_slope = ind.macd_histogram - ind.macd_histogram_prev
         if ind.macd_histogram > 0 and hist_slope < 0:
             criteres.append(CritereScore(
@@ -686,8 +688,11 @@ def compute_score(ind: TechnicalIndicators) -> ScoreResult:
 
     if taux_couverture < 0.5 or nb_groupes_actifs < 2 or data_quality == "sparse":
         result.confiance = "faible"   # Données insuffisantes, mono-bloc, ou très lacunaires
-    elif nb_groupes_alignes == 3 and data_quality == "ok":
-        result.confiance = "forte"    # forte requiert données sans trou
+    elif nb_groupes_alignes == nb_groupes_actifs and data_quality == "ok":
+        # "forte" = tous les groupes ACTIFS alignés dans la même direction.
+        # nb_groupes_actifs peut être < 3 quand un groupe est désactivé par le profil
+        # (ex: macd=0 en Moyen terme → s_momentum=0 → seuls TREND+TIMING comptent).
+        result.confiance = "forte"
     elif nb_groupes_alignes >= 2:
         result.confiance = "modérée"  # gaps acceptables → cap à modérée
     else:

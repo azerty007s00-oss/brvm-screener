@@ -337,3 +337,74 @@ def test_signal_achat_tf_uptrend():
     assert result.confiance in ("forte", "modérée"), (
         f"Confiance attendue forte/moderee, obtenu '{result.confiance}'"
     )
+
+
+# ─── TEST 12 - Confiance forte atteignable en MT même sans MACD ───────────────
+
+def test_confiance_forte_mt_sans_macd():
+    """
+    En Moyen terme (macd=0), TREND et TIMING alignés → nb_actifs=2, nb_alignes=2
+    → confiance FORTE (tous les groupes actifs sont alignés).
+    Avant le fix, jamais forte car la condition était nb_groupes_alignes == 3
+    (impossible avec MACD désactivé).
+    """
+    ind = TechnicalIndicators(
+        ticker="TEST",
+        rsi=60,
+        rsi_p10=30.0,
+        rsi_p90=70.0,
+        ma20=1100.0,
+        ma50=1000.0,
+        ma_lt=900.0,
+        ma_lt_period=200,
+        ma_signal="golden_cross",
+        ma50_slope_pct=0.5,
+        stoch_k=15,
+        adx=28,
+        volume_moy20=600,
+        volume_actuel=1200,
+        volume_median_nonzero=150.0,
+        cours_actuel=1100.0,
+        prix_vs_ma_lt="au_dessus",
+        perf_vs_index_1m_atr_norm=1.5,
+        perf_vs_index_1m=4.0,
+    )
+    result = compute_score(ind)
+    assert result.signal == "ACHAT", (
+        f"Attendu ACHAT, obtenu {result.signal} (score={result.score_total})"
+    )
+    assert result.confiance == "forte", (
+        f"Confiance attendue 'forte' (TREND+TIMING alignes, MACD inactif), "
+        f"obtenu '{result.confiance}'"
+    )
+
+
+# ─── TEST 13 - MACD histogram silencieux quand macd=0 dans le profil ──────────
+
+def test_macd_histogram_silent_when_disabled():
+    """
+    Critère 6b (MACD Momentum / pente histogramme) ne doit pas se déclencher
+    quand macd=0 dans le profil d'horizon (Moyen terme par défaut).
+    Même avec une inflexion baissière forte (hist=+0.5 → +0.2), le critère
+    doit rester silencieux (absent des criteres).
+    """
+    ind = TechnicalIndicators(
+        ticker="TEST",
+        rsi=62,
+        rsi_p10=30.0,
+        rsi_p90=70.0,
+        ma_signal="bullish",
+        adx=22,
+        macd_histogram=0.5,
+        macd_histogram_prev=0.8,   # inflexion baissiere (slope < 0)
+        volume_moy20=600,
+        volume_actuel=600,
+        volume_median_nonzero=100.0,
+    )
+    result = compute_score(ind)
+
+    macd_mom_criteres = [c for c in result.criteres if c.nom == "MACD Momentum"]
+    assert len(macd_mom_criteres) == 0, (
+        f"MACD Momentum ne devrait pas se declencher quand macd=0 en Moyen terme, "
+        f"obtenu {len(macd_mom_criteres)} critere(s) : {macd_mom_criteres}"
+    )
