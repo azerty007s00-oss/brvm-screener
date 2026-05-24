@@ -39,3 +39,4 @@ date,ticker,signal,score,confiance,entry_price,stop_loss,take_profit,rr,k_stop,k
 2026-05-12,SMBC,VENTE,-3,modérée,11500.0,11405.0,11900.0,4.21,0.63,2.66,20.0,1.31,ok,,,,,
 2026-05-12,ONTBF,VENTE,-3,modérée,2710.0,2610.0,2900.0,1.9,2.46,4.68,20.0,1.5,ok,,,,,
 2026-05-13,ORAC,VENTE,-5,faible,15050.0,14420.0,15470.0,0.67,2.36,1.58,20.0,1.77,ok,,,,,
+2026-05-24,BNBC,VENTE,-3,faible,1500.0,1350.0,1600.0,0.67,3.06,2.04,6.7,3.27,ok,,,,,
