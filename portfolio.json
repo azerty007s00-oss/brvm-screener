@@ -1,14 +1,1 @@
-[
-  {
-    "ticker": "BICC",
-    "entry_price": 27000.0,
-    "quantity": 1,
-    "stop_loss": 24266.71,
-    "take_profit": 31099.94,
-    "entry_date": "2026-05-24",
-    "current_price": 29000.0,
-    "refreshed_at": "2026-08-06 17:16",
-    "signal": "ACHAT",
-    "confiance": "forte"
-  }
-]
+[]
