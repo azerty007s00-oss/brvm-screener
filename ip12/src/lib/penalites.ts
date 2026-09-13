@@ -216,3 +216,38 @@ export function moisARelancer(aujourdhui: Date = new Date()): string {
   const mois = `${aujourdhui.getUTCFullYear()}-${String(aujourdhui.getUTCMonth() + 1).padStart(2, "0")}-01`;
   return estExigible(mois, aujourdhui) ? mois : decalerMois(mois, -1);
 }
+
+/* ------------------------------------------------------- absences en reunion */
+
+export type TrancheAbsence = {
+  /** Rang de la tranche : la premiere, la deuxieme… Sert de cle au constat. */
+  rang: number;
+  /** Rang de l'absence qui a ferme la tranche, pour dire a partir de quand elle est due. */
+  absenceDeclenchante: number;
+  montant: number;
+};
+
+/**
+ * Tranches d'absences injustifiees penalisables.
+ *
+ * Le club sanctionne la repetition, non l'empechement ponctuel : seule une tranche
+ * complete est due, et le reste court jusqu'a la suivante. Les absences excusees --
+ * c'est au secretaire de les justifier -- ne comptent pas.
+ *
+ * Le rang rend le constat idempotent : une tranche deja portee au registre y reste
+ * sous la meme cle, et un nouveau constat n'ajoute que celles qui manquent.
+ */
+export function tranchesAbsence(
+  nbAbsencesInjustifiees: number,
+  regles: { penaliteAbsence: number; absencesParTranche: number } = REGLES,
+): TrancheAbsence[] {
+  const parTranche = Math.floor(regles.absencesParTranche);
+  if (parTranche <= 0 || nbAbsencesInjustifiees <= 0) return [];
+
+  const completes = Math.floor(nbAbsencesInjustifiees / parTranche);
+  return Array.from({ length: completes }, (_, i) => ({
+    rang: i + 1,
+    absenceDeclenchante: (i + 1) * parTranche,
+    montant: regles.penaliteAbsence,
+  }));
+}

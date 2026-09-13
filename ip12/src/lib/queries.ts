@@ -364,6 +364,53 @@ export async function listerReunions(): Promise<Reunion[]> {
  * Une seule requete pour l'ensemble : la page affiche la feuille de chaque reunion,
  * et les interroger une par une multiplierait les allers-retours sans raison.
  */
+export type AbsencesMembre = {
+  membreId: string;
+  nom: string;
+  /** Absences sans justification : seules celles-la se penalisent. */
+  injustifiees: number;
+  /** Absences excusees par le secretaire : comptees, jamais penalisees. */
+  excusees: number;
+  /** Dates des absences injustifiees, dans l'ordre : datent les tranches. */
+  datesInjustifiees: string[];
+};
+
+/**
+ * Absences pointees par membre, l'injustifiee separee de l'excusee.
+ *
+ * Le decompte part de la feuille de presence et d'elle seule : justifier une absence
+ * consiste a la passer en « excuse » sur la seance concernee, ce qui la retire
+ * mecaniquement du compte penalisable.
+ */
+export async function absencesParMembre(): Promise<AbsencesMembre[]> {
+  const sql = db();
+  const rows = await sql`
+    select m.id as membre_id, m.full_name as nom,
+           count(*) filter (where a.status = 'absent') as injustifiees,
+           count(*) filter (where a.status = 'excuse') as excusees,
+           coalesce(
+             array_agg(to_char(r.meeting_date, 'YYYY-MM-DD') order by r.meeting_date)
+               filter (where a.status = 'absent'),
+             '{}'
+           ) as dates_injustifiees
+    from members m
+    left join attendances a on a.member_id = m.id
+    left join meetings r on r.id = a.meeting_id
+    where m.is_active
+    group by m.id, m.full_name
+    order by count(*) filter (where a.status = 'absent') desc, m.full_name
+  `;
+  return rows.map((r) => ({
+    membreId: String(r.membre_id),
+    nom: String(r.nom),
+    injustifiees: n(r.injustifiees),
+    excusees: n(r.excusees),
+    datesInjustifiees: Array.isArray(r.dates_injustifiees)
+      ? (r.dates_injustifiees as string[])
+      : [],
+  }));
+}
+
 export async function presencesParReunion(): Promise<Map<string, Map<string, string>>> {
   const sql = db();
   const rows = await sql`select meeting_id, member_id, status from attendances`;

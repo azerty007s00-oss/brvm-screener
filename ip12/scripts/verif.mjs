@@ -5,9 +5,8 @@ import { strict as assert } from "node:assert";
 const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair } = await import(
   "../.verif/perf.mjs"
 );
-const { situationMembre, calculerPenalites, issueR5, moisARelancer } = await import(
-  "../.verif/penalites.mjs"
-);
+const { situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence } =
+  await import("../.verif/penalites.mjs");
 
 /* ------------------------------------------------------------- performance */
 
@@ -216,4 +215,36 @@ assert.equal(moisARelancer(new Date("2026-09-10T08:00:00Z")), "2026-08-01");
 // Le 11, le mois de septembre est devenu exigible.
 assert.equal(moisARelancer(new Date("2026-09-11T08:00:00Z")), "2026-09-01");
 
-console.log("OK - 35 verifications : performance, penalites art. 9 et R4, retards, R3, R5, relance");
+/* ------------------------------------------------- absences en reunion */
+
+const reglesAbsence = { penaliteAbsence: 2_000, absencesParTranche: 2 };
+
+// Une absence isolee ne coute rien : c'est la repetition qui est sanctionnee.
+assert.deepEqual(tranchesAbsence(0, reglesAbsence), []);
+assert.deepEqual(tranchesAbsence(1, reglesAbsence), []);
+
+// La deuxieme ferme la tranche.
+const uneTranche = tranchesAbsence(2, reglesAbsence);
+assert.equal(uneTranche.length, 1);
+assert.equal(uneTranche[0].rang, 1);
+assert.equal(uneTranche[0].absenceDeclenchante, 2);
+assert.equal(uneTranche[0].montant, 2_000);
+
+// La troisieme ne rouvre rien ; la quatrieme ouvre la deuxieme tranche.
+assert.equal(tranchesAbsence(3, reglesAbsence).length, 1);
+const deuxTranches = tranchesAbsence(4, reglesAbsence);
+assert.equal(deuxTranches.length, 2);
+assert.equal(deuxTranches[1].rang, 2);
+assert.equal(deuxTranches[1].absenceDeclenchante, 4);
+
+// Les rangs sont stables : reconstater apres une absence de plus laisse les
+// tranches deja portees au registre sous la meme cle.
+assert.deepEqual(
+  tranchesAbsence(5, reglesAbsence).slice(0, 2),
+  tranchesAbsence(4, reglesAbsence),
+);
+
+// Un reglage absurde ne fait pas naitre de dette.
+assert.deepEqual(tranchesAbsence(10, { penaliteAbsence: 2_000, absencesParTranche: 0 }), []);
+
+console.log("OK - 45 verifications : performance, penalites art. 9 et R4, retards, absences, R3, R5, relance");

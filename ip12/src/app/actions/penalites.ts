@@ -4,8 +4,14 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
-import { bornesReprisePenalites, situationsClub } from "@/lib/queries";
+import {
+  absencesParMembre,
+  bornesReprisePenalites,
+  reglagesEffectifs,
+  situationsClub,
+} from "@/lib/queries";
 import { REGLES, moisLong } from "@/lib/settings";
+import { tranchesAbsence } from "@/lib/penalites";
 import { KIND_PENALITE, STATUT_PENALITE } from "@/lib/valeurs";
 import type { EtatFormulaire } from "./auth";
 
@@ -118,6 +124,104 @@ export async function constaterPenalitesRetard(
   if (reajustees > 0) parts.push(`${reajustees} reajustee${reajustees > 1 ? "s" : ""} (R4)`);
   if (intactes > 0) parts.push(`${intactes} deja reglee${intactes > 1 ? "s" : ""} ou annulee${intactes > 1 ? "s" : ""}, laissee${intactes > 1 ? "s" : ""} intacte${intactes > 1 ? "s" : ""}`);
   return { ok: true, message: `${parts.join(", ")}.${sousReprise}` };
+}
+
+/** Identifiant stable d'une tranche d'absences : rend le constat idempotent. */
+const cleAbsence = (membreId: string, rang: number) => `absence:${membreId}:${rang}`;
+
+/**
+ * Constate les penalites d'absence : une tranche d'absences injustifiees, une penalite.
+ *
+ * Le decompte part de la feuille de presence et d'elle seule. Justifier une absence
+ * consiste a la passer en « excuse » sur la seance concernee -- c'est l'office du
+ * secretaire -- ce qui la retire du compte penalisable.
+ *
+ * Rejouable : chaque tranche porte son rang en cle, un nouveau constat n'ajoute que
+ * celles qui manquent. Une tranche devenue infondee parce qu'une absence a ete
+ * excusee apres coup n'est pas supprimee d'office : une penalite portee au registre
+ * se leve par une annulation motivee, non par un effacement silencieux. Le compte
+ * rendu la signale pour qu'elle soit reprise a la main.
+ */
+export async function constaterPenalitesAbsence(
+  _precedent: EtatFormulaire,
+  _donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererPenalites");
+  const sql = db();
+  const [absences, reglages] = await Promise.all([absencesParMembre(), reglagesEffectifs()]);
+
+  let creees = 0;
+  let intactes = 0;
+  let infondees = 0;
+
+  for (const a of absences) {
+    const tranches = tranchesAbsence(a.injustifiees, reglages);
+
+    for (const t of tranches) {
+      const cle = cleAbsence(a.membreId, t.rang);
+      const existante = await sql`select id from penalties where source_key = ${cle} limit 1`;
+      if (existante.length > 0) {
+        intactes++;
+        continue;
+      }
+
+      /*
+       * La penalite nait le jour de l'absence qui a ferme la tranche, non le jour
+       * du constat : c'est cette date que le registre doit porter, sans quoi toutes
+       * les tranches d'un rattrapage sembleraient nees le meme jour.
+       */
+      const naissance = a.datesInjustifiees[t.absenceDeclenchante - 1] ?? null;
+      const motif = `Absence en reunion — ${t.absenceDeclenchante} absences injustifiees (tranche ${t.rang})`;
+
+      if (naissance) {
+        await sql`
+          insert into penalties (member_id, kind, quantity, unit_amount, reason,
+                                 incurred_on, status, created_by, source_key, auto)
+          values (${a.membreId}::uuid, ${KIND_PENALITE.absence}, 1, ${t.montant}, ${motif},
+                  ${naissance}::date, ${STATUT_PENALITE.due}, ${auteur.id}::uuid, ${cle}, true)
+        `;
+      } else {
+        await sql`
+          insert into penalties (member_id, kind, quantity, unit_amount, reason,
+                                 status, created_by, source_key, auto)
+          values (${a.membreId}::uuid, ${KIND_PENALITE.absence}, 1, ${t.montant}, ${motif},
+                  ${STATUT_PENALITE.due}, ${auteur.id}::uuid, ${cle}, true)
+        `;
+      }
+      creees++;
+    }
+
+    // Tranches portees au registre que la feuille de presence ne justifie plus.
+    const auDela = await sql`
+      select count(*)::int as nb from penalties
+      where member_id = ${a.membreId}::uuid
+        and kind = ${KIND_PENALITE.absence}
+        and status = ${STATUT_PENALITE.due}
+        and source_key like ${`absence:${a.membreId}:%`}
+    `;
+    infondees += Math.max(0, Number(auDela[0]?.nb ?? 0) - tranches.length);
+  }
+
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "constat_absences",
+    { entite: "penalties" },
+    { creees, intactes, infondees },
+  );
+  revalidatePath("/", "layout");
+
+  const reste =
+    infondees > 0
+      ? ` ${infondees} tranche${infondees > 1 ? "s" : ""} au registre n'${infondees > 1 ? "ont" : "a"} plus de fondement depuis qu'une absence a ete excusee : a annuler a la main.`
+      : "";
+
+  if (creees === 0) {
+    return { ok: true, message: `Aucune nouvelle tranche d'absences a constater.${reste}` };
+  }
+  return {
+    ok: true,
+    message: `${creees} penalite${creees > 1 ? "s" : ""} d'absence constatee${creees > 1 ? "s" : ""}.${reste}`,
+  };
 }
 
 /** Penalite saisie a la main : absence en reunion, ou tout autre motif. */

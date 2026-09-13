@@ -1,12 +1,14 @@
 import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
-import { listerMembres, listerPenalites, situationsClub } from "@/lib/queries";
+import { absencesParMembre, listerMembres, listerPenalites, situationsClub } from "@/lib/queries";
 import {
   ajouterPenalite,
   annulerPenalite,
+  constaterPenalitesAbsence,
   constaterPenalitesRetard,
   reglerPenalite,
 } from "@/app/actions/penalites";
+import { tranchesAbsence } from "@/lib/penalites";
 import { REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { KIND_PENALITE, STATUT_PENALITE } from "@/lib/valeurs";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
@@ -25,12 +27,13 @@ export default async function PagePenalites() {
   const membre = await exigerMembre();
   const gere = peut(membre, "gererPenalites");
 
-  let penalites, membres, situations;
+  let penalites, membres, situations, absences;
   try {
-    [penalites, membres, situations] = await Promise.all([
+    [penalites, membres, situations, absences] = await Promise.all([
       listerPenalites(gere ? undefined : { membreId: membre.id }),
       listerMembres(),
       situationsClub(),
+      absencesParMembre().catch(() => []),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -46,6 +49,17 @@ export default async function PagePenalites() {
     s.penalites
       .filter((p) => !dejaConstatees.has(`retard:${s.membreId}:${p.mois}`))
       .map((p) => ({ nom: s.nom, ...p })),
+  );
+
+  /*
+   * Les tranches d'absences que la feuille de presence justifie et que le registre
+   * ne porte pas encore. Le rang sert de cle : il rend le rapprochement exact meme
+   * quand une tranche ancienne a deja ete reglee.
+   */
+  const absencesAConstater = absences.flatMap((a) =>
+    tranchesAbsence(a.injustifiees, REGLES)
+      .filter((t) => !dejaConstatees.has(`absence:${a.membreId}:${t.rang}`))
+      .map((t) => ({ nom: a.nom, ...t })),
   );
 
   return (
@@ -84,6 +98,63 @@ export default async function PagePenalites() {
                 libelle="Porter au registre"
                 confirmation={`Constater ${aConstater.length} penalite(s) de retard ?`}
               />
+            </>
+          )}
+        </Carte>
+      )}
+
+      {gere && (
+        <Carte titre="Constater les absences">
+          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+            {fcfa(REGLES.penaliteAbsence)} par tranche de {REGLES.absencesParTranche} absences
+            injustifiees. Le club sanctionne la repetition, non l&apos;empechement ponctuel : une
+            absence isolee ne coute rien. Pour en justifier une, le secretaire la passe en
+            &laquo;&nbsp;Excuse&nbsp;&raquo; sur la seance, depuis la page Reunions — elle sort
+            alors du compte.
+          </p>
+          {absences.length === 0 ? (
+            <Vide>Aucune feuille de presence pointee.</Vide>
+          ) : (
+            <>
+              <ul className="mb-3 divide-y text-sm" style={{ borderColor: "var(--bordure)" }}>
+                {absences
+                  .filter((a) => a.injustifiees > 0 || a.excusees > 0)
+                  .map((a) => (
+                    <li key={a.membreId} className="flex justify-between gap-2 py-1.5">
+                      <span>{a.nom}</span>
+                      <span style={{ color: "var(--discret)" }}>
+                        {a.injustifiees} injustifiee{a.injustifiees > 1 ? "s" : ""}
+                        {a.excusees > 0 ? ` · ${a.excusees} excusee${a.excusees > 1 ? "s" : ""}` : ""}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+              {absencesAConstater.length === 0 ? (
+                <Alerte ton="vert">
+                  Le registre est a jour : aucune tranche d&apos;absences a porter.
+                </Alerte>
+              ) : (
+                <>
+                  <Alerte
+                    ton="ambre"
+                    titre={`${absencesAConstater.length} tranche${absencesAConstater.length > 1 ? "s" : ""} a constater`}
+                  >
+                    <ul className="mt-1 space-y-0.5">
+                      {absencesAConstater.map((t, i) => (
+                        <li key={`${t.nom}-${t.rang}-${i}`}>
+                          {t.nom} &middot; tranche {t.rang} ({t.absenceDeclenchante} absences)
+                          &middot; {fcfa(t.montant)}
+                        </li>
+                      ))}
+                    </ul>
+                  </Alerte>
+                  <FormulaireAction
+                    action={constaterPenalitesAbsence}
+                    libelle="Porter au registre"
+                    confirmation={`Constater ${absencesAConstater.length} penalite(s) d'absence ?`}
+                  />
+                </>
+              )}
             </>
           )}
         </Carte>

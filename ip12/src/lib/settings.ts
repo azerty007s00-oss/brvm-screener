@@ -36,6 +36,15 @@ export const REGLES = {
   fraisCession: 0.02,
   /** R5 - remboursement sous 4 mois en cas d'exclusion de plein droit. */
   delaiRemboursementMois: 4,
+  /** Penalite due par tranche d'absences injustifiees en reunion, en FCFA. */
+  penaliteAbsence: 2_000,
+  /**
+   * Nombre d'absences injustifiees qui forment une tranche penalisable.
+   *
+   * Le club ne sanctionne pas l'empechement ponctuel mais sa repetition : une
+   * absence isolee ne coute rien, la deuxieme fait naitre la penalite.
+   */
+  absencesParTranche: 2,
   /** Le president releve la valeur du compte-titres tous les 2 mois. */
   periodiciteValorisationMois: 2,
 } as const;
