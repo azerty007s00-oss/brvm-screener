@@ -71,4 +71,34 @@ body {
 
 @media print {
   .sans-impression { display: none !important; }
+
+  /*
+   * Un releve signe se lit sur papier, pas sur ecran : fond blanc, encre noire,
+   * aucun aplat a imprimer. Les couleurs de marque coutent de l'encre et rendent
+   * les chiffres moins lisibles une fois photocopies.
+   */
+  :root {
+    --fond: #fff;
+    --carte: #fff;
+    --texte: #000;
+    --discret: #444;
+    --bordure: #999;
+  }
+
+  body { background: #fff !important; color: #000 !important; }
+
+  main { max-width: none !important; padding: 0 !important; }
+
+  .a-imprimer { break-inside: avoid; }
+
+  /* Une bordure fine survit a la photocopie la ou une ombre disparait. */
+  .impression-encadre {
+    border: 1px solid #999 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  table { break-inside: auto; }
+  tr { break-inside: avoid; }
+  thead { display: table-header-group; }
 }

@@ -15,6 +15,9 @@ Phoenix Capital Management.
 - **Compte-titres** — le président enregistre et valide les virements vers la SGI (art. 14).
 - **Portefeuille** — le président saisit la valeur du compte tous les 2 mois ; les parts de
   chaque membre sont recalculées au prorata de ses versements validés (art. 12).
+- **Releve individuel** — chaque membre edite le sien, le bureau celui de tous : versements,
+  part, penalites et situation statutaire, mis en page pour le papier. L'impression du
+  navigateur produit le PDF, sans rien a installer.
 - **Relance du 10** — un cron Vercel envoie chaque mois un e-mail aux retardataires et le site
   affiche les alertes correspondantes. L'envoi passe par le SMTP du club (Gmail, Brevo) ou par
   Resend, selon ce qui est renseigne ; sans transport, seules les alertes du site subsistent.
@@ -105,5 +108,6 @@ npm run verif                # vérifie TRI, Dietz modifié et répartition des 
 | `src/lib/valeurs.ts` | Valeurs des colonnes à contrainte, rassemblées en un point |
 | `src/lib/droits.ts` | Qui a le droit de faire quoi, rassemblé en un tableau |
 | `src/lib/version.ts` | Révision déployée, lue dans l'environnement Vercel |
+| `src/lib/courriel.ts` | Envoi des relances, par SMTP ou Resend |
 | `scripts/migration-r3.sql` | Ajout de la table des déclarations R3 |
 | `scripts/migration-frais.sql` | Ajout des frais de dépôt sur les virements |

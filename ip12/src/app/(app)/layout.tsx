@@ -37,7 +37,7 @@ export default async function CoquilleApplication({ children }: { children: Reac
   return (
     <div className="min-h-screen">
       <header
-        className="sticky top-0 z-10 border-b backdrop-blur"
+        className="sans-impression sticky top-0 z-10 border-b backdrop-blur"
         style={{ background: "var(--color-brun-900)", borderColor: "var(--color-brun-700)" }}
       >
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3">
@@ -98,7 +98,7 @@ export default async function CoquilleApplication({ children }: { children: Reac
         {children}
       </main>
 
-      <footer className="mx-auto max-w-5xl px-4 pb-8 pt-2 text-center text-[11px]" style={{ color: "var(--discret)" }}>
+      <footer className="sans-impression mx-auto max-w-5xl px-4 pb-8 pt-2 text-center text-[11px]" style={{ color: "var(--discret)" }}>
         {CLUB.nom} &middot; {CLUB.ville} &middot; compte-titres {CLUB.sgi}
         {version.revision && (
           <>

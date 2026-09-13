@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import { listerVersements, situationsClub, synthese } from "@/lib/queries";
 import { changerMotDePasse } from "@/app/actions/auth";
@@ -40,6 +41,16 @@ export default async function PageMonCompte() {
 
   return (
     <>
+      <div className="flex justify-end">
+        <Link
+          href={`/releve/${membre.id}`}
+          className="rounded-lg px-3 py-1.5 text-xs font-medium"
+          style={{ background: "var(--color-brun-700)", color: "var(--color-brun-100)" }}
+        >
+          Editer mon releve
+        </Link>
+      </div>
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Statistique libelle="J'ai verse" valeur={fcfa(maPart?.verse ?? 0)} />
         <Statistique

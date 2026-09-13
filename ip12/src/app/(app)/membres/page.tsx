@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
+import { peut } from "@/lib/droits";
 import { listerMembres, situationsClub, synthese } from "@/lib/queries";
 import { basculerActivite, creerMembre, modifierMembre, reinitialiserMotDePasse } from "@/app/actions/membres";
 import { CLUB, ROLES, dateCourte, fcfa } from "@/lib/settings";
@@ -13,6 +15,8 @@ const OPTIONS_ROLE = Object.entries(ROLES).map(([valeur, libelle]) => ({ valeur,
 export default async function PageMembres() {
   const membre = await exigerMembre();
   const estPresident = membre.role === "president";
+  // Le bureau tient les comptes : il edite la piece de chacun (voir /releve).
+  const peutEditerReleve = peut(membre, "validerVersement") || peut(membre, "gererReglages");
 
   let membres, situations, s;
   try {
@@ -62,6 +66,15 @@ export default async function PageMembres() {
                         </p>
                       )}
                     </div>
+                    {peutEditerReleve && (
+                      <Link
+                        href={`/releve/${m.id}`}
+                        className="sans-impression shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-medium"
+                        style={{ background: "var(--color-brun-100)", color: "var(--color-brun-700)" }}
+                      >
+                        Releve
+                      </Link>
+                    )}
                   </div>
 
                   {estPresident && (
