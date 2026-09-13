@@ -41,8 +41,15 @@ répercute partout en modifiant ce seul fichier.
 L'application se branche sur la base Neon **existante** du club, dont la structure est décrite
 dans `src/lib/schema-cible.md`. Les dix membres y sont déjà enregistrés.
 
-Une seule migration est nécessaire : `scripts/migration-r3.sql` ajoute la table des déclarations
-de retard exigées par R3, absente du schéma d'origine. Elle est purement additive.
+Deux migrations la complètent, toutes deux purement additives :
+
+| Script | Ce qu'il ajoute |
+|---|---|
+| `scripts/migration-r3.sql` | La table des déclarations de retard exigées par R3, absente du schéma d'origine |
+| `scripts/migration-frais.sql` | `securities_transfers.fees`, la part d'un virement retenue en frais de dépôt |
+
+Tant que `migration-frais.sql` n'a pas été exécutée, la lecture des mouvements retombe sur une
+projection sans `fees` : le site continue de fonctionner, les frais s'affichent à zéro.
 
 `scripts/test/schema-local.sql` est une réplique de cette structure, **réservée aux tests** :
 elle sert à monter un PostgreSQL jetable pour vérifier les requêtes avant déploiement. Ne jamais
@@ -50,9 +57,23 @@ l'exécuter sur la base de production.
 
 ## Mise en service
 
+0. **Identité des commits** — Vercel refuse de construire un commit dont l'adresse d'auteur
+   n'est rattachée à aucun compte GitHub, et l'échec ne ressemble pas à un échec : le dernier
+   déploiement réussi reste en ligne, sans que rien ne signale que les suivants ont été bloqués.
+   On cherche alors dans le code une fonctionnalité qui s'y trouve déjà. Committer sous une
+   adresse du compte — l'adresse `@users.noreply.github.com` convient et ne divulgue rien :
+
+   ```bash
+   git config user.email "IDENTIFIANT+UTILISATEUR@users.noreply.github.com"
+   ```
+
+   Le pied de page affiche la révision réellement en ligne : c'est de là qu'on part pour
+   distinguer une fonctionnalité manquante d'un déploiement resté en arrière.
+
 1. **Variables** — renseigner sur Vercel celles listées dans `.env.example`, `DATABASE_URL`
    pointant sur le projet Neon du club.
-2. **Migration R3** — exécuter `scripts/migration-r3.sql` dans le SQL Editor de Neon.
+2. **Migrations** — exécuter `scripts/migration-r3.sql` puis `scripts/migration-frais.sql`
+   dans le SQL Editor de Neon.
 3. **Reprise en main** — appeler une fois `/api/bootstrap?token=SETUP_TOKEN`. Les mots de passe
    hérités ayant été produits par une version antérieure au format inconnu, cette route
    réinitialise celui de l'adresse déclarée dans `BOOTSTRAP_EMAIL` et renvoie un mot de passe
@@ -81,4 +102,7 @@ npm run verif                # vérifie TRI, Dietz modifié et répartition des 
 | `src/app/actions/` | Actions serveur : versements, compte-titres, membres |
 | `src/app/(app)/` | Pages authentifiées |
 | `src/lib/valeurs.ts` | Valeurs des colonnes à contrainte, rassemblées en un point |
+| `src/lib/droits.ts` | Qui a le droit de faire quoi, rassemblé en un tableau |
+| `src/lib/version.ts` | Révision déployée, lue dans l'environnement Vercel |
 | `scripts/migration-r3.sql` | Ajout de la table des déclarations R3 |
+| `scripts/migration-frais.sql` | Ajout des frais de dépôt sur les virements |
