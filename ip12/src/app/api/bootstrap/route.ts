@@ -72,13 +72,23 @@ export async function GET(requete: Request) {
     });
   }
 
-  const total = await sql`select count(*)::int as c from members`;
-  if (Number(total[0]?.c ?? 0) > 0) {
+  const autres = await sql`
+    select email, full_name, role from members order by full_name
+  `;
+  if (autres.length > 0) {
+    // Le jeton est deja fourni : lister les adresses evite un aller-retour vers
+    // la console pour corriger BOOTSTRAP_EMAIL.
     return NextResponse.json(
       {
         erreur:
           "Des membres existent, mais aucun ne porte cette adresse. " +
-          "Corrigez BOOTSTRAP_EMAIL pour viser un membre existant.",
+          "Reprenez l'une des adresses ci-dessous dans BOOTSTRAP_EMAIL, puis redeployez.",
+        adresseCherchee: email,
+        membresEnregistres: autres.map((m) => ({
+          nom: m.full_name,
+          email: m.email,
+          role: m.role,
+        })),
       },
       { status: 409 },
     );
