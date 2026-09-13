@@ -4,10 +4,17 @@ import { membreCourant } from "@/lib/auth";
 import { baseConfiguree } from "@/lib/db";
 import { seDeconnecter } from "@/app/actions/auth";
 import { CLUB, ROLES } from "@/lib/settings";
+import { peut, type Droit } from "@/lib/droits";
 import { Alerte } from "@/components/ui";
 import { versionDeployee } from "@/lib/version";
 
-const LIENS = [
+/*
+ * Presque tout se lit par tous : la transparence des comptes est le principe du
+ * club. Seule l'administration n'a rien a montrer a qui ne l'exerce pas, d'ou le
+ * droit qui conditionne son entree -- un lien qui ne mene qu'a un refus est une
+ * promesse rompue.
+ */
+const LIENS: { href: string; libelle: string; droit?: Droit }[] = [
   { href: "/", libelle: "Tableau de bord" },
   { href: "/versements", libelle: "Versements" },
   { href: "/caisse", libelle: "Caisse" },
@@ -16,7 +23,7 @@ const LIENS = [
   { href: "/penalites", libelle: "Penalites" },
   { href: "/reunions", libelle: "Reunions" },
   { href: "/membres", libelle: "Membres" },
-  { href: "/administration", libelle: "Administration" },
+  { href: "/administration", libelle: "Administration", droit: "gererReglages" },
   { href: "/mon-compte", libelle: "Mon compte" },
 ];
 
@@ -63,7 +70,7 @@ export default async function CoquilleApplication({ children }: { children: Reac
 
         <nav className="defilement-x mx-auto max-w-5xl px-4 pb-2">
           <ul className="flex gap-1 whitespace-nowrap">
-            {LIENS.map((l) => (
+            {LIENS.filter((l) => !l.droit || peut(membre, l.droit)).map((l) => (
               <li key={l.href}>
                 <Link
                   href={l.href}
