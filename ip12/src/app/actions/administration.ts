@@ -7,7 +7,7 @@ import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { descriptionTransport, envoyerCourriel, transportConfigure } from "@/lib/courriel";
 import { listerMembres, reglagesEffectifs } from "@/lib/queries";
-import { CLUB, REGLES, debutMois, decalerMois, fcfa, moisLong } from "@/lib/settings";
+import { CLUB, REGLES, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
 import {
   KIND_PENALITE,
   KIND_VERSEMENT,
@@ -445,7 +445,7 @@ export async function enregistrerSortie(
  */
 export async function envoyerCourrielEssai(
   _precedent: EtatFormulaire,
-  _donnees: FormData,
+  donnees: FormData,
 ): Promise<EtatFormulaire> {
   const auteur = await exigerDroit("gererReglages");
 
@@ -458,8 +458,21 @@ export async function envoyerCourrielEssai(
     };
   }
 
+  /*
+   * Deux destinations possibles, toutes deux deja connues du site : l'adresse du
+   * demandeur, et celle du compte d'envoi. Aucune adresse libre -- un formulaire
+   * qui enverrait ou l'on veut depuis l'adresse du club serait un relais ouvert.
+   *
+   * Le choix compte : l'adresse du membre n'est pas forcement celle du club, et
+   * attendre le courrier dans la mauvaise boite fait conclure a une panne qui
+   * n'existe pas.
+   */
+  const versLeClub = String(donnees.get("destination") ?? "") === "club";
+  const adresseClub = variable("SMTP_USER", "") || variable("EMAIL_EXPEDITEUR", "");
+  const destinataire = versLeClub && adresseClub !== "" ? adresseClub : auteur.email;
+
   const { ok: parti, detail } = await envoyerCourriel({
-    destinataire: auteur.email,
+    destinataire,
     sujet: `${CLUB.sigle} — essai de configuration`,
     texte: [
       `Bonjour ${auteur.nom},`,
@@ -477,6 +490,7 @@ export async function envoyerCourrielEssai(
     transport: transportConfigure(),
     reussi: parti,
     detail,
+    destinataire,
   });
 
   if (!parti) {
@@ -495,7 +509,7 @@ export async function envoyerCourrielEssai(
   return {
     ok: true,
     message:
-      `Courrier remis a ${auteur.email} — verifiez cette boite, et son dossier Spam. ` +
+      `Courrier remis a ${destinataire} — verifiez cette boite, et son dossier Spam. ` +
       `Reponse du serveur : ${detail}`,
   };
 }

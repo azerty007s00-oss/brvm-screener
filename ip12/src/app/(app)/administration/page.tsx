@@ -21,7 +21,7 @@ import { listerMembres } from "@/lib/queries";
 import { CLUB, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { REGLE_MEMBRE } from "@/lib/valeurs";
-import { descriptionTransport, transportConfigure } from "@/lib/courriel";
+import { adresseDuCompte, descriptionTransport, transportConfigure } from "@/lib/courriel";
 import { Badge } from "@/components/ui";
 import { Alerte, Carte, Statistique, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
@@ -39,6 +39,7 @@ const LIBELLE_REGLE: Record<string, string> = {
 export default async function PageAdministration() {
   const membre = await exigerMembre();
   const transport = transportConfigure();
+  const adresseClub = adresseDuCompte();
   if (!peut(membre, "gererReglages")) {
     return (
       <Carte titre="Administration">
@@ -62,6 +63,19 @@ export default async function PageAdministration() {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
     throw e;
   }
+
+  /*
+   * Le journal garde la trace de chaque essai : on peut donc en afficher l'issue
+   * apres coup, la ou le message de confirmation s'efface au rechargement.
+   */
+  const dernierEssai = journal.find((j) => j.action === "essai_courriel") ?? null;
+  const detailEssai = (dernierEssai?.details ?? {}) as {
+    reussi?: boolean;
+    detail?: string;
+    destinataire?: string;
+  };
+  const essaiReussi = detailEssai.reussi === true;
+
 
   const moisDecouverts = situations.reduce((total, s) => total + s.nbMoisRetard, 0);
 
@@ -293,6 +307,29 @@ export default async function PageAdministration() {
             {descriptionTransport()}
           </span>
         </p>
+        {/*
+          * Le resultat du dernier essai, lu au journal. Sans lui, « je n'ai rien
+          * recu » ne se distingue pas de « le serveur a refuse » : le message de
+          * confirmation disparait au rechargement, et l'on ne sait plus quoi
+          * chercher.
+          */}
+        {dernierEssai && (
+          <div
+            className="mb-3 rounded-lg border px-3 py-2 text-xs"
+            style={{
+              borderColor: essaiReussi ? "var(--color-vert-600)" : "var(--color-rouge-600)",
+              color: "var(--discret)",
+            }}
+          >
+            <p className="font-medium" style={{ color: essaiReussi ? "var(--color-vert-600)" : "var(--color-rouge-600)" }}>
+              Dernier essai du {dateCourte(dernierEssai.created_at)} :{" "}
+              {essaiReussi ? "accepte par le serveur" : "refuse"}
+            </p>
+            {detailEssai.destinataire && <p>Remis a : {detailEssai.destinataire}</p>}
+            {detailEssai.detail && <p className="break-words">Reponse : {detailEssai.detail}</p>}
+          </div>
+        )}
+
         {transport === "aucun" ? (
           <Alerte ton="ambre" titre="Rien ne partira le 10">
             Renseignez <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code> et{" "}
@@ -300,11 +337,26 @@ export default async function PageAdministration() {
             redeployez. Gmail exige un mot de passe d&apos;application, non celui du compte.
           </Alerte>
         ) : (
-          <FormulaireAction action={envoyerCourrielEssai} libelle="Envoyer un courrier d'essai" />
+          <FormulaireAction action={envoyerCourrielEssai} libelle="Envoyer un courrier d'essai">
+            <Selection
+              nom="destination"
+              libelle="Envoyer a"
+              valeur="moi"
+              options={[
+                { valeur: "moi", libelle: `Mon adresse — ${membre.email}` },
+                ...(adresseClub
+                  ? [{ valeur: "club", libelle: `L'adresse du club — ${adresseClub}` }]
+                  : []),
+              ]}
+            />
+          </FormulaireAction>
         )}
         <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
-          L&apos;essai part a votre propre adresse, jamais a une adresse saisie : un formulaire
-          qui enverrait ou l&apos;on veut depuis l&apos;adresse du club serait un relais ouvert.
+          Seules ces deux adresses, deja connues du site, sont proposees : un formulaire qui
+          enverrait ou l&apos;on veut depuis l&apos;adresse du club serait un relais ouvert. Si
+          le courrier n&apos;arrive pas alors que le serveur l&apos;a accepte, il est dans les
+          indesirables : un premier message entre deux adresses qui n&apos;ont jamais
+          correspondu y atterrit souvent.
         </p>
       </Carte>
 

@@ -58,6 +58,11 @@ function optionsSmtp() {
   };
 }
 
+/** L'adresse du compte d'envoi : la boite du club, ou l'essai peut aussi aboutir. */
+export function adresseDuCompte(): string {
+  return variable("SMTP_USER", "") || variable("EMAIL_EXPEDITEUR", "");
+}
+
 /** Ce qui est configure, en clair, sans jamais divulguer le mot de passe. */
 export function descriptionTransport(): string {
   switch (transportConfigure()) {
