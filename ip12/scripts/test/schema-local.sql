@@ -134,6 +134,19 @@ create table payment_proofs (
   blob_url text
 );
 
+create table member_rules (
+  id uuid primary key default gen_random_uuid(),
+  member_id uuid not null references members(id) on delete cascade,
+  kind text not null check (kind in ('cotisation','penalite_multiplicateur','avance_min','plan_redressement','note')),
+  numeric_value numeric,
+  starts_on date,
+  ends_on date,
+  is_active boolean not null default true,
+  note text,
+  created_by uuid not null references members(id),
+  created_at timestamptz not null default now()
+);
+
 create table meetings (
   id uuid primary key default gen_random_uuid(),
   meeting_date date not null,

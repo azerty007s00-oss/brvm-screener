@@ -1,19 +1,31 @@
 import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
-import { reglagesEffectifs, situationsClub } from "@/lib/queries";
+import { reglagesEffectifs, reglesIndividuelles, situationsClub } from "@/lib/queries";
 import { journalRecent } from "@/lib/journal";
 import {
   enregistrerReglages,
   reprendreHistorique,
   reprendrePenalites,
+  inscrireRegleMembre,
+  leverRegleMembre,
 } from "@/app/actions/administration";
 import { listerMembres } from "@/lib/queries";
 import { CLUB, dateCourte, fcfa, moisLong } from "@/lib/settings";
-import { Champ, Depliant, FormulaireAction } from "@/components/formulaires";
+import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
+import { REGLE_MEMBRE } from "@/lib/valeurs";
+import { Badge } from "@/components/ui";
 import { Alerte, Carte, Statistique, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
+
+const LIBELLE_REGLE: Record<string, string> = {
+  [REGLE_MEMBRE.cotisationParticuliere]: "cotisation particuliere",
+  [REGLE_MEMBRE.multiplicateurPenalite]: "penalites majorees",
+  [REGLE_MEMBRE.avanceMinimale]: "avance minimale exigee",
+  [REGLE_MEMBRE.planRedressement]: "plan de redressement (R5)",
+  [REGLE_MEMBRE.note]: "note",
+};
 
 export default async function PageAdministration() {
   const membre = await exigerMembre();
@@ -25,13 +37,14 @@ export default async function PageAdministration() {
     );
   }
 
-  let reglages, situations, journal, membres;
+  let reglages, situations, journal, membres, regles;
   try {
-    [reglages, situations, journal, membres] = await Promise.all([
+    [reglages, situations, journal, membres, regles] = await Promise.all([
       reglagesEffectifs(),
       situationsClub(),
       journalRecent(30).catch(() => []),
       listerMembres(),
+      reglesIndividuelles(true).catch(() => []),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -254,6 +267,92 @@ export default async function PageAdministration() {
         <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
           Chaque validation, correction et constat y laisse une trace nominative.
         </p>
+      </Carte>
+
+      <Carte titre="Regles individuelles">
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Les statuts valent pour tous. Le club peut neanmoins convenir d&apos;une cotisation
+          differente, majorer les penalites d&apos;un membre sous sanction, ou accorder le plan de
+          redressement que R5 reserve au retard declare. Ces accords se prenaient de memoire :
+          les inscrire les rend opposables et datables. Une regle levee n&apos;est pas effacee —
+          elle a produit ses effets.
+        </p>
+
+        {regles.length === 0 ? (
+          <Vide>Aucune derogation : le regime commun s&apos;applique a tous.</Vide>
+        ) : (
+          <ul className="mb-4 divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {regles.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-start justify-between gap-2 py-2">
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                    {r.membreNom}
+                    <span className="font-normal" style={{ color: "var(--discret)" }}>
+                      {LIBELLE_REGLE[r.nature] ?? r.nature}
+                    </span>
+                    {r.valeur !== null && (
+                      <Badge ton="ambre">
+                        {r.nature === REGLE_MEMBRE.multiplicateurPenalite
+                          ? `x ${r.valeur}`
+                          : fcfa(r.valeur)}
+                      </Badge>
+                    )}
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--discret)" }}>
+                    {r.debut ? `des le ${dateCourte(r.debut)}` : "sans date de debut"}
+                    {r.fin ? ` · jusqu'au ${dateCourte(r.fin)}` : " · sans terme"}
+                    {r.note ? ` · ${r.note}` : ""}
+                  </p>
+                </div>
+                <FormulaireAction
+                  action={leverRegleMembre}
+                  libelle="Lever"
+                  variante="discret"
+                  compact
+                  confirmation={`Lever cette regle pour ${r.membreNom} ?`}
+                >
+                  <ChampCache nom="id" valeur={r.id} />
+                </FormulaireAction>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <Depliant titre="Inscrire une regle">
+          <FormulaireAction action={inscrireRegleMembre} libelle="Inscrire">
+            <Selection
+              nom="membre"
+              libelle="Membre"
+              options={membres.map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
+            />
+            <Selection
+              nom="nature"
+              libelle="Nature"
+              valeur={REGLE_MEMBRE.cotisationParticuliere}
+              options={Object.values(REGLE_MEMBRE).map((v) => ({
+                valeur: v,
+                libelle: LIBELLE_REGLE[v] ?? v,
+              }))}
+            />
+            <Champ
+              nom="valeur"
+              libelle="Valeur"
+              type="number"
+              min={1}
+              requis={false}
+              aide="Un montant en FCFA pour la cotisation et l'avance ; un multiplicateur (2 = double) pour les penalites. Laisser vide pour un plan ou une note."
+            />
+            <Champ nom="debut" libelle="A compter du" type="date" requis={false} />
+            <Champ
+              nom="fin"
+              libelle="Jusqu'au"
+              type="date"
+              requis={false}
+              aide="Sans terme, la derogation devient un regime parallele durable."
+            />
+            <Champ nom="note" libelle="Motif ou reference de la decision" requis={false} />
+          </FormulaireAction>
+        </Depliant>
       </Carte>
 
       <p className="text-center text-[11px]" style={{ color: "var(--discret)" }}>

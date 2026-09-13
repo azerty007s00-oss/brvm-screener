@@ -247,4 +247,34 @@ assert.deepEqual(
 // Un reglage absurde ne fait pas naitre de dette.
 assert.deepEqual(tranchesAbsence(10, { penaliteAbsence: 2_000, absencesParTranche: 0 }), []);
 
-console.log("OK - 45 verifications : performance, penalites art. 9 et R4, retards, absences, R3, R5, relance");
+/* ------------------------------------------------- regles individuelles */
+
+// Regime commun : 10 % de 5 000.
+assert.equal(calculerPenalites(["2026-07-01"])[0].montant, 500);
+
+// Cotisation particuliere : la penalite suit la cotisation du membre.
+assert.equal(
+  calculerPenalites(["2026-07-01"], [], { cotisationMensuelle: 10_000 })[0].montant,
+  1_000,
+);
+
+// Penalites majorees : le multiplicateur s'applique par-dessus le taux.
+assert.equal(
+  calculerPenalites(["2026-07-01"], [], { multiplicateurPenalite: 2 })[0].montant,
+  1_000,
+);
+
+// Et par-dessus le doublement R4, sans le remplacer : 10 % x 2 (R4) x 2 (regle).
+const majoreesR4 = calculerPenalites(
+  ["2026-05-01", "2026-06-01", "2026-07-01"],
+  [],
+  { multiplicateurPenalite: 2 },
+);
+assert.equal(majoreesR4.length, 3);
+assert.ok(majoreesR4.every((p) => p.doublee));
+assert.equal(majoreesR4[0].montant, 2_000);
+
+// Une derogation absente laisse le regime commun intact.
+assert.equal(calculerPenalites(["2026-07-01"], [], {})[0].montant, 500);
+
+console.log("OK - 51 verifications : performance, penalites art. 9 et R4, regles individuelles, retards, absences, R3, R5, relance");

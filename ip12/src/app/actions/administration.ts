@@ -7,7 +7,14 @@ import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { listerMembres, reglagesEffectifs } from "@/lib/queries";
 import { CLUB, debutMois, decalerMois, moisLong } from "@/lib/settings";
-import { KIND_PENALITE, KIND_VERSEMENT, METHODE, STATUT_PENALITE, STATUT_VERSEMENT } from "@/lib/valeurs";
+import {
+  KIND_PENALITE,
+  KIND_VERSEMENT,
+  METHODE,
+  REGLE_MEMBRE,
+  STATUT_PENALITE,
+  STATUT_VERSEMENT,
+} from "@/lib/valeurs";
 import type { EtatFormulaire } from "./auth";
 
 /**
@@ -256,4 +263,93 @@ export async function reprendrePenalites(
       `${remplacees > 0 ? `, dont ${remplacees} mise(s) a jour` : ""}. ` +
       `Le constat automatique ne recomptera aucun mois anterieur.`,
   };
+}
+
+/* --------------------------------------------------- regles individuelles (R5) */
+
+const NATURES_REGLE = Object.values(REGLE_MEMBRE) as string[];
+
+/** Natures qui pesent sur un calcul, et exigent donc une valeur chiffree. */
+const NATURES_CHIFFREES: string[] = [
+  REGLE_MEMBRE.cotisationParticuliere,
+  REGLE_MEMBRE.multiplicateurPenalite,
+  REGLE_MEMBRE.avanceMinimale,
+];
+
+/**
+ * Inscrit une derogation au regime commun pour un membre.
+ *
+ * Les statuts valent pour tous ; le club peut neanmoins convenir d'une cotisation
+ * differente, majorer les penalites d'un membre sous sanction, ou accorder le plan
+ * de redressement que R5 reserve au retard declare. Ces accords se prenaient
+ * jusqu'ici de memoire : les inscrire les rend opposables et datables.
+ *
+ * La fenetre compte autant que la regle : une derogation sans fin est un regime
+ * parallele durable, qu'il vaut mieux avoir voulu que subi.
+ */
+export async function inscrireRegleMembre(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererSorties");
+
+  const membreId = String(donnees.get("membre") ?? "");
+  const nature = String(donnees.get("nature") ?? "");
+  const valeurBrute = String(donnees.get("valeur") ?? "").trim();
+  const debut = String(donnees.get("debut") ?? "").slice(0, 10);
+  const fin = String(donnees.get("fin") ?? "").slice(0, 10);
+  const note = String(donnees.get("note") ?? "").trim();
+
+  if (!membreId) return { ok: false, erreur: "Choisissez un membre." };
+  if (!NATURES_REGLE.includes(nature)) return { ok: false, erreur: "Nature de regle inconnue." };
+
+  let valeur: number | null = null;
+  if (NATURES_CHIFFREES.includes(nature)) {
+    valeur = Number(valeurBrute);
+    if (!Number.isFinite(valeur) || valeur <= 0) {
+      return { ok: false, erreur: "Cette regle demande une valeur positive." };
+    }
+  }
+  if (fin && debut && fin < debut) {
+    return { ok: false, erreur: "La fin ne peut preceder le debut." };
+  }
+
+  const sql = db();
+  await sql`
+    insert into member_rules (member_id, kind, numeric_value, starts_on, ends_on,
+                              is_active, note, created_by)
+    values (${membreId}::uuid, ${nature}, ${valeur},
+            ${debut === "" ? null : debut}::date, ${fin === "" ? null : fin}::date,
+            true, ${note === "" ? null : note}, ${auteur.id}::uuid)
+  `;
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "regle_membre_inscrite",
+    { entite: "member_rules", id: membreId },
+    { nature, valeur, debut: debut || null, fin: fin || null, note: note || null },
+  );
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Regle inscrite." };
+}
+
+/**
+ * Leve une derogation sans l'effacer : elle a produit ses effets, et le registre
+ * doit pouvoir dire lesquels et jusqu'a quand.
+ */
+export async function leverRegleMembre(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererSorties");
+  const id = String(donnees.get("id") ?? "");
+  if (!id) return { ok: false, erreur: "Regle introuvable." };
+
+  const sql = db();
+  await sql`update member_rules set is_active = false where id = ${id}::uuid`;
+  await journaliser({ id: auteur.id, nom: auteur.nom }, "regle_membre_levee", {
+    entite: "member_rules",
+    id,
+  });
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Regle levee : le regime commun s'applique a nouveau." };
 }

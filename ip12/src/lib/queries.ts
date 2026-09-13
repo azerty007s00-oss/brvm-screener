@@ -2,8 +2,8 @@ import "server-only";
 import { db } from "./db";
 import { CLUB, REGLES, debutMois, moisDuClub } from "./settings";
 import type { Role } from "./settings";
-import { situationMembre, type SituationMembre } from "./penalites";
-import { STATUT_PENALITE, STATUT_VERSEMENT, SENS_TRANSFERT } from "./valeurs";
+import { situationMembre, type ReglesMembre, type SituationMembre } from "./penalites";
+import { REGLE_MEMBRE, STATUT_PENALITE, STATUT_VERSEMENT, SENS_TRANSFERT } from "./valeurs";
 import { dietzModifie, dureeEnAnnees, repartirParts, tri, type Flux, type PartMembre } from "./perf";
 
 /** bigint et numeric reviennent en chaine avec le pilote Postgres : on normalise. */
@@ -477,9 +477,88 @@ export type SituationClub = SituationMembre & {
   retardDeclare: boolean;
 };
 
+export type RegleMembre = {
+  id: string;
+  membreId: string;
+  membreNom: string;
+  nature: string;
+  valeur: number | null;
+  debut: string | null;
+  fin: string | null;
+  note: string | null;
+};
+
+/**
+ * Regles individuelles en vigueur : celles qui sont actives et dont la fenetre
+ * couvre le jour considere.
+ *
+ * Une regle expiree n'est pas supprimee -- elle a produit ses effets et le
+ * registre doit pouvoir le dire -- mais elle cesse de s'appliquer.
+ */
+export async function reglesIndividuelles(toutes = false): Promise<RegleMembre[]> {
+  try {
+    const sql = db();
+    const rows = await sql`
+      select r.id, r.member_id as membre_id, m.full_name as membre_nom,
+             r.kind as nature, r.numeric_value as valeur,
+             to_char(r.starts_on, 'YYYY-MM-DD') as debut,
+             to_char(r.ends_on, 'YYYY-MM-DD') as fin,
+             r.note, r.is_active as actif
+      from member_rules r
+      join members m on m.id = r.member_id
+      order by m.full_name, r.created_at desc
+    `;
+    const aujourdhui = new Date().toISOString().slice(0, 10);
+    return rows
+      .filter((r) => {
+        if (toutes) return true;
+        if (!r.actif) return false;
+        const debut = r.debut as string | null;
+        const fin = r.fin as string | null;
+        return (!debut || debut <= aujourdhui) && (!fin || fin >= aujourdhui);
+      })
+      .map((r) => ({
+        id: String(r.id),
+        membreId: String(r.membre_id),
+        membreNom: String(r.membre_nom),
+        nature: String(r.nature),
+        valeur: r.valeur === null || r.valeur === undefined ? null : Number(r.valeur),
+        debut: (r.debut as string | null) ?? null,
+        fin: (r.fin as string | null) ?? null,
+        note: (r.note as string | null) ?? null,
+      }));
+  } catch {
+    // La table peut manquer d'une base a l'autre : son absence n'est pas une erreur.
+    return [];
+  }
+}
+
+/** Les derogations en vigueur, indexees par membre, pretes pour le calcul. */
+export async function derogationsParMembre(): Promise<Map<string, ReglesMembre>> {
+  const regles = await reglesIndividuelles();
+  const index = new Map<string, ReglesMembre>();
+  for (const r of regles) {
+    if (r.valeur === null || !Number.isFinite(r.valeur) || r.valeur <= 0) continue;
+    const courante = index.get(r.membreId) ?? {};
+    if (r.nature === REGLE_MEMBRE.cotisationParticuliere) {
+      courante.cotisationMensuelle = r.valeur;
+    } else if (r.nature === REGLE_MEMBRE.multiplicateurPenalite) {
+      courante.multiplicateurPenalite = r.valeur;
+    } else {
+      continue;
+    }
+    index.set(r.membreId, courante);
+  }
+  return index;
+}
+
 export async function situationsClub(aujourdhui = new Date()): Promise<SituationClub[]> {
   const sql = db();
-  const [membres, declarations] = await Promise.all([listerMembres(), declarationsRetard()]);
+  const [membres, declarations, derogations] = await Promise.all([
+    listerMembres(),
+    declarationsRetard(),
+    derogationsParMembre(),
+  ]);
   const mois = moisDuClub(debutMois(aujourdhui));
 
   const versements = await sql`
@@ -509,6 +588,7 @@ export async function situationsClub(aujourdhui = new Date()): Promise<Situation
       declares,
       aujourdhui,
       `${m.date_adhesion.slice(0, 8)}01`,
+      derogations.get(m.id) ?? {},
     );
 
     return {

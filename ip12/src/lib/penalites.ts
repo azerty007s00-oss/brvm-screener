@@ -68,6 +68,19 @@ type VersementConnu = {
  * l'argent, seule la contresignature du tresorier manque. Le penaliser pour le
  * delai de validation du bureau serait injuste.
  */
+/**
+ * Ce qui, chez un membre, deroge au regime commun.
+ *
+ * Le club peut convenir d'une cotisation differente, ou majorer les penalites
+ * d'un membre sous sanction. Un champ absent vaut « regime commun » : les
+ * statuts restent la reference, la derogation l'exception nommee.
+ */
+export type ReglesMembre = {
+  cotisationMensuelle?: number;
+  /** Multiplie la penalite, par-dessus le doublement R4. 1 = regime commun. */
+  multiplicateurPenalite?: number;
+};
+
 export function situationMembre(
   membreId: string,
   moisDuClub: string[],
@@ -75,6 +88,7 @@ export function situationMembre(
   moisDeclares: string[] = [],
   aujourdhui: Date = new Date(),
   moisAdhesion?: string,
+  propres: ReglesMembre = {},
 ): SituationMembre {
   const parMois = new Map<string, VersementConnu>();
   for (const v of versements) {
@@ -115,7 +129,7 @@ export function situationMembre(
 
   const nbMoisRetard = moisEnRetard.length;
   const joursDeRetard = nbMoisRetard === 0 ? 0 : joursDepuisEcheance(moisEnRetard[0], aujourdhui);
-  const penalites = calculerPenalites(moisEnRetard, moisRegularisesEnRetard);
+  const penalites = calculerPenalites(moisEnRetard, moisRegularisesEnRetard, propres);
 
   return {
     membreId,
@@ -155,14 +169,18 @@ function joursDepuisEcheance(mois: string, aujourdhui: Date): number {
 export function calculerPenalites(
   moisEnRetard: string[],
   moisRegularisesEnRetard: string[] = [],
+  propres: ReglesMembre = {},
 ): PenaliteCalculee[] {
+  const cotisation = propres.cotisationMensuelle ?? REGLES.cotisationMensuelle;
+  const multiplicateur = propres.multiplicateurPenalite ?? 1;
+
   const impayes = [...moisEnRetard].sort();
   const doublement = impayes.length >= REGLES.doublementApresMois;
   const aDoubler = impayes.slice(-REGLES.moisPenalitesDoublees);
 
   const sur = (mois: string, doublee: boolean, figee: boolean): PenaliteCalculee => {
-    const taux = doublee ? REGLES.tauxPenalite * 2 : REGLES.tauxPenalite;
-    return { mois, taux, montant: Math.round(REGLES.cotisationMensuelle * taux), doublee, figee };
+    const taux = (doublee ? REGLES.tauxPenalite * 2 : REGLES.tauxPenalite) * multiplicateur;
+    return { mois, taux, montant: Math.round(cotisation * taux), doublee, figee };
   };
 
   return [
