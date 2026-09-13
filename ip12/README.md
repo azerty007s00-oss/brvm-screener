@@ -16,7 +16,8 @@ Phoenix Capital Management.
 - **Portefeuille** — le président saisit la valeur du compte tous les 2 mois ; les parts de
   chaque membre sont recalculées au prorata de ses versements validés (art. 12).
 - **Relance du 10** — un cron Vercel envoie chaque mois un e-mail aux retardataires et le site
-  affiche les alertes correspondantes.
+  affiche les alertes correspondantes. L'envoi passe par le SMTP du club (Gmail, Brevo) ou par
+  Resend, selon ce qui est renseigne ; sans transport, seules les alertes du site subsistent.
 
 ## Règles appliquées
 

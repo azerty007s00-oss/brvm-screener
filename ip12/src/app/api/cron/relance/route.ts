@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { situationsClub, type SituationClub } from "@/lib/queries";
 import { CLUB, REGLES, debutMois, fcfa, moisLong, variable } from "@/lib/settings";
+import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -21,8 +22,8 @@ type Destinataire = {
  * journee pour payer : le mois courant n'est donc pas encore en retard. On le rappelle
  * quand meme, mais comme echeance du jour et sans penalite -- c'est le sens d'une relance.
  *
- * L'envoi d'e-mail est facultatif : sans RESEND_API_KEY le site continue d'afficher
- * les alertes, seul le courrier ne part pas.
+ * L'envoi d'e-mail est facultatif : sans transport configure -- SMTP ou Resend --
+ * le site continue d'afficher les alertes, seul le courrier ne part pas.
  */
 export async function GET(requete: Request) {
   const attendu = process.env.CRON_SECRET;
@@ -56,29 +57,20 @@ export async function GET(requete: Request) {
 
   const envoyes: string[] = [];
   const echecs: string[] = [];
-  const cle = process.env.RESEND_API_KEY;
+  const transport = transportConfigure();
 
-  if (cle && destinataires.length > 0) {
-    const { Resend } = await import("resend");
-    const resend = new Resend(cle);
-    const expediteur = variable("EMAIL_EXPEDITEUR", "onboarding@resend.dev");
+  if (transport !== "aucun") {
     const siteUrl = variable("NEXT_PUBLIC_SITE_URL", "");
-
     for (const d of destinataires) {
-      try {
-        await resend.emails.send({
-          from: `${CLUB.nom} <${expediteur}>`,
-          to: d.situation.email,
-          subject:
-            d.arrieres.length > 0
-              ? `${CLUB.sigle} — versement en retard (${d.arrieres.length} mois)`
-              : `${CLUB.sigle} — votre versement de ${moisLong(moisCourant)} est du aujourd'hui`,
-          text: texteRelance(d, siteUrl),
-        });
-        envoyes.push(d.situation.email);
-      } catch {
-        echecs.push(d.situation.email);
-      }
+      const parti = await envoyerCourriel({
+        destinataire: d.situation.email,
+        sujet:
+          d.arrieres.length > 0
+            ? `${CLUB.sigle} — versement en retard (${d.arrieres.length} mois)`
+            : `${CLUB.sigle} — votre versement de ${moisLong(moisCourant)} est du aujourd'hui`,
+        texte: texteRelance(d, siteUrl),
+      });
+      (parti ? envoyes : echecs).push(d.situation.email);
     }
   }
 
@@ -104,7 +96,7 @@ export async function GET(requete: Request) {
     echeanceDuJour: destinataires.filter((d) => d.echeanceDuJour && d.arrieres.length === 0).length,
     emailsEnvoyes: envoyes.length,
     echecs: echecs.length,
-    emailActif: Boolean(cle),
+    transport,
   });
 }
 
