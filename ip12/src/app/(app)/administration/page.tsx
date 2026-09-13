@@ -13,6 +13,7 @@ import {
   reprendreHistorique,
   reprendrePenalites,
   enregistrerSortie,
+  envoyerCourrielEssai,
   inscrireRegleMembre,
   leverRegleMembre,
 } from "@/app/actions/administration";
@@ -20,6 +21,7 @@ import { listerMembres } from "@/lib/queries";
 import { CLUB, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { REGLE_MEMBRE } from "@/lib/valeurs";
+import { descriptionTransport, transportConfigure } from "@/lib/courriel";
 import { Badge } from "@/components/ui";
 import { Alerte, Carte, Statistique, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
@@ -36,6 +38,7 @@ const LIBELLE_REGLE: Record<string, string> = {
 
 export default async function PageAdministration() {
   const membre = await exigerMembre();
+  const transport = transportConfigure();
   if (!peut(membre, "gererReglages")) {
     return (
       <Carte titre="Administration">
@@ -275,6 +278,33 @@ export default async function PageAdministration() {
         )}
         <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
           Chaque validation, correction et constat y laisse une trace nominative.
+        </p>
+      </Carte>
+
+      <Carte titre="Relance du 10">
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Le courrier part le 10 de chaque mois aux membres qui n&apos;ont pas verse. Sans
+          transport configure, les alertes restent visibles sur le site mais rien ne part — et
+          cela ne se remarque pas.
+        </p>
+        <p className="mb-3 text-sm">
+          Transport :{" "}
+          <span style={{ color: transport === "aucun" ? "var(--color-rouge-600)" : "var(--color-vert-600)" }}>
+            {descriptionTransport()}
+          </span>
+        </p>
+        {transport === "aucun" ? (
+          <Alerte ton="ambre" titre="Rien ne partira le 10">
+            Renseignez <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code> et{" "}
+            <code>SMTP_PASS</code> dans les variables d&apos;environnement de l&apos;hebergeur, puis
+            redeployez. Gmail exige un mot de passe d&apos;application, non celui du compte.
+          </Alerte>
+        ) : (
+          <FormulaireAction action={envoyerCourrielEssai} libelle="Envoyer un courrier d'essai" />
+        )}
+        <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
+          L&apos;essai part a votre propre adresse, jamais a une adresse saisie : un formulaire
+          qui enverrait ou l&apos;on veut depuis l&apos;adresse du club serait un relais ouvert.
         </p>
       </Carte>
 

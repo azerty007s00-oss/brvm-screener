@@ -47,7 +47,13 @@ function optionsSmtp() {
     secure: port === 465,
     auth: {
       user: variable("SMTP_USER", ""),
-      pass: variable("SMTP_PASS", ""),
+      /*
+       * Google affiche ses mots de passe d'application par groupes de quatre
+       * lettres separes d'espaces. On les colle tels qu'affiches ; les espaces
+       * n'en font pas partie, et les laisser donne un refus d'authentification
+       * que rien ne distingue d'un mauvais mot de passe.
+       */
+      pass: variable("SMTP_PASS", "").replace(/\s+/g, ""),
     },
   };
 }
@@ -58,6 +64,18 @@ function optionsSmtp() {
  * Une relance qui echoue ne doit pas interrompre les suivantes, ni faire echouer
  * le traitement du 10 : l'echec est trace dans `reminder_log`, membre par membre.
  */
+/** Ce qui est configure, en clair, sans jamais divulguer le mot de passe. */
+export function descriptionTransport(): string {
+  switch (transportConfigure()) {
+    case "smtp":
+      return `SMTP ${variable("SMTP_HOST", "")}:${variable("SMTP_PORT", "465")}, compte ${variable("SMTP_USER", "(non renseigne)")}`;
+    case "resend":
+      return `Resend, expediteur ${expediteur()}`;
+    default:
+      return "aucun transport configure";
+  }
+}
+
 export async function envoyerCourriel(courriel: Courriel): Promise<boolean> {
   const transport = transportConfigure();
   const from = `${CLUB.nom} <${expediteur()}>`;

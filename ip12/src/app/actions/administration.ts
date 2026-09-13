@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
+import { descriptionTransport, envoyerCourriel, transportConfigure } from "@/lib/courriel";
 import { listerMembres, reglagesEffectifs } from "@/lib/queries";
 import { CLUB, REGLES, debutMois, decalerMois, fcfa, moisLong } from "@/lib/settings";
 import {
@@ -428,4 +429,63 @@ export async function enregistrerSortie(
     ok: true,
     message: `Sortie enregistree : ${fcfa(net)} a verser a ${membre[0].full_name}, sous ${REGLES.delaiRemboursementMois} mois (R5).`,
   };
+}
+
+/* ---------------------------------------------------- essai de configuration */
+
+/**
+ * Envoie un courrier d'essai au president, pour verifier la configuration.
+ *
+ * La relance ne part que le 10 : sans ce bouton, une faute de frappe dans le mot
+ * de passe ne se decouvre qu'un mois plus tard, quand personne n'a ete relance.
+ *
+ * Le courrier part a l'adresse du demandeur, jamais a une adresse saisie : un
+ * formulaire qui envoie ou l'on veut depuis l'adresse du club est un relais
+ * ouvert, et c'est le genre de service dont on abuse.
+ */
+export async function envoyerCourrielEssai(
+  _precedent: EtatFormulaire,
+  _donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererReglages");
+
+  if (transportConfigure() === "aucun") {
+    return {
+      ok: false,
+      erreur:
+        "Aucun transport configure. Renseignez SMTP_HOST, SMTP_PORT, SMTP_USER et SMTP_PASS " +
+        "dans les variables d'environnement, puis redeployez.",
+    };
+  }
+
+  const parti = await envoyerCourriel({
+    destinataire: auteur.email,
+    sujet: `${CLUB.sigle} — essai de configuration`,
+    texte: [
+      `Bonjour ${auteur.nom},`,
+      "",
+      "Ce courrier confirme que l'envoi fonctionne : la relance du 10 partira.",
+      "",
+      `Transport : ${descriptionTransport()}`,
+      `Essai demande le ${new Date().toISOString().slice(0, 10)}.`,
+      "",
+      `Le bureau — ${CLUB.nom}`,
+    ].join("\n"),
+  });
+
+  await journaliser({ id: auteur.id, nom: auteur.nom }, "essai_courriel", { entite: "settings" }, {
+    transport: transportConfigure(),
+    reussi: parti,
+  });
+
+  if (!parti) {
+    return {
+      ok: false,
+      erreur:
+        `Envoi refuse par ${descriptionTransport()}. Avec Gmail, la cause la plus frequente ` +
+        "est un mot de passe ordinaire la ou un mot de passe d'application est exige, " +
+        "ou le port 587 declare en 465.",
+    };
+  }
+  return { ok: true, message: `Courrier d'essai envoye a ${auteur.email}.` };
 }
