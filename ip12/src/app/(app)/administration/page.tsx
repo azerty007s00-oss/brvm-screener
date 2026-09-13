@@ -21,7 +21,12 @@ import { listerMembres } from "@/lib/queries";
 import { CLUB, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { REGLE_MEMBRE } from "@/lib/valeurs";
-import { adresseDuCompte, descriptionTransport, transportConfigure } from "@/lib/courriel";
+import {
+  adresseDuCompte,
+  descriptionTransport,
+  etatVariablesEnvoi,
+  transportConfigure,
+} from "@/lib/courriel";
 import { Badge } from "@/components/ui";
 import { Alerte, Carte, Statistique, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
@@ -40,6 +45,7 @@ export default async function PageAdministration() {
   const membre = await exigerMembre();
   const transport = transportConfigure();
   const adresseClub = adresseDuCompte();
+  const etatEnvoi = etatVariablesEnvoi();
   if (!peut(membre, "gererReglages")) {
     return (
       <Carte titre="Administration">
@@ -332,9 +338,28 @@ export default async function PageAdministration() {
 
         {transport === "aucun" ? (
           <Alerte ton="ambre" titre="Rien ne partira le 10">
-            Renseignez <code>SMTP_HOST</code>, <code>SMTP_PORT</code>, <code>SMTP_USER</code> et{" "}
-            <code>SMTP_PASS</code> dans les variables d&apos;environnement de l&apos;hebergeur, puis
-            redeployez. Gmail exige un mot de passe d&apos;application, non celui du compte.
+            <p>
+              Voici ce que le serveur voit reellement. Les noms seulement : une valeur de mot de
+              passe ne s&apos;affiche pas, meme ici.
+            </p>
+            <ul className="mt-2 space-y-0.5">
+              {etatEnvoi.variables.map((v) => (
+                <li key={v.nom}>
+                  <code>{v.nom}</code> —{" "}
+                  <strong style={{ color: v.presente ? "var(--color-vert-600)" : "var(--color-rouge-600)" }}>
+                    {v.presente ? "presente" : "absente"}
+                  </strong>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2">
+              Environnement servi : <code>{etatEnvoi.environnement}</code>.
+            </p>
+            <p className="mt-2">
+              {etatEnvoi.variables.every((v) => !v.presente)
+                ? "Aucune n'arrive : les variables sont enregistrees sur un autre projet, ou pour un autre environnement que celui indique ci-dessus, ou le formulaire n'a pas ete valide. Verifiez que le projet Vercel ouvert est bien celui qui sert cette adresse, et que la case correspondant a l'environnement ci-dessus est cochee."
+                : "Certaines arrivent et d'autres non : les manquantes portent vraisemblablement une faute de frappe dans leur nom, ou un espace avant ou apres. Le nom doit s'ecrire exactement comme ci-dessus, en majuscules."}
+            </p>
           </Alerte>
         ) : (
           <FormulaireAction action={envoyerCourrielEssai} libelle="Envoyer un courrier d'essai">

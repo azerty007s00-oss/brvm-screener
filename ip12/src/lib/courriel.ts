@@ -58,6 +58,33 @@ function optionsSmtp() {
   };
 }
 
+/**
+ * Quelles variables d'envoi le serveur voit, et sous quel environnement.
+ *
+ * « Aucun transport configure » a plusieurs causes que rien ne distinguait :
+ * variables enregistrees sur un autre projet, sur un autre environnement que
+ * celui qui sert la page, nom mal orthographie, ou simplement pas enregistrees.
+ * Dire lesquelles arrivent separe ces cas en un coup d'oeil.
+ *
+ * Les noms seulement, jamais les valeurs : un mot de passe ne s'affiche pas,
+ * fut-ce sur une page reservee au president.
+ */
+export type EtatVariables = {
+  environnement: string;
+  /** Vrai si l'hebergeur est reconnu : sinon on ne lit meme pas le bon endroit. */
+  chezVercel: boolean;
+  variables: { nom: string; presente: boolean }[];
+};
+
+export function etatVariablesEnvoi(): EtatVariables {
+  const noms = ["SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "EMAIL_EXPEDITEUR"];
+  return {
+    environnement: variable("VERCEL_ENV", "hors Vercel"),
+    chezVercel: variable("VERCEL", "") !== "" || variable("VERCEL_ENV", "") !== "",
+    variables: noms.map((nom) => ({ nom, presente: variable(nom, "") !== "" })),
+  };
+}
+
 /** L'adresse du compte d'envoi : la boite du club, ou l'essai peut aussi aboutir. */
 export function adresseDuCompte(): string {
   return variable("SMTP_USER", "") || variable("EMAIL_EXPEDITEUR", "");
