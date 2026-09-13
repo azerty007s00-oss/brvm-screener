@@ -458,7 +458,7 @@ export async function envoyerCourrielEssai(
     };
   }
 
-  const parti = await envoyerCourriel({
+  const { ok: parti, detail } = await envoyerCourriel({
     destinataire: auteur.email,
     sujet: `${CLUB.sigle} — essai de configuration`,
     texte: [
@@ -476,16 +476,26 @@ export async function envoyerCourrielEssai(
   await journaliser({ id: auteur.id, nom: auteur.nom }, "essai_courriel", { entite: "settings" }, {
     transport: transportConfigure(),
     reussi: parti,
+    detail,
   });
 
   if (!parti) {
     return {
       ok: false,
       erreur:
-        `Envoi refuse par ${descriptionTransport()}. Avec Gmail, la cause la plus frequente ` +
+        `Envoi refuse. Reponse du serveur : ${detail}. Avec Gmail, la cause la plus frequente ` +
         "est un mot de passe ordinaire la ou un mot de passe d'application est exige, " +
         "ou le port 587 declare en 465.",
     };
   }
-  return { ok: true, message: `Courrier d'essai envoye a ${auteur.email}.` };
+  /*
+   * L'adresse est celle du compte, qui n'est pas forcement celle que l'on relevait
+   * en attendant le courrier. La nommer evite de chercher dans la mauvaise boite.
+   */
+  return {
+    ok: true,
+    message:
+      `Courrier remis a ${auteur.email} — verifiez cette boite, et son dossier Spam. ` +
+      `Reponse du serveur : ${detail}`,
+  };
 }

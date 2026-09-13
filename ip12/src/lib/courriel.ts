@@ -58,12 +58,6 @@ function optionsSmtp() {
   };
 }
 
-/**
- * Envoie un courrier. Ne leve jamais : rend `false` si l'envoi a echoue.
- *
- * Une relance qui echoue ne doit pas interrompre les suivantes, ni faire echouer
- * le traitement du 10 : l'echec est trace dans `reminder_log`, membre par membre.
- */
 /** Ce qui est configure, en clair, sans jamais divulguer le mot de passe. */
 export function descriptionTransport(): string {
   switch (transportConfigure()) {
@@ -76,7 +70,23 @@ export function descriptionTransport(): string {
   }
 }
 
-export async function envoyerCourriel(courriel: Courriel): Promise<boolean> {
+/**
+ * Ce que l'envoi a donne, et ce qu'en a dit le serveur.
+ *
+ * Un booleen suffisait au cron, qui ne fait qu'inscrire l'echec dans
+ * `reminder_log`. Il ne suffit pas quand le courrier ne semble pas arriver :
+ * « accepte par le serveur » et « refuse » appellent des recherches opposees, et
+ * sans la reponse du serveur rien ne les distingue.
+ */
+export type ResultatEnvoi = { ok: boolean; detail: string };
+
+/**
+ * Envoie un courrier. Ne leve jamais.
+ *
+ * Une relance qui echoue ne doit pas interrompre les suivantes, ni faire echouer
+ * le traitement du 10 : l'echec est trace dans `reminder_log`, membre par membre.
+ */
+export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi> {
   const transport = transportConfigure();
   const from = `${CLUB.nom} <${expediteur()}>`;
 
@@ -84,19 +94,28 @@ export async function envoyerCourriel(courriel: Courriel): Promise<boolean> {
     if (transport === "smtp") {
       const { createTransport } = await import("nodemailer");
       const envoi = createTransport(optionsSmtp());
-      await envoi.sendMail({
+      const info = await envoi.sendMail({
         from,
         to: courriel.destinataire,
         subject: courriel.sujet,
         text: courriel.texte,
       });
-      return true;
+      /*
+       * `accepted` porte les destinataires que le serveur a pris en charge. Une
+       * liste vide vaut refus, meme sans erreur levee : le courrier n'ira nulle
+       * part, et le dire « envoye » ferait chercher dans la boite de reception un
+       * probleme qui est ici.
+       */
+      if ((info.accepted ?? []).length === 0) {
+        return { ok: false, detail: `aucun destinataire accepte — ${info.response ?? "sans reponse"}` };
+      }
+      return { ok: true, detail: String(info.response ?? "accepte") };
     }
 
     if (transport === "resend") {
       const { Resend } = await import("resend");
       const resend = new Resend(variable("RESEND_API_KEY", ""));
-      const { error } = await resend.emails.send({
+      const { data, error } = await resend.emails.send({
         from,
         to: courriel.destinataire,
         subject: courriel.sujet,
@@ -106,10 +125,15 @@ export async function envoyerCourriel(courriel: Courriel): Promise<boolean> {
        * Resend rend l'erreur plutot que de la lever : sans ce test, un refus du
        * fournisseur serait consigne comme un envoi reussi.
        */
-      return !error;
+      if (error) return { ok: false, detail: `${error.name} — ${error.message}` };
+      return { ok: true, detail: `accepte (identifiant ${data?.id ?? "inconnu"})` };
     }
-  } catch {
-    return false;
+  } catch (e) {
+    // Le code SMTP nomme la cause bien mieux que le message : EAUTH, ECONNECTION…
+    const err = e as { code?: string; responseCode?: number; message?: string };
+    const code = err.code ? `${err.code} ` : "";
+    const reponse = err.responseCode ? `(${err.responseCode}) ` : "";
+    return { ok: false, detail: `${code}${reponse}${err.message ?? String(e)}` };
   }
-  return false;
+  return { ok: false, detail: "aucun transport configure" };
 }

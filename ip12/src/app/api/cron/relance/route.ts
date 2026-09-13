@@ -62,7 +62,7 @@ export async function GET(requete: Request) {
   if (transport !== "aucun") {
     const siteUrl = variable("NEXT_PUBLIC_SITE_URL", "");
     for (const d of destinataires) {
-      const parti = await envoyerCourriel({
+      const { ok: parti } = await envoyerCourriel({
         destinataire: d.situation.email,
         sujet:
           d.arrieres.length > 0
