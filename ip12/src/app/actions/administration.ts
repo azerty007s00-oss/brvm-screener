@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { listerMembres, reglagesEffectifs } from "@/lib/queries";
-import { CLUB, debutMois, decalerMois, moisLong } from "@/lib/settings";
+import { CLUB, REGLES, debutMois, decalerMois, fcfa, moisLong } from "@/lib/settings";
 import {
   KIND_PENALITE,
   KIND_VERSEMENT,
@@ -352,4 +352,80 @@ export async function leverRegleMembre(
   });
   revalidatePath("/", "layout");
   return { ok: true, message: "Regle levee : le regime commun s'applique a nouveau." };
+}
+
+/* --------------------------------------------------------- sorties (art. 20) */
+
+/**
+ * Enregistre la sortie d'un membre et solde ses comptes.
+ *
+ * L'art. 20 rembourse la part au cours de cession, diminuee de 2 % de frais.
+ * L'art. 9 veut que les penalites soient « definitivement acquises au benefice du
+ * club » : elles ne se remboursent pas, et se retranchent donc du versement.
+ *
+ * Les montants sont saisis, non imposes. Le site en propose le calcul au dernier
+ * releve, mais les frais reels de la SGI ne sont connus qu'apres coup et le club
+ * vote : les chiffres ouvrent la discussion, ils ne la closent pas.
+ *
+ * Le membre est desactive dans le meme mouvement. Le laisser actif le ferait
+ * figurer aux relances, aux feuilles de presence et aux parts d'un club qu'il a
+ * quitte -- et fausserait la repartition de tous les autres.
+ */
+export async function enregistrerSortie(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererSorties");
+
+  const membreId = String(donnees.get("membre") ?? "");
+  const date = String(donnees.get("date") ?? "").slice(0, 10);
+  const motif = String(donnees.get("motif") ?? "").trim();
+  const brut = Math.round(Number(donnees.get("valeurBrute") ?? 0));
+  const frais = Math.round(Number(donnees.get("frais") ?? 0));
+  const acquis = Math.round(Number(donnees.get("acquisAuClub") ?? 0));
+  const note = String(donnees.get("note") ?? "").trim();
+
+  if (!membreId) return { ok: false, erreur: "Choisissez le membre sortant." };
+  if (!date) return { ok: false, erreur: "Indiquez la date de sortie." };
+  if (!motif) return { ok: false, erreur: "Indiquez le motif de la sortie." };
+  for (const [libelle, v] of [
+    ["La valeur brute", brut],
+    ["Les frais", frais],
+    ["Le montant acquis au club", acquis],
+  ] as const) {
+    if (!Number.isFinite(v) || v < 0) return { ok: false, erreur: `${libelle} doit etre positif ou nul.` };
+  }
+  if (frais + acquis > brut) {
+    return {
+      ok: false,
+      erreur: "Frais et penalites depassent la valeur de la part : le club ne peut reclamer au sortant.",
+    };
+  }
+
+  const sql = db();
+  const membre = await sql`select full_name, is_active from members where id = ${membreId}::uuid`;
+  if (!membre[0]) return { ok: false, erreur: "Membre introuvable." };
+  if (!membre[0].is_active) return { ok: false, erreur: "Ce membre est deja sorti." };
+
+  const net = brut - frais - acquis;
+
+  await sql`
+    insert into member_exits (member_id, exit_date, reason, gross_value, fees,
+                              net_paid, forfeited, note, created_by)
+    values (${membreId}::uuid, ${date}::date, ${motif}, ${brut}, ${frais},
+            ${net}, ${acquis}, ${note === "" ? null : note}, ${auteur.id}::uuid)
+  `;
+  await sql`update members set is_active = false where id = ${membreId}::uuid`;
+
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "sortie_membre",
+    { entite: "member_exits", id: membreId },
+    { date, motif, brut, frais, acquis, net },
+  );
+  revalidatePath("/", "layout");
+  return {
+    ok: true,
+    message: `Sortie enregistree : ${fcfa(net)} a verser a ${membre[0].full_name}, sous ${REGLES.delaiRemboursementMois} mois (R5).`,
+  };
 }

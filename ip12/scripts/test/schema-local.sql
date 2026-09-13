@@ -147,6 +147,20 @@ create table member_rules (
   created_at timestamptz not null default now()
 );
 
+create table member_exits (
+  id uuid primary key default gen_random_uuid(),
+  member_id uuid not null references members(id) on delete cascade,
+  exit_date date not null,
+  reason text,
+  gross_value bigint not null default 0 check (gross_value >= 0),
+  fees bigint not null default 0 check (fees >= 0),
+  net_paid bigint not null default 0 check (net_paid >= 0),
+  forfeited bigint not null default 0 check (forfeited >= 0),
+  note text,
+  created_by uuid not null references members(id),
+  created_at timestamptz not null default now()
+);
+
 create table meetings (
   id uuid primary key default gen_random_uuid(),
   meeting_date date not null,

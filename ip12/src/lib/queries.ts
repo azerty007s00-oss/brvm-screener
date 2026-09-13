@@ -552,6 +552,93 @@ export async function derogationsParMembre(): Promise<Map<string, ReglesMembre>>
   return index;
 }
 
+/* -------------------------------------------------------- sorties (art. 20) */
+
+export type Sortie = {
+  id: string;
+  membreId: string;
+  membreNom: string;
+  date: string;
+  motif: string | null;
+  valeurBrute: number;
+  frais: number;
+  netVerse: number;
+  acquisAuClub: number;
+  note: string | null;
+};
+
+export async function listerSorties(): Promise<Sortie[]> {
+  try {
+    const sql = db();
+    const rows = await sql`
+      select e.id, e.member_id as membre_id, m.full_name as membre_nom,
+             to_char(e.exit_date, 'YYYY-MM-DD') as date, e.reason as motif,
+             e.gross_value, e.fees, e.net_paid, e.forfeited, e.note
+      from member_exits e
+      join members m on m.id = e.member_id
+      order by e.exit_date desc
+    `;
+    return rows.map((r) => ({
+      id: String(r.id),
+      membreId: String(r.membre_id),
+      membreNom: String(r.membre_nom),
+      date: String(r.date),
+      motif: (r.motif as string | null) ?? null,
+      valeurBrute: n(r.gross_value),
+      frais: n(r.fees),
+      netVerse: n(r.net_paid),
+      acquisAuClub: n(r.forfeited),
+      note: (r.note as string | null) ?? null,
+    }));
+  } catch {
+    // La table peut manquer d'une base a l'autre : son absence n'est pas une erreur.
+    return [];
+  }
+}
+
+export type DecompteSortie = {
+  membreId: string;
+  nom: string;
+  verse: number;
+  part: number;
+  /** Valeur de la part au dernier releve : ce que l'art. 20 appelle le cours de cession. */
+  valeurBrute: number;
+  /** Art. 20 : 2 % retenus sur le remboursement. Indicatif, les frais reels peuvent differer. */
+  fraisIndicatifs: number;
+  /** Art. 9 : les penalites dues restent acquises au club, elles ne se remboursent pas. */
+  penalitesDues: number;
+  /** Ce qui resterait a verser : brut moins frais moins penalites. */
+  netIndicatif: number;
+};
+
+/**
+ * Ce que couterait la sortie de chaque membre, au dernier releve connu.
+ *
+ * Purement indicatif : les frais reels de la SGI ne sont connus qu'apres coup, et
+ * le club vote. Le calcul sert a ouvrir la discussion sur des chiffres, non a la
+ * clore.
+ */
+export async function decomptesSortie(): Promise<DecompteSortie[]> {
+  const [s, dues] = await Promise.all([
+    synthese(),
+    penalitesDuesParMembre().catch(() => new Map<string, number>()),
+  ]);
+  return s.parts.map((p) => {
+    const frais = Math.round(p.valeur * REGLES.fraisCession);
+    const penalites = dues.get(p.membreId) ?? 0;
+    return {
+      membreId: p.membreId,
+      nom: p.nom,
+      verse: p.verse,
+      part: p.part,
+      valeurBrute: p.valeur,
+      fraisIndicatifs: frais,
+      penalitesDues: penalites,
+      netIndicatif: Math.max(0, p.valeur - frais - penalites),
+    };
+  });
+}
+
 export async function situationsClub(aujourdhui = new Date()): Promise<SituationClub[]> {
   const sql = db();
   const [membres, declarations, derogations] = await Promise.all([

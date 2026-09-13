@@ -1,16 +1,23 @@
 import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
-import { reglagesEffectifs, reglesIndividuelles, situationsClub } from "@/lib/queries";
+import {
+  decomptesSortie,
+  listerSorties,
+  reglagesEffectifs,
+  reglesIndividuelles,
+  situationsClub,
+} from "@/lib/queries";
 import { journalRecent } from "@/lib/journal";
 import {
   enregistrerReglages,
   reprendreHistorique,
   reprendrePenalites,
+  enregistrerSortie,
   inscrireRegleMembre,
   leverRegleMembre,
 } from "@/app/actions/administration";
 import { listerMembres } from "@/lib/queries";
-import { CLUB, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { CLUB, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { REGLE_MEMBRE } from "@/lib/valeurs";
 import { Badge } from "@/components/ui";
@@ -37,14 +44,16 @@ export default async function PageAdministration() {
     );
   }
 
-  let reglages, situations, journal, membres, regles;
+  let reglages, situations, journal, membres, regles, sorties, decomptes;
   try {
-    [reglages, situations, journal, membres, regles] = await Promise.all([
+    [reglages, situations, journal, membres, regles, sorties, decomptes] = await Promise.all([
       reglagesEffectifs(),
       situationsClub(),
       journalRecent(30).catch(() => []),
       listerMembres(),
       reglesIndividuelles(true).catch(() => []),
+      listerSorties(),
+      decomptesSortie().catch(() => []),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -351,6 +360,108 @@ export default async function PageAdministration() {
               aide="Sans terme, la derogation devient un regime parallele durable."
             />
             <Champ nom="note" libelle="Motif ou reference de la decision" requis={false} />
+          </FormulaireAction>
+        </Depliant>
+      </Carte>
+
+      <Carte titre="Sorties et exclusions (art. 20)">
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          L&apos;art. 20 rembourse la part au cours de cession, diminuee de{" "}
+          {(REGLES.fraisCession * 100).toFixed(0)} % de frais, et l&apos;art. 9 veut que les
+          penalites dues restent acquises au club : elles se retranchent du versement. Le
+          remboursement intervient sous {REGLES.delaiRemboursementMois} mois (R5). Une exclusion
+          demande le vote des {(REGLES.majoriteExclusion * 100).toFixed(0)} %.
+        </p>
+
+        {decomptes.length > 0 && (
+          <div className="defilement-x mb-4">
+            <table className="w-full min-w-[34rem] text-xs">
+              <thead>
+                <tr style={{ color: "var(--discret)" }}>
+                  <th className="py-1 text-left font-medium">Membre</th>
+                  <th className="py-1 text-right font-medium">Part</th>
+                  <th className="py-1 text-right font-medium">Frais {(REGLES.fraisCession * 100).toFixed(0)} %</th>
+                  <th className="py-1 text-right font-medium">Penalites</th>
+                  <th className="py-1 text-right font-medium">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {decomptes.map((d) => (
+                  <tr key={d.membreId} className="border-t" style={{ borderColor: "var(--bordure)" }}>
+                    <td className="py-1.5">{d.nom}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.valeurBrute)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisIndicatifs)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.penalitesDues)}</td>
+                    <td className="py-1.5 text-right font-medium tabular-nums">{fcfa(d.netIndicatif)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-2 text-[11px]" style={{ color: "var(--discret)" }}>
+              Indicatif, au dernier releve. Les frais reels de la SGI ne sont connus
+              qu&apos;apres coup : ces chiffres ouvrent la discussion, ils ne la closent pas.
+            </p>
+          </div>
+        )}
+
+        {sorties.length > 0 && (
+          <ul className="mb-4 divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {sorties.map((s) => (
+              <li key={s.id} className="py-2">
+                <p className="text-sm font-medium">
+                  {s.membreNom} &middot; {dateCourte(s.date)} &middot; {fcfa(s.netVerse)} verses
+                </p>
+                <p className="text-xs" style={{ color: "var(--discret)" }}>
+                  {s.motif ?? "motif non precise"} &middot; part {fcfa(s.valeurBrute)} &minus; frais{" "}
+                  {fcfa(s.frais)} &minus; acquis au club {fcfa(s.acquisAuClub)}
+                  {s.note ? ` · ${s.note}` : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <Depliant titre="Enregistrer une sortie">
+          <FormulaireAction action={enregistrerSortie} libelle="Enregistrer la sortie">
+            <Selection
+              nom="membre"
+              libelle="Membre sortant"
+              options={membres.map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
+            />
+            <Champ
+              nom="date"
+              libelle="Date de sortie"
+              type="date"
+              valeur={new Date().toISOString().slice(0, 10)}
+            />
+            <Champ
+              nom="motif"
+              libelle="Motif"
+              aide="Demission, exclusion prononcee au vote, exclusion de plein droit (R5)…"
+            />
+            <Champ
+              nom="valeurBrute"
+              libelle="Valeur de la part (FCFA)"
+              type="number"
+              min={0}
+              aide="Au cours de cession. Le tableau ci-dessus en donne l'estimation au dernier releve."
+            />
+            <Champ
+              nom="frais"
+              libelle="Frais retenus (FCFA)"
+              type="number"
+              min={0}
+              aide={`${(REGLES.fraisCession * 100).toFixed(0)} % selon l'art. 20 ; saisir les frais reels s'ils different.`}
+            />
+            <Champ
+              nom="acquisAuClub"
+              libelle="Penalites acquises au club (FCFA)"
+              type="number"
+              min={0}
+              valeur={0}
+              aide="Art. 9 : les penalites dues ne se remboursent pas."
+            />
+            <Champ nom="note" libelle="Reference de la decision" requis={false} />
           </FormulaireAction>
         </Depliant>
       </Carte>
