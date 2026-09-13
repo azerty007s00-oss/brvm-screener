@@ -2,7 +2,9 @@
 // Lancement : npm run verif
 import { strict as assert } from "node:assert";
 
-const { tri, dietzModifie, repartirParts } = await import("../.verif/perf.mjs");
+const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair } = await import(
+  "../.verif/perf.mjs"
+);
 const { situationMembre, calculerPenalites, issueR5, moisARelancer } = await import(
   "../.verif/penalites.mjs"
 );
@@ -14,6 +16,38 @@ const r = tri([
   { date: "2026-01-01", montant: 1_344_000 },
 ]);
 assert.ok(r !== null && Math.abs(r - 0.344) < 0.005, `TRI attendu ~0,344, obtenu ${r}`);
+
+// Le taux rendu est annuel quelle que soit la duree : six mois a +20 % en tout
+// s'annualisent a environ +44 %, et non a +20 %.
+const rSemestre = tri([
+  { date: "2026-01-01", montant: -1_000_000 },
+  { date: "2026-07-02", montant: 1_200_000 },
+]);
+assert.ok(
+  rSemestre !== null && rSemestre > 0.43 && rSemestre < 0.45,
+  `TRI semestriel annualise attendu ~0,44, obtenu ${rSemestre}`,
+);
+
+// Et il porte sur toute la duree, chaque versement comptant depuis sa propre date :
+// 1 000 000 verses en deux fois et valant 1 210 000 au bout de deux ans donnent 13,4 %
+// par an -- 50x^2 + 50x = 121 pour x = 1 + r -- la ou le rapport brut, +21 % sur le
+// total verse, melange deux annees de placement pour la premiere moitie et une pour
+// la seconde.
+const rEtale = tri([
+  { date: "2024-09-13", montant: -500_000 },
+  { date: "2025-09-13", montant: -500_000 },
+  { date: "2026-09-13", montant: 1_210_000 },
+]);
+const attendu = (-50 + Math.sqrt(50 * 50 + 4 * 50 * 121)) / 100 - 1;
+assert.ok(
+  rEtale !== null && Math.abs(rEtale - attendu) < 1e-6,
+  `TRI etale attendu ${attendu}, obtenu ${rEtale}`,
+);
+
+assert.ok(Math.abs(dureeEnAnnees("2025-01-01", "2026-01-01") - 1) < 0.01);
+assert.equal(dureeEnClair(2.25), "2 ans et 3 mois");
+assert.equal(dureeEnClair(1), "1 an");
+assert.equal(dureeEnClair(0.5), "6 mois");
 
 const d = dietzModifie(
   2_166_323,
@@ -182,4 +216,4 @@ assert.equal(moisARelancer(new Date("2026-09-10T08:00:00Z")), "2026-08-01");
 // Le 11, le mois de septembre est devenu exigible.
 assert.equal(moisARelancer(new Date("2026-09-11T08:00:00Z")), "2026-09-01");
 
-console.log("OK - 29 verifications : performance, penalites art. 9 et R4, retards, R3, R5, relance");
+console.log("OK - 35 verifications : performance, penalites art. 9 et R4, retards, R3, R5, relance");

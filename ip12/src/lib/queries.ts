@@ -4,7 +4,7 @@ import { CLUB, REGLES, debutMois, moisDuClub } from "./settings";
 import type { Role } from "./settings";
 import { situationMembre, type SituationMembre } from "./penalites";
 import { STATUT_PENALITE, STATUT_VERSEMENT, SENS_TRANSFERT } from "./valeurs";
-import { dietzModifie, repartirParts, tri, type Flux, type PartMembre } from "./perf";
+import { dietzModifie, dureeEnAnnees, repartirParts, tri, type Flux, type PartMembre } from "./perf";
 
 /** bigint et numeric reviennent en chaine avec le pilote Postgres : on normalise. */
 const n = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
@@ -488,6 +488,8 @@ export type Synthese = {
   depenses: number;
   parts: PartMembre[];
   tri: number | null;
+  /** Sur quoi porte le TRI : du premier virement au dernier releve. */
+  triPeriode: { debut: string; fin: string; annees: number } | null;
   exercice: ReturnType<typeof dietzModifie> | null;
   nbRetardataires: number;
   /** Ce que les statuts prevoient, calcule a partir des mois impayes. */
@@ -526,10 +528,34 @@ export async function synthese(aujourdhui = new Date()): Promise<Synthese> {
     valorisation?.total ?? 0,
   );
 
-  // TRI : apports vers le compte-titres en sortie de poche, valeur actuelle en entree.
-  const flux: Flux[] = apports.map((a) => ({ date: a.date_transfert, montant: -net(a) }));
-  if (valorisation && flux.length > 0) {
-    flux.push({ date: valorisation.date_valo, montant: valorisation.total });
+  /*
+   * TRI : apports vers le compte-titres en sortie de poche, valeur du releve en
+   * entree finale. Le taux obtenu est annualise par construction, sur les dates
+   * reelles de virement et sur toute la duree depuis le premier d'entre eux.
+   *
+   * Seuls comptent les flux anterieurs au dernier releve. Un virement posterieur
+   * n'a pas encore de valeur en face : le compter en sortie sans contrepartie
+   * ferait plonger le taux sans qu'aucune perte n'ait eu lieu -- d'autant plus
+   * que le portefeuille n'est valorise que tous les deux mois, et qu'un ou deux
+   * versements mensuels tombent donc toujours apres le dernier releve.
+   */
+  const flux: Flux[] = [];
+  let triPeriode: Synthese["triPeriode"] = null;
+  if (valorisation) {
+    for (const a of apports) {
+      if (a.date_transfert <= valorisation.date_valo) {
+        flux.push({ date: a.date_transfert, montant: -net(a) });
+      }
+    }
+    if (flux.length > 0) {
+      const debut = flux.reduce((tot, f) => (f.date < tot ? f.date : tot), flux[0].date);
+      flux.push({ date: valorisation.date_valo, montant: valorisation.total });
+      triPeriode = {
+        debut,
+        fin: valorisation.date_valo,
+        annees: dureeEnAnnees(debut, valorisation.date_valo),
+      };
+    }
   }
 
   const debutExercice = `${aujourdhui.getUTCFullYear()}-01-01`;
@@ -560,6 +586,7 @@ export async function synthese(aujourdhui = new Date()): Promise<Synthese> {
     depenses,
     parts,
     tri: flux.length >= 2 ? tri(flux) : null,
+    triPeriode,
     exercice,
     nbRetardataires: situations.filter((s) => s.nbMoisRetard > 0).length,
     totalPenalitesCalculees: situations.reduce((s, m) => s + m.totalPenalites, 0),

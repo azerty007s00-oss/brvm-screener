@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import { situationsClub, synthese } from "@/lib/queries";
-import { pourcent } from "@/lib/perf";
+import { dureeEnClair, pourcent } from "@/lib/perf";
 import { CLUB, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Alerte, Badge, Carte, Statistique, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
@@ -60,12 +60,25 @@ export default async function TableauDeBord() {
           <div className="grid gap-4 sm:grid-cols-2">
             {s.tri !== null && (
               <div>
-                <p className="text-2xl font-semibold" style={{ color: "var(--color-vert-600)" }}>
+                <p
+                  className="text-2xl font-semibold"
+                  style={{ color: s.tri >= 0 ? "var(--color-vert-600)" : "var(--color-rouge-600)" }}
+                >
                   {pourcent(s.tri)}
+                  <span className="ml-1 text-xs font-normal" style={{ color: "var(--discret)" }}>
+                    par an
+                  </span>
                 </p>
                 <p className="text-xs" style={{ color: "var(--discret)" }}>
-                  TRI annualise depuis la creation du club, calcule sur les dates reelles
-                  d&apos;apport au compte-titres.
+                  TRI annualise sur les dates reelles de virement au compte-titres.
+                  {s.triPeriode && (
+                    <>
+                      {" "}
+                      Il porte sur {dureeEnClair(s.triPeriode.annees)} de placement, du{" "}
+                      {dateCourte(s.triPeriode.debut)} au {dateCourte(s.triPeriode.fin)}, date du
+                      dernier releve.
+                    </>
+                  )}
                 </p>
               </div>
             )}

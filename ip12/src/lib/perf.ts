@@ -13,6 +13,16 @@ function jours(a: string, b: string): number {
   return (Date.parse(`${b.slice(0, 10)}T00:00:00Z`) - Date.parse(`${a.slice(0, 10)}T00:00:00Z`)) / 86_400_000;
 }
 
+/**
+ * Duree en annees entre deux dates, sur le meme decompte que le TRI.
+ *
+ * Annualiser suppose une duree : l'afficher a cote du taux dit sur quoi il porte,
+ * et un taux annuel tire de quelques mois ne se lit pas comme un taux tenu trois ans.
+ */
+export function dureeEnAnnees(debut: string, fin: string): number {
+  return jours(debut, fin) / 365;
+}
+
 /** Valeur actuelle nette d'une serie de flux datee, au taux annuel donne. */
 function van(flux: Flux[], taux: number): number {
   if (flux.length === 0) return 0;
@@ -119,6 +129,16 @@ export function repartirParts(
       return { ...m, part, valeur, plusValue: valeur - m.verse };
     })
     .sort((a, b) => b.part - a.part);
+}
+
+/** Une duree en annees, dite comme on la dit : « 2 ans et 3 mois ». */
+export function dureeEnClair(annees: number): string {
+  const mois = Math.max(0, Math.round(annees * 12));
+  if (mois < 12) return `${mois} mois`;
+  const ans = Math.floor(mois / 12);
+  const reste = mois % 12;
+  const debut = `${ans} an${ans > 1 ? "s" : ""}`;
+  return reste === 0 ? debut : `${debut} et ${reste} mois`;
 }
 
 export function pourcent(x: number | null, decimales = 1): string {
