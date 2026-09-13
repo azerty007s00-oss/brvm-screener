@@ -4,10 +4,11 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerRole, hacherMotDePasse, motDePasseProvisoire } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
-import { CLUB } from "@/lib/settings";
+import { CLUB, POSTES_UNIQUES, ROLES } from "@/lib/settings";
+import type { Role } from "@/lib/settings";
 import type { EtatFormulaire } from "./auth";
 
-const ROLES_VALIDES = ["president", "tresorier", "membre"] as const;
+const ROLES_VALIDES = Object.keys(ROLES) as Role[];
 
 export async function creerMembre(
   _precedent: EtatFormulaire,
@@ -23,7 +24,7 @@ export async function creerMembre(
 
   if (nom.length < 2) return { ok: false, erreur: "Nom trop court." };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, erreur: "E-mail invalide." };
-  if (!ROLES_VALIDES.includes(role as (typeof ROLES_VALIDES)[number])) {
+  if (!ROLES_VALIDES.includes(role as Role)) {
     return { ok: false, erreur: "Role inconnu." };
   }
 
@@ -33,8 +34,8 @@ export async function creerMembre(
     return { ok: false, erreur: `Le club est plafonne a ${CLUB.membresMax} membres (statuts).` };
   }
 
-  // Un seul president et un seul tresorier : le titulaire precedent repasse membre.
-  if (role === "president" || role === "tresorier") {
+  // Poste de bureau : un seul titulaire, le precedent repasse simple membre.
+  if (POSTES_UNIQUES.includes(role as Role)) {
     await sql`update members set role = 'membre' where role = ${role}`;
   }
 
@@ -77,12 +78,12 @@ export async function modifierMembre(
 
   if (!id) return { ok: false, erreur: "Membre introuvable." };
   if (nom.length < 2) return { ok: false, erreur: "Nom trop court." };
-  if (!ROLES_VALIDES.includes(role as (typeof ROLES_VALIDES)[number])) {
+  if (!ROLES_VALIDES.includes(role as Role)) {
     return { ok: false, erreur: "Role inconnu." };
   }
 
   const sql = db();
-  if (role === "president" || role === "tresorier") {
+  if (POSTES_UNIQUES.includes(role as Role)) {
     await sql`update members set role = 'membre' where role = ${role} and id <> ${id}::uuid`;
   }
   await sql`

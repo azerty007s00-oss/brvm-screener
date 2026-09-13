@@ -8,11 +8,7 @@ import { EcranInitialisation, estTableAbsente } from "@/components/initialisatio
 
 export const dynamic = "force-dynamic";
 
-const OPTIONS_ROLE = [
-  { valeur: "membre", libelle: "Membre" },
-  { valeur: "tresorier", libelle: "Tresorier" },
-  { valeur: "president", libelle: "President" },
-];
+const OPTIONS_ROLE = Object.entries(ROLES).map(([valeur, libelle]) => ({ valeur, libelle }));
 
 export default async function PageMembres() {
   const membre = await exigerMembre();
@@ -76,6 +72,7 @@ export default async function PageMembres() {
                           <Champ nom="nom" libelle="Nom" valeur={m.nom} />
                           <Champ nom="email" libelle="E-mail" type="email" valeur={m.email} />
                           <Champ nom="telephone" libelle="Telephone" valeur={m.telephone ?? ""} requis={false} />
+                          <Champ nom="titre" libelle="Intitule" valeur={m.titre ?? ""} requis={false} />
                           <Selection nom="role" libelle="Role" valeur={m.role} options={OPTIONS_ROLE} />
                         </FormulaireAction>
                         <div className="mt-3 flex flex-wrap gap-2">
@@ -121,6 +118,7 @@ export default async function PageMembres() {
               <Champ nom="nom" libelle="Nom et prenoms" />
               <Champ nom="email" libelle="Adresse e-mail" type="email" />
               <Champ nom="telephone" libelle="Telephone" requis={false} />
+              <Champ nom="titre" libelle="Intitule (facultatif)" requis={false} />
               <Selection nom="role" libelle="Role" valeur="membre" options={OPTIONS_ROLE} />
               <Champ nom="dateAdhesion" libelle="Date d'adhesion" type="date" valeur={CLUB.dateCreation} />
             </FormulaireAction>

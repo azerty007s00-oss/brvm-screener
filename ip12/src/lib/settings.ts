@@ -40,13 +40,18 @@ export const REGLES = {
   periodiciteValorisationMois: 2,
 } as const;
 
-export type Role = "president" | "tresorier" | "membre";
+export type Role = "president" | "vice_president" | "tresorier" | "secretaire" | "membre";
 
 export const ROLES: Record<Role, string> = {
   president: "President",
+  vice_president: "Vice-president",
   tresorier: "Tresorier",
+  secretaire: "Secretaire",
   membre: "Membre",
 };
+
+/** Postes du bureau : un seul titulaire a la fois, contrairement a "membre". */
+export const POSTES_UNIQUES: Role[] = ["president", "vice_president", "tresorier", "secretaire"];
 
 /** Montant en FCFA, sans decimale : 5000 -> "5 000 FCFA". */
 export function fcfa(montant: number): string {

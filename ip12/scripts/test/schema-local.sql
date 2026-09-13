@@ -4,8 +4,9 @@
 -- donnees du club. Ce fichier sert a monter un PostgreSQL jetable pour verifier
 -- que les requetes de l'application sont valides avant tout deploiement.
 --
--- Releve depuis information_schema le 13/09/2026. Les contraintes CHECK n'etaient
--- pas visibles : elles sont reproduites ici d'apres src/lib/valeurs.ts.
+-- Releve depuis information_schema le 13/09/2026, contraintes CHECK relevees
+-- depuis pg_constraint le meme jour. Les reproduire ici n'est pas cosmetique :
+-- leur absence avait laisse passer une valeur de direction erronee.
 
 create extension if not exists pgcrypto;
 
@@ -15,7 +16,8 @@ create table members (
   email text not null unique,
   phone text,
   title text,
-  role text not null default 'membre',
+  role text not null default 'membre'
+    check (role in ('president','vice_president','tresorier','secretaire','membre')),
   password_hash text not null,
   must_change_password boolean not null default true,
   is_active boolean not null default true,
@@ -27,14 +29,16 @@ create table contributions (
   id uuid primary key default gen_random_uuid(),
   member_id uuid not null references members(id) on delete cascade,
   period date not null,
-  kind text not null default 'cotisation',
-  amount bigint not null,
+  kind text not null default 'cotisation' check (kind in ('cotisation','penalite')),
+  amount bigint not null check (amount > 0),
   paid_on date not null,
-  method text not null default 'mobile_money',
+  method text not null default 'mobile_money'
+    check (method in ('especes','mobile_money','virement','cheque')),
   reference text,
   note text,
   batch_id uuid not null,
-  status text not null default 'en_attente',
+  status text not null default 'en_attente'
+    check (status in ('en_attente','valide','rejete')),
   declared_by uuid not null references members(id),
   reviewed_by uuid references members(id),
   reviewed_at timestamptz,
@@ -45,8 +49,8 @@ create table contributions (
 create table securities_transfers (
   id uuid primary key default gen_random_uuid(),
   transfer_date date not null,
-  amount bigint not null,
-  direction text not null,
+  amount bigint not null check (amount > 0),
+  direction text not null check (direction in ('vers_titres','retrait')),
   note text,
   created_by uuid not null references members(id),
   created_at timestamptz not null default now()
@@ -55,8 +59,8 @@ create table securities_transfers (
 create table portfolio_valuations (
   id uuid primary key default gen_random_uuid(),
   valued_on date not null,
-  total_value bigint not null,
-  cash_part bigint,
+  total_value bigint not null check (total_value >= 0),
+  cash_part bigint check (cash_part >= 0),
   note text,
   created_by uuid not null references members(id),
   created_at timestamptz not null default now()
@@ -65,12 +69,12 @@ create table portfolio_valuations (
 create table penalties (
   id uuid primary key default gen_random_uuid(),
   member_id uuid not null references members(id) on delete cascade,
-  kind text not null default 'retard',
-  quantity integer not null default 1,
-  unit_amount bigint not null,
+  kind text not null default 'retard' check (kind in ('retard','absence','autre')),
+  quantity integer not null default 1 check (quantity > 0),
+  unit_amount bigint not null check (unit_amount > 0),
   reason text,
   incurred_on date not null default current_date,
-  status text not null default 'due',
+  status text not null default 'due' check (status in ('due','payee','annulee')),
   settled_on date,
   settlement_note text,
   created_by uuid not null references members(id),
