@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { situationsClub, type SituationClub } from "@/lib/queries";
-import { CLUB, REGLES, debutMois, fcfa, moisLong } from "@/lib/settings";
+import { CLUB, REGLES, debutMois, fcfa, moisLong, variable } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -61,8 +61,8 @@ export async function GET(requete: Request) {
   if (cle && destinataires.length > 0) {
     const { Resend } = await import("resend");
     const resend = new Resend(cle);
-    const expediteur = process.env.EMAIL_EXPEDITEUR ?? "onboarding@resend.dev";
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
+    const expediteur = variable("EMAIL_EXPEDITEUR", "onboarding@resend.dev");
+    const siteUrl = variable("NEXT_PUBLIC_SITE_URL", "");
 
     for (const d of destinataires) {
       try {

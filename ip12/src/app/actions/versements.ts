@@ -4,18 +4,23 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerMembre, exigerRole } from "@/lib/auth";
+import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
 import { reglagesEffectifs } from "@/lib/queries";
 import { decalerMois } from "@/lib/settings";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
+import { enregistrerJustificatif } from "@/lib/justificatifs";
 import type { EtatFormulaire } from "./auth";
 
 const METHODES = Object.values(METHODE) as string[];
 
 /**
- * Declare un versement en caisse. Il reste "en attente" jusqu'a validation du
- * tresorier, mais il est visible de tous des la declaration : c'est le suivi
- * partage voulu par le club.
+ * Enregistre un versement en caisse.
+ *
+ * Un membre declare : sa ligne est visible de tous aussitot, et attend la
+ * validation du tresorier qui tient la caisse. Le tresorier et le president,
+ * eux, saisissent des encaissements deja constates : leur saisie vaut
+ * validation. Le journal conserve dans les deux cas qui a saisi et qui a valide.
  *
  * Une avance de plusieurs mois cree une ligne par mois couvert, toutes reliees
  * par un meme batch_id : le suivi reste mensuel sans perdre le fait qu'il s'agit
@@ -36,8 +41,12 @@ export async function declarerVersement(
   const reference = String(donnees.get("reference") ?? "").trim() || null;
   const note = String(donnees.get("note") ?? "").trim() || null;
 
-  if (membreCible !== auteur.id && auteur.role !== "president") {
-    return { ok: false, erreur: "Seul le president peut declarer un versement pour un autre membre." };
+  const saisieDirecte = peut(auteur, "saisirVersementValide");
+  if (membreCible !== auteur.id && !saisieDirecte) {
+    return {
+      ok: false,
+      erreur: "Seuls le tresorier et le president peuvent enregistrer un versement pour autrui.",
+    };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(moisDebut)) return { ok: false, erreur: "Mois de depart invalide." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVersement)) return { ok: false, erreur: "Date de versement invalide." };
@@ -62,17 +71,22 @@ export async function declarerVersement(
   }
 
   const lot = randomUUID();
+  const statut = saisieDirecte ? STATUT_VERSEMENT.valide : STATUT_VERSEMENT.enAttente;
   for (const m of mois) {
     await sql`
       insert into contributions
         (member_id, period, kind, amount, paid_on, method, reference, note,
-         batch_id, status, declared_by)
+         batch_id, status, declared_by, reviewed_by, reviewed_at)
       values
         (${membreCible}::uuid, ${m}::date, ${KIND_VERSEMENT.cotisation},
          ${Math.round(montantParMois)}, ${dateVersement}::date, ${mode}, ${reference}, ${note},
-         ${lot}::uuid, ${STATUT_VERSEMENT.enAttente}, ${auteur.id}::uuid)
+         ${lot}::uuid, ${statut}, ${auteur.id}::uuid,
+         ${saisieDirecte ? auteur.id : null}::uuid,
+         ${saisieDirecte ? new Date().toISOString() : null}::timestamptz)
     `;
   }
+
+  await enregistrerJustificatif(donnees, lot, membreCible, auteur.id);
 
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
@@ -81,12 +95,12 @@ export async function declarerVersement(
     { membreCible, mois, montantTotal: Math.round(montantParMois) * nbMois },
   );
   revalidatePath("/", "layout");
+  const objet = nbMois === 1 ? "Versement" : `${nbMois} mois declares en un seul versement`;
   return {
     ok: true,
-    message:
-      nbMois === 1
-        ? "Versement declare. Il attend la validation du tresorier."
-        : `${nbMois} mois declares en un seul versement. Ils attendent la validation du tresorier.`,
+    message: saisieDirecte
+      ? `${objet} enregistre et valide.`
+      : `${objet} — en attente de validation par le tresorier.`,
   };
 }
 
@@ -104,19 +118,11 @@ export async function validerVersement(
   if (!id) return { ok: false, erreur: "Versement introuvable." };
 
   const sql = db();
-  const rows = await sql`
-    select c.member_id, c.status, m.role as role_membre
-    from contributions c join members m on m.id = c.member_id
-    where c.id = ${id}::uuid
-  `;
+  const rows = await sql`select status from contributions where id = ${id}::uuid`;
   const v = rows[0];
   if (!v) return { ok: false, erreur: "Versement introuvable." };
-  if (v.status !== STATUT_VERSEMENT.enAttente) return { ok: false, erreur: "Ce versement est deja traite." };
-  if (String(v.member_id) === auteur.id) {
-    return { ok: false, erreur: "Vous ne pouvez pas valider votre propre versement." };
-  }
-  if (auteur.role === "president" && v.role_membre !== "tresorier") {
-    return { ok: false, erreur: "La validation des encaissements revient au tresorier." };
+  if (v.status !== STATUT_VERSEMENT.enAttente) {
+    return { ok: false, erreur: "Ce versement est deja traite." };
   }
 
   await sql`
@@ -143,11 +149,8 @@ export async function rejeterVersement(
   if (!motif) return { ok: false, erreur: "Indiquez le motif du rejet." };
 
   const sql = db();
-  const rows = await sql`select member_id from contributions where id = ${id}::uuid`;
+  const rows = await sql`select id from contributions where id = ${id}::uuid`;
   if (!rows[0]) return { ok: false, erreur: "Versement introuvable." };
-  if (String(rows[0].member_id) === auteur.id) {
-    return { ok: false, erreur: "Vous ne pouvez pas statuer sur votre propre versement." };
-  }
 
   await sql`
     update contributions
@@ -163,6 +166,44 @@ export async function rejeterVersement(
   );
   revalidatePath("/", "layout");
   return { ok: true, message: "Versement rejete. Le mois redevient disponible." };
+}
+
+/**
+ * Joint un justificatif a un versement deja declare : on oublie souvent la piece
+ * sur le moment, et il ne faut pas avoir a ressaisir le versement pour la fournir.
+ */
+export async function joindreJustificatif(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerMembre();
+  const lot = String(donnees.get("lot") ?? "");
+  if (!lot) return { ok: false, erreur: "Versement introuvable." };
+
+  const sql = db();
+  const rows = await sql`
+    select distinct member_id from contributions where batch_id = ${lot}::uuid
+  `;
+  if (rows.length === 0) return { ok: false, erreur: "Versement introuvable." };
+
+  const membreCible = String(rows[0].member_id);
+  if (membreCible !== auteur.id && !peut(auteur, "saisirVersementValide")) {
+    return { ok: false, erreur: "Vous ne pouvez joindre une piece qu'a vos propres versements." };
+  }
+
+  const resultat = await enregistrerJustificatif(donnees, lot, membreCible, auteur.id);
+  if (!resultat.joint) {
+    return { ok: false, erreur: `Justificatif non enregistre : ${resultat.motif ?? "aucun fichier"}.` };
+  }
+
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "justificatif_joint",
+    { entite: "payment_proofs", id: lot },
+    { membreCible },
+  );
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Justificatif joint." };
 }
 
 /** R3 : le membre declare son retard au groupe ; la trace est conservee ici. */

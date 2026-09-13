@@ -1,6 +1,12 @@
 import { REGLES, decalerMois, estExigible } from "./settings";
 
-export type StatutMois = "paye" | "en_attente" | "retard" | "a_venir" | "hors_periode";
+export type StatutMois =
+  | "paye"
+  | "paye_en_retard"
+  | "en_attente"
+  | "retard"
+  | "a_venir"
+  | "hors_periode";
 
 export type CelluleMois = {
   mois: string;
@@ -9,10 +15,19 @@ export type CelluleMois = {
   dateVersement: string | null;
 };
 
+/** Vrai si le versement est intervenu apres l'echeance du mois qu'il couvre. */
+export function verseEnRetard(mois: string, dateVersement: string | null): boolean {
+  if (!dateVersement) return false;
+  const echeance = `${mois.slice(0, 8)}${String(REGLES.jourEcheance).padStart(2, "0")}`;
+  return dateVersement.slice(0, 10) > echeance;
+}
+
 export type SituationMembre = {
   membreId: string;
   cellules: CelluleMois[];
   moisEnRetard: string[];
+  /** Mois regles, mais apres le 10 : la penalite reste due (art. 9). */
+  moisRegularisesEnRetard: string[];
   nbMoisRetard: number;
   /** Jours ecoules depuis l'echeance du plus ancien mois impaye. */
   joursDeRetard: number;
@@ -31,6 +46,12 @@ export type PenaliteCalculee = {
   taux: number;
   montant: number;
   doublee: boolean;
+  /**
+   * Penalite d'un mois finalement regle, mais apres l'echeance. L'art. 9 la dit
+   * "definitivement acquise au benefice du club" : elle reste due, et la
+   * majoration R4 ne s'y applique pas puisque le retard a cesse.
+   */
+  figee: boolean;
 };
 
 type VersementConnu = {
@@ -64,6 +85,8 @@ export function situationMembre(
   const cellules: CelluleMois[] = [];
   const moisEnRetard: string[] = [];
 
+  const moisRegularisesEnRetard: string[] = [];
+
   for (const mois of moisDuClub) {
     if (moisAdhesion && mois < moisAdhesion) {
       cellules.push({ mois, statut: "hors_periode", montant: 0, dateVersement: null });
@@ -71,9 +94,12 @@ export function situationMembre(
     }
     const v = parMois.get(mois);
     if (v) {
+      const tardif = verseEnRetard(mois, v.date_versement);
+      if (tardif) moisRegularisesEnRetard.push(mois);
       cellules.push({
         mois,
-        statut: v.statut === "valide" ? "paye" : "en_attente",
+        statut:
+          v.statut !== "valide" ? "en_attente" : tardif ? "paye_en_retard" : "paye",
         montant: v.montant,
         dateVersement: v.date_versement,
       });
@@ -89,12 +115,13 @@ export function situationMembre(
 
   const nbMoisRetard = moisEnRetard.length;
   const joursDeRetard = nbMoisRetard === 0 ? 0 : joursDepuisEcheance(moisEnRetard[0], aujourdhui);
-  const penalites = calculerPenalites(moisEnRetard);
+  const penalites = calculerPenalites(moisEnRetard, moisRegularisesEnRetard);
 
   return {
     membreId,
     cellules,
     moisEnRetard,
+    moisRegularisesEnRetard,
     nbMoisRetard,
     joursDeRetard,
     voteSuspendu: joursDeRetard >= REGLES.suspensionVoteApresJours,
@@ -115,26 +142,33 @@ function joursDepuisEcheance(mois: string, aujourdhui: Date): number {
 }
 
 /**
- * Art. 9 : 10 % du versement du par mois de retard.
- * R4 : des 3 mois de retard, les penalites des 3 mois les plus recents doublent
- *      (le cumul de ces 3 mois passe de 30 % a 60 % du versement du).
+ * Art. 9 : 10 % du versement du des lors que l'echeance du 10 est depassee.
+ *
+ * La penalite nait du depassement, pas de l'absence de paiement : un mois regle
+ * en retard la conserve, "definitivement acquise au benefice du club". Regulariser
+ * eteint la cotisation, jamais la penalite.
+ *
+ * R4 : des 3 mois encore impayes, les penalites des 3 mois les plus recents
+ * doublent (leur cumul passe de 30 % a 60 % du versement du). La majoration ne
+ * frappe que le retard en cours : un mois deja regle ne peut plus s'aggraver.
  */
-export function calculerPenalites(moisEnRetard: string[]): PenaliteCalculee[] {
-  if (moisEnRetard.length === 0) return [];
-  const tries = [...moisEnRetard].sort();
-  const doublement = tries.length >= REGLES.doublementApresMois;
-  const seuilDoublement = tries.slice(-REGLES.moisPenalitesDoublees);
+export function calculerPenalites(
+  moisEnRetard: string[],
+  moisRegularisesEnRetard: string[] = [],
+): PenaliteCalculee[] {
+  const impayes = [...moisEnRetard].sort();
+  const doublement = impayes.length >= REGLES.doublementApresMois;
+  const aDoubler = impayes.slice(-REGLES.moisPenalitesDoublees);
 
-  return tries.map((mois) => {
-    const doublee = doublement && seuilDoublement.includes(mois);
+  const sur = (mois: string, doublee: boolean, figee: boolean): PenaliteCalculee => {
     const taux = doublee ? REGLES.tauxPenalite * 2 : REGLES.tauxPenalite;
-    return {
-      mois,
-      taux,
-      montant: Math.round(REGLES.cotisationMensuelle * taux),
-      doublee,
-    };
-  });
+    return { mois, taux, montant: Math.round(REGLES.cotisationMensuelle * taux), doublee, figee };
+  };
+
+  return [
+    ...impayes.map((mois) => sur(mois, doublement && aDoubler.includes(mois), false)),
+    ...[...moisRegularisesEnRetard].sort().map((mois) => sur(mois, false, true)),
+  ].sort((a, b) => a.mois.localeCompare(b.mois));
 }
 
 /**

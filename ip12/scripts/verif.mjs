@@ -112,6 +112,62 @@ assert.equal(nouveau.cellules[0].statut, "hors_periode");
 assert.equal(nouveau.cellules[1].statut, "hors_periode");
 assert.equal(nouveau.nbMoisRetard, 2);
 
+/* ------------------------------------ art. 9 : la penalite survit au rattrapage */
+
+// Un mois regle apres le 10 conserve sa penalite : elle est "definitivement acquise".
+const rattrapeTard = situationMembre(
+  "m5",
+  ["2026-06-01"],
+  [{ mois_couvert: "2026-06-01", montant: 5000, statut: "valide", date_versement: "2026-06-28" }],
+  [],
+  aout,
+);
+assert.equal(rattrapeTard.cellules[0].statut, "paye_en_retard");
+assert.equal(rattrapeTard.nbMoisRetard, 0, "le mois est regle : plus d'arriere");
+assert.equal(rattrapeTard.totalPenalites, 500, "mais la penalite reste due (art. 9)");
+assert.equal(rattrapeTard.penalites[0].figee, true);
+assert.equal(rattrapeTard.penalites[0].doublee, false, "un mois regle ne peut plus s'aggraver");
+
+// Paye le 10 meme : dans les delais, aucune penalite.
+const paiementLimite = situationMembre(
+  "m6",
+  ["2026-06-01"],
+  [{ mois_couvert: "2026-06-01", montant: 5000, statut: "valide", date_versement: "2026-06-10" }],
+  [],
+  aout,
+);
+assert.equal(paiementLimite.cellules[0].statut, "paye");
+assert.equal(paiementLimite.totalPenalites, 0);
+
+// Une avance versee avant le mois couvert n'est evidemment pas un retard.
+const avance = situationMembre(
+  "m7",
+  ["2026-08-01"],
+  [{ mois_couvert: "2026-08-01", montant: 5000, statut: "valide", date_versement: "2026-06-05" }],
+  [],
+  aout,
+);
+assert.equal(avance.cellules[0].statut, "paye");
+assert.equal(avance.totalPenalites, 0);
+
+// Melange : 2 mois regles en retard (figees, 10 %) et 3 impayes (doubles par R4).
+const melange = situationMembre(
+  "m8",
+  ["2026-02-01", "2026-03-01", "2026-04-01", "2026-05-01", "2026-06-01"],
+  [
+    { mois_couvert: "2026-02-01", montant: 5000, statut: "valide", date_versement: "2026-03-20" },
+    { mois_couvert: "2026-03-01", montant: 5000, statut: "valide", date_versement: "2026-04-02" },
+  ],
+  [],
+  aout,
+);
+assert.equal(melange.nbMoisRetard, 3);
+assert.equal(melange.moisRegularisesEnRetard.length, 2);
+assert.equal(melange.penalites.filter((p) => p.figee).length, 2);
+assert.equal(melange.penalites.filter((p) => p.doublee).length, 3);
+// 2 figees a 500 + 3 impayes doubles a 1000
+assert.equal(melange.totalPenalites, 2 * 500 + 3 * 1000);
+
 /* --------------------------------------------------------------------- R5 */
 
 assert.equal(issueR5(2, false, false).applicable, false);
@@ -126,4 +182,4 @@ assert.equal(moisARelancer(new Date("2026-09-10T08:00:00Z")), "2026-08-01");
 // Le 11, le mois de septembre est devenu exigible.
 assert.equal(moisARelancer(new Date("2026-09-11T08:00:00Z")), "2026-09-01");
 
-console.log("OK - 24 verifications : performance, penalites art. 9 et R4, retards, R3, R5, relance");
+console.log("OK - 29 verifications : performance, penalites art. 9 et R4, retards, R3, R5, relance");

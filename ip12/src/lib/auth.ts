@@ -1,7 +1,9 @@
 import { cookies } from "next/headers";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { db } from "./db";
+import { ROLES } from "./settings";
 import type { Role } from "./settings";
+import { peut, titulaires, type Droit } from "./droits";
 
 const COOKIE = "ip12_session";
 const DUREE_SESSION_JOURS = 30;
@@ -202,6 +204,18 @@ export async function exigerRole(...roles: Role[]): Promise<Membre> {
   const m = await exigerMembre();
   if (!roles.includes(m.role)) {
     throw new AccesRefuse("Cette action est reservee au bureau du club.");
+  }
+  return m;
+}
+
+/**
+ * Exige un droit plutot qu'un role : le code metier decrit ce qu'il fait, et
+ * src/lib/droits.ts decide qui le peut.
+ */
+export async function exigerDroit(droit: Droit): Promise<Membre> {
+  const m = await exigerMembre();
+  if (!peut(m, droit)) {
+    throw new AccesRefuse(`Cette action est reservee ${titulaires(droit, ROLES)}.`);
   }
   return m;
 }

@@ -1,8 +1,11 @@
 import { exigerMembre } from "@/lib/auth";
 import { listerVersements, situationsClub, synthese } from "@/lib/queries";
 import { changerMotDePasse } from "@/app/actions/auth";
+import { joindreJustificatif } from "@/app/actions/versements";
+import { ChampJustificatif } from "@/components/justificatif";
+import { justificatifsParLot } from "@/lib/justificatifs";
 import { ROLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
-import { Champ, FormulaireAction } from "@/components/formulaires";
+import { Champ, ChampCache, Depliant, FormulaireAction } from "@/components/formulaires";
 import { libelleMode } from "@/lib/valeurs";
 import { Alerte, Badge, Carte, Statistique, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
@@ -12,12 +15,13 @@ export const dynamic = "force-dynamic";
 export default async function PageMonCompte() {
   const membre = await exigerMembre();
 
-  let mesVersements, situations, s;
+  let mesVersements, situations, s, pieces;
   try {
-    [mesVersements, situations, s] = await Promise.all([
+    [mesVersements, situations, s, pieces] = await Promise.all([
       listerVersements({ membreId: membre.id }),
       situationsClub(),
       synthese(),
+      justificatifsParLot(),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -26,6 +30,13 @@ export default async function PageMonCompte() {
 
   const maSituation = situations.find((x) => x.membreId === membre.id);
   const maPart = s.parts.find((p) => p.membreId === membre.id);
+
+  // Un lot peut couvrir plusieurs mois : on ne propose la piece qu'une fois par lot.
+  const lotsSansPiece = [...new Map(
+    mesVersements
+      .filter((v) => v.statut !== "rejete" && (pieces.get(v.lot) ?? []).length === 0)
+      .map((v) => [v.lot, v]),
+  ).values()];
 
   return (
     <>
@@ -112,14 +123,45 @@ export default async function PageMonCompte() {
                     {v.motif_rejet ? ` · rejet : ${v.motif_rejet}` : ""}
                   </p>
                 </div>
-                <Badge
-                  ton={v.statut === "valide" ? "vert" : v.statut === "en_attente" ? "ambre" : "rouge"}
-                >
-                  {v.statut === "valide" ? "Valide" : v.statut === "en_attente" ? "En attente" : "Rejete"}
-                </Badge>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge
+                    ton={v.statut === "valide" ? "vert" : v.statut === "en_attente" ? "ambre" : "rouge"}
+                  >
+                    {v.statut === "valide" ? "Valide" : v.statut === "en_attente" ? "En attente" : "Rejete"}
+                  </Badge>
+                  {(pieces.get(v.lot) ?? []).map((j) => (
+                    <a
+                      key={j.id}
+                      href={`/api/justificatif/${j.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs underline"
+                      style={{ color: "var(--color-vert-600)" }}
+                    >
+                      {j.mime === "application/pdf" ? "Bordereau" : "Recu"}
+                    </a>
+                  ))}
+                </div>
               </li>
             ))}
           </ul>
+        )}
+        {lotsSansPiece.length > 0 && (
+          <div className="mt-4">
+            <Depliant titre={`Joindre un justificatif (${lotsSansPiece.length} versement(s) sans piece)`}>
+              {lotsSansPiece.map((lot) => (
+                <div key={lot.lot} className="mt-3 border-t pt-3" style={{ borderColor: "var(--bordure)" }}>
+                  <p className="text-xs font-medium">
+                    {moisLong(lot.mois)} &middot; {fcfa(lot.montant)}
+                  </p>
+                  <FormulaireAction action={joindreJustificatif} libelle="Joindre" compact>
+                    <ChampCache nom="lot" valeur={lot.lot} />
+                    <ChampJustificatif />
+                  </FormulaireAction>
+                </div>
+              ))}
+            </Depliant>
+          </div>
         )}
       </Carte>
     </>

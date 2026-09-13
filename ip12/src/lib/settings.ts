@@ -40,6 +40,18 @@ export const REGLES = {
   periodiciteValorisationMois: 2,
 } as const;
 
+/**
+ * Lit une variable d'environnement en traitant la chaine vide comme une absence.
+ *
+ * Une variable declaree mais laissee vide dans l'interface d'hebergement est un cas
+ * courant : `??` la laisserait passer telle quelle, ce qui donnerait un expediteur
+ * d'e-mail vide ou un membre cree sans nom.
+ */
+export function variable(nom: string, repli: string): string {
+  const brut = process.env[nom];
+  return brut && brut.trim() !== "" ? brut.trim() : repli;
+}
+
 export type Role = "president" | "vice_president" | "tresorier" | "secretaire" | "membre";
 
 export const ROLES: Record<Role, string> = {

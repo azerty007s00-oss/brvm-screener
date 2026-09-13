@@ -7,6 +7,9 @@ import {
   rejeterVersement,
   validerVersement,
 } from "@/app/actions/versements";
+import { ChampJustificatif } from "@/components/justificatif";
+import { justificatifsParLot } from "@/lib/justificatifs";
+import { peut } from "@/lib/droits";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { Badge, Carte, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
@@ -17,6 +20,11 @@ export const dynamic = "force-dynamic";
 
 const PASTILLE: Record<StatutMois, { ton: string; fond: string; texte: string }> = {
   paye: { ton: "Paye", fond: "var(--color-vert-100)", texte: "var(--color-vert-600)" },
+  paye_en_retard: {
+    ton: "Paye en retard",
+    fond: "var(--color-or-200)",
+    texte: "var(--color-or-600)",
+  },
   en_attente: { ton: "En attente", fond: "var(--color-ambre-100)", texte: "var(--color-ambre-600)" },
   retard: { ton: "Retard", fond: "var(--color-rouge-100)", texte: "var(--color-rouge-600)" },
   a_venir: { ton: "A venir", fond: "var(--color-brun-100)", texte: "var(--color-brun-600)" },
@@ -26,19 +34,21 @@ const PASTILLE: Record<StatutMois, { ton: string; fond: string; texte: string }>
 export default async function PageVersements() {
   const membre = await exigerMembre();
 
-  let situations, enAttente, membres;
+  let situations, enAttente, membres, pieces;
   try {
-    [situations, enAttente, membres] = await Promise.all([
+    [situations, enAttente, membres, pieces] = await Promise.all([
       situationsClub(),
       versementsEnAttente(),
       listerMembres(),
+      justificatifsParLot(),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
     throw e;
   }
 
-  const peutValider = membre.role === "tresorier" || membre.role === "president";
+  const peutValider = peut(membre, "validerVersement");
+  const saisieDirecte = peut(membre, "saisirVersementValide");
   // Les 14 derniers mois : au-dela, la grille devient illisible sur telephone.
   const moisAffiches = (situations[0]?.cellules ?? []).slice(-14);
   const maSituation = situations.find((s) => s.membreId === membre.id);
@@ -46,13 +56,14 @@ export default async function PageVersements() {
 
   return (
     <>
-      <Carte titre="Declarer un versement">
+      <Carte titre={saisieDirecte ? "Enregistrer un versement" : "Declarer un versement"}>
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          Votre declaration est visible de tous immediatement, et reste en attente jusqu&apos;a la
-          validation du tresorier qui tient la caisse.
+          {saisieDirecte
+            ? "Votre saisie vaut validation : vous constatez un encaissement, pour vous ou pour un autre membre."
+            : "Votre declaration est visible de tous immediatement, et reste en attente jusqu'a la validation du tresorier qui tient la caisse."}
         </p>
         <FormulaireAction action={declarerVersement} libelle="Declarer">
-          {membre.role === "president" && (
+          {saisieDirecte && (
             <Selection
               nom="membreId"
               libelle="Pour le compte de"
@@ -81,6 +92,7 @@ export default async function PageVersements() {
           <Selection nom="mode" libelle="Mode" options={MODES_AFFICHES} />
           <Champ nom="reference" libelle="Reference du paiement (facultatif)" requis={false} />
           <Champ nom="note" libelle="Note (facultatif)" requis={false} />
+          <ChampJustificatif />
         </FormulaireAction>
       </Carte>
 
@@ -109,6 +121,28 @@ export default async function PageVersements() {
                           {v.note}
                         </p>
                       )}
+                      <div className="mt-1">
+                        {(pieces.get(v.lot) ?? []).length > 0 ? (
+                          <span className="flex flex-wrap gap-2">
+                            {(pieces.get(v.lot) ?? []).map((j) => (
+                              <a
+                                key={j.id}
+                                href={`/api/justificatif/${j.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center rounded px-2 py-0.5 text-xs underline"
+                                style={{ background: "var(--color-vert-100)", color: "var(--color-vert-600)" }}
+                              >
+                                {j.mime === "application/pdf" ? "Bordereau PDF" : "Voir le recu"}
+                              </a>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="text-xs" style={{ color: "var(--color-ambre-600)" }}>
+                            Aucun justificatif joint — a verifier avant de valider.
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="flex flex-wrap items-start gap-2">
                       <FormulaireAction action={validerVersement} libelle="Valider" compact>
@@ -187,7 +221,7 @@ export default async function PageVersements() {
           </table>
         </div>
         <div className="mt-3 flex flex-wrap gap-3 text-[11px]" style={{ color: "var(--discret)" }}>
-          {(["paye", "en_attente", "retard", "a_venir"] as StatutMois[]).map((k) => (
+          {(["paye", "paye_en_retard", "en_attente", "retard", "a_venir"] as StatutMois[]).map((k) => (
             <span key={k} className="inline-flex items-center gap-1.5">
               <span className="inline-block h-3 w-3 rounded" style={{ background: PASTILLE[k].fond }} />
               {PASTILLE[k].ton}

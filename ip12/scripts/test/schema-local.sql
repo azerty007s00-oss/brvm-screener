@@ -50,6 +50,7 @@ create table securities_transfers (
   id uuid primary key default gen_random_uuid(),
   transfer_date date not null,
   amount bigint not null check (amount > 0),
+  fees bigint not null default 0 check (fees >= 0 and fees <= amount),
   direction text not null check (direction in ('vers_titres','retrait')),
   note text,
   created_by uuid not null references members(id),
@@ -118,4 +119,48 @@ create table reminder_log (
   ok boolean not null default true,
   error text,
   sent_at timestamptz not null default now()
+);
+
+create table payment_proofs (
+  id uuid primary key default gen_random_uuid(),
+  batch_id uuid not null,
+  member_id uuid not null references members(id) on delete cascade,
+  filename text not null,
+  mime text not null,
+  byte_size integer not null check (byte_size > 0),
+  data bytea,
+  uploaded_by uuid not null references members(id),
+  created_at timestamptz not null default now(),
+  blob_url text
+);
+
+create table meetings (
+  id uuid primary key default gen_random_uuid(),
+  meeting_date date not null,
+  title text,
+  note text,
+  created_by uuid not null references members(id),
+  created_at timestamptz not null default now()
+);
+
+create table attendances (
+  meeting_id uuid not null references meetings(id) on delete cascade,
+  member_id uuid not null references members(id) on delete cascade,
+  status text not null default 'present' check (status in ('present','absent','excuse')),
+  note text
+);
+
+create table cash_movements (
+  id uuid primary key default gen_random_uuid(),
+  movement_date date not null,
+  direction text not null check (direction in ('depense','recette')),
+  category text not null default 'autre',
+  amount bigint not null check (amount > 0),
+  note text,
+  status text not null default 'en_attente' check (status in ('en_attente','valide','rejete')),
+  created_by uuid not null references members(id),
+  reviewed_by uuid references members(id),
+  reviewed_at timestamptz,
+  review_note text,
+  created_at timestamptz not null default now()
 );

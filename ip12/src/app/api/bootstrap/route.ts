@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { hacherMotDePasse, motDePasseProvisoire } from "@/lib/auth";
-import { CLUB } from "@/lib/settings";
+import { CLUB, variable } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +29,7 @@ export async function GET(requete: Request) {
     return NextResponse.json({ erreur: "Jeton invalide." }, { status: 401 });
   }
 
-  const email = (process.env.BOOTSTRAP_EMAIL ?? "").trim().toLowerCase();
+  const email = variable("BOOTSTRAP_EMAIL", "").toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return NextResponse.json({ erreur: "BOOTSTRAP_EMAIL absente ou invalide." }, { status: 400 });
   }
@@ -96,7 +96,7 @@ export async function GET(requete: Request) {
 
   await sql`
     insert into members (full_name, email, role, password_hash, must_change_password, joined_on)
-    values (${process.env.BOOTSTRAP_NOM ?? "President"}, ${email}, 'president',
+    values (${variable("BOOTSTRAP_NOM", "President")}, ${email}, 'president',
             ${hacherMotDePasse(provisoire)}, true, ${CLUB.dateCreation}::date)
   `;
   return NextResponse.json({

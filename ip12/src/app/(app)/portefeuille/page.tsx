@@ -1,4 +1,5 @@
 import { exigerMembre } from "@/lib/auth";
+import { peut } from "@/lib/droits";
 import { listerValorisations, synthese } from "@/lib/queries";
 import { enregistrerValorisation, supprimerValorisation } from "@/app/actions/titres";
 import { pourcent } from "@/lib/perf";
@@ -81,11 +82,12 @@ export default async function PagePortefeuille() {
         </p>
       </Carte>
 
-      {membre.role === "president" && (
+      {peut(membre, "gererCompteTitres") && (
         <Carte titre="Saisir un releve">
           <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            A relever tous les {REGLES.periodiciteValorisationMois} mois sur le compte-titres. Une
-            seconde saisie a la meme date remplace la precedente.
+            A relever tous les {REGLES.periodiciteValorisationMois} mois sur le compte-titres, par
+            le president ou le vice-president. Une seconde saisie a la meme date remplace la
+            precedente.
           </p>
           <Depliant titre="Nouveau releve">
             <FormulaireAction action={enregistrerValorisation} libelle="Enregistrer le releve">
@@ -125,7 +127,7 @@ export default async function PagePortefeuille() {
                     {fcfa(v.liquidites)}
                   </p>
                 </div>
-                {membre.role === "president" && (
+                {peut(membre, "gererCompteTitres") && (
                   <FormulaireAction
                     action={supprimerValorisation}
                     libelle="Supprimer"

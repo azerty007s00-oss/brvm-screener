@@ -5,13 +5,18 @@ import { baseConfiguree } from "@/lib/db";
 import { seDeconnecter } from "@/app/actions/auth";
 import { CLUB, ROLES } from "@/lib/settings";
 import { Alerte } from "@/components/ui";
+import { versionDeployee } from "@/lib/version";
 
 const LIENS = [
   { href: "/", libelle: "Tableau de bord" },
   { href: "/versements", libelle: "Versements" },
+  { href: "/caisse", libelle: "Caisse" },
   { href: "/compte-titres", libelle: "Compte-titres" },
   { href: "/portefeuille", libelle: "Portefeuille" },
+  { href: "/penalites", libelle: "Penalites" },
+  { href: "/reunions", libelle: "Reunions" },
   { href: "/membres", libelle: "Membres" },
+  { href: "/administration", libelle: "Administration" },
   { href: "/mon-compte", libelle: "Mon compte" },
 ];
 
@@ -19,6 +24,8 @@ export default async function CoquilleApplication({ children }: { children: Reac
   if (!baseConfiguree()) redirect("/login");
   const membre = await membreCourant();
   if (!membre) redirect("/login");
+
+  const version = versionDeployee();
 
   return (
     <div className="min-h-screen">
@@ -86,6 +93,16 @@ export default async function CoquilleApplication({ children }: { children: Reac
 
       <footer className="mx-auto max-w-5xl px-4 pb-8 pt-2 text-center text-[11px]" style={{ color: "var(--discret)" }}>
         {CLUB.nom} &middot; {CLUB.ville} &middot; compte-titres {CLUB.sgi}
+        {version.revision && (
+          <>
+            <br />
+            <span title={version.titre ?? undefined}>
+              version {version.revision}
+              {version.depot ? ` \u00b7 ${version.depot}` : ""}
+              {version.branche ? ` \u00b7 ${version.branche}` : ""}
+            </span>
+          </>
+        )}
       </footer>
     </div>
   );

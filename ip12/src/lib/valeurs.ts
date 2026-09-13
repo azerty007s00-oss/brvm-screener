@@ -64,3 +64,43 @@ export const MODES_AFFICHES: { valeur: string; libelle: string }[] = [
 export function libelleMode(mode: string): string {
   return MODES_AFFICHES.find((m) => m.valeur === mode)?.libelle ?? mode.replace(/_/g, " ");
 }
+
+/** cash_movements.direction : sortie ou entree d'argent en caisse. */
+export const SENS_CAISSE = {
+  depense: "depense",
+  recette: "recette",
+} as const;
+
+export const STATUT_CAISSE = {
+  enAttente: "en_attente",
+  valide: "valide",
+  rejete: "rejete",
+} as const;
+
+/**
+ * cash_movements.category : texte libre en base, propose ici sous forme de liste
+ * pour que le journal reste exploitable plutot que de se remplir de variantes.
+ */
+export const CATEGORIES_DEPENSE = [
+  { valeur: "transport", libelle: "Transport" },
+  { valeur: "impressions", libelle: "Impressions et fournitures" },
+  { valeur: "frais_bancaires", libelle: "Frais bancaires" },
+  { valeur: "frais_sgi", libelle: "Frais SGI" },
+  { valeur: "regularisation", libelle: "Regularisation de caisse" },
+  { valeur: "autre", libelle: "Autre depense" },
+];
+
+export const CATEGORIES_RECETTE = [
+  { valeur: "versements_acquis", libelle: "Versements acquis au club (art. 18)" },
+  { valeur: "penalites_anterieures", libelle: "Penalites anterieures, detail non disponible" },
+  { valeur: "interets", libelle: "Interets et produits" },
+  { valeur: "regularisation", libelle: "Regularisation de caisse" },
+  { valeur: "autre", libelle: "Autre recette" },
+];
+
+export function libelleCategorie(categorie: string): string {
+  return (
+    [...CATEGORIES_DEPENSE, ...CATEGORIES_RECETTE].find((c) => c.valeur === categorie)?.libelle ??
+    categorie.replace(/_/g, " ")
+  );
+}

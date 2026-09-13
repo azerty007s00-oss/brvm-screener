@@ -3,7 +3,7 @@ import { db } from "./db";
 import { CLUB, REGLES, debutMois, moisDuClub } from "./settings";
 import type { Role } from "./settings";
 import { situationMembre, type SituationMembre } from "./penalites";
-import { STATUT_VERSEMENT, SENS_TRANSFERT } from "./valeurs";
+import { STATUT_PENALITE, STATUT_VERSEMENT, SENS_TRANSFERT } from "./valeurs";
 import { dietzModifie, repartirParts, tri, type Flux, type PartMembre } from "./perf";
 
 /** bigint et numeric reviennent en chaine avec le pilote Postgres : on normalise. */
@@ -42,6 +42,8 @@ export type Apport = {
   id: string;
   date_transfert: string;
   montant: number;
+  /** Part retenue par la SGI a l'arrivee : le net investi vaut montant - frais. */
+  frais: number;
   sens: string;
   note: string | null;
   saisi_par_nom: string | null;
@@ -159,15 +161,29 @@ export async function versementsEnAttente(): Promise<Versement[]> {
 
 export async function listerApports(): Promise<Apport[]> {
   const sql = db();
-  const rows = await sql`
-    select t.id, to_char(t.transfer_date, 'YYYY-MM-DD') as date_transfert,
-           t.amount as montant, t.direction as sens, t.note,
-           c.full_name as saisi_par_nom
+  const projection = (avecFrais: boolean) => `
+    t.id, to_char(t.transfer_date, 'YYYY-MM-DD') as date_transfert,
+    t.amount as montant, ${avecFrais ? "t.fees" : "0"} as frais,
+    t.direction as sens, t.note, c.full_name as saisi_par_nom
+  `;
+  /*
+   * La colonne `fees` vient d'une migration : tant qu'elle n'est pas passee, le
+   * site continue de fonctionner en considerant les frais comme nuls, plutot que
+   * de tomber sur une page d'erreur.
+   */
+  const lire = (avecFrais: boolean) => sql`
+    select ${sql.unsafe(projection(avecFrais))}
     from securities_transfers t
     left join members c on c.id = t.created_by
     order by t.transfer_date desc, t.created_at desc
   `;
-  return (rows as Apport[]).map((r) => ({ ...r, montant: n(r.montant) }));
+  let rows;
+  try {
+    rows = await lire(true);
+  } catch {
+    rows = await lire(false);
+  }
+  return (rows as Apport[]).map((r) => ({ ...r, montant: n(r.montant), frais: n(r.frais) }));
 }
 
 export async function listerValorisations(): Promise<Valorisation[]> {
@@ -211,6 +227,196 @@ export async function declarationsRetard(): Promise<{ membre_id: string; mois: s
     return rows as { membre_id: string; mois: string }[];
   } catch {
     return [];
+  }
+}
+
+/* ----------------------------------------------------------------- penalites */
+
+export type Penalite = {
+  id: string;
+  membre_id: string;
+  membre_nom: string;
+  nature: string;
+  quantite: number;
+  montant_unitaire: number;
+  montant: number;
+  motif: string | null;
+  date_constat: string;
+  statut: string;
+  date_reglement: string | null;
+  note_reglement: string | null;
+  source_key: string | null;
+  auto: boolean;
+  constate_par: string | null;
+  resolu_par: string | null;
+};
+
+export async function listerPenalites(filtre?: {
+  membreId?: string;
+  statut?: string;
+}): Promise<Penalite[]> {
+  const sql = db();
+  const membreId = filtre?.membreId ?? null;
+  const statut = filtre?.statut ?? null;
+  const rows = await sql`
+    select p.id, p.member_id as membre_id, m.full_name as membre_nom,
+           p.kind as nature, p.quantity as quantite, p.unit_amount as montant_unitaire,
+           p.reason as motif,
+           to_char(p.incurred_on, 'YYYY-MM-DD') as date_constat,
+           p.status as statut,
+           to_char(p.settled_on, 'YYYY-MM-DD') as date_reglement,
+           p.settlement_note as note_reglement,
+           p.source_key, p.auto,
+           c.full_name as constate_par, r.full_name as resolu_par
+    from penalties p
+    join members m on m.id = p.member_id
+    left join members c on c.id = p.created_by
+    left join members r on r.id = p.resolved_by
+    where (${membreId}::uuid is null or p.member_id = ${membreId}::uuid)
+      and (${statut}::text is null or p.status = ${statut}::text)
+    order by p.incurred_on desc, m.full_name
+  `;
+  return rows.map((r) => {
+    const quantite = n(r.quantite);
+    const unitaire = n(r.montant_unitaire);
+    return {
+      ...(r as unknown as Penalite),
+      quantite,
+      montant_unitaire: unitaire,
+      montant: quantite * unitaire,
+    };
+  });
+}
+
+/**
+ * Borne de reprise par membre : jusqu'a quel mois le tresorier a deja compte.
+ *
+ * La cle de source distingue la reprise du constat automatique, et la date portee
+ * par la ligne de reprise dit ou s'arrete son decompte. Au-dela, le site prend le
+ * relais ; en deca, il se tait, sous peine de compter deux fois la meme realite.
+ */
+export async function bornesReprisePenalites(): Promise<Map<string, string>> {
+  const bornes = new Map<string, string>();
+  try {
+    const sql = db();
+    const rows = await sql`
+      select member_id, to_char(incurred_on, 'YYYY-MM-DD') as borne
+      from penalties where source_key like 'reprise_penalites:%'
+    `;
+    for (const r of rows) bornes.set(String(r.member_id), String(r.borne));
+  } catch {
+    // Table absente : aucune borne, le constat couvre tout.
+  }
+  return bornes;
+}
+
+/** Totaux par membre, sur les seules penalites encore dues. */
+export async function penalitesDuesParMembre(): Promise<Map<string, number>> {
+  const sql = db();
+  const rows = await sql`
+    select member_id, sum(quantity * unit_amount)::bigint as total
+    from penalties where status = ${STATUT_PENALITE.due}
+    group by member_id
+  `;
+  return new Map(rows.map((r) => [String(r.member_id), n(r.total)]));
+}
+
+/* ------------------------------------------------------------------ reunions */
+
+export type Reunion = {
+  id: string;
+  date_reunion: string;
+  titre: string | null;
+  note: string | null;
+  cree_par: string | null;
+  presents: number;
+  absents: number;
+  excuses: number;
+};
+
+export type Presence = {
+  membre_id: string;
+  membre_nom: string;
+  statut: string | null;
+  note: string | null;
+};
+
+export async function listerReunions(): Promise<Reunion[]> {
+  const sql = db();
+  const rows = await sql`
+    select r.id, to_char(r.meeting_date, 'YYYY-MM-DD') as date_reunion,
+           r.title as titre, r.note, c.full_name as cree_par,
+           count(*) filter (where a.status = 'present')::int as presents,
+           count(*) filter (where a.status = 'absent')::int  as absents,
+           count(*) filter (where a.status = 'excuse')::int  as excuses
+    from meetings r
+    left join members c on c.id = r.created_by
+    left join attendances a on a.meeting_id = r.id
+    group by r.id, r.meeting_date, r.title, r.note, c.full_name
+    order by r.meeting_date desc
+  `;
+  return rows as Reunion[];
+}
+
+/**
+ * Toutes les presences pointees, indexees par reunion puis par membre.
+ *
+ * Une seule requete pour l'ensemble : la page affiche la feuille de chaque reunion,
+ * et les interroger une par une multiplierait les allers-retours sans raison.
+ */
+export async function presencesParReunion(): Promise<Map<string, Map<string, string>>> {
+  const sql = db();
+  const rows = await sql`select meeting_id, member_id, status from attendances`;
+  const index = new Map<string, Map<string, string>>();
+  for (const r of rows) {
+    const reunion = String(r.meeting_id);
+    if (!index.has(reunion)) index.set(reunion, new Map());
+    index.get(reunion)!.set(String(r.member_id), String(r.status));
+  }
+  return index;
+}
+
+/* -------------------------------------------------------------------- caisse */
+
+export type MouvementCaisse = {
+  id: string;
+  date_mouvement: string;
+  sens: string;
+  categorie: string;
+  montant: number;
+  note: string | null;
+  statut: string;
+  saisi_par: string | null;
+  valide_par: string | null;
+  motif_refus: string | null;
+};
+
+export async function listerMouvementsCaisse(): Promise<MouvementCaisse[]> {
+  const sql = db();
+  const rows = await sql`
+    select c.id, to_char(c.movement_date, 'YYYY-MM-DD') as date_mouvement,
+           c.direction as sens, c.category as categorie, c.amount as montant,
+           c.note, c.status as statut, c.review_note as motif_refus,
+           s.full_name as saisi_par, v.full_name as valide_par
+    from cash_movements c
+    left join members s on s.id = c.created_by
+    left join members v on v.id = c.reviewed_by
+    order by c.movement_date desc, c.created_at desc
+  `;
+  return (rows as MouvementCaisse[]).map((r) => ({ ...r, montant: n(r.montant) }));
+}
+
+/** Penalites effectivement encaissees : elles grossissent la caisse. */
+export async function penalitesEncaissees(): Promise<number> {
+  try {
+    const sql = db();
+    const rows = await sql`
+      select coalesce(sum(quantity * unit_amount), 0)::bigint as total
+      from penalties where status = ${STATUT_PENALITE.payee}
+    `;
+    return n(rows[0]?.total);
+  } catch {
+    return 0;
   }
 }
 
@@ -276,21 +482,36 @@ export type Synthese = {
   totalVerse: number;
   totalEnCaisse: number;
   totalApports: number;
+  /** Penalites encaissees, recettes et depenses valides du journal de caisse. */
+  penalitesEncaissees: number;
+  recettes: number;
+  depenses: number;
   parts: PartMembre[];
   tri: number | null;
   exercice: ReturnType<typeof dietzModifie> | null;
   nbRetardataires: number;
-  totalPenalites: number;
+  /** Ce que les statuts prevoient, calcule a partir des mois impayes. */
+  totalPenalitesCalculees: number;
+  /** Ce que le bureau a effectivement constate et qui reste du. */
+  totalPenalitesDues: number;
   enAttenteValidation: number;
 };
 
 export async function synthese(aujourdhui = new Date()): Promise<Synthese> {
-  const [situations, apports, valos, enAttente] = await Promise.all([
-    situationsClub(aujourdhui),
-    listerApports(),
-    listerValorisations(),
-    versementsEnAttente(),
-  ]);
+  const [situations, apports, valos, enAttente, duesParMembre, encaissees, caisse] =
+    await Promise.all([
+      situationsClub(aujourdhui),
+      listerApports(),
+      listerValorisations(),
+      versementsEnAttente(),
+      penalitesDuesParMembre().catch(() => new Map<string, number>()),
+      penalitesEncaissees(),
+      listerMouvementsCaisse().catch(() => [] as MouvementCaisse[]),
+    ]);
+
+  const valides = caisse.filter((m) => m.statut === "valide");
+  const recettes = valides.filter((m) => m.sens === "recette").reduce((t, m) => t + m.montant, 0);
+  const depenses = valides.filter((m) => m.sens === "depense").reduce((t, m) => t + m.montant, 0);
 
   const valorisation = valos.at(-1) ?? null;
   const totalVerse = situations.reduce((s, m) => s + m.verse, 0);
@@ -327,13 +548,22 @@ export async function synthese(aujourdhui = new Date()): Promise<Synthese> {
   return {
     valorisation,
     totalVerse,
-    totalEnCaisse: totalVerse - totalApports,
+    /*
+     * Le disponible en caisse : ce qui est entre -- cotisations validees,
+     * penalites encaissees, recettes -- diminue des depenses et du net vire au
+     * compte-titres. Un retrait depuis la SGI revient en caisse, d'ou le net.
+     */
+    totalEnCaisse: totalVerse + encaissees + recettes - depenses - totalApports,
     totalApports,
+    penalitesEncaissees: encaissees,
+    recettes,
+    depenses,
     parts,
     tri: flux.length >= 2 ? tri(flux) : null,
     exercice,
     nbRetardataires: situations.filter((s) => s.nbMoisRetard > 0).length,
-    totalPenalites: situations.reduce((s, m) => s + m.totalPenalites, 0),
+    totalPenalitesCalculees: situations.reduce((s, m) => s + m.totalPenalites, 0),
+    totalPenalitesDues: [...duesParMembre.values()].reduce((s, v) => s + v, 0),
     enAttenteValidation: enAttente.length,
   };
 }
