@@ -22,6 +22,15 @@ export const DROITS = {
    */
   saisirVersementValide: ["tresorier", "president"],
 
+  /**
+   * Reprendre une ligne deja validee : en corriger les termes, ou l'annuler.
+   *
+   * Acte plus lourd que la validation, qui touche a une ecriture close et deplace
+   * la caisse. Meme titulaires que la validation, mais nomme a part : la trace
+   * dit alors sous quel titre la reprise a eu lieu.
+   */
+  corrigerVersement: ["tresorier", "president"],
+
   /** Mouvements vers la SGI et releves de portefeuille (art. 14). */
   gererCompteTitres: ["president", "vice_president"],
 

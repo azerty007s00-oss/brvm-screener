@@ -7,7 +7,7 @@ import { exigerMembre, exigerRole } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
 import { reglagesEffectifs } from "@/lib/queries";
-import { decalerMois } from "@/lib/settings";
+import { decalerMois, moisLong } from "@/lib/settings";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
 import type { EtatFormulaire } from "./auth";
@@ -244,4 +244,168 @@ export async function declarerRetard(
   );
   revalidatePath("/", "layout");
   return { ok: true, message: "Retard declare. Le benefice du plan de redressement (R5) est preserve." };
+}
+
+/* ------------------------------------------------- reprise d'une ligne close */
+
+/** Ce qu'une reprise peut toucher, et comment le dire en clair dans la trace. */
+const CHAMPS_REPRISE = [
+  { nom: "montant", libelle: "montant" },
+  { nom: "dateVersement", libelle: "date de versement" },
+  { nom: "mois", libelle: "mois couvert" },
+  { nom: "mode", libelle: "mode de paiement" },
+  { nom: "reference", libelle: "reference" },
+] as const;
+
+/**
+ * Corrige une ligne de versement, y compris deja validee.
+ *
+ * Une erreur de saisie etait jusqu'ici definitive : un montant faux, un mois
+ * errone, et la caisse restait fausse pour toujours. Rien dans les statuts ne
+ * l'exige -- c'etait une lacune de l'outil, non une regle du club.
+ *
+ * La correction n'efface pas : elle laisse la trace de l'etat anterieur dans la
+ * note de revue et au journal, et exige un motif. Une ecriture close se reprend
+ * a visage decouvert.
+ */
+export async function corrigerVersement(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerMembre();
+  if (!peut(auteur, "corrigerVersement")) {
+    return { ok: false, erreur: "La correction d'un versement revient au tresorier et au president." };
+  }
+
+  const id = String(donnees.get("id") ?? "");
+  const motif = String(donnees.get("motif") ?? "").trim();
+  if (!id) return { ok: false, erreur: "Versement introuvable." };
+  if (!motif) return { ok: false, erreur: "Indiquez le motif de la correction." };
+
+  const sql = db();
+  const rows = await sql`
+    select id, member_id, amount, status,
+           to_char(paid_on, 'YYYY-MM-DD') as paid_on,
+           to_char(period, 'YYYY-MM-DD') as period,
+           method, reference, review_note
+    from contributions where id = ${id}::uuid
+  `;
+  const v = rows[0];
+  if (!v) return { ok: false, erreur: "Versement introuvable." };
+  if (v.status === STATUT_VERSEMENT.rejete) {
+    return { ok: false, erreur: "Cette ligne est rejetee : le mois est libre, saisissez-la a nouveau." };
+  }
+
+  const montant = Math.round(Number(donnees.get("montant") ?? 0));
+  const dateVersement = String(donnees.get("dateVersement") ?? "").slice(0, 10);
+  const mois = String(donnees.get("mois") ?? "").slice(0, 10);
+  const mode = String(donnees.get("mode") ?? "");
+  const reference = String(donnees.get("reference") ?? "").trim();
+
+  if (!Number.isFinite(montant) || montant <= 0) {
+    return { ok: false, erreur: "Le montant doit etre positif." };
+  }
+  if (!dateVersement || !mois) return { ok: false, erreur: "Date et mois sont requis." };
+  if (!METHODES.includes(mode)) return { ok: false, erreur: "Mode de paiement inconnu." };
+
+  /*
+   * Deplacer une ligne sur un mois deja couvert creerait un double comptage
+   * silencieux : le mois paraitrait paye deux fois, et la caisse enflerait.
+   */
+  if (mois !== v.period) {
+    const occupe = await sql`
+      select id from contributions
+      where member_id = ${v.member_id}::uuid
+        and period = ${mois}::date
+        and status <> ${STATUT_VERSEMENT.rejete}
+        and id <> ${id}::uuid
+      limit 1
+    `;
+    if (occupe.length > 0) {
+      return { ok: false, erreur: `${moisLong(mois)} est deja couvert pour ce membre.` };
+    }
+  }
+
+  const avant = {
+    montant: Number(v.amount),
+    dateVersement: String(v.paid_on),
+    mois: String(v.period),
+    mode: String(v.method),
+    reference: (v.reference as string | null) ?? "",
+  };
+  const apres = { montant, dateVersement, mois, mode, reference };
+
+  const changements = CHAMPS_REPRISE.filter((c) => String(avant[c.nom]) !== String(apres[c.nom])).map(
+    (c) => `${c.libelle} ${avant[c.nom] || "(vide)"} → ${apres[c.nom] || "(vide)"}`,
+  );
+  if (changements.length === 0) {
+    return { ok: false, erreur: "Aucun changement : les valeurs proposees sont celles enregistrees." };
+  }
+
+  const trace = `Corrige le ${new Date().toISOString().slice(0, 10)} par ${auteur.nom} : ${changements.join(", ")}. Motif : ${motif}`;
+  const note = v.review_note ? `${v.review_note}\n${trace}` : trace;
+
+  await sql`
+    update contributions
+    set amount = ${montant}, paid_on = ${dateVersement}::date, period = ${mois}::date,
+        method = ${mode}, reference = ${reference === "" ? null : reference},
+        reviewed_by = ${auteur.id}::uuid, reviewed_at = now(), review_note = ${note}
+    where id = ${id}::uuid
+  `;
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "correction_versement",
+    { entite: "contributions", id },
+    { avant, apres, motif },
+  );
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Versement corrige : ${changements.join(", ")}.` };
+}
+
+/**
+ * Annule une ligne deja validee : le mois redevient libre.
+ *
+ * Pour l'encaissement qui n'a jamais eu lieu, ou porte deux fois. Le rejet
+ * ordinaire ne vise que les lignes en attente ; celle-ci est close, et son
+ * annulation demande le meme motif ecrit.
+ */
+export async function annulerVersementValide(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerMembre();
+  if (!peut(auteur, "corrigerVersement")) {
+    return { ok: false, erreur: "L'annulation d'un versement revient au tresorier et au president." };
+  }
+
+  const id = String(donnees.get("id") ?? "");
+  const motif = String(donnees.get("motif") ?? "").trim();
+  if (!motif) return { ok: false, erreur: "Indiquez le motif de l'annulation." };
+
+  const sql = db();
+  const rows = await sql`
+    select amount, to_char(period, 'YYYY-MM-DD') as period, status, review_note
+    from contributions where id = ${id}::uuid
+  `;
+  const v = rows[0];
+  if (!v) return { ok: false, erreur: "Versement introuvable." };
+  if (v.status === STATUT_VERSEMENT.rejete) {
+    return { ok: false, erreur: "Cette ligne est deja annulee." };
+  }
+
+  const trace = `Annule le ${new Date().toISOString().slice(0, 10)} par ${auteur.nom}. Motif : ${motif}`;
+  await sql`
+    update contributions
+    set status = ${STATUT_VERSEMENT.rejete}, reviewed_by = ${auteur.id}::uuid,
+        reviewed_at = now(), review_note = ${v.review_note ? `${v.review_note}\n${trace}` : trace}
+    where id = ${id}::uuid
+  `;
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "annulation_versement",
+    { entite: "contributions", id },
+    { montant: Number(v.amount), mois: String(v.period), motif },
+  );
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Versement annule : ${moisLong(String(v.period))} redevient disponible.` };
 }

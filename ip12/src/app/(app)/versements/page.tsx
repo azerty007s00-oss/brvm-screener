@@ -1,7 +1,9 @@
 import { exigerMembre } from "@/lib/auth";
-import { listerMembres, situationsClub, versementsEnAttente } from "@/lib/queries";
+import { listerMembres, listerVersements, situationsClub, versementsEnAttente } from "@/lib/queries";
 import { REGLES, dateCourte, debutMois, fcfa, moisLong } from "@/lib/settings";
 import {
+  annulerVersementValide,
+  corrigerVersement,
   declarerRetard,
   declarerVersement,
   rejeterVersement,
@@ -14,7 +16,7 @@ import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/comp
 import { Badge, Carte, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 import type { StatutMois } from "@/lib/penalites";
-import { MODES_AFFICHES, libelleMode } from "@/lib/valeurs";
+import { MODES_AFFICHES, STATUT_VERSEMENT, libelleMode } from "@/lib/valeurs";
 
 export const dynamic = "force-dynamic";
 
@@ -34,13 +36,14 @@ const PASTILLE: Record<StatutMois, { ton: string; fond: string; texte: string }>
 export default async function PageVersements() {
   const membre = await exigerMembre();
 
-  let situations, enAttente, membres, pieces;
+  let situations, enAttente, membres, pieces, valides;
   try {
-    [situations, enAttente, membres, pieces] = await Promise.all([
+    [situations, enAttente, membres, pieces, valides] = await Promise.all([
       situationsClub(),
       versementsEnAttente(),
       listerMembres(),
       justificatifsParLot(),
+      listerVersements({ statut: STATUT_VERSEMENT.valide }),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -48,6 +51,9 @@ export default async function PageVersements() {
   }
 
   const peutValider = peut(membre, "validerVersement");
+  const peutCorriger = peut(membre, "corrigerVersement");
+  // Les corrections portent sur des saisies recentes : au-dela, on ne corrige plus, on regularise.
+  const corrigibles = valides.slice(0, 40);
   const saisieDirecte = peut(membre, "saisirVersementValide");
   // Les 14 derniers mois : au-dela, la grille devient illisible sur telephone.
   const moisAffiches = (situations[0]?.cellules ?? []).slice(-14);
@@ -170,6 +176,70 @@ export default async function PageVersements() {
               ))}
             </ul>
           )}
+        </Carte>
+      )}
+
+      {peutCorriger && corrigibles.length > 0 && (
+        <Carte titre="Corriger un versement valide">
+          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+            Une erreur de saisie n&apos;est pas definitive. La correction ne remplace pas en
+            silence : l&apos;etat anterieur reste inscrit sur la ligne et au journal, et le motif
+            est obligatoire. Les {corrigibles.length} saisies les plus recentes.
+          </p>
+          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {corrigibles.map((v) => (
+              <li key={v.id} className="py-1.5">
+                <Depliant
+                  titre={`${v.membre_nom} · ${moisLong(v.mois)} · ${fcfa(v.montant)}`}
+                >
+                  <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+                    Verse le {dateCourte(v.date_versement)} &middot; {libelleMode(v.mode)}
+                    {v.reference ? ` · ${v.reference}` : ""}
+                    {v.valide_par_nom ? ` · valide par ${v.valide_par_nom}` : ""}
+                  </p>
+                  {v.motif_rejet && (
+                    <p
+                      className="mb-3 whitespace-pre-line rounded-lg px-2 py-1.5 text-[11px]"
+                      style={{ background: "var(--color-brun-100)", color: "var(--discret)" }}
+                    >
+                      {v.motif_rejet}
+                    </p>
+                  )}
+                  <FormulaireAction action={corrigerVersement} libelle="Corriger" compact>
+                    <ChampCache nom="id" valeur={v.id} />
+                    <Champ nom="montant" libelle="Montant (FCFA)" type="number" min={1} valeur={v.montant} />
+                    <Champ nom="dateVersement" libelle="Date du versement" type="date" valeur={v.date_versement} />
+                    <Champ
+                      nom="mois"
+                      libelle="Mois couvert"
+                      type="date"
+                      valeur={v.mois}
+                      aide="Le premier du mois. Un mois deja couvert pour ce membre est refuse."
+                    />
+                    <Selection nom="mode" libelle="Mode" valeur={v.mode} options={MODES_AFFICHES} />
+                    <Champ nom="reference" libelle="Reference" requis={false} valeur={v.reference ?? ""} />
+                    <Champ nom="motif" libelle="Motif de la correction" aide="Restera inscrit sur la ligne." />
+                  </FormulaireAction>
+                  <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--bordure)" }}>
+                    <p className="mb-2 text-[11px]" style={{ color: "var(--discret)" }}>
+                      Si l&apos;encaissement n&apos;a jamais eu lieu, ou a ete compte deux fois :
+                      l&apos;annulation libere le mois.
+                    </p>
+                    <FormulaireAction
+                      action={annulerVersementValide}
+                      libelle="Annuler ce versement"
+                      variante="danger"
+                      compact
+                      confirmation={`Annuler ${fcfa(v.montant)} de ${v.membre_nom} pour ${moisLong(v.mois)} ?`}
+                    >
+                      <ChampCache nom="id" valeur={v.id} />
+                      <Champ nom="motif" libelle="Motif de l'annulation" />
+                    </FormulaireAction>
+                  </div>
+                </Depliant>
+              </li>
+            ))}
+          </ul>
         </Carte>
       )}
 
