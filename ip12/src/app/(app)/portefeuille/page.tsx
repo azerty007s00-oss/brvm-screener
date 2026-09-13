@@ -29,8 +29,8 @@ export default async function PagePortefeuille() {
     <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Statistique libelle="Valeur totale" valeur={derniere ? fcfa(derniere.total) : "--"} accent="or" />
-        <Statistique libelle="Actions" valeur={derniere ? fcfa(derniere.valeur_actions) : "--"} />
-        <Statistique libelle="Liquidites" valeur={derniere ? fcfa(derniere.valeur_liquidites) : "--"} />
+        <Statistique libelle="Actions" valeur={derniere ? fcfa(derniere.actions) : "--"} />
+        <Statistique libelle="Liquidites" valeur={derniere ? fcfa(derniere.liquidites) : "--"} />
         <Statistique
           libelle="Depuis le releve precedent"
           valeur={pourcent(variation)}
@@ -90,8 +90,21 @@ export default async function PagePortefeuille() {
           <Depliant titre="Nouveau releve">
             <FormulaireAction action={enregistrerValorisation} libelle="Enregistrer le releve">
               <Champ nom="dateValo" libelle="Date du releve" type="date" valeur={new Date().toISOString().slice(0, 10)} />
-              <Champ nom="valeurActions" libelle="Valeur des actions (FCFA)" type="number" min={0} />
-              <Champ nom="valeurLiquidites" libelle="Liquidites (FCFA)" type="number" min={0} valeur={0} />
+              <Champ
+                nom="total"
+                libelle="Valeur totale du compte (FCFA)"
+                type="number"
+                min={1}
+                aide="Le montant global du releve, liquidites comprises."
+              />
+              <Champ
+                nom="liquidites"
+                libelle="Dont liquidites (FCFA)"
+                type="number"
+                min={0}
+                valeur={0}
+                aide="La part non investie. La valeur des titres s'en deduit."
+              />
               <Champ nom="note" libelle="Note" requis={false} />
             </FormulaireAction>
           </Depliant>
@@ -108,8 +121,8 @@ export default async function PagePortefeuille() {
                 <div>
                   <p className="text-sm font-medium">{fcfa(v.total)}</p>
                   <p className="text-xs" style={{ color: "var(--discret)" }}>
-                    {dateCourte(v.date_valo)} &middot; actions {fcfa(v.valeur_actions)} &middot; liquidites{" "}
-                    {fcfa(v.valeur_liquidites)}
+                    {dateCourte(v.date_valo)} &middot; actions {fcfa(v.actions)} &middot; liquidites{" "}
+                    {fcfa(v.liquidites)}
                   </p>
                 </div>
                 {membre.role === "president" && (

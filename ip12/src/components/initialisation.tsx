@@ -1,28 +1,45 @@
 import { Alerte, Carte } from "./ui";
 
 /**
- * Affiche a la place d'une page quand la base repond mais que les tables n'existent pas
- * encore. Evite une erreur 500 opaque au premier deploiement.
+ * Affiche a la place d'une page quand Postgres repond mais qu'une table manque.
+ * Evite une erreur 500 opaque et oriente vers la cause la plus probable.
  */
 export function EcranInitialisation({ detail }: { detail?: string }) {
+  const manqueDeclarations = /late_declarations/i.test(detail ?? "");
+
   return (
-    <Carte titre="Base non initialisee">
-      <Alerte ton="ambre">
-        La connexion a Postgres fonctionne, mais les tables du club n&apos;existent pas encore.
-      </Alerte>
-      <ol className="mt-4 space-y-2 text-sm">
-        <li>
-          1. Ouvrez la console Neon, onglet <strong>SQL Editor</strong>.
-        </li>
-        <li>
-          2. Collez-y le contenu du fichier <code>scripts/schema.sql</code> du depot, puis executez.
-        </li>
-        <li>
-          3. Appelez une fois <code>/api/bootstrap?token=VOTRE_SETUP_TOKEN</code> pour creer le compte
-          president. Les 9 autres profils se creent ensuite depuis la page Membres.
-        </li>
-        <li>4. Rechargez cette page.</li>
-      </ol>
+    <Carte titre={manqueDeclarations ? "Migration a appliquer" : "Table introuvable"}>
+      {manqueDeclarations ? (
+        <>
+          <Alerte ton="ambre">
+            La table des declarations de retard (R3) n&apos;existe pas encore.
+          </Alerte>
+          <p className="mt-3 text-sm">
+            Executez <code>scripts/migration-r3.sql</code> dans le SQL Editor de Neon. Cette
+            migration est purement additive : elle ne modifie ni ne supprime aucune table existante.
+          </p>
+        </>
+      ) : (
+        <>
+          <Alerte ton="rouge">
+            La connexion a Postgres fonctionne, mais une table attendue est absente.
+          </Alerte>
+          <ol className="mt-4 space-y-2 text-sm">
+            <li>
+              1. Verifiez que <code>DATABASE_URL</code> pointe bien sur le projet Neon du club et
+              non sur une base vide.
+            </li>
+            <li>
+              2. Comparez la structure attendue, decrite dans <code>src/lib/schema-cible.md</code>,
+              avec celle de la base.
+            </li>
+            <li>
+              3. Si la table des declarations R3 manque, appliquez{" "}
+              <code>scripts/migration-r3.sql</code>.
+            </li>
+          </ol>
+        </>
+      )}
       {detail && (
         <p className="mt-4 text-xs" style={{ color: "var(--discret)" }}>
           Detail technique : {detail}

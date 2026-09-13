@@ -1,16 +1,21 @@
 import { NextResponse } from "next/server";
-import { randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
-import { hacherMotDePasse } from "@/lib/auth";
+import { hacherMotDePasse, motDePasseProvisoire } from "@/lib/auth";
 import { CLUB } from "@/lib/settings";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Cree le tout premier compte, celui du president, sans avoir a executer de script.
+ * Reprise en main du compte president, sans avoir a executer de script.
  *
- * Deux garde-fous : un jeton secret (SETUP_TOKEN) et le fait que la route refuse de
- * s'executer des qu'un membre existe. Elle devient donc inerte apres le premier appel.
+ * Deux situations :
+ *  - aucun membre en base : le compte president est cree ;
+ *  - le membre existe deja (cas de la base heritee, dont les mots de passe ont ete
+ *    produits par une version anterieure au format inconnu) : son mot de passe est
+ *    reinitialise.
+ *
+ * Garde-fous : un jeton secret (SETUP_TOKEN) et une seule adresse cible, celle de
+ * BOOTSTRAP_EMAIL. A retirer des variables d'environnement une fois utilisee.
  */
 export async function GET(requete: Request) {
   const jeton = process.env.SETUP_TOKEN;
@@ -20,47 +25,76 @@ export async function GET(requete: Request) {
       { status: 503 },
     );
   }
-  const fourni = new URL(requete.url).searchParams.get("token");
-  if (fourni !== jeton) {
+  if (new URL(requete.url).searchParams.get("token") !== jeton) {
     return NextResponse.json({ erreur: "Jeton invalide." }, { status: 401 });
   }
 
-  const sql = db();
-  let existants;
-  try {
-    existants = await sql`select count(*)::int as c from membres`;
-  } catch (e) {
-    return NextResponse.json(
-      { erreur: "Les tables n'existent pas encore. Executez scripts/schema.sql dans la console Neon.", detail: String(e) },
-      { status: 409 },
-    );
-  }
-
-  if (Number(existants[0]?.c ?? 0) > 0) {
-    return NextResponse.json(
-      { erreur: "Des membres existent deja : cette route est desormais sans effet." },
-      { status: 409 },
-    );
-  }
-
-  const nom = process.env.BOOTSTRAP_NOM ?? "President";
   const email = (process.env.BOOTSTRAP_EMAIL ?? "").trim().toLowerCase();
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
     return NextResponse.json({ erreur: "BOOTSTRAP_EMAIL absente ou invalide." }, { status: 400 });
   }
 
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const brut = Array.from(randomBytes(12), (o) => alphabet[o % alphabet.length]).join("");
-  const provisoire = `${brut.slice(0, 4)}-${brut.slice(4, 8)}-${brut.slice(8, 12)}`;
+  const sql = db();
+  const provisoire = motDePasseProvisoire();
+
+  let existant;
+  try {
+    existant = await sql`select id, full_name, role from members where lower(email) = ${email}`;
+  } catch (e) {
+    return NextResponse.json(
+      {
+        erreur: "La table members n'existe pas. Verifiez que DATABASE_URL pointe sur la bonne base.",
+        detail: String(e),
+      },
+      { status: 409 },
+    );
+  }
+
+  if (existant.length > 0) {
+    const membre = existant[0];
+    await sql`
+      update members
+      set password_hash = ${hacherMotDePasse(provisoire)},
+          must_change_password = true,
+          role = 'president',
+          is_active = true
+      where id = ${membre.id}::uuid
+    `;
+    return NextResponse.json({
+      ok: true,
+      action: "mot_de_passe_reinitialise",
+      message:
+        "Mot de passe reinitialise. Connectez-vous, changez-le immediatement, " +
+        "puis supprimez SETUP_TOKEN des variables d'environnement.",
+      membre: membre.full_name,
+      email,
+      motDePasseProvisoire: provisoire,
+    });
+  }
+
+  const total = await sql`select count(*)::int as c from members`;
+  if (Number(total[0]?.c ?? 0) > 0) {
+    return NextResponse.json(
+      {
+        erreur:
+          "Des membres existent, mais aucun ne porte cette adresse. " +
+          "Corrigez BOOTSTRAP_EMAIL pour viser un membre existant.",
+      },
+      { status: 409 },
+    );
+  }
 
   await sql`
-    insert into membres (nom, email, role, password_hash, must_change_password, date_adhesion)
-    values (${nom}, ${email}, 'president', ${hacherMotDePasse(provisoire)}, true, ${CLUB.dateCreation}::date)
+    insert into members (full_name, email, role, password_hash, must_change_password, joined_on)
+    values (${process.env.BOOTSTRAP_NOM ?? "President"}, ${email}, 'president',
+            ${hacherMotDePasse(provisoire)}, true, ${CLUB.dateCreation}::date)
   `;
-
   return NextResponse.json({
     ok: true,
-    message: "Compte president cree. Connectez-vous puis changez ce mot de passe immediatement.",
+    action: "compte_cree",
+    message:
+      "Compte president cree. Connectez-vous, changez ce mot de passe, " +
+      "puis supprimez SETUP_TOKEN des variables d'environnement.",
     email,
     motDePasseProvisoire: provisoire,
   });

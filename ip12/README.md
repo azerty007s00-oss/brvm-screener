@@ -36,15 +36,29 @@ Phoenix Capital Management.
 Ces valeurs sont centralisées dans `src/lib/settings.ts` : un amendement des statuts se
 répercute partout en modifiant ce seul fichier.
 
+## Base de données
+
+L'application se branche sur la base Neon **existante** du club, dont la structure est décrite
+dans `src/lib/schema-cible.md`. Les dix membres y sont déjà enregistrés.
+
+Une seule migration est nécessaire : `scripts/migration-r3.sql` ajoute la table des déclarations
+de retard exigées par R3, absente du schéma d'origine. Elle est purement additive.
+
+`scripts/test/schema-local.sql` est une réplique de cette structure, **réservée aux tests** :
+elle sert à monter un PostgreSQL jetable pour vérifier les requêtes avant déploiement. Ne jamais
+l'exécuter sur la base de production.
+
 ## Mise en service
 
-1. **Base** — créer un projet Neon, copier la chaîne de connexion *pooled*.
-2. **Schéma** — exécuter `scripts/schema.sql` dans le SQL Editor de Neon.
-3. **Variables** — renseigner sur Vercel celles listées dans `.env.example`.
-4. **Premier compte** — appeler une fois `/api/bootstrap?token=SETUP_TOKEN` : la route crée le
-   compte président, renvoie un mot de passe provisoire, puis devient inerte.
-5. **Les 9 autres membres** — les créer depuis la page *Membres* ; chacun reçoit un mot de passe
-   provisoire qu'il remplace à sa première connexion.
+1. **Variables** — renseigner sur Vercel celles listées dans `.env.example`, `DATABASE_URL`
+   pointant sur le projet Neon du club.
+2. **Migration R3** — exécuter `scripts/migration-r3.sql` dans le SQL Editor de Neon.
+3. **Reprise en main** — appeler une fois `/api/bootstrap?token=SETUP_TOKEN`. Les mots de passe
+   hérités ayant été produits par une version antérieure au format inconnu, cette route
+   réinitialise celui de l'adresse déclarée dans `BOOTSTRAP_EMAIL` et renvoie un mot de passe
+   provisoire. **Supprimer `SETUP_TOKEN` des variables d'environnement juste après.**
+4. **Les autres membres** — leur mot de passe se réinitialise depuis la page *Membres* ; chacun
+   reçoit un provisoire qu'il remplace à sa première connexion.
 
 ## Développement
 
@@ -66,4 +80,5 @@ npm run verif                # vérifie TRI, Dietz modifié et répartition des 
 | `src/lib/auth.ts` | Mots de passe scrypt, sessions signées par cookie |
 | `src/app/actions/` | Actions serveur : versements, compte-titres, membres |
 | `src/app/(app)/` | Pages authentifiées |
-| `scripts/schema.sql` | Schéma de la base |
+| `src/lib/valeurs.ts` | Valeurs des colonnes à contrainte, rassemblées en un point |
+| `scripts/migration-r3.sql` | Ajout de la table des déclarations R3 |

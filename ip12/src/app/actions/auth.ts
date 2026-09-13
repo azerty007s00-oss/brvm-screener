@@ -7,7 +7,10 @@ import {
   exigerMembre,
   fermerSession,
   hacherMotDePasse,
+  membreParEmail,
   ouvrirSession,
+  tracerTentative,
+  tropDeTentatives,
   verifierMotDePasse,
 } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
@@ -25,24 +28,30 @@ export async function seConnecter(
     return { ok: false, erreur: "Renseignez votre e-mail et votre mot de passe." };
   }
 
-  let rows;
+  if (await tropDeTentatives(email)) {
+    return {
+      ok: false,
+      erreur: "Trop de tentatives infructueuses. Reessayez dans un quart d'heure.",
+    };
+  }
+
+  let membre;
   try {
-    const sql = db();
-    rows = await sql`
-      select id, password_hash, actif from membres where lower(email) = ${email}
-    `;
+    membre = await membreParEmail(email);
   } catch {
     return { ok: false, erreur: "La base de donnees n'est pas joignable. Reessayez dans un instant." };
   }
 
-  const membre = rows[0];
   // Message identique dans les trois cas : ne pas reveler quels e-mails existent.
   const echec = { ok: false as const, erreur: "E-mail ou mot de passe incorrect." };
-  if (!membre || !membre.actif) return echec;
-  if (!verifierMotDePasse(motDePasse, membre.password_hash as string | null)) return echec;
+  if (!membre || !membre.actif || !verifierMotDePasse(motDePasse, membre.password_hash)) {
+    await tracerTentative(email, false);
+    return echec;
+  }
 
-  await ouvrirSession(Number(membre.id));
-  await journaliser(Number(membre.id), "connexion");
+  await tracerTentative(email, true);
+  await ouvrirSession(membre.id);
+  await journaliser({ id: membre.id, nom: membre.nom }, "connexion");
   redirect("/");
 }
 
@@ -68,20 +77,19 @@ export async function changerMotDePasse(
   }
 
   const sql = db();
-  const rows = await sql`select password_hash from membres where id = ${membre.id}`;
-  const hash = rows[0]?.password_hash as string | null;
+  const rows = await sql`select password_hash from members where id = ${membre.id}::uuid`;
 
   // Un membre dont le mot de passe est encore provisoire n'a pas a fournir l'ancien.
-  if (!membre.must_change_password && !verifierMotDePasse(actuel, hash)) {
+  if (!membre.must_change_password && !verifierMotDePasse(actuel, rows[0]?.password_hash as string)) {
     return { ok: false, erreur: "Mot de passe actuel incorrect." };
   }
 
   await sql`
-    update membres
+    update members
     set password_hash = ${hacherMotDePasse(nouveau)}, must_change_password = false
-    where id = ${membre.id}
+    where id = ${membre.id}::uuid
   `;
-  await journaliser(membre.id, "changement_mot_de_passe");
+  await journaliser({ id: membre.id, nom: membre.nom }, "changement_mot_de_passe");
   revalidatePath("/", "layout");
   return { ok: true, message: "Mot de passe mis a jour." };
 }

@@ -95,7 +95,7 @@ export function dietzModifie(
 /* ------------------------------------------------------------------ les parts */
 
 export type PartMembre = {
-  membreId: number;
+  membreId: string;
   nom: string;
   verse: number;
   part: number;
@@ -108,7 +108,7 @@ export type PartMembre = {
  * (art. 12 : les votes sont proportionnels aux parts).
  */
 export function repartirParts(
-  versesParMembre: { membreId: number; nom: string; verse: number }[],
+  versesParMembre: { membreId: string; nom: string; verse: number }[],
   valeurPortefeuille: number,
 ): PartMembre[] {
   const total = versesParMembre.reduce((s, m) => s + m.verse, 0);

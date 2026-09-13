@@ -3,6 +3,7 @@ import { listerVersements, situationsClub, synthese } from "@/lib/queries";
 import { changerMotDePasse } from "@/app/actions/auth";
 import { ROLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Champ, FormulaireAction } from "@/components/formulaires";
+import { libelleMode } from "@/lib/valeurs";
 import { Alerte, Badge, Carte, Statistique, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
@@ -104,10 +105,10 @@ export default async function PageMonCompte() {
               <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                 <div>
                   <p className="text-sm font-medium">
-                    {moisLong(v.mois_couvert)} &middot; {fcfa(v.montant)}
+                    {moisLong(v.mois)} &middot; {fcfa(v.montant)}
                   </p>
                   <p className="text-xs" style={{ color: "var(--discret)" }}>
-                    Verse le {dateCourte(v.date_versement)} &middot; {v.mode.replace("_", " ")}
+                    Verse le {dateCourte(v.date_versement)} &middot; {libelleMode(v.mode)}
                     {v.motif_rejet ? ` · rejet : ${v.motif_rejet}` : ""}
                   </p>
                 </div>

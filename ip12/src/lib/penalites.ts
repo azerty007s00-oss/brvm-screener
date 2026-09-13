@@ -10,7 +10,7 @@ export type CelluleMois = {
 };
 
 export type SituationMembre = {
-  membreId: number;
+  membreId: string;
   cellules: CelluleMois[];
   moisEnRetard: string[];
   nbMoisRetard: number;
@@ -48,7 +48,7 @@ type VersementConnu = {
  * delai de validation du bureau serait injuste.
  */
 export function situationMembre(
-  membreId: number,
+  membreId: string,
   moisDuClub: string[],
   versements: VersementConnu[],
   moisDeclares: string[] = [],

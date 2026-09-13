@@ -11,6 +11,7 @@ import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/comp
 import { Badge, Carte, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 import type { StatutMois } from "@/lib/penalites";
+import { MODES_AFFICHES, libelleMode } from "@/lib/valeurs";
 
 export const dynamic = "force-dynamic";
 
@@ -77,16 +78,8 @@ export default async function PageVersements() {
             min={1}
           />
           <Champ nom="dateVersement" libelle="Date du versement" type="date" valeur={new Date().toISOString().slice(0, 10)} />
-          <Selection
-            nom="mode"
-            libelle="Mode"
-            options={[
-              { valeur: "especes", libelle: "Especes" },
-              { valeur: "mobile_money", libelle: "Mobile Money" },
-              { valeur: "virement", libelle: "Virement" },
-              { valeur: "cheque", libelle: "Cheque" },
-            ]}
-          />
+          <Selection nom="mode" libelle="Mode" options={MODES_AFFICHES} />
+          <Champ nom="reference" libelle="Reference du paiement (facultatif)" requis={false} />
           <Champ nom="note" libelle="Note (facultatif)" requis={false} />
         </FormulaireAction>
       </Carte>
@@ -105,8 +98,8 @@ export default async function PageVersements() {
                         {v.membre_nom} &middot; {fcfa(v.montant)}
                       </p>
                       <p className="text-xs" style={{ color: "var(--discret)" }}>
-                        {moisLong(v.mois_couvert)} &middot; verse le {dateCourte(v.date_versement)} &middot;{" "}
-                        {v.mode.replace("_", " ")}
+                        {moisLong(v.mois)} &middot; verse le {dateCourte(v.date_versement)} &middot;{" "}
+                        {libelleMode(v.mode)}
                         {v.saisi_par_nom && v.saisi_par_nom !== v.membre_nom
                           ? ` · saisi par ${v.saisi_par_nom}`
                           : ""}

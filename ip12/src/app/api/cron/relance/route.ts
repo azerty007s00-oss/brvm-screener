@@ -82,15 +82,17 @@ export async function GET(requete: Request) {
     }
   }
 
+  // reminder_log porte une ligne par membre et par periode : on trace chaque envoi.
   try {
     const sql = db();
-    await sql`
-      insert into relances (mois_concerne, destinataires, detail)
-      values (${moisCourant}::date, ${envoyes.length},
-              ${JSON.stringify({ envoyes, echecs, concernes: destinataires.length })})
-      on conflict (mois_concerne) do update
-        set envoye_le = now(), destinataires = excluded.destinataires, detail = excluded.detail
-    `;
+    for (const d of destinataires) {
+      const reussi = envoyes.includes(d.situation.email);
+      await sql`
+        insert into reminder_log (period, member_id, channel, ok, error)
+        values (${moisCourant}::date, ${d.situation.membreId}::uuid, 'email', ${reussi},
+                ${reussi ? null : "envoi impossible"})
+      `;
+    }
   } catch {
     // La trace de relance ne doit pas faire echouer le traitement.
   }

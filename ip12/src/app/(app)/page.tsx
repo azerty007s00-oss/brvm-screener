@@ -55,7 +55,7 @@ export default async function TableauDeBord() {
         />
       </div>
 
-      {(s.tri !== null || s.semestre) && (
+      {(s.tri !== null || s.exercice) && (
         <Carte titre="Performance">
           <div className="grid gap-4 sm:grid-cols-2">
             {s.tri !== null && (
@@ -69,19 +69,19 @@ export default async function TableauDeBord() {
                 </p>
               </div>
             )}
-            {s.semestre?.rendement != null && (
+            {s.exercice?.rendement != null && (
               <div>
                 <p
                   className="text-2xl font-semibold"
                   style={{
-                    color: s.semestre.rendement >= 0 ? "var(--color-vert-600)" : "var(--color-rouge-600)",
+                    color: s.exercice.rendement >= 0 ? "var(--color-vert-600)" : "var(--color-rouge-600)",
                   }}
                 >
-                  {pourcent(s.semestre.rendement)}
+                  {pourcent(s.exercice.rendement)}
                 </p>
                 <p className="text-xs" style={{ color: "var(--discret)" }}>
                   Exercice en cours (Dietz modifie) &middot; gain de gestion{" "}
-                  {fcfa(s.semestre.gain)} sur un capital moyen de {fcfa(s.semestre.capitalMoyen)}.
+                  {fcfa(s.exercice.gain)} sur un capital moyen de {fcfa(s.exercice.capitalMoyen)}.
                 </p>
               </div>
             )}
