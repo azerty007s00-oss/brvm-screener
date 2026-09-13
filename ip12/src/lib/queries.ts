@@ -108,7 +108,13 @@ export async function listerMembres(inclureInactifs = false): Promise<MembreList
     select ${sql.unsafe(CHAMPS_MEMBRE)}
     from members
     where ${inclureInactifs} or is_active = true
-    order by case role when 'president' then 0 when 'tresorier' then 1 else 2 end, full_name
+    order by case role
+      when 'president' then 0
+      when 'vice_president' then 1
+      when 'tresorier' then 2
+      when 'secretaire' then 3
+      else 4
+    end, full_name
   `;
   return rows as MembreListe[];
 }
