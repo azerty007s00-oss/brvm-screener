@@ -1,0 +1,74 @@
+@import "tailwindcss";
+
+@theme {
+  /* Charte du club : brun profond et or, reprise de la banniere. */
+  --color-brun-950: #1d120a;
+  --color-brun-900: #2a1a10;
+  --color-brun-800: #3b2415;
+  --color-brun-700: #4d3120;
+  --color-brun-600: #6b472f;
+  --color-brun-300: #b99c82;
+  --color-brun-100: #ede2d5;
+  --color-brun-50: #faf6ef;
+
+  --color-or-600: #a8861d;
+  --color-or-500: #c9a227;
+  --color-or-400: #d9b84a;
+  --color-or-200: #f0dfa4;
+
+  --color-vert-600: #2f7d54;
+  --color-vert-100: #dcefe3;
+  --color-rouge-600: #a8322c;
+  --color-rouge-100: #f6dedc;
+  --color-ambre-600: #9a6b12;
+  --color-ambre-100: #f8ebd0;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+  --fond: var(--color-brun-50);
+  --texte: var(--color-brun-900);
+  --carte: #ffffff;
+  --bordure: var(--color-brun-100);
+  --discret: #6b5a4a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --fond: var(--color-brun-950);
+    --texte: var(--color-brun-50);
+    --carte: var(--color-brun-900);
+    --bordure: var(--color-brun-700);
+    --discret: var(--color-brun-300);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --fond: var(--color-brun-950);
+  --texte: var(--color-brun-50);
+  --carte: var(--color-brun-900);
+  --bordure: var(--color-brun-700);
+  --discret: var(--color-brun-300);
+}
+
+body {
+  background: var(--fond);
+  color: var(--texte);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tableau des mois : lecture horizontale sur mobile sans casser la page. */
+.defilement-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+@media print {
+  .sans-impression { display: none !important; }
+}
