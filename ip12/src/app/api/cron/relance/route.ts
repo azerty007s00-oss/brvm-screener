@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { situationsClub, type SituationClub } from "@/lib/queries";
-import { CLUB, REGLES, debutMois, fcfa, moisLong, variable } from "@/lib/settings";
+import { avancesExigees, situationsClub, type AvanceExigee, type SituationClub } from "@/lib/queries";
+import { CLUB, EFFET, REGLES, dateCourte, debutMois, fcfa, moisLong, variable } from "@/lib/settings";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
 
 export const dynamic = "force-dynamic";
@@ -13,6 +13,14 @@ type Destinataire = {
   arrieres: string[];
   /** Mois courant non encore couvert : echeance du jour, pas encore penalisable. */
   echeanceDuJour: string | null;
+  /**
+   * Avance minimale imposee au membre et non tenue.
+   *
+   * Une mesure disciplinaire assortie d'une date ne vaut que si l'interesse en est
+   * averti. La seule relance automatique du club tombe le 10 : y taire l'obligation
+   * reviendrait a laisser courir un delai dont il ne sait rien.
+   */
+  avanceManquante: AvanceExigee | null;
 };
 
 /**
@@ -21,6 +29,13 @@ type Destinataire = {
  * Le courrier part le matin du 10, alors que l'art. 8 laisse jusqu'a la fin de cette
  * journee pour payer : le mois courant n'est donc pas encore en retard. On le rappelle
  * quand meme, mais comme echeance du jour et sans penalite -- c'est le sens d'une relance.
+ *
+ * Trois motifs y conduisent, et non plus un seul :
+ *   - l'echeance du jour ou des mois impayes ;
+ *   - des penalites impayees, meme cotisations a jour -- depuis que l'assemblee les
+ *     a rendues indissociables, ce profil mene a l'exclusion sans qu'aucun mois ne
+ *     soit en retard, donc sans qu'aucune relance ne partait ;
+ *   - une avance minimale imposee et non tenue.
  *
  * L'envoi d'e-mail est facultatif : sans transport configure -- SMTP ou Resend --
  * le site continue d'afficher les alertes, seul le courrier ne part pas.
@@ -42,18 +57,28 @@ export async function GET(requete: Request) {
     return NextResponse.json({ erreur: String(e) }, { status: 500 });
   }
 
+  const avances = await avancesExigees(maintenant).catch(() => [] as AvanceExigee[]);
+
   const destinataires: Destinataire[] = situations
     .map((situation) => {
       const cellule = situation.cellules.find((c) => c.mois === moisCourant);
       const echeanceDuJour =
         cellule && (cellule.statut === "a_venir" || cellule.statut === "retard") ? moisCourant : null;
+      const avance = avances.find((a) => a.membreId === situation.membreId);
       return {
         situation,
         arrieres: situation.moisEnRetard.filter((m) => m !== moisCourant),
         echeanceDuJour,
+        avanceManquante: avance && !avance.respectee ? avance : null,
       };
     })
-    .filter((d) => d.arrieres.length > 0 || d.echeanceDuJour !== null);
+    .filter(
+      (d) =>
+        d.arrieres.length > 0 ||
+        d.echeanceDuJour !== null ||
+        d.situation.nbPenalitesImpayees > 0 ||
+        d.avanceManquante !== null,
+    );
 
   const envoyes: string[] = [];
   const echecs: string[] = [];
@@ -64,10 +89,7 @@ export async function GET(requete: Request) {
     for (const d of destinataires) {
       const { ok: parti } = await envoyerCourriel({
         destinataire: d.situation.email,
-        sujet:
-          d.arrieres.length > 0
-            ? `${CLUB.sigle} — versement en retard (${d.arrieres.length} mois)`
-            : `${CLUB.sigle} — votre versement de ${moisLong(moisCourant)} est du aujourd'hui`,
+        sujet: sujetRelance(d, moisCourant),
         texte: texteRelance(d, siteUrl),
       });
       (parti ? envoyes : echecs).push(d.situation.email);
@@ -94,13 +116,34 @@ export async function GET(requete: Request) {
     concernes: destinataires.length,
     enRetard: destinataires.filter((d) => d.arrieres.length > 0).length,
     echeanceDuJour: destinataires.filter((d) => d.echeanceDuJour && d.arrieres.length === 0).length,
+    // Cotisations a jour, mais penalites en souffrance : le profil vise par l'assemblee.
+    penalitesSeules: destinataires.filter(
+      (d) => d.arrieres.length === 0 && d.situation.nbPenalitesImpayees > 0,
+    ).length,
+    avancesNonTenues: destinataires.filter((d) => d.avanceManquante !== null).length,
     emailsEnvoyes: envoyes.length,
     echecs: echecs.length,
     transport,
   });
 }
 
-function texteRelance({ situation, arrieres, echeanceDuJour }: Destinataire, siteUrl: string): string {
+/*
+ * L'objet nomme le motif le plus grave. Une mesure disciplinaire assortie d'une
+ * date prime sur un simple rappel d'echeance : c'est elle qu'il faut lire.
+ */
+function sujetRelance(d: Destinataire, moisCourant: string): string {
+  if (d.avanceManquante) return `${CLUB.sigle} — avance obligatoire non constituee`;
+  if (d.arrieres.length > 0) return `${CLUB.sigle} — versement en retard (${d.arrieres.length} mois)`;
+  if (d.situation.nbPenalitesImpayees > 0) {
+    return `${CLUB.sigle} — ${d.situation.nbPenalitesImpayees} penalite(s) de retard impayee(s)`;
+  }
+  return `${CLUB.sigle} — votre versement de ${moisLong(moisCourant)} est du aujourd'hui`;
+}
+
+function texteRelance(
+  { situation, arrieres, echeanceDuJour, avanceManquante }: Destinataire,
+  siteUrl: string,
+): string {
   const lignes: string[] = [`Bonjour ${situation.nom},`, ""];
 
   if (echeanceDuJour) {
@@ -141,6 +184,47 @@ function texteRelance({ situation, arrieres, echeanceDuJour }: Destinataire, sit
           "est suspendu jusqu'a regularisation complete.",
       );
     }
+  }
+
+  /*
+   * Les penalites se rappellent meme sans aucun mois en retard : c'est tout
+   * l'objet de la resolution qui les a rendues indissociables des cotisations.
+   */
+  if (situation.nbPenalitesImpayees > 0) {
+    const seuil = REGLES.penalitesImpayeesAvantExclusion;
+    const effet = EFFET.penalitesIndissociables;
+    lignes.push(
+      "",
+      `Penalites de retard impayees : ${situation.nbPenalitesImpayees}, pour un total de ` +
+        `${fcfa(situation.totalPenalites)}.`,
+    );
+    if (situation.nbPenalitesImpayees >= seuil) {
+      lignes.push(
+        `Ce nombre atteint le seuil de ${seuil} fixe par l'assemblee : les penalites etant ` +
+          `indissociables des cotisations depuis le ${dateCourte(effet)}, l'exclusion est ` +
+          "encourue de plein droit (R5), meme cotisations a jour.",
+      );
+    } else {
+      lignes.push(
+        `A partir de ${seuil} penalites impayees, l'exclusion est encourue de plein droit ` +
+          `(R5) meme cotisations a jour — regle en vigueur le ${dateCourte(effet)}.`,
+      );
+    }
+  }
+
+  if (avanceManquante) {
+    lignes.push(
+      "",
+      "MESURE DISCIPLINAIRE — avance obligatoire.",
+      `L'assemblee vous impose de detenir en permanence ${avanceManquante.mois} mois de ` +
+        `cotisation d'avance, soit ${fcfa(avanceManquante.montantExige)}.`,
+      `Vous en detenez aujourd'hui ${fcfa(avanceManquante.avanceDetenue)} : il manque ` +
+        `${fcfa(Math.max(0, avanceManquante.montantExige - avanceManquante.avanceDetenue))}.`,
+      avanceManquante.fin
+        ? `Cette obligation court jusqu'au ${dateCourte(avanceManquante.fin)}.`
+        : "Cette obligation est sans terme fixe.",
+      "A defaut de regularisation, l'exclusion est automatique (R5).",
+    );
   }
 
   if (siteUrl) lignes.push("", `Regulariser : ${siteUrl}`);
