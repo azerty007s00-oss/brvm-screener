@@ -81,6 +81,8 @@ type VersementConnu = {
  */
 export type ReglesMembre = {
   cotisationMensuelle?: number;
+  /** Taux de l'art. 9, tel que regle par le bureau. Fraction, non pourcentage. */
+  tauxPenalite?: number;
   /** Multiplie la penalite, par-dessus le doublement R4. 1 = regime commun. */
   multiplicateurPenalite?: number;
 };
@@ -189,6 +191,7 @@ export function calculerPenalites(
   propres: ReglesMembre = {},
 ): PenaliteCalculee[] {
   const cotisation = propres.cotisationMensuelle ?? REGLES.cotisationMensuelle;
+  const tauxDeBase = propres.tauxPenalite ?? REGLES.tauxPenalite;
   const multiplicateur = propres.multiplicateurPenalite ?? 1;
 
   const impayes = [...moisEnRetard].sort();
@@ -196,7 +199,7 @@ export function calculerPenalites(
   const aDoubler = impayes.slice(-REGLES.moisPenalitesDoublees);
 
   const sur = (mois: string, doublee: boolean, figee: boolean): PenaliteCalculee => {
-    const taux = (doublee ? REGLES.tauxPenalite * 2 : REGLES.tauxPenalite) * multiplicateur;
+    const taux = (doublee ? tauxDeBase * 2 : tauxDeBase) * multiplicateur;
     return { mois, taux, montant: Math.round(cotisation * taux), doublee, figee };
   };
 

@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./db";
-import { CLUB, REGLES, debutMois, estExigible, moisDuClub } from "./settings";
+import { CLUB, REGLES, debutMois, estExigible, moisDuClub, tauxNormalise } from "./settings";
 import type { Role } from "./settings";
 import { situationMembre, type ReglesMembre, type SituationMembre } from "./penalites";
 import {
@@ -74,6 +74,12 @@ const CLES_REGLAGES: Partial<Record<keyof Reglages, string[]>> = {
   tauxPenalite: ["taux_penalite", "penalty_rate"],
 };
 
+/** Applique la convention du code a une valeur lue en base, ou la rejette. */
+function normaliser(champ: keyof Reglages, valeur: number): number | null {
+  if (champ === "tauxPenalite") return tauxNormalise(valeur);
+  return Number.isFinite(valeur) && valeur > 0 ? valeur : null;
+}
+
 /**
  * Reglages effectifs : les constantes des statuts, surchargees par la table
  * `settings` quand elle porte la cle correspondante. Permet de changer le montant
@@ -89,8 +95,8 @@ export async function reglagesEffectifs(): Promise<Reglages> {
       for (const cle of cles) {
         const brut = table.get(cle);
         if (brut === undefined) continue;
-        const valeur = Number(brut);
-        if (Number.isFinite(valeur) && valeur > 0) {
+        const valeur = normaliser(champ, Number(brut));
+        if (valeur !== null) {
           (sortie as Record<string, number>)[champ] = valeur;
           break;
         }
@@ -728,11 +734,12 @@ export async function decomptesSortie(): Promise<DecompteSortie[]> {
 
 export async function situationsClub(aujourdhui = new Date()): Promise<SituationClub[]> {
   const sql = db();
-  const [membres, declarations, derogations, nbPenalites] = await Promise.all([
+  const [membres, declarations, derogations, nbPenalites, reglages] = await Promise.all([
     listerMembres(),
     declarationsRetard(),
     derogationsParMembre(),
     nbPenalitesRetardDues(),
+    reglagesEffectifs(),
   ]);
   const mois = moisDuClub(debutMois(aujourdhui));
 
@@ -763,7 +770,8 @@ export async function situationsClub(aujourdhui = new Date()): Promise<Situation
       declares,
       aujourdhui,
       `${m.date_adhesion.slice(0, 8)}01`,
-      derogations.get(m.id) ?? {},
+      // Le reglage du bureau vaut defaut ; la derogation individuelle le surcharge.
+      { tauxPenalite: reglages.tauxPenalite, ...(derogations.get(m.id) ?? {}) },
       nbPenalites.get(m.id) ?? 0,
     );
 

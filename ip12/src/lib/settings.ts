@@ -71,6 +71,25 @@ export const EFFET = {
 } as const;
 
 /**
+ * Ramene un taux lu en base a la convention du code, ou le rejette.
+ *
+ * Un taux se dit de deux facons : 0,1 ou 10 %. L'application precedente ecrivait
+ * la seconde, celle-ci attend la premiere -- et rien ne les distinguait. Lu tel
+ * quel, un taux de 10 valait 1 000 % : la penalite d'un mois serait passee de
+ * 500 a 50 000 FCFA sans que rien ne s'en emeuve.
+ *
+ * Au-dela de 1, un taux ne peut etre qu'un pourcentage : aucun club ne penalise
+ * au-dela de 100 % du versement du. On le ramene donc, plutot que d'ecarter un
+ * reglage que le tresorier a bel et bien saisi. Au-dela de 100 apres conversion,
+ * ce n'est plus un taux : on le rejette.
+ */
+export function tauxNormalise(valeur: number): number | null {
+  if (!Number.isFinite(valeur) || valeur <= 0) return null;
+  const taux = valeur > 1 ? valeur / 100 : valeur;
+  return taux > 1 ? null : taux;
+}
+
+/**
  * Lit une variable d'environnement en traitant la chaine vide comme une absence.
  *
  * Une variable declaree mais laissee vide dans l'interface d'hebergement est un cas

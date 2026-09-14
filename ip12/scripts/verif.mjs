@@ -7,6 +7,7 @@ const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair } = await 
 );
 const { situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence } =
   await import("../.verif/penalites.mjs");
+const { tauxNormalise } = await import("../.verif/settings.mjs");
 
 /* ------------------------------------------------------------- performance */
 
@@ -378,4 +379,38 @@ assert.ok(/l'ensemble de sa dette/.test(planAvecPenalites.texte));
 // Retard non declare : l'exclusion de plein droit prime, comme avant.
 assert.equal(issueR5(3, false, false, 3, apresEffet).voie, "exclusion_plein_droit");
 
-console.log("OK - 82 verifications : performance, parts et avances, penalites art. 9, R4 et indissociabilite, regles individuelles, retards, absences, R3, R5, relance");
+/* --------------------------- taux de penalite : deux conventions, une lecture */
+
+// La convention du code : une fraction.
+assert.equal(tauxNormalise(0.1), 0.1);
+assert.equal(tauxNormalise(1), 1);
+
+/*
+ * Celle de l'application precedente : un pourcentage. Lu tel quel, 10 valait
+ * 1 000 %, et la penalite d'un mois passait de 500 a 50 000 FCFA.
+ */
+assert.equal(tauxNormalise(10), 0.1, "10 doit se lire 10 %");
+assert.equal(tauxNormalise(60), 0.6);
+assert.equal(tauxNormalise(100), 1);
+
+// Au-dela de 100 %, ce n'est plus un taux : on le rejette plutot que de l'appliquer.
+assert.equal(tauxNormalise(101), null);
+assert.equal(tauxNormalise(1000), null);
+assert.equal(tauxNormalise(0), null);
+assert.equal(tauxNormalise(-5), null);
+assert.equal(tauxNormalise(Number.NaN), null);
+
+// Le calcul obeit au taux regle par le bureau, non a la seule constante.
+assert.equal(calculerPenalites(["2026-07-01"], [], { tauxPenalite: 0.2 })[0].montant, 1000);
+assert.equal(calculerPenalites(["2026-07-01"], [], { tauxPenalite: 0.1 })[0].montant, 500);
+
+// Et il se combine au doublement R4 comme le taux des statuts.
+const r4Regle = calculerPenalites(
+  ["2026-05-01", "2026-06-01", "2026-07-01"],
+  [],
+  { tauxPenalite: 0.2 },
+);
+assert.ok(r4Regle.every((p) => p.doublee));
+assert.equal(r4Regle[0].montant, 2000);
+
+console.log("OK - 95 verifications : performance, parts et avances, penalites art. 9, R4 et indissociabilite, regles individuelles, retards, absences, R3, R5, relance");
