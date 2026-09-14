@@ -1,0 +1,14 @@
+{
+  "artboards": [
+    { "file": "Actuel.dc.html", "x": 0, "y": 0, "w": 390, "h": 1150, "title": "Aujourd'hui" },
+    { "file": "Main.dc.html", "x": 500, "y": 0, "w": 390, "h": 1230, "title": "D — Tableau de bord" },
+    { "file": "Epure.dc.html", "x": 1000, "y": 0, "w": 390, "h": 1190, "title": "E — Épuré" }
+  ],
+  "annotations": [
+    { "id": "cause", "x": 0, "y": -300, "w": 890, "text": "POURQUOI LES TROIS PREMIERES ETAIENT MOCHES\nElles chargeaient Archivo, Lora et IBM Plex depuis Google Fonts. L'apercu du canvas n'a aucun acces reseau : aucune de ces polices ne s'est chargee. Vous avez vu des mises en page calibrees pour des polices absentes.\nCes deux-ci n'utilisent que la police du telephone." },
+    { "id": "actuel", "x": 0, "y": -170, "w": 390, "text": "AUJOURD'HUI\nNeuf cartes blanches identiques. Rien ne dit ce qui presse, rien ne dit ce qui ne sert qu'une fois." },
+    { "id": "dirD", "x": 500, "y": -170, "w": 390, "text": "D — TABLEAU DE BORD\nLa grammaire de Wave et d'Orange Money : en-tete brun arrondi, carte de chiffres qui deborde, tuiles a icone, pastilles d'etat. Le rouge n'existe que la ou il y a un probleme.\nFamilier pour les membres. Plus charge." },
+    { "id": "dirE", "x": 1000, "y": -170, "w": 390, "text": "E — EPURE\nLa grammaire de Cowrywise : fond blanc, un seul grand chiffre, filets fins, lignes cliquables, aucun cadre. La couleur ne sert qu'a l'alerte.\nPlus serieux, plus calme. Moins immediat." }
+  ],
+  "launch": { "view": "canvas" }
+}

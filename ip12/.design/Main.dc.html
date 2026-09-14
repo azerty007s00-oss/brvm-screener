@@ -1,0 +1,184 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0;
+           font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    .tuile { display: flex; gap: 12px; align-items: flex-start; padding: 14px;
+             border-radius: 16px; background: #fff; border: 1px solid #f1e8dc;
+             box-shadow: 0 1px 2px rgba(42,26,16,.05), 0 10px 20px -16px rgba(42,26,16,.35); }
+    .chip { flex: none; width: 38px; height: 38px; border-radius: 12px; background: #f8f1e2;
+            display: grid; place-items: center; }
+    .tuile h3 { margin: 0; font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+    .tuile p  { margin: 3px 0 0; font-size: 11.5px; line-height: 1.45; color: #6b5a4a; }
+    .rub { margin: 0 0 10px; font-size: 11px; font-weight: 600; letter-spacing: .1em;
+           text-transform: uppercase; color: #8a7663; }
+    .num { font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+  </style>
+</helmet>
+
+<div style="width: 390px; background: #faf6ef; color: #2a1a10; padding-bottom: 28px">
+
+  <!-- En-tete brun, arrondi en bas, avec la carte d'etat qui deborde -->
+  <div style="background: #2a1a10; border-radius: 0 0 26px 26px; padding: 16px 18px 44px">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <div style="display: flex; align-items: center; gap: 10px">
+        <span style="width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px;
+                     background: #c9a227; color: #2a1a10; font-size: 12px; font-weight: 800">IP</span>
+        <span>
+          <span style="display: block; font-size: 16px; font-weight: 600; color: #faf6ef; letter-spacing: -.01em">Administration</span>
+          <span style="display: block; font-size: 11px; color: #b99c82">Président &middot; SORO Tiélina</span>
+        </span>
+      </div>
+      <span style="font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+                   color: #f0dfa4; background: rgba(201,162,39,.16); border: 1px solid rgba(201,162,39,.35);
+                   border-radius: 999px; padding: 5px 9px">Accès total</span>
+    </div>
+  </div>
+
+  <div style="padding: 0 16px; margin-top: -32px; display: flex; flex-direction: column; gap: 18px">
+
+    <!-- Carte d'etat : trois chiffres, comme un solde -->
+    <div style="border-radius: 18px; background: #fff; border: 1px solid #f1e8dc; padding: 14px 4px;
+                box-shadow: 0 2px 4px rgba(42,26,16,.06), 0 18px 30px -22px rgba(42,26,16,.5);
+                display: grid; grid-template-columns: repeat(3, 1fr)">
+      <div style="text-align: center">
+        <div class="num" style="font-size: 22px; font-weight: 700">10</div>
+        <div style="font-size: 10.5px; color: #6b5a4a; margin-top: 2px">membres</div>
+      </div>
+      <div style="text-align: center; border-left: 1px solid #f1e8dc; border-right: 1px solid #f1e8dc">
+        <div class="num" style="font-size: 22px; font-weight: 700; color: #a8322c">2</div>
+        <div style="font-size: 10.5px; color: #6b5a4a; margin-top: 2px">en retard</div>
+      </div>
+      <div style="text-align: center">
+        <div class="num" style="font-size: 22px; font-weight: 700; color: #a8861d">35 500</div>
+        <div style="font-size: 10.5px; color: #6b5a4a; margin-top: 2px">à encaisser</div>
+      </div>
+    </div>
+
+    <!-- Ce qui bloque : le rouge n'apparait que la -->
+    <div style="border-radius: 16px; background: #fdf2f1; border: 1px solid #f0cfcc; overflow: hidden">
+      <div style="display: flex; gap: 10px; padding: 13px 14px 11px; align-items: center">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#a8322c" stroke-width="2.2" stroke-linecap="round">
+          <path d="M12 9v4"/><path d="M12 17h.01"/>
+          <path d="M10.3 3.9 2.4 17.6a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" stroke-linejoin="round"/>
+        </svg>
+        <span style="font-size: 13px; font-weight: 600; color: #a8322c">2 points à régler</span>
+      </div>
+      <div style="border-top: 1px solid #f0cfcc; padding: 11px 14px; display: flex; justify-content: space-between; gap: 10px; align-items: center">
+        <span style="font-size: 12px; line-height: 1.4"><b style="font-weight: 600">CRON_SECRET</b> absent<br><span style="color: #8a5b57; font-size: 11px">aucune relance ne partira le 7, le 9 ni le 10</span></span>
+        <span style="flex: none; font-size: 11px; font-weight: 600; color: #fff; background: #a8322c; border-radius: 999px; padding: 6px 11px">Régler</span>
+      </div>
+      <div style="border-top: 1px solid #f0cfcc; padding: 11px 14px; display: flex; justify-content: space-between; gap: 10px; align-items: center">
+        <span style="font-size: 12px; line-height: 1.4"><b style="font-weight: 600">SETUP_TOKEN</b> encore présent<br><span style="color: #8a5b57; font-size: 11px">à supprimer avant de partager le lien</span></span>
+        <span style="flex: none; font-size: 11px; font-weight: 600; color: #fff; background: #a8322c; border-radius: 999px; padding: 6px 11px">Régler</span>
+      </div>
+    </div>
+
+    <!-- Le club : les trois reglages, lisibles sans ouvrir -->
+    <div>
+      <h2 class="rub">Le club</h2>
+      <div style="border-radius: 16px; background: #fff; border: 1px solid #f1e8dc; overflow: hidden;
+                  box-shadow: 0 1px 2px rgba(42,26,16,.05), 0 10px 20px -16px rgba(42,26,16,.35)">
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); padding: 14px 4px">
+          <div style="text-align: center">
+            <div style="font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #8a7663">Cotisation</div>
+            <div class="num" style="font-size: 17px; font-weight: 700; color: #a8861d; margin-top: 3px">5 000</div>
+          </div>
+          <div style="text-align: center; border-left: 1px solid #f1e8dc; border-right: 1px solid #f1e8dc">
+            <div style="font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #8a7663">Échéance</div>
+            <div class="num" style="font-size: 17px; font-weight: 700; margin-top: 3px">le 10</div>
+          </div>
+          <div style="text-align: center">
+            <div style="font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: #8a7663">Pénalité</div>
+            <div class="num" style="font-size: 17px; font-weight: 700; margin-top: 3px">10 %</div>
+          </div>
+        </div>
+        <div style="border-top: 1px solid #f1e8dc; display: flex">
+          <span style="flex: 1; text-align: center; padding: 11px; font-size: 12px; font-weight: 600; color: #a8861d">Modifier</span>
+          <span style="width: 1px; background: #f1e8dc"></span>
+          <span style="flex: 1; text-align: center; padding: 11px; font-size: 12px; font-weight: 600; color: #a8861d">Dérogations <span style="color:#8a7663; font-weight:500">(2)</span></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Les gestes courants -->
+    <div>
+      <h2 class="rub">Au quotidien</h2>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+
+        <div class="tuile">
+          <span class="chip">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#a8861d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M22 6 12 13 2 6"/><rect x="2" y="4" width="20" height="16" rx="2.5"/>
+            </svg>
+          </span>
+          <span style="flex: 1">
+            <h3>Relances</h3>
+            <p>Départ automatique le 7, le 9 et le 10. Envoi manuel possible.</p>
+          </span>
+          <span style="flex: none; align-self: center; font-size: 10px; font-weight: 600; color: #a8322c;
+                       background: #fdf2f1; border-radius: 999px; padding: 4px 8px">à l'arrêt</span>
+        </div>
+
+        <div class="tuile">
+          <span class="chip">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#a8861d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 5v14"/><path d="M5 12h14"/>
+            </svg>
+          </span>
+          <span style="flex: 1">
+            <h3>Reprise de l'historique</h3>
+            <p>Saisir les versements antérieurs à l'outil.</p>
+          </span>
+        </div>
+
+        <div class="tuile">
+          <span class="chip">
+            <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#a8861d" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>
+            </svg>
+          </span>
+          <span style="flex: 1">
+            <h3>Reprise des pénalités</h3>
+            <p>Le décompte que le trésorier tenait à la main.</p>
+          </span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Ce qu'on ouvre rarement : des lignes, pas des cartes -->
+    <div>
+      <h2 class="rub">Contrôle</h2>
+      <div style="border-radius: 16px; background: #fff; border: 1px solid #f1e8dc; overflow: hidden;
+                  box-shadow: 0 1px 2px rgba(42,26,16,.05), 0 10px 20px -16px rgba(42,26,16,.35)">
+        <div style="display: flex; align-items: center; gap: 10px; padding: 14px">
+          <span style="flex: 1; font-size: 13.5px; font-weight: 500">Journal des validations</span>
+          <span class="num" style="font-size: 12px; color: #6b5a4a">30</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b99c82" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+        </div>
+        <div style="border-top: 1px solid #f1e8dc; display: flex; align-items: center; gap: 10px; padding: 14px">
+          <span style="flex: 1; font-size: 13.5px; font-weight: 500">Sorties et exclusions <span style="color:#8a7663; font-size:11.5px">art. 20</span></span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b99c82" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+        </div>
+        <div style="border-top: 1px solid #f1e8dc; display: flex; align-items: center; gap: 10px; padding: 14px">
+          <span style="flex: 1; font-size: 13.5px; font-weight: 500">Sécurité</span>
+          <span style="font-size: 10px; font-weight: 600; color: #a8322c; background: #fdf2f1; border-radius: 999px; padding: 4px 8px">2 alertes</span>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#b99c82" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>
