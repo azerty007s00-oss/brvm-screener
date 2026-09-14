@@ -22,9 +22,13 @@ Phoenix Capital Management.
 - **Releve individuel** — chaque membre edite le sien, le bureau celui de tous : versements,
   part, penalites et situation statutaire, mis en page pour le papier. L'impression du
   navigateur produit le PDF, sans rien a installer.
-- **Relance du 10** — un cron Vercel envoie chaque mois un e-mail aux retardataires et le site
-  affiche les alertes correspondantes. L'envoi passe par le SMTP du club (Gmail, Brevo) ou par
-  Resend, selon ce qui est renseigne ; sans transport, seules les alertes du site subsistent.
+- **Relances des 7, 9 et 10** — un cron Vercel écrit trois fois par mois aux membres qui n'ont
+  pas versé. Les 7 et 9 préviennent avant l'échéance en disant les jours restants ; le 10 est le
+  dernier jour de l'art. 8. **La liste est recalculée à chaque passage** : qui a versé le 8 n'est
+  pas relancé le 9. Le récapitulatif au bureau ne part que le 10. L'envoi passe par le SMTP du
+  club (Gmail, Brevo) ou par Resend ; sans transport, seules les alertes du site subsistent.
+- **Avis au bureau** — déclaration de versement en attente, récapitulatif de ce qu'il y a à
+  encaisser, absence relevée par le secrétariat : le site n'attend plus qu'on l'ouvre.
 
 ## Règles appliquées
 
@@ -114,6 +118,8 @@ npm run verif                # vérifie TRI, Dietz modifié et répartition des 
 | `src/lib/valeurs.ts` | Valeurs des colonnes à contrainte, rassemblées en un point |
 | `src/lib/droits.ts` | Qui a le droit de faire quoi, rassemblé en un tableau |
 | `src/lib/version.ts` | Révision déployée, lue dans l'environnement Vercel |
-| `src/lib/courriel.ts` | Envoi des relances, par SMTP ou Resend |
+| `src/lib/courriel.ts` | Envoi du courrier, par SMTP ou Resend |
+| `src/lib/relance.ts` | Qui relancer, et que leur écrire |
+| `src/lib/avis.ts` | Avis adressés au bureau et aux membres absents |
 | `scripts/migration-r3.sql` | Ajout de la table des déclarations R3 |
 | `scripts/migration-frais.sql` | Ajout des frais de dépôt sur les virements |

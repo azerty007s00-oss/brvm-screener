@@ -2,7 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { debutMois, variable } from "@/lib/settings";
-import { destinatairesDuJour, envoyerRelances } from "@/lib/relance";
+import { destinatairesDuJour, envoyerRelances, joursAvantEcheance } from "@/lib/relance";
 import { avertirLeBureau } from "@/lib/avis";
 import { transportConfigure } from "@/lib/courriel";
 
@@ -10,12 +10,15 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
 /**
- * Relance des retardataires, declenchee par le cron Vercel le 10 de chaque mois.
+ * Relance des retardataires, trois fois par mois : les 7, 9 et 10.
  *
- * Le courrier part le matin du 10, alors que l'art. 8 laisse jusqu'a la fin de
- * cette journee pour payer : le mois courant n'est donc pas encore en retard. On
- * le rappelle quand meme, mais comme echeance du jour et sans penalite -- c'est le
- * sens d'une relance.
+ * Le 10 est le dernier jour de l'echeance statutaire (art. 8) : le courrier part
+ * le matin meme, et le mois courant n'est donc pas encore en retard. Les passages
+ * des 7 et 9 previennent avant qu'il ne le devienne, en disant combien de jours
+ * restent -- une relance qui arrive apres coup ne sert plus a rien.
+ *
+ * La liste est recalculee a chaque passage : qui a verse le 8 n'est pas relance
+ * le 9. C'est la raison d'etre de ces rappels echelonnes.
  *
  * La fabrique des courriers vit dans `lib/relance` : le bureau peut declencher la
  * meme relance a la main, et les deux doivent dire exactement la meme chose.
@@ -77,13 +80,17 @@ export async function GET(requete: Request) {
 
   /*
    * Le tresorier tient la caisse : c'est lui qui encaisse ce que la relance
-   * reclame. Sans ce recapitulatif il devrait ouvrir le site pour savoir ce qui
-   * l'attend -- et le 10 est precisement le jour ou il ne faut pas l'oublier.
+   * reclame. Le recapitulatif ne part qu'au jour de l'echeance : les passages
+   * anterieurs sont des rappels adresses aux membres, et trois courriers par
+   * mois au bureau useraient l'attention qu'on veut obtenir le 10.
    */
-  const avis = await avertirLeBureau(destinataires, maintenant);
+  const jourDEcheance = joursAvantEcheance(maintenant) <= 0;
+  const avis = jourDEcheance ? await avertirLeBureau(destinataires, maintenant) : 0;
 
   return NextResponse.json({
     mois: moisCourant,
+    jour: maintenant.getUTCDate(),
+    jourDEcheance,
     concernes: destinataires.length,
     enRetard: destinataires.filter((d) => d.arrieres.length > 0).length,
     echeanceDuJour: destinataires.filter((d) => d.echeanceDuJour && d.arrieres.length === 0).length,

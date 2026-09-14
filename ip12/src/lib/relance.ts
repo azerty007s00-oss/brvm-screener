@@ -1,7 +1,17 @@
 import "server-only";
 import { avancesExigees, situationsClub, type AvanceExigee, type SituationClub } from "@/lib/queries";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
-import { CLUB, EFFET, REGLES, dateCourte, debutMois, fcfa, moisLong, variable } from "@/lib/settings";
+import {
+  CLUB,
+  EFFET,
+  REGLES,
+  dateCourte,
+  debutMois,
+  deMois,
+  fcfa,
+  moisLong,
+  variable,
+} from "@/lib/settings";
 
 /**
  * Fabrique et envoi des relances.
@@ -80,7 +90,7 @@ export async function envoyerRelances(
   for (const d of destinataires) {
     const { ok } = await envoyerCourriel({
       destinataire: d.situation.email,
-      sujet: sujetRelance(d, moisCourant),
+      sujet: sujetRelance(d, moisCourant, maintenant),
       texte: texteRelance(d, siteUrl, maintenant),
     });
     (ok ? envoyes : echecs).push(d.situation.email);
@@ -89,17 +99,30 @@ export async function envoyerRelances(
 }
 
 
+/**
+ * Jours restants avant l'echeance du mois, negatif une fois passee.
+ *
+ * La relance part plusieurs fois avant le 10 : ecrire « du aujourd'hui » le 7
+ * serait faux, et user la formule pour le jour ou elle compte vraiment.
+ */
+export function joursAvantEcheance(maintenant: Date): number {
+  return REGLES.jourEcheance - maintenant.getUTCDate();
+}
+
 /*
  * L'objet nomme le motif le plus grave. Une mesure disciplinaire assortie d'une
  * date prime sur un simple rappel d'echeance : c'est elle qu'il faut lire.
  */
-export function sujetRelance(d: Destinataire, moisCourant: string): string {
+export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: Date): string {
   if (d.avanceManquante) return `${CLUB.sigle} — avance obligatoire non constituee`;
   if (d.arrieres.length > 0) return `${CLUB.sigle} — versement en retard (${d.arrieres.length} mois)`;
   if (d.situation.nbPenalitesImpayees > 0) {
     return `${CLUB.sigle} — ${d.situation.nbPenalitesImpayees} penalite(s) de retard impayee(s)`;
   }
-  return `${CLUB.sigle} — votre versement de ${moisLong(moisCourant)} est du aujourd'hui`;
+  const reste = joursAvantEcheance(maintenant);
+  return reste > 0
+    ? `${CLUB.sigle} — versement ${deMois(moisCourant)} attendu le ${REGLES.jourEcheance}`
+    : `${CLUB.sigle} — votre versement ${deMois(moisCourant)} est du aujourd'hui`;
 }
 
 export function texteRelance(
@@ -111,10 +134,16 @@ export function texteRelance(
   const lignes: string[] = [`Bonjour ${situation.nom},`];
 
   if (echeanceDuJour) {
+    const reste = joursAvantEcheance(maintenant);
     lignes.push(
       "",
-      `Votre versement de ${fcfa(REGLES.cotisationMensuelle)} pour ${moisLong(echeanceDuJour)} ` +
-        `est du aujourd'hui, dernier jour de l'echeance statutaire (art. 8).`,
+      reste > 0
+        ? `Votre versement de ${fcfa(REGLES.cotisationMensuelle)} pour ` +
+          `${moisLong(echeanceDuJour)} est attendu au plus tard le ${REGLES.jourEcheance} ` +
+          `(art. 8) : il vous reste ${reste} jour${reste > 1 ? "s" : ""}.`
+        : `Votre versement de ${fcfa(REGLES.cotisationMensuelle)} pour ` +
+          `${moisLong(echeanceDuJour)} est du aujourd'hui, dernier jour de l'echeance ` +
+          "statutaire (art. 8).",
     );
   }
 
@@ -214,6 +243,12 @@ export function texteRelance(
   }
 
   if (siteUrl) lignes.push("", `Regulariser : ${siteUrl}`);
+  /*
+   * La date distingue les passages du mois. Trois courriers au texte identique
+   * sont replies par la messagerie sous « messages precedents masques », et le
+   * dernier parait vide -- l'ecueil deja rencontre sur les courriers d'essai.
+   */
+  lignes.push("", `Relance du ${dateCourte(maintenant.toISOString().slice(0, 10))}.`);
   lignes.push("", `Le bureau — ${CLUB.nom}`);
   return lignes.join("\n");
 }

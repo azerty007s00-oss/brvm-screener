@@ -7,7 +7,7 @@ const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair } = await 
 );
 const { situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence } =
   await import("../.verif/penalites.mjs");
-const { tauxNormalise } = await import("../.verif/settings.mjs");
+const { tauxNormalise, deMois } = await import("../.verif/settings.mjs");
 
 /* ------------------------------------------------------------- performance */
 
@@ -413,4 +413,21 @@ const r4Regle = calculerPenalites(
 assert.ok(r4Regle.every((p) => p.doublee));
 assert.equal(r4Regle[0].montant, 2000);
 
-console.log("OK - 95 verifications : performance, parts et avances, penalites art. 9, R4 et indissociabilite, regles individuelles, retards, absences, R3, R5, relance");
+/* --------------------------------------- elision devant les mois a voyelle */
+
+/*
+ * Trois mois commencent par une voyelle -- avril, aout, octobre -- et « de
+ * octobre » saute aux yeux dans un courrier adresse a dix personnes. On teste
+ * le prefixe, non le nom du mois : celui-ci porte des accents que la locale
+ * rend, et les reecrire ici n'eprouverait que ma copie.
+ */
+for (const mois of ["2026-04-01", "2026-08-01", "2026-10-01"]) {
+  assert.ok(deMois(mois).startsWith("d'"), `${mois} doit prendre l'elision : ${deMois(mois)}`);
+}
+for (const mois of ["2026-01-01", "2026-03-01", "2026-12-01"]) {
+  assert.ok(deMois(mois).startsWith("de "), `${mois} ne prend pas l'elision : ${deMois(mois)}`);
+}
+assert.equal(deMois("2026-10-01"), "d'octobre 2026");
+assert.equal(deMois("2026-01-01"), "de janvier 2026");
+
+console.log("OK - 102 verifications : performance, parts et avances, penalites art. 9, R4 et indissociabilite, regles individuelles, retards, absences, R3, R5, relance");

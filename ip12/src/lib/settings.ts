@@ -71,6 +71,17 @@ export const EFFET = {
 } as const;
 
 /**
+ * « de janvier », mais « d'avril » : l'elision devant voyelle.
+ *
+ * Trois mois commencent par une voyelle en francais -- avril, aout, octobre --
+ * et « de octobre » saute aux yeux dans un courrier adresse a dix personnes.
+ */
+export function deMois(isoMois: string): string {
+  const nom = moisLong(isoMois);
+  return /^[aeiouyAEIOUY]/.test(nom) ? `d'${nom}` : `de ${nom}`;
+}
+
+/**
  * Ramene un taux lu en base a la convention du code, ou le rejette.
  *
  * Un taux se dit de deux facons : 0,1 ou 10 %. L'application precedente ecrivait
