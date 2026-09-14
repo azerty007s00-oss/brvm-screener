@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
+import { avertirAbsence } from "@/lib/avis";
+import { absencesParMembre, reglagesEffectifs } from "@/lib/queries";
 import type { EtatFormulaire } from "./auth";
 
 const PRESENCES = ["present", "absent", "excuse"] as const;
@@ -60,6 +62,18 @@ export async function enregistrerPresences(
   }
 
   const sql = db();
+
+  /*
+   * L'etat anterieur, releve avant d'ecraser la feuille. La feuille se corrige :
+   * sans cette comparaison, chaque reenregistrement renverrait l'avis a tous les
+   * absents, y compris ceux qui l'ont deja recu la veille.
+   */
+  const avant = new Map(
+    (await sql`select member_id, status from attendances where meeting_id = ${reunionId}::uuid`).map(
+      (r) => [String(r.member_id), String(r.status)],
+    ),
+  );
+
   await sql`delete from attendances where meeting_id = ${reunionId}::uuid`;
   for (const p of pointes) {
     await sql`
@@ -69,18 +83,49 @@ export async function enregistrerPresences(
   }
 
   const absents = pointes.filter((p) => p.statut === "absent").length;
+
+  /*
+   * Seuls ceux qui viennent d'etre pointes absents sont avertis. Passer un membre
+   * de « excuse » a « absent » est un nouveau fait, et vaut avis ; le laisser
+   * absent d'un enregistrement a l'autre n'en est pas un.
+   */
+  const nouveaux = pointes.filter(
+    (p) => p.statut === "absent" && avant.get(p.membreId) !== "absent",
+  );
+  let avertis = 0;
+  if (nouveaux.length > 0) {
+    const [seance, comptes, reglages] = await Promise.all([
+      sql`select to_char(meeting_date, 'YYYY-MM-DD') as date, title from meetings where id = ${reunionId}::uuid`,
+      absencesParMembre().catch(() => []),
+      reglagesEffectifs(),
+    ]);
+    const info = seance[0];
+    if (info) {
+      for (const p of nouveaux) {
+        const parti = await avertirAbsence({
+          membreId: p.membreId,
+          seance: { date: String(info.date), titre: (info.title as string | null) ?? null },
+          total: comptes.find((c) => c.membreId === p.membreId)?.injustifiees ?? 1,
+          regles: reglages,
+        }).catch(() => false);
+        if (parti) avertis++;
+      }
+    }
+  }
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "feuille_presence",
     { entite: "meetings", id: reunionId },
-    { pointes: pointes.length, absents },
+    { pointes: pointes.length, absents, nouveauxAbsents: nouveaux.length, avertis },
   );
   revalidatePath("/", "layout");
   return {
     ok: true,
     message:
       absents > 0
-        ? `Feuille enregistree. ${absents} absence${absents > 1 ? "s" : ""} — vous pouvez les sanctionner depuis la page Penalites.`
+        ? `Feuille enregistree. ${absents} absence${absents > 1 ? "s" : ""} — ` +
+          `${avertis > 0 ? `${avertis} membre(s) averti(s) par courriel. ` : ""}` +
+          "Vous pouvez les sanctionner depuis la page Penalites."
         : "Feuille enregistree.",
   };
 }

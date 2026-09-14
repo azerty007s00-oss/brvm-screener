@@ -1,7 +1,7 @@
 import "server-only";
 import { listerMembres } from "@/lib/queries";
 import { envoyerCourriel } from "@/lib/courriel";
-import { CLUB, fcfa, moisLong, variable } from "@/lib/settings";
+import { CLUB, dateCourte, fcfa, moisLong, variable } from "@/lib/settings";
 import { titulaires, DROITS } from "@/lib/droits";
 import type { Destinataire } from "@/lib/relance";
 import type { Role } from "@/lib/settings";
@@ -134,4 +134,55 @@ export async function avertirDeclaration(params: {
 /** Qui recoit ces avis, pour le dire a l'ecran. */
 export function destinatairesAvis(roles: Record<Role, string>): string {
   return titulaires("validerVersement", roles);
+}
+
+/**
+ * Avis d'absence, adresse au membre que le secretariat vient de pointer absent.
+ *
+ * Une absence se penalise par tranches, et se justifie en la passant en
+ * « excuse ». Encore faut-il que l'interesse sache qu'elle a ete relevee : sans
+ * avis, il decouvre la penalite au moment ou elle est constatee, quand il est
+ * trop tard pour dire qu'il avait prevenu.
+ */
+export async function avertirAbsence(params: {
+  membreId: string;
+  seance: { date: string; titre: string | null };
+  /** Absences injustifiees du membre, celle-ci comprise. */
+  total: number;
+  regles: { penaliteAbsence: number; absencesParTranche: number };
+}): Promise<boolean> {
+  const membres = await listerMembres().catch(() => []);
+  const membre = membres.find((m) => String(m.id) === params.membreId);
+  if (!membre?.email) return false;
+
+  const { penaliteAbsence, absencesParTranche } = params.regles;
+  const fermeUneTranche =
+    absencesParTranche > 0 && params.total > 0 && params.total % absencesParTranche === 0;
+
+  const lignes = [
+    `Bonjour ${membre.nom},`,
+    "",
+    `Le secretariat a enregistre votre absence a la seance du ${dateCourte(params.seance.date)}` +
+      `${params.seance.titre ? ` — ${params.seance.titre}` : ""}.`,
+    "",
+    `Vous comptez desormais ${params.total} absence(s) injustifiee(s).`,
+    fermeUneTranche
+      ? `Ce nombre ferme une tranche de ${absencesParTranche} : une penalite de ` +
+        `${fcfa(penaliteAbsence)} est due.`
+      : `A la prochaine absence injustifiee, une penalite de ${fcfa(penaliteAbsence)} sera due ` +
+        `— le club sanctionne par tranche de ${absencesParTranche}, non l'empechement ponctuel.`,
+    "",
+    "Si votre absence etait justifiee, signalez-le au secretaire : il la passera en " +
+      "« excuse », et elle sortira du compte penalisable.",
+  ];
+  const siteUrl = variable("NEXT_PUBLIC_SITE_URL", "");
+  if (siteUrl) lignes.push("", `Feuille de presence : ${siteUrl}/reunions`);
+  lignes.push("", `Le suivi du club — ${CLUB.nom}`);
+
+  const { ok } = await envoyerCourriel({
+    destinataire: membre.email,
+    sujet: `${CLUB.sigle} — absence relevee a la seance du ${dateCourte(params.seance.date)}`,
+    texte: lignes.join("\n"),
+  });
+  return ok;
 }
