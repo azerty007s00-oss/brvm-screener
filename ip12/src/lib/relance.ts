@@ -1,4 +1,5 @@
 import "server-only";
+import { db } from "@/lib/db";
 import { avancesExigees, situationsClub, type AvanceExigee, type SituationClub } from "@/lib/queries";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
 import {
@@ -96,6 +97,62 @@ export async function envoyerRelances(
     (ok ? envoyes : echecs).push(d.situation.email);
   }
   return { envoyes, echecs };
+}
+
+
+/* ------------------------------------------------------------ idempotence */
+
+/**
+ * Les membres a qui une relance automatique est deja partie aujourd'hui.
+ *
+ * Le cron passe trois fois par mois, mais rien ne garantit qu'il ne passe qu'une
+ * fois par jour : un redeploiement, une reprise apres erreur, un declenchement
+ * repete cote hebergeur, et dix membres recoivent le meme courrier deux fois.
+ * Une relance repetee le meme jour ne dit rien de plus et abime la seule chose
+ * qu'elle doit obtenir -- qu'on la lise.
+ *
+ * Seuls les envois reussis comptent : un echec doit pouvoir etre retente au
+ * passage suivant.
+ *
+ * La date est comparee en UTC, comme l'horaire du cron, pour qu'un fuseau de
+ * serveur different ne decale pas la journee.
+ *
+ * Reserve : deux passages strictement simultanes liraient tous deux une liste
+ * vide et enverraient deux fois. L'hebergeur ne declenche pas un meme horaire en
+ * parallele ; s'en premunir demanderait une contrainte d'unicite sur une
+ * expression de date, que PostgreSQL n'indexe pas sur un timestamptz.
+ */
+export async function dejaRelancesAujourdhui(maintenant = new Date()): Promise<Set<string>> {
+  const jour = maintenant.toISOString().slice(0, 10);
+  const sql = db();
+  const lignes = (await sql`
+    select distinct member_id
+    from reminder_log
+    where channel = 'email'
+      and ok = true
+      and (sent_at at time zone 'UTC')::date = ${jour}::date
+  `) as { member_id: string }[];
+  return new Set(lignes.map((l) => l.member_id));
+}
+
+/** Inscrit au registre l'issue d'un envoi, membre par membre. */
+export async function tracerRelances(
+  destinataires: Destinataire[],
+  envoyes: string[],
+  maintenant = new Date(),
+  canal = "email",
+): Promise<void> {
+  if (destinataires.length === 0) return;
+  const moisCourant = debutMois(maintenant);
+  const sql = db();
+  for (const d of destinataires) {
+    const reussi = envoyes.includes(d.situation.email);
+    await sql`
+      insert into reminder_log (period, member_id, channel, ok, error)
+      values (${moisCourant}::date, ${d.situation.membreId}::uuid, ${canal}, ${reussi},
+              ${reussi ? null : "envoi impossible"})
+    `;
+  }
 }
 
 

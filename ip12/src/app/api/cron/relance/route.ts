@@ -1,8 +1,13 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
 import { debutMois, variable } from "@/lib/settings";
-import { destinatairesDuJour, envoyerRelances, joursAvantEcheance } from "@/lib/relance";
+import {
+  dejaRelancesAujourdhui,
+  destinatairesDuJour,
+  envoyerRelances,
+  joursAvantEcheance,
+  tracerRelances,
+} from "@/lib/relance";
 import { avertirLeBureau } from "@/lib/avis";
 import { transportConfigure } from "@/lib/courriel";
 
@@ -61,19 +66,28 @@ export async function GET(requete: Request) {
     return NextResponse.json({ erreur: String(e) }, { status: 500 });
   }
 
-  const { envoyes, echecs } = await envoyerRelances(destinataires, maintenant);
-
-  // reminder_log porte une ligne par membre et par periode : on trace chaque envoi.
+  /*
+   * Qui a deja recu la relance du jour n'est pas relance une seconde fois. Le
+   * registre fait foi : c'est la seule memoire qui survive a un redemarrage.
+   * En cas d'echec de lecture on n'ecrit a personne -- deux courriers valent
+   * pire qu'un courrier en retard, et le passage suivant rattrapera.
+   */
+  let dejaVus: Set<string>;
   try {
-    const sql = db();
-    for (const d of destinataires) {
-      const reussi = envoyes.includes(d.situation.email);
-      await sql`
-        insert into reminder_log (period, member_id, channel, ok, error)
-        values (${moisCourant}::date, ${d.situation.membreId}::uuid, 'email', ${reussi},
-                ${reussi ? null : "envoi impossible"})
-      `;
-    }
+    dejaVus = await dejaRelancesAujourdhui(maintenant);
+  } catch (e) {
+    return NextResponse.json(
+      { erreur: `Registre des relances illisible, aucun courrier envoye : ${String(e)}` },
+      { status: 500 },
+    );
+  }
+  const aRelancer = destinataires.filter((d) => !dejaVus.has(d.situation.membreId));
+  const ignores = destinataires.length - aRelancer.length;
+
+  const { envoyes, echecs } = await envoyerRelances(aRelancer, maintenant);
+
+  try {
+    await tracerRelances(aRelancer, envoyes, maintenant);
   } catch {
     // La trace de relance ne doit pas faire echouer le traitement.
   }
@@ -84,14 +98,24 @@ export async function GET(requete: Request) {
    * anterieurs sont des rappels adresses aux membres, et trois courriers par
    * mois au bureau useraient l'attention qu'on veut obtenir le 10.
    */
+  /*
+   * Le recapitulatif suit le meme sort : il ne part que si au moins une relance
+   * nouvelle est partie ce jour. Un second passage le meme jour ne relance
+   * personne, donc n'a rien de neuf a resumer. Le detail, lui, porte sur tous
+   * les concernes et pas seulement sur les nouveaux : c'est l'etat de la caisse
+   * que le tresorier lit, pas la liste des courriers.
+   */
   const jourDEcheance = joursAvantEcheance(maintenant) <= 0;
-  const avis = jourDEcheance ? await avertirLeBureau(destinataires, maintenant) : 0;
+  const avis =
+    jourDEcheance && aRelancer.length > 0 ? await avertirLeBureau(destinataires, maintenant) : 0;
 
   return NextResponse.json({
     mois: moisCourant,
     jour: maintenant.getUTCDate(),
     jourDEcheance,
     concernes: destinataires.length,
+    // Deja relances aujourd'hui, donc laisses tranquilles.
+    ignores,
     enRetard: destinataires.filter((d) => d.arrieres.length > 0).length,
     echeanceDuJour: destinataires.filter((d) => d.echeanceDuJour && d.arrieres.length === 0).length,
     // Cotisations a jour, mais penalites en souffrance : le profil vise par l'assemblee.

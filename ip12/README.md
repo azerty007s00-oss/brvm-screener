@@ -25,8 +25,14 @@ Phoenix Capital Management.
 - **Relances des 7, 9 et 10** — un cron Vercel écrit trois fois par mois aux membres qui n'ont
   pas versé. Les 7 et 9 préviennent avant l'échéance en disant les jours restants ; le 10 est le
   dernier jour de l'art. 8. **La liste est recalculée à chaque passage** : qui a versé le 8 n'est
-  pas relancé le 9. Le récapitulatif au bureau ne part que le 10. L'envoi passe par le SMTP du
-  club (Gmail, Brevo) ou par Resend ; sans transport, seules les alertes du site subsistent.
+  pas relancé le 9. **Un membre déjà relancé dans la journée ne l'est pas deux fois** : le
+  registre `reminder_log` fait foi, et seuls les envois réussis comptent — un échec est retenté au
+  passage suivant. Le récapitulatif au bureau ne part que le 10, et seulement si au moins une
+  relance nouvelle est partie. La relance déclenchée à la main par le bureau reste toujours
+  possible : elle s'inscrit sous un canal distinct, ne bloque pas le passage automatique, et
+  signale au président combien de destinataires avaient déjà reçu le courrier du jour. L'envoi
+  passe par le SMTP du club (Gmail, Brevo) ou par Resend ; sans transport, seules les alertes du
+  site subsistent.
 - **Avis au bureau** — déclaration de versement en attente, récapitulatif de ce qu'il y a à
   encaisser, absence relevée par le secrétariat : le site n'attend plus qu'on l'ouvre.
 

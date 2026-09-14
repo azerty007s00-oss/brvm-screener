@@ -6,7 +6,12 @@ import { db } from "@/lib/db";
 import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { descriptionTransport, envoyerCourriel, transportConfigure } from "@/lib/courriel";
-import { destinatairesDuJour, envoyerRelances } from "@/lib/relance";
+import {
+  dejaRelancesAujourdhui,
+  destinatairesDuJour,
+  envoyerRelances,
+  tracerRelances,
+} from "@/lib/relance";
 import { versionDeployee } from "@/lib/version";
 import { listerMembres, reglagesEffectifs } from "@/lib/queries";
 import { CLUB, REGLES, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
@@ -532,9 +537,11 @@ export async function envoyerCourrielEssai(
  * moyen d'ecrire aux retardataires. Le courrier est exactement celui du 10 --
  * deux redactions divergentes feraient douter de celle qu'on a recue.
  *
- * Sans trace dans `reminder_log` : cette table porte une ligne par membre et par
- * periode, et y inscrire un envoi manuel ferait croire que la relance du mois est
- * partie. Le journal, lui, garde qui a decide d'ecrire.
+ * Inscrit au registre sous un canal distinct, `email-manuel` : la trace existe,
+ * mais elle ne fait pas passer le membre pour deja relance et n'empeche donc pas
+ * le passage automatique du lendemain. L'inverse vaut aussi -- le bureau garde le
+ * droit d'ecrire un jour ou le cron a deja ecrit ; le message le lui signale
+ * plutot que de le lui refuser. Le journal, lui, garde qui a decide d'ecrire.
  */
 export async function relancerMaintenant(
   _precedent: EtatFormulaire,
@@ -552,7 +559,20 @@ export async function relancerMaintenant(
     return { ok: true, message: "Personne a relancer : tout le monde est a jour." };
   }
 
+  /*
+   * Le nombre de membres deja touches aujourd'hui par le passage automatique :
+   * l'envoi n'est pas refuse, mais l'annoncer evite un second courrier decide
+   * sans le savoir.
+   */
+  const dejaVus = await dejaRelancesAujourdhui(maintenant).catch(() => new Set<string>());
+  const dejaTouches = destinataires.filter((d) => dejaVus.has(d.situation.membreId)).length;
+
   const { envoyes, echecs } = await envoyerRelances(destinataires, maintenant);
+  try {
+    await tracerRelances(destinataires, envoyes, maintenant, "email-manuel");
+  } catch {
+    // Le registre est un temoin, pas une condition : son echec n'annule pas l'envoi.
+  }
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "relance_manuelle",
@@ -562,9 +582,14 @@ export async function relancerMaintenant(
   revalidatePath("/", "layout");
 
   const reste = echecs.length > 0 ? ` ${echecs.length} envoi(s) ont echoue.` : "";
+  const doublon =
+    dejaTouches > 0
+      ? ` ${dejaTouches} d'entre eux avaient deja recu la relance automatique aujourd'hui : ` +
+        "pour ceux-la, c'est un second courrier."
+      : "";
   return {
     ok: echecs.length === 0,
-    message: `${envoyes.length} relance(s) envoyee(s) sur ${destinataires.length} membre(s) concerne(s).${reste}`,
+    message: `${envoyes.length} relance(s) envoyee(s) sur ${destinataires.length} membre(s) concerne(s).${reste}${doublon}`,
     erreur: echecs.length > 0 ? `${echecs.length} envoi(s) ont echoue.` : undefined,
   };
 }
