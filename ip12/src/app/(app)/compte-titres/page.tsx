@@ -114,17 +114,17 @@ export default async function PageCompteTitres() {
                 nom="montant"
                 libelle="Montant vire (FCFA)"
                 type="number"
-                min={1}
-                aide="Ce qui quitte la caisse, frais compris."
+                min={0}
+                aide="Ce qui quitte la caisse, frais compris. Zero pour n'inscrire que des frais."
               />
               <Champ
                 nom="frais"
-                libelle="Dont frais de depot (FCFA)"
+                libelle="Frais (FCFA)"
                 type="number"
                 min={0}
                 valeur={0}
                 requis={false}
-                aide="La part retenue par la SGI a l'arrivee. Zero si les frais sont regles a part depuis la caisse."
+                aide="Retenus a l'arrivee sur le virement, ou preleves seuls dans le compte-titres : laissez alors le montant a zero. Zero ici si les frais sont regles a part depuis la caisse."
               />
               <Selection
                 nom="sens"
@@ -158,13 +158,31 @@ export default async function PageCompteTitres() {
               return (
                 <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                   <div className="min-w-0">
+                    {/*
+                      * Un mouvement a zero franc n'est pas un virement : c'est un
+                      * prelevement de frais dans le compte-titres. L'afficher
+                      * « + 0 FCFA » le ferait passer pour une saisie ratee.
+                      */}
                     <p className="flex items-center gap-1.5 text-sm font-medium">
-                      {sortie ? "-" : "+"} {fcfa(a.montant)}
-                      {sortie && <Badge ton="ambre">Retrait</Badge>}
+                      {a.montant === 0 ? (
+                        <>
+                          - {fcfa(a.frais)}
+                          <Badge ton="rouge">Frais</Badge>
+                        </>
+                      ) : (
+                        <>
+                          {sortie ? "-" : "+"} {fcfa(a.montant)}
+                          {sortie && <Badge ton="ambre">Retrait</Badge>}
+                        </>
+                      )}
                     </p>
                     <p className="text-xs" style={{ color: "var(--discret)" }}>
                       {dateCourte(a.date_transfert)}
-                      {a.frais > 0 ? ` · dont ${fcfa(a.frais)} de frais` : ""}
+                      {a.montant === 0
+                        ? " · preleves dans le compte-titres"
+                        : a.frais > 0
+                          ? ` · dont ${fcfa(a.frais)} de frais`
+                          : ""}
                       {a.saisi_par_nom ? ` · ${a.saisi_par_nom}` : ""}
                       {a.note ? ` · ${a.note}` : ""}
                     </p>

@@ -886,7 +886,17 @@ async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
   let triPeriode: Synthese["triPeriode"] = null;
   if (valorisation) {
     for (const a of apports) {
-      if (a.date_transfert <= valorisation.date_valo) {
+      /*
+       * Les lignes de frais seuls portent un montant nul : elles n'ont rien
+       * deplace entre la caisse et le compte-titres.
+       *
+       * Le taux, lui, n'y verrait rien -- un flux nul ne pese pas dans la valeur
+       * actuelle nette, quelle que soit sa date, et le controle le montre. Ce qui
+       * bougerait, c'est `debut` : la periode affichee sous le TRI partirait du
+       * jour d'un prelevement de frais, annoncant un placement plus ancien qu'il
+       * n'est. Le taux serait juste, la phrase qui l'accompagne fausse.
+       */
+      if (net(a) !== 0 && a.date_transfert <= valorisation.date_valo) {
         flux.push({ date: a.date_transfert, montant: -net(a) });
       }
     }

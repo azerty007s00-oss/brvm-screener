@@ -26,12 +26,29 @@ export async function enregistrerApport(
   const note = String(donnees.get("note") ?? "").trim() || null;
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateApport)) return { ok: false, erreur: "Date invalide." };
-  if (!Number.isFinite(montant) || montant <= 0) return { ok: false, erreur: "Montant invalide." };
+  if (!Number.isFinite(montant) || montant < 0) return { ok: false, erreur: "Montant invalide." };
   if (sens !== SENS_TRANSFERT.entree && sens !== SENS_TRANSFERT.sortie) {
     return { ok: false, erreur: "Sens du mouvement inconnu." };
   }
   if (!Number.isFinite(frais) || frais < 0) return { ok: false, erreur: "Frais invalides." };
-  if (frais > montant) {
+
+  /*
+   * Un mouvement a zero franc et sans frais ne dit rien.
+   */
+  if (montant === 0 && frais === 0) {
+    return { ok: false, erreur: "Indiquez un montant vire, des frais, ou les deux." };
+  }
+
+  /*
+   * Frais seuls : la SGI preleve sa commission dans le compte-titres, sans
+   * qu'aucun virement l'accompagne. C'est le cas ordinaire d'un ordre de bourse.
+   *
+   * Ils s'inscrivent avec un montant nul, et c'est voulu : la caisse n'a rien
+   * verse, elle ne doit pas bouger. Le releve du portefeuille porte deja la
+   * baisse -- inscrire un retrait par-dessus ferait remonter la caisse comme si
+   * l'argent etait revenu, et la depense s'annulerait au lieu de se voir.
+   */
+  if (montant > 0 && frais > montant) {
     return { ok: false, erreur: "Les frais ne peuvent pas depasser le montant vire." };
   }
 

@@ -12,6 +12,12 @@ Phoenix Capital Management.
   restant requise. Personne ne valide son propre versement.
 - **Avances et retards** — une déclaration peut couvrir plusieurs mois d'avance. Les mois
   échus non couverts basculent automatiquement en retard après le 10 (art. 8).
+- **Frais de compte-titres** — ils se règlent de trois façons, et les trois se saisissent :
+  retenus à l'arrivée sur un virement, payés à part depuis la caisse (catégorie *Frais SGI* ou
+  *Frais bancaires*), ou **prélevés seuls dans le compte-titres** par la SGI, sans virement qui
+  les accompagne. Ce dernier cas s'inscrit avec un montant viré nul : la caisse n'a rien versé,
+  elle ne bouge pas, et le relevé du portefeuille porte déjà la baisse. Inscrire un retrait à la
+  place ferait remonter la caisse comme si l'argent était revenu.
 - **Versements partiels** — un mois n'est soldé que lorsque la somme des versements atteint la
   cotisation attendue. En dessous, le mois reste dû et la pénalité de l'art. 9 porte sur la
   cotisation entière, jamais sur le seul reliquat : verser un acompte ne réduit pas la sanction.

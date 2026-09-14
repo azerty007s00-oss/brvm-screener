@@ -567,6 +567,39 @@ assert.equal(derogue.cellules[0].requis, 3000);
 assert.equal(derogue.nbMoisRetard, 0);
 
 
+/* ------------------------------------- frais preleves dans le compte-titres */
+
+/*
+ * La SGI preleve sa commission directement dans le compte-titres, sans virement
+ * qui l'accompagne. Une telle ligne porte un montant nul.
+ *
+ * Le taux ne s'en trouve pas change : un flux nul ne pese pas dans la valeur
+ * actuelle nette, quelle que soit sa date. C'est verifie ici parce que j'avais
+ * suppose l'inverse -- et que la raison d'ecarter ces lignes du calcul n'est
+ * donc pas le taux, mais la periode affichee a cote de lui, qui partirait du
+ * jour d'un prelevement de frais et annoncerait un placement plus ancien qu'il
+ * n'est.
+ */
+const triSansFluxNul = tri([
+  { date: "2026-01-01", montant: -1_000_000 },
+  { date: "2027-01-01", montant: 1_200_000 },
+]);
+const triAvecFluxNul = tri([
+  { date: "2025-01-01", montant: 0 },
+  { date: "2026-01-01", montant: -1_000_000 },
+  { date: "2027-01-01", montant: 1_200_000 },
+]);
+assert.ok(triSansFluxNul !== null && triAvecFluxNul !== null, "les deux TRI doivent etre calculables");
+assert.ok(
+  Math.abs(triSansFluxNul - triAvecFluxNul) < 1e-9,
+  `un flux nul ne doit pas deplacer le taux (${triSansFluxNul} contre ${triAvecFluxNul})`,
+);
+assert.ok(
+  Math.abs(triSansFluxNul - 0.2) < 0.001,
+  `TRI attendu ~0,20, obtenu ${triSansFluxNul}`,
+);
+
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
