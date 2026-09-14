@@ -50,6 +50,13 @@ Phoenix Capital Management.
   signale au président combien de destinataires avaient déjà reçu le courrier du jour. L'envoi
   passe par le SMTP du club (Gmail, Brevo) ou par Resend ; sans transport, seules les alertes du
   site subsistent.
+- **Accès envoyés par courrier** — créer un membre ou réinitialiser son mot de passe lui envoie
+  ses accès : lien du site, identifiant, mot de passe provisoire. Le mot de passe ne sert qu'une
+  fois — l'écran de première connexion en exige un autre avant d'ouvrir quoi que ce soit. L'envoi
+  suit l'écriture en base, jamais l'inverse : un courrier parti sur un mot de passe non enregistré
+  donnerait un accès qui ne fonctionne pas. Son échec n'annule pas l'opération, mais il est dit,
+  et le mot de passe reste affiché pour être transmis autrement. Sans `NEXT_PUBLIC_SITE_URL`, le
+  courrier part sans l'adresse du site et le message de retour le signale.
 - **Avis au bureau** — déclaration de versement en attente, récapitulatif de ce qu'il y a à
   encaisser, absence relevée par le secrétariat : le site n'attend plus qu'on l'ouvre.
 

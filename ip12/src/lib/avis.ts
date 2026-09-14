@@ -186,3 +186,52 @@ export async function avertirAbsence(params: {
   });
   return ok;
 }
+
+/**
+ * Les acces d'un membre, envoyes a lui seul.
+ *
+ * Le president reinitialisait, lisait le mot de passe a l'ecran, puis le
+ * recopiait dans WhatsApp -- ou il restait, lisible par qui ouvrirait le
+ * telephone, et sans le lien du site que personne ne retenait.
+ *
+ * Le courrier ne vaut pas mieux qu'un message pour transporter un secret, mais
+ * il va a une seule adresse au lieu d'un groupe de dix, et le mot de passe est
+ * provisoire : le site exige d'en choisir un autre avant de s'ouvrir. Ce qui
+ * transite ici ne sert qu'une fois.
+ */
+export async function envoyerAcces(
+  membre: { nom: string; email: string },
+  motDePasseProvisoire: string,
+): Promise<{ ok: boolean; detail: string }> {
+  const url = variable("NEXT_PUBLIC_SITE_URL", "");
+  const prenom = membre.nom.trim().split(/\s+/)[1] ?? membre.nom;
+
+  const lignes = [
+    `Bonjour ${prenom},`,
+    "",
+    `Votre acces au site du club ${CLUB.nom} est pret.`,
+    "",
+    ...(url ? [`Adresse du site : ${url}`, ""] : []),
+    `Identifiant : ${membre.email}`,
+    `Mot de passe provisoire : ${motDePasseProvisoire}`,
+    "",
+    "Ce mot de passe ne sert qu'une fois : a la premiere connexion, le site vous",
+    "demande d'en choisir un autre, connu de vous seul. Le president lui-meme ne",
+    "peut pas le lire.",
+    "",
+    "Vous y verrez a tout moment ce que vous avez verse, ce que vous devez, et ce",
+    "que vaut votre part du portefeuille. Les comptes sont ouverts a tous les",
+    "membres : c'est le principe de l'article 12.",
+    "",
+    "Si cette adresse n'est pas la votre, ou si vous n'avez pas demande cet acces,",
+    "signalez-le au president.",
+    "",
+    `Le bureau — ${CLUB.nom}`,
+  ];
+
+  return envoyerCourriel({
+    destinataire: membre.email,
+    sujet: `${CLUB.sigle} — votre acces au site du club`,
+    texte: lignes.join("\n"),
+  });
+}

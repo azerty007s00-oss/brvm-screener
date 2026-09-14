@@ -4,11 +4,24 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerRole, hacherMotDePasse, motDePasseProvisoire } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
-import { CLUB, POSTES_UNIQUES, ROLES } from "@/lib/settings";
+import { envoyerAcces } from "@/lib/avis";
+import { CLUB, POSTES_UNIQUES, ROLES, variable } from "@/lib/settings";
 import type { Role } from "@/lib/settings";
 import type { EtatFormulaire } from "./auth";
 
 const ROLES_VALIDES = Object.keys(ROLES) as Role[];
+
+/*
+ * Le courrier d'acces porte le lien du site. Sans NEXT_PUBLIC_SITE_URL, il part
+ * quand meme -- l'identifiant et le mot de passe valent d'etre transmis -- mais
+ * sans l'adresse, et le destinataire ne sait pas ou aller. Le president doit
+ * l'apprendre du message de retour, non d'un membre perdu.
+ */
+function lienManquant(): string {
+  return variable("NEXT_PUBLIC_SITE_URL", "") === ""
+    ? " Attention : NEXT_PUBLIC_SITE_URL n'est pas renseignee dans Vercel, le courrier part sans l'adresse du site."
+    : "";
+}
 
 export async function creerMembre(
   _precedent: EtatFormulaire,
@@ -51,16 +64,26 @@ export async function creerMembre(
     return { ok: false, erreur: "Cet e-mail est deja utilise par un membre." };
   }
 
+  /* Meme courrier qu'a la reinitialisation : le nouveau venu recoit ses acces. */
+  const envoi = await envoyerAcces({ nom, email }, provisoire).catch((e: unknown) => ({
+    ok: false,
+    detail: String(e),
+  }));
+
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "creation_membre",
     { entite: "members" },
-    { nom, email, role },
+    { nom, email, role, courriel: envoi.ok ? "remis" : `echec : ${envoi.detail}` },
   );
   revalidatePath("/", "layout");
+
+  const rappel = `Mot de passe provisoire : ${provisoire} — il lui sera demande de le changer a la premiere connexion.`;
   return {
     ok: true,
-    message: `${nom} est cree. Mot de passe provisoire a lui transmettre : ${provisoire} — il lui sera demande de le changer a la premiere connexion.`,
+    message: envoi.ok
+      ? `${nom} est cree, ses acces sont partis a ${email}. ${rappel}${lienManquant()}`
+      : `${nom} est cree. Le courrier n'est pas parti (${envoi.detail}) : transmettez-lui vous-meme. ${rappel}`,
   };
 }
 
@@ -109,20 +132,48 @@ export async function reinitialiserMotDePasse(
   const id = String(donnees.get("id") ?? "");
   const sql = db();
   const provisoire = motDePasseProvisoire();
-  const rows = await sql`
+  const rows = (await sql`
     update members
     set password_hash = ${hacherMotDePasse(provisoire)}, must_change_password = true
     where id = ${id}::uuid
-    returning full_name
-  `;
+    returning full_name, email
+  `) as { full_name: string; email: string }[];
   if (rows.length === 0) return { ok: false, erreur: "Membre introuvable." };
 
-  await journaliser({ id: auteur.id, nom: auteur.nom }, "reinitialisation_mot_de_passe", {
-    entite: "members",
-    id,
-  });
+  /*
+   * Le courrier porte le lien, l'identifiant et le mot de passe provisoire.
+   *
+   * Il ne part qu'apres l'ecriture : un envoi reussi sur un mot de passe non
+   * enregistre donnerait un acces qui ne fonctionne pas, et l'interesse
+   * chercherait longtemps.
+   *
+   * Son echec n'annule pas la reinitialisation -- l'ancien mot de passe ne vaut
+   * deja plus rien -- mais il est dit, et le provisoire reste affiche pour etre
+   * transmis autrement.
+   */
+  const envoi = await envoyerAcces(
+    { nom: rows[0].full_name, email: rows[0].email },
+    provisoire,
+  ).catch((e: unknown) => ({ ok: false, detail: String(e) }));
+
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "reinitialisation_mot_de_passe",
+    { entite: "members", id },
+    { courriel: envoi.ok ? "remis" : `echec : ${envoi.detail}` },
+  );
   revalidatePath("/", "layout");
-  return { ok: true, message: `Nouveau mot de passe provisoire pour ${rows[0].full_name} : ${provisoire}` };
+
+  const rappel = `Mot de passe provisoire de ${rows[0].full_name} : ${provisoire}`;
+  return envoi.ok
+    ? {
+        ok: true,
+        message: `Acces envoyes a ${rows[0].email}. ${rappel} — a garder sous la main tant qu'il n'a pas confirme.${lienManquant()}`,
+      }
+    : {
+        ok: true,
+        message: `${rappel}. Le courrier n'est pas parti (${envoi.detail}) : transmettez-le vous-meme.`,
+      };
 }
 
 export async function basculerActivite(
