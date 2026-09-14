@@ -1,6 +1,6 @@
 import "server-only";
 import { db } from "./db";
-import { CLUB, REGLES, debutMois, moisDuClub } from "./settings";
+import { CLUB, REGLES, debutMois, estExigible, moisDuClub } from "./settings";
 import type { Role } from "./settings";
 import { situationMembre, type ReglesMembre, type SituationMembre } from "./penalites";
 import { REGLE_MEMBRE, STATUT_PENALITE, STATUT_VERSEMENT, SENS_TRANSFERT } from "./valeurs";
@@ -473,7 +473,12 @@ export type SituationClub = SituationMembre & {
   nom: string;
   role: Role;
   email: string;
+  /** Tout ce qui est valide, avances comprises : c'est l'argent entre en caisse. */
   verse: number;
+  /** La part echue de ce total : le capital qui donne des droits. */
+  acquis: number;
+  /** La part portant sur des mois a venir. */
+  avance: number;
   retardDeclare: boolean;
 };
 
@@ -601,22 +606,27 @@ export type DecompteSortie = {
   nom: string;
   verse: number;
   part: number;
-  /** Valeur de la part au dernier releve : ce que l'art. 20 appelle le cours de cession. */
+  /** Avance en depot : rendue au nominal, sans frais -- ce n'est pas une cession. */
+  avance: number;
+  /** Valeur totale de ses droits, avance comprise, penalites deja deduites. */
   valeurBrute: number;
-  /** Art. 20 : 2 % retenus sur le remboursement. Indicatif, les frais reels peuvent differer. */
+  /** Art. 20 : 2 % retenus, sur la seule quote-part du portefeuille. */
   fraisIndicatifs: number;
-  /** Art. 9 : les penalites dues restent acquises au club, elles ne se remboursent pas. */
-  penalitesDues: number;
-  /** Ce qui resterait a verser : brut moins frais moins penalites. */
+  /** Penalites deja retranchees de son capital, pour memoire. */
+  penalitesDeduites: number;
   netIndicatif: number;
 };
 
 /**
- * Ce que couterait la sortie de chaque membre, au dernier releve connu.
+ * Ce que couterait la sortie de chaque membre, sur l'avoir connu du club.
  *
  * Purement indicatif : les frais reels de la SGI ne sont connus qu'apres coup, et
  * le club vote. Le calcul sert a ouvrir la discussion sur des chiffres, non a la
  * clore.
+ *
+ * Les penalites dues ne se retranchent pas ici : elles ont deja quitte le capital
+ * du membre en diluant sa part. Les deduire une seconde fois les compterait deux
+ * fois.
  */
 export async function decomptesSortie(): Promise<DecompteSortie[]> {
   const [s, dues] = await Promise.all([
@@ -624,17 +634,22 @@ export async function decomptesSortie(): Promise<DecompteSortie[]> {
     penalitesDuesParMembre().catch(() => new Map<string, number>()),
   ]);
   return s.parts.map((p) => {
-    const frais = Math.round(p.valeur * REGLES.fraisCession);
-    const penalites = dues.get(p.membreId) ?? 0;
+    /*
+     * Les frais de cession ne portent que sur la quote-part du portefeuille :
+     * l'avance est un depot rendu, non un titre cede.
+     */
+    const cessible = Math.max(0, p.valeur - p.avance);
+    const frais = Math.round(cessible * REGLES.fraisCession);
     return {
       membreId: p.membreId,
       nom: p.nom,
       verse: p.verse,
       part: p.part,
+      avance: p.avance,
       valeurBrute: p.valeur,
       fraisIndicatifs: frais,
-      penalitesDues: penalites,
-      netIndicatif: Math.max(0, p.valeur - frais - penalites),
+      penalitesDeduites: dues.get(p.membreId) ?? 0,
+      netIndicatif: Math.max(0, p.valeur - frais),
     };
   });
 }
@@ -684,6 +699,17 @@ export async function situationsClub(aujourdhui = new Date()): Promise<Situation
       role: m.role,
       email: m.email,
       verse: siens.filter((v) => v.statut === "valide").reduce((s, v) => s + v.montant, 0),
+      /*
+       * Le capital acquis s'arrete aux mois echus. Une avance ne donne aucun
+       * droit tant que le mois qu'elle couvre n'est pas venu : elle est
+       * volontaire, donc ni remuneree ni penalisee.
+       */
+      acquis: siens
+        .filter((v) => v.statut === "valide" && estExigible(v.mois_couvert, aujourdhui))
+        .reduce((s, v) => s + v.montant, 0),
+      avance: siens
+        .filter((v) => v.statut === "valide" && !estExigible(v.mois_couvert, aujourdhui))
+        .reduce((s, v) => s + v.montant, 0),
       retardDeclare:
         situation.moisEnRetard.length > 0 &&
         situation.moisEnRetard.every((mo) => declares.includes(mo)),
@@ -737,9 +763,29 @@ export async function synthese(aujourdhui = new Date()): Promise<Synthese> {
     a.sens === SENS_TRANSFERT.sortie ? -a.montant : a.montant;
   const totalApports = apports.reduce((s, a) => s + net(a), 0);
 
+  /*
+   * L'avoir du club, portefeuille et caisse reunis. Une avance versee ce mois-ci
+   * dort d'abord en caisse : la retrancher du seul portefeuille la prendrait ou
+   * elle ne se trouve pas encore, et diminuerait la part de tous les autres.
+   */
+  /*
+   * Le disponible en caisse : ce qui est entre -- cotisations validees, penalites
+   * encaissees, recettes -- diminue des depenses et du net vire au compte-titres.
+   * Un retrait depuis la SGI revient en caisse, d'ou le net.
+   */
+  const totalEnCaisse = totalVerse + encaissees + recettes - depenses - totalApports;
+
+  const avoirDuClub = (valorisation?.total ?? 0) + totalEnCaisse;
+
   const parts = repartirParts(
-    situations.map((s) => ({ membreId: s.membreId, nom: s.nom, verse: s.verse })),
-    valorisation?.total ?? 0,
+    situations.map((s) => ({
+      membreId: s.membreId,
+      nom: s.nom,
+      acquis: s.acquis,
+      avance: s.avance,
+      dues: duesParMembre.get(s.membreId) ?? 0,
+    })),
+    avoirDuClub,
   );
 
   /*
@@ -788,12 +834,7 @@ export async function synthese(aujourdhui = new Date()): Promise<Synthese> {
   return {
     valorisation,
     totalVerse,
-    /*
-     * Le disponible en caisse : ce qui est entre -- cotisations validees,
-     * penalites encaissees, recettes -- diminue des depenses et du net vire au
-     * compte-titres. Un retrait depuis la SGI revient en caisse, d'ou le net.
-     */
-    totalEnCaisse: totalVerse + encaissees + recettes - depenses - totalApports,
+    totalEnCaisse,
     totalApports,
     penalitesEncaissees: encaissees,
     recettes,

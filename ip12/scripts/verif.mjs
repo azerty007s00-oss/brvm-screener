@@ -63,16 +63,71 @@ assert.equal(d.apportsPeriode, 478_000);
 assert.equal(d.gain, 3_274_828 - 2_166_323 - 478_000);
 assert.ok(d.rendement !== null && d.rendement > 0.2 && d.rendement < 0.32);
 
-const parts = repartirParts(
-  [
-    { membreId: "a", nom: "A", verse: 200_000 },
-    { membreId: "b", nom: "B", verse: 100_000 },
-  ],
-  600_000,
-);
-assert.ok(Math.abs(parts[0].part - 2 / 3) < 1e-9);
-assert.equal(Math.round(parts[0].valeur), 400_000);
-assert.equal(Math.round(parts[1].plusValue), 100_000);
+/* ------------------------------------------- repartition : avances et penalites */
+
+const m = (membreId, nom, acquis, avance = 0, dues = 0) => ({ membreId, nom, acquis, avance, dues });
+
+// Sans avance ni penalite : simple prorata du capital acquis.
+const simple = repartirParts([m("a", "A", 200_000), m("b", "B", 100_000)], 600_000);
+assert.ok(Math.abs(simple.find((p) => p.membreId === "a").part - 2 / 3) < 1e-9);
+assert.equal(simple.find((p) => p.membreId === "a").valeur, 400_000);
+
+/*
+ * L'exemple du club : deux membres a capital acquis egal, un avoir de 50, dont
+ * 5 avances par l'un. La part de l'autre vaut (50 - 5)/2 ; la sienne, (50 - 5)/2 + 5.
+ */
+const avanceParts = repartirParts([m("a", "A", 10, 5), m("b", "B", 10)], 50);
+const aAvance = avanceParts.find((p) => p.membreId === "a");
+const bAvance = avanceParts.find((p) => p.membreId === "b");
+assert.equal(bAvance.valeur, 22.5, `attendu 22,5 pour B, obtenu ${bAvance.valeur}`);
+assert.equal(aAvance.valeur, 27.5, `attendu 27,5 pour A, obtenu ${aAvance.valeur}`);
+assert.equal(aAvance.valeur + bAvance.valeur, 50);
+
+// L'avance ne rapporte rien : sur un avoir en hausse, elle reste rendue au nominal.
+const gain = repartirParts([m("a", "A", 10, 5), m("b", "B", 10)], 105);
+assert.equal(gain.find((p) => p.membreId === "a").valeur, 5 + 50);
+assert.equal(gain.find((p) => p.membreId === "b").valeur, 50);
+
+// Trois membres inegaux, une avance : le pot ampute se partage au prorata de l'acquis.
+const trois = repartirParts([m("a", "A", 30, 5), m("b", "B", 20), m("c", "C", 10)], 100);
+// A un centieme pres : le prorata s'applique avant la multiplication, l'ordre
+// des operations decale le dernier bit.
+const proche = (obtenu, attendu, quoi) =>
+  assert.ok(Math.abs(obtenu - attendu) < 1e-9, `${quoi} : attendu ${attendu}, obtenu ${obtenu}`);
+proche(trois.find((p) => p.membreId === "a").valeur, 5 + (95 * 30) / 60, "A");
+proche(trois.find((p) => p.membreId === "b").valeur, (95 * 20) / 60, "B");
+assert.ok(Math.abs(trois.reduce((t, p) => t + p.valeur, 0) - 100) < 1e-9);
+
+// Penalite impayee : elle quitte le capital du fautif et dilue sa part au profit des autres.
+const penalise = repartirParts([m("a", "A", 30, 0, 6), m("b", "B", 30)], 60);
+const aPen = penalise.find((p) => p.membreId === "a");
+const bPen = penalise.find((p) => p.membreId === "b");
+assert.ok(Math.abs(aPen.valeur - (60 * 24) / 54) < 1e-9, `obtenu ${aPen.valeur}`);
+assert.ok(Math.abs(bPen.valeur - (60 * 30) / 54) < 1e-9);
+assert.ok(aPen.valeur < 30 && bPen.valeur > 30, "la penalite doit diluer le fautif");
+assert.ok(Math.abs(aPen.valeur + bPen.valeur - 60) < 1e-9, "le partage reste exhaustif");
+
+/*
+ * Regularisation : la penalite reglee entre en caisse, donc dans l'avoir, et le
+ * poids du membre est restaure. Les parts se reequilibrent -- mais l'argent, lui,
+ * est sorti de sa poche : c'est en cela que la sanction demeure.
+ */
+const regularise = repartirParts([m("a", "A", 30), m("b", "B", 30)], 66);
+assert.equal(regularise.find((p) => p.membreId === "a").valeur, 33);
+assert.equal(regularise.find((p) => p.membreId === "b").valeur, 33);
+
+// Penalites superieures au capital : le poids tombe a zero, jamais en dessous.
+const ruine = repartirParts([m("a", "A", 10, 0, 50), m("b", "B", 30)], 60);
+assert.equal(ruine.find((p) => p.membreId === "a").valeur, 0);
+assert.equal(ruine.find((p) => p.membreId === "b").valeur, 60);
+
+// Avances superieures a l'avoir constate : rien de negatif n'est reparti.
+const excedent = repartirParts([m("a", "A", 10, 100), m("b", "B", 10)], 50);
+assert.ok(excedent.every((p) => p.valeur >= 0));
+
+// La plus-value se mesure sur tout ce qui a ete verse, avance comprise.
+assert.equal(aAvance.verse, 15);
+assert.equal(aAvance.plusValue, 27.5 - 15);
 
 /* ----------------------------------------------------------- penalites art. 9 */
 
@@ -277,4 +332,4 @@ assert.equal(majoreesR4[0].montant, 2_000);
 // Une derogation absente laisse le regime commun intact.
 assert.equal(calculerPenalites(["2026-07-01"], [], {})[0].montant, 500);
 
-console.log("OK - 51 verifications : performance, penalites art. 9 et R4, regles individuelles, retards, absences, R3, R5, relance");
+console.log("OK - 71 verifications : performance, parts et avances, penalites art. 9 et R4, regles individuelles, retards, absences, R3, R5, relance");

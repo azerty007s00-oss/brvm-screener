@@ -488,7 +488,7 @@ export default async function PageAdministration() {
                   <th className="py-1 text-left font-medium">Membre</th>
                   <th className="py-1 text-right font-medium">Part</th>
                   <th className="py-1 text-right font-medium">Frais {(REGLES.fraisCession * 100).toFixed(0)} %</th>
-                  <th className="py-1 text-right font-medium">Penalites</th>
+                  <th className="py-1 text-right font-medium">Avance</th>
                   <th className="py-1 text-right font-medium">Net</th>
                 </tr>
               </thead>
@@ -498,15 +498,18 @@ export default async function PageAdministration() {
                     <td className="py-1.5">{d.nom}</td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.valeurBrute)}</td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisIndicatifs)}</td>
-                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.penalitesDues)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.avance)}</td>
                     <td className="py-1.5 text-right font-medium tabular-nums">{fcfa(d.netIndicatif)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
             <p className="mt-2 text-[11px]" style={{ color: "var(--discret)" }}>
-              Indicatif, au dernier releve. Les frais reels de la SGI ne sont connus
-              qu&apos;apres coup : ces chiffres ouvrent la discussion, ils ne la closent pas.
+              Indicatif, sur l&apos;avoir connu du club — portefeuille et caisse. Les frais
+              reels de la SGI ne sont connus qu&apos;apres coup : ces chiffres ouvrent la
+              discussion, ils ne la closent pas. L&apos;avance est rendue au nominal et
+              supporte donc aucun frais de cession ; les penalites dues sont deja
+              retranchees, leur deduction ayant lieu au calcul de la part.
             </p>
           </div>
         )}

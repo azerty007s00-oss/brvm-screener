@@ -107,28 +107,76 @@ export function dietzModifie(
 export type PartMembre = {
   membreId: string;
   nom: string;
+  /** Versements valides des mois echus : le seul capital qui donne des droits. */
+  acquis: number;
+  /** Versements valides de mois a venir : capital en depot, rendu au nominal. */
+  avance: number;
+  /** Penalites constatees et non reglees : elles quittent son capital. */
+  dues: number;
+  /** Tout ce qu'il a verse : acquis + avance. Sert a mesurer la plus-value. */
   verse: number;
+  /** Sa quote-part du pot a partager, hors avances. */
   part: number;
+  /** Ce qu'il detient : son avance au nominal, plus sa quote-part. */
   valeur: number;
   plusValue: number;
 };
 
+export type ApportMembre = {
+  membreId: string;
+  nom: string;
+  acquis: number;
+  avance: number;
+  dues: number;
+};
+
 /**
- * La part d'un membre est le rapport de ses versements valides au total du club
- * (art. 12 : les votes sont proportionnels aux parts).
+ * Repartition de l'avoir du club entre ses membres.
+ *
+ * Trois principes, decides par le club :
+ *
+ * 1. L'avance est volontaire, donc elle ne rapporte rien. Elle est retiree du pot
+ *    avant partage et rendue a son auteur au nominal. Sans quoi celui qui a la
+ *    tresorerie pour payer six mois d'avance capterait une part des gains au
+ *    detriment de celui qui paie chaque mois -- alors que les statuts exigent
+ *    la meme chose des deux.
+ *
+ * 2. Le mois venu, l'avance rejoint d'elle-meme le capital acquis : ni perte,
+ *    ni gain. C'est a l'appelant de faire ce classement, selon l'echeance.
+ *
+ * 3. La penalite constatee et impayee quitte le capital du membre (art. 9 : elle
+ *    est acquise au benefice du club). Elle dilue son poids, et ce poids perdu se
+ *    reporte sur tous les autres sans qu'aucun montant n'ait a etre deplace.
+ *
+ * `valeurTotale` est l'avoir du club, portefeuille et caisse reunis : une avance
+ * versee ce mois-ci dort d'abord en caisse, et la retrancher du seul portefeuille
+ * la prendrait ou elle ne se trouve pas encore.
  */
 export function repartirParts(
-  versesParMembre: { membreId: string; nom: string; verse: number }[],
-  valeurPortefeuille: number,
+  apports: ApportMembre[],
+  valeurTotale: number,
 ): PartMembre[] {
-  const total = versesParMembre.reduce((s, m) => s + m.verse, 0);
-  return versesParMembre
+  const avances = apports.reduce((t, m) => t + m.avance, 0);
+
+  /*
+   * Les avances sortent du pot avant partage. Le plancher a zero couvre le cas
+   * limite ou elles excederaient l'avoir constate -- un releve de portefeuille
+   * en retard sur un gros versement d'avance : mieux vaut ne rien partager que
+   * repartir un montant negatif.
+   */
+  const aPartager = Math.max(0, valeurTotale - avances);
+
+  const net = (m: ApportMembre) => Math.max(0, m.acquis - m.dues);
+  const totalNet = apports.reduce((t, m) => t + net(m), 0);
+
+  return apports
     .map((m) => {
-      const part = total > 0 ? m.verse / total : 0;
-      const valeur = part * valeurPortefeuille;
-      return { ...m, part, valeur, plusValue: valeur - m.verse };
+      const part = totalNet > 0 ? net(m) / totalNet : 0;
+      const valeur = m.avance + part * aPartager;
+      const verse = m.acquis + m.avance;
+      return { ...m, verse, part, valeur, plusValue: valeur - verse };
     })
-    .sort((a, b) => b.part - a.part);
+    .sort((a, b) => b.valeur - a.valeur);
 }
 
 /** Une duree en annees, dite comme on la dit : « 2 ans et 3 mois ». */

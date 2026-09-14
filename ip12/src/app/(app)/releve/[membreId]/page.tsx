@@ -125,6 +125,9 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
           <div>
             <h2 className="mb-1 text-sm font-semibold">Part au capital (art. 12)</h2>
             <ul className="text-sm">
+              {ligne("Capital acquis", part ? fcfa(part.acquis) : "--")}
+              {part && part.avance > 0 ? ligne("Avance en depot", fcfa(part.avance)) : null}
+              {part && part.dues > 0 ? ligne("Penalites deduites", `- ${fcfa(part.dues)}`) : null}
               {ligne("Quote-part", part ? pourcent(part.part, 2).replace("+", "") : "--")}
               {ligne("Valeur de la part", part ? fcfa(part.valeur) : "--")}
               {ligne("Plus-value", part ? fcfa(part.plusValue) : "--")}
@@ -215,8 +218,10 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
 
         <footer className="mt-5 border-t pt-3 text-[11px]" style={{ borderColor: "var(--bordure)", color: "var(--discret)" }}>
           Piece editee par l&apos;outil de suivi du club, sur les ecritures validees a la date
-          d&apos;edition. La valeur de la part suit le dernier releve du compte-titres tenu chez{" "}
-          {CLUB.sgi} et varie avec le marche.
+          d&apos;edition. La quote-part se calcule sur le capital echu, diminue des penalites
+          dues : une avance est un depot, rendu au nominal, qui ne produit rien jusqu&apos;au
+          mois qu&apos;il couvre. La valeur suit l&apos;avoir du club — compte-titres tenu chez{" "}
+          {CLUB.sgi} et caisse — et varie avec le marche.
         </footer>
       </div>
     </>

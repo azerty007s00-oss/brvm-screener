@@ -52,10 +52,23 @@ export default async function PageMonCompte() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Statistique libelle="J'ai verse" valeur={fcfa(maPart?.verse ?? 0)} />
+        <Statistique
+          libelle="J'ai verse"
+          valeur={fcfa(maPart?.verse ?? 0)}
+          detail={
+            maPart && maPart.avance > 0
+              ? `dont ${fcfa(maPart.avance)} d'avance, en depot`
+              : undefined
+          }
+        />
         <Statistique
           libelle="Ma part"
           valeur={maPart ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} %` : "--"}
+          detail={
+            maPart && maPart.dues > 0
+              ? `capital diminue de ${fcfa(maPart.dues)} de penalites dues`
+              : "au prorata du capital echu"
+          }
         />
         <Statistique libelle="Valeur de ma part" valeur={maPart ? fcfa(maPart.valeur) : "--"} accent="or" />
         <Statistique

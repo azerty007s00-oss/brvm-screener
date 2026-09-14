@@ -44,6 +44,14 @@ export default async function PagePortefeuille() {
       </Carte>
 
       <Carte titre="Repartition des parts">
+          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+            La quote-part se calcule sur le capital echu de chacun, diminue des penalites
+            dues (art. 9). Une avance ne donne aucun droit tant que le mois qu&apos;elle couvre
+            n&apos;est pas venu : elle est volontaire, donc ni remuneree ni penalisee, et
+            figure a part, rendue au nominal. La repartition porte sur l&apos;avoir du club,
+            compte-titres et caisse reunis.
+          </p>
+
         {s.parts.length === 0 || !derniere ? (
           <Vide>Les parts s&apos;afficheront des qu&apos;un releve sera saisi.</Vide>
         ) : (

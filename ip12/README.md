@@ -13,8 +13,12 @@ Phoenix Capital Management.
 - **Avances et retards** — une déclaration peut couvrir plusieurs mois d'avance. Les mois
   échus non couverts basculent automatiquement en retard après le 10 (art. 8).
 - **Compte-titres** — le président enregistre et valide les virements vers la SGI (art. 14).
-- **Portefeuille** — le président saisit la valeur du compte tous les 2 mois ; les parts de
-  chaque membre sont recalculées au prorata de ses versements validés (art. 12).
+- **Portefeuille** — le président saisit la valeur du compte tous les 2 mois ; les parts sont
+  recalculées au prorata du **capital échu** de chaque membre, diminué de ses pénalités dues.
+  Une **avance** est un dépôt : retirée du pot avant partage puis rendue au nominal, elle ne
+  produit rien jusqu'au mois qu'elle couvre — payer d'avance est volontaire, et ne doit donc
+  pas donner une plus grosse part des gains. La répartition porte sur l'avoir du club,
+  compte-titres **et** caisse.
 - **Releve individuel** — chaque membre edite le sien, le bureau celui de tous : versements,
   part, penalites et situation statutaire, mis en page pour le papier. L'impression du
   navigateur produit le PDF, sans rien a installer.
@@ -29,7 +33,7 @@ Phoenix Capital Management.
 | Art. 6 | Versement mensuel de 5 000 FCFA par membre |
 | Art. 8 | Exigible au plus tard le 10 du mois |
 | Art. 9 | Pénalité de 10 % du versement dû, versée à l'actif du club |
-| Art. 12 | Droits de vote proportionnels aux parts |
+| Art. 12 | Droits de vote proportionnels aux parts, calculees sur le capital echu |
 | Art. 14 | Le président transmet les ordres de bourse, le trésorier par délégation |
 | Art. 20 | Exclusion à 3 mois de retard, majorité des 3/4, remboursement moins 2 % de frais |
 | R2 | Droit de vote suspendu dès 30 jours de retard, jusqu'à régularisation |
