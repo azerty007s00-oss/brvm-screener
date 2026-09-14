@@ -4,9 +4,18 @@ import { listerApports, listerMouvementsCaisse, synthese } from "@/lib/queries";
 import { enregistrerApport, supprimerApport } from "@/app/actions/titres";
 import { CLUB, dateCourte, fcfa } from "@/lib/settings";
 import { SENS_TRANSFERT } from "@/lib/valeurs";
-import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
-import { Badge, Carte, Statistique, Vide } from "@/components/ui";
-import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import {
+  Champ,
+  ChampCache,
+  Depliant,
+  FormulaireAction,
+  Selection,
+} from "@/components/formulaires";
+import { Badge, Carte, GroupeReplie, Statistique, Vide } from "@/components/ui";
+import {
+  EcranInitialisation,
+  estTableAbsente,
+} from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
 
@@ -46,6 +55,63 @@ export default async function PageCompteTitres() {
   const fraisTotaux = fraisRetenus + fraisPayesEnCaisse;
   const netInvesti = s.totalApports - fraisRetenus;
 
+  const ligneMouvement = (a: (typeof apports)[number]) => {
+    const sortie = a.sens === SENS_TRANSFERT.sortie;
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+        <div className="min-w-0">
+          {/*
+           * Un mouvement a zero franc n'est pas un virement : c'est un
+           * prelevement de frais dans le compte-titres. L'afficher
+           * « + 0 FCFA » le ferait passer pour une saisie ratee.
+           */}
+          <p className="flex items-center gap-1.5 text-sm font-medium">
+            {a.montant === 0 ? (
+              <>
+                - {fcfa(a.frais)}
+                <Badge ton="rouge">Frais</Badge>
+              </>
+            ) : (
+              <>
+                {sortie ? "-" : "+"} {fcfa(a.montant)}
+                {sortie && <Badge ton="ambre">Retrait</Badge>}
+              </>
+            )}
+          </p>
+          <p className="text-xs" style={{ color: "var(--discret)" }}>
+            {dateCourte(a.date_transfert)}
+            {a.montant === 0
+              ? " · preleves dans le compte-titres"
+              : a.frais > 0
+                ? ` · dont ${fcfa(a.frais)} de frais`
+                : ""}
+            {a.saisi_par_nom ? ` · ${a.saisi_par_nom}` : ""}
+            {a.note ? ` · ${a.note}` : ""}
+          </p>
+        </div>
+        {/*
+         * Une saisie fautive restait a jamais : il fallait lui opposer
+         * un mouvement inverse, qui decrivait a son tour un virement
+         * n'ayant pas eu lieu. La ligne passe au journal avant d'etre
+         * effacee -- la trace survit a la donnee.
+         */}
+        {peutSaisir && (
+          <FormulaireAction
+            action={supprimerApport}
+            libelle="Supprimer"
+            variante="danger"
+            compact
+            confirmation="Supprimer ce mouvement ? Il disparaitra des comptes ; le journal en gardera le detail et votre nom."
+          >
+            <ChampCache nom="id" valeur={a.id} />
+          </FormulaireAction>
+        )}
+      </div>
+    );
+  };
+
+  const datesSorties = sorties.map((a) => a.date_transfert).sort();
+
   return (
     <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -55,7 +121,10 @@ export default async function PageCompteTitres() {
           detail={`Chez ${CLUB.sgi}`}
           accent="or"
         />
-        <Statistique libelle="Apports" valeur={fcfa(entrees.reduce((t, a) => t + a.montant, 0))} />
+        <Statistique
+          libelle="Apports"
+          valeur={fcfa(entrees.reduce((t, a) => t + a.montant, 0))}
+        />
         <Statistique
           libelle="Retraits"
           valeur={fcfa(sorties.reduce((t, a) => t + a.montant, 0))}
@@ -73,11 +142,15 @@ export default async function PageCompteTitres() {
         <Carte titre="Ce que les frais ont coute">
           <ul className="space-y-1 text-sm">
             <li className="flex justify-between gap-2">
-              <span style={{ color: "var(--discret)" }}>Retenus a l&apos;arrivee sur les virements</span>
+              <span style={{ color: "var(--discret)" }}>
+                Retenus a l&apos;arrivee sur les virements
+              </span>
               <span className="tabular-nums">{fcfa(fraisRetenus)}</span>
             </li>
             <li className="flex justify-between gap-2">
-              <span style={{ color: "var(--discret)" }}>Regles depuis la caisse</span>
+              <span style={{ color: "var(--discret)" }}>
+                Regles depuis la caisse
+              </span>
               <span className="tabular-nums">{fcfa(fraisPayesEnCaisse)}</span>
             </li>
             <li
@@ -89,9 +162,10 @@ export default async function PageCompteTitres() {
             </li>
           </ul>
           <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
-            Sur {fcfa(s.totalApports)} vires, {fcfa(netInvesti)} sont reellement arrives sur le
-            compte-titres. Le TRI porte sur le montant vire, frais compris : ce sont des sommes
-            engagees, et une performance qui les ignorerait flatterait sans rien vouloir dire.
+            Sur {fcfa(s.totalApports)} vires, {fcfa(netInvesti)} sont reellement
+            arrives sur le compte-titres. Le TRI porte sur le montant vire,
+            frais compris : ce sont des sommes engagees, et une performance qui
+            les ignorerait flatterait sans rien vouloir dire.
           </p>
         </Carte>
       )}
@@ -99,8 +173,9 @@ export default async function PageCompteTitres() {
       {peutSaisir ? (
         <Carte titre="Nouveau mouvement">
           <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            L&apos;art. 14 confie la transmission des ordres au president, le bureau agissant
-            par delegation : votre saisie vaut enregistrement, sans validation par un tiers.
+            L&apos;art. 14 confie la transmission des ordres au president, le
+            bureau agissant par delegation : votre saisie vaut enregistrement,
+            sans validation par un tiers.
           </p>
           <Depliant titre="Enregistrer un mouvement vers la SGI">
             <FormulaireAction action={enregistrerApport} libelle="Enregistrer">
@@ -131,8 +206,14 @@ export default async function PageCompteTitres() {
                 libelle="Sens"
                 valeur={SENS_TRANSFERT.entree}
                 options={[
-                  { valeur: SENS_TRANSFERT.entree, libelle: "Apport — de la caisse vers la SGI" },
-                  { valeur: SENS_TRANSFERT.sortie, libelle: "Retrait — de la SGI vers la caisse" },
+                  {
+                    valeur: SENS_TRANSFERT.entree,
+                    libelle: "Apport — de la caisse vers la SGI",
+                  },
+                  {
+                    valeur: SENS_TRANSFERT.sortie,
+                    libelle: "Retrait — de la SGI vers la caisse",
+                  },
                 ]}
               />
               <Champ nom="note" libelle="Note ou reference" requis={false} />
@@ -142,8 +223,8 @@ export default async function PageCompteTitres() {
       ) : (
         <Carte titre="Mouvements du compte-titres">
           <p className="text-xs" style={{ color: "var(--discret)" }}>
-            Les mouvements vers la SGI sont enregistres par le president et le vice-president
-            (art. 14). Vous en avez ici la lecture complete.
+            Les mouvements vers la SGI sont enregistres par le president et le
+            vice-president (art. 14). Vous en avez ici la lecture complete.
           </p>
         </Carte>
       )}
@@ -153,60 +234,40 @@ export default async function PageCompteTitres() {
           <Vide>Aucun mouvement enregistre.</Vide>
         ) : (
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
-            {apports.map((a) => {
-              const sortie = a.sens === SENS_TRANSFERT.sortie;
-              return (
-                <li key={a.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="min-w-0">
-                    {/*
-                      * Un mouvement a zero franc n'est pas un virement : c'est un
-                      * prelevement de frais dans le compte-titres. L'afficher
-                      * « + 0 FCFA » le ferait passer pour une saisie ratee.
-                      */}
-                    <p className="flex items-center gap-1.5 text-sm font-medium">
-                      {a.montant === 0 ? (
-                        <>
-                          - {fcfa(a.frais)}
-                          <Badge ton="rouge">Frais</Badge>
-                        </>
-                      ) : (
-                        <>
-                          {sortie ? "-" : "+"} {fcfa(a.montant)}
-                          {sortie && <Badge ton="ambre">Retrait</Badge>}
-                        </>
-                      )}
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--discret)" }}>
-                      {dateCourte(a.date_transfert)}
-                      {a.montant === 0
-                        ? " · preleves dans le compte-titres"
-                        : a.frais > 0
-                          ? ` · dont ${fcfa(a.frais)} de frais`
-                          : ""}
-                      {a.saisi_par_nom ? ` · ${a.saisi_par_nom}` : ""}
-                      {a.note ? ` · ${a.note}` : ""}
-                    </p>
-                  </div>
-                  {/*
-                    * Une saisie fautive restait a jamais : il fallait lui opposer
-                    * un mouvement inverse, qui decrivait a son tour un virement
-                    * n'ayant pas eu lieu. La ligne passe au journal avant d'etre
-                    * effacee -- la trace survit a la donnee.
-                    */}
-                  {peutSaisir && (
-                    <FormulaireAction
-                      action={supprimerApport}
-                      libelle="Supprimer"
-                      variante="danger"
-                      compact
-                      confirmation="Supprimer ce mouvement ? Il disparaitra des comptes ; le journal en gardera le detail et votre nom."
-                    >
-                      <ChampCache nom="id" valeur={a.id} />
-                    </FormulaireAction>
-                  )}
-                </li>
-              );
-            })}
+            {entrees.map((a) => (
+              <li key={a.id}>{ligneMouvement(a)}</li>
+            ))}
+            {/*
+             * Les retraits sont rassembles en une ligne.
+             *
+             * Chacun est le pendant d'un apport du meme jour -- 1 % de frais
+             * bancaires sur le virement -- et les intercaler doublait la liste
+             * sans rien apprendre. Le total reste lisible sans ouvrir, et le
+             * detail est a un doigt.
+             */}
+            {sorties.length > 0 && (
+              <li>
+                <GroupeReplie
+                  libelle="Retraits"
+                  nombre={sorties.length}
+                  detail={`de ${dateCourte(datesSorties[0])} a ${dateCourte(datesSorties[datesSorties.length - 1])}`}
+                  total={
+                    <span style={{ color: "var(--color-rouge-600)" }}>
+                      &minus; {fcfa(sorties.reduce((t, a) => t + a.montant, 0))}
+                    </span>
+                  }
+                >
+                  <ul
+                    className="divide-y"
+                    style={{ borderColor: "var(--bordure)" }}
+                  >
+                    {sorties.map((a) => (
+                      <li key={a.id}>{ligneMouvement(a)}</li>
+                    ))}
+                  </ul>
+                </GroupeReplie>
+              </li>
+            )}
           </ul>
         )}
       </Carte>

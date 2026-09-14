@@ -272,3 +272,56 @@ export function Tuile({
     </details>
   );
 }
+
+/*
+ * Un groupe de lignes repliees.
+ *
+ * Un journal ou dix-huit frais bancaires de quelques centaines de francs noient
+ * deux ecritures importantes n'est pas un journal : c'est une liste. Les lignes
+ * de meme nature se rassemblent donc sous une ligne de total, ouvrable d'un
+ * doigt. Rien n'est masque -- le detail est a un geste, et le total est visible
+ * sans le geste.
+ *
+ * Un groupe d'une seule ligne ne se replie pas : demander d'ouvrir pour trouver
+ * ce qu'on voyait deja serait une facon compliquee de cacher.
+ */
+export function GroupeReplie({
+  libelle,
+  nombre,
+  total,
+  detail,
+  children,
+}: {
+  libelle: ReactNode;
+  nombre: number;
+  total: ReactNode;
+  detail?: ReactNode;
+  children: ReactNode;
+}) {
+  if (nombre <= 1) return <>{children}</>;
+  return (
+    <details className="group">
+      <summary className="tapable -mx-2 flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-2.5">
+        <span
+          className="chevron flex-none"
+          style={{ color: "var(--color-brun-300)" }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium">{libelle}</span>
+          <span className="block text-xs" style={{ color: "var(--discret)" }}>
+            {nombre} lignes{detail ? ` · ${detail}` : ""}
+          </span>
+        </span>
+        <span className="flex-none text-sm font-semibold tabular-nums whitespace-nowrap">{total}</span>
+      </summary>
+      <div
+        className="contenu-depliant ml-2 border-l pl-3"
+        style={{ borderColor: "var(--bordure)" }}
+      >
+        {children}
+      </div>
+    </details>
+  );
+}

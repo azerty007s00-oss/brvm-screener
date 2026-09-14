@@ -15,9 +15,25 @@ import {
   STATUT_CAISSE,
   libelleCategorie,
 } from "@/lib/valeurs";
-import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
-import { Alerte, Badge, Carte, Statistique, Vide } from "@/components/ui";
-import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import {
+  Champ,
+  ChampCache,
+  Depliant,
+  FormulaireAction,
+  Selection,
+} from "@/components/formulaires";
+import {
+  Alerte,
+  Badge,
+  Carte,
+  GroupeReplie,
+  Statistique,
+  Vide,
+} from "@/components/ui";
+import {
+  EcranInitialisation,
+  estTableAbsente,
+} from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +50,42 @@ export default async function PageCaisse() {
     throw e;
   }
 
-  const enAttente = mouvements.filter((m) => m.statut === STATUT_CAISSE.enAttente);
+  const enAttente = mouvements.filter(
+    (m) => m.statut === STATUT_CAISSE.enAttente,
+  );
+
+  /*
+   * Le journal se lit par nature, non ligne a ligne.
+   *
+   * Dix-huit frais bancaires de quelques centaines de francs noyaient deux
+   * ecritures importantes. Les mouvements de meme categorie et de meme sens se
+   * rassemblent donc sous une ligne de total, l'ordre restant celui du mouvement
+   * le plus recent de chaque groupe : la chronologie survit au regroupement.
+   *
+   * Un groupe d'une seule ligne s'affiche tel quel, sans repli.
+   */
+  const parNature = new Map<string, typeof mouvements>();
+  for (const m of mouvements) {
+    const cle = `${m.sens}|${m.categorie}`;
+    const liste = parNature.get(cle);
+    if (liste) liste.push(m);
+    else parNature.set(cle, [m]);
+  }
+  const groupes = [...parNature.entries()]
+    .map(([cle, lignes]) => {
+      const dates = lignes.map((m) => m.date_mouvement).sort();
+      const signe = lignes[0].sens === SENS_CAISSE.depense ? -1 : 1;
+      return {
+        cle,
+        libelle: libelleCategorie(lignes[0].categorie),
+        lignes,
+        total: signe * lignes.reduce((t, m) => t + m.montant, 0),
+        depuis: dateCourte(dates[0]),
+        jusqua: dateCourte(dates[dates.length - 1]),
+        recent: dates[dates.length - 1],
+      };
+    })
+    .sort((a, b) => b.recent.localeCompare(a.recent));
 
   return (
     <>
@@ -44,8 +95,16 @@ export default async function PageCaisse() {
           valeur={fcfa(s.totalEnCaisse)}
           accent={s.totalEnCaisse < 0 ? "rouge" : "or"}
         />
-        <Statistique libelle="Recettes" valeur={fcfa(s.recettes)} accent="vert" />
-        <Statistique libelle="Depenses" valeur={fcfa(s.depenses)} accent="rouge" />
+        <Statistique
+          libelle="Recettes"
+          valeur={fcfa(s.recettes)}
+          accent="vert"
+        />
+        <Statistique
+          libelle="Depenses"
+          valeur={fcfa(s.depenses)}
+          accent="rouge"
+        />
         <Statistique
           libelle="Penalites encaissees"
           valeur={fcfa(s.penalitesEncaissees)}
@@ -66,7 +125,9 @@ export default async function PageCaisse() {
               <span style={{ color: "var(--discret)" }}>
                 {signe as string} {libelle as string}
               </span>
-              <span className="whitespace-nowrap tabular-nums">{fcfa(montant as number)}</span>
+              <span className="whitespace-nowrap tabular-nums">
+                {fcfa(montant as number)}
+              </span>
             </li>
           ))}
           <li
@@ -74,12 +135,15 @@ export default async function PageCaisse() {
             style={{ borderColor: "var(--bordure)" }}
           >
             <span>Solde disponible</span>
-            <span className="whitespace-nowrap tabular-nums">{fcfa(s.totalEnCaisse)}</span>
+            <span className="whitespace-nowrap tabular-nums">
+              {fcfa(s.totalEnCaisse)}
+            </span>
           </li>
         </ul>
         <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
-          Un retrait depuis la SGI revient en caisse : le net vire tient compte des deux sens.
-          Comparez ce solde a votre releve pour verifier que rien ne manque.
+          Un retrait depuis la SGI revient en caisse : le net vire tient compte
+          des deux sens. Comparez ce solde a votre releve pour verifier que rien
+          ne manque.
         </p>
       </Carte>
 
@@ -87,11 +151,14 @@ export default async function PageCaisse() {
         <Carte titre={`A valider (${enAttente.length})`}>
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {enAttente.map((m) => (
-              <li key={m.id} className="flex flex-wrap items-start justify-between gap-2 py-3">
+              <li
+                key={m.id}
+                className="flex flex-wrap items-start justify-between gap-2 py-3"
+              >
                 <div className="min-w-0">
                   <p className="text-sm font-medium">
-                    {m.sens === SENS_CAISSE.depense ? "−" : "+"} {fcfa(m.montant)} &middot;{" "}
-                    {libelleCategorie(m.categorie)}
+                    {m.sens === SENS_CAISSE.depense ? "−" : "+"}{" "}
+                    {fcfa(m.montant)} &middot; {libelleCategorie(m.categorie)}
                   </p>
                   <p className="text-xs" style={{ color: "var(--discret)" }}>
                     {dateCourte(m.date_mouvement)}
@@ -100,7 +167,11 @@ export default async function PageCaisse() {
                   {m.note && <p className="mt-0.5 text-xs italic">{m.note}</p>}
                 </div>
                 <div className="flex flex-wrap items-start gap-2">
-                  <FormulaireAction action={validerMouvement} libelle="Valider" compact>
+                  <FormulaireAction
+                    action={validerMouvement}
+                    libelle="Valider"
+                    compact
+                  >
                     <ChampCache nom="id" valeur={m.id} />
                   </FormulaireAction>
                   <FormulaireAction
@@ -138,11 +209,11 @@ export default async function PageCaisse() {
               : "Votre saisie attendra la validation du president."}
           </p>
           {/*
-            * Un formulaire par sens, plutot qu'une liste unique.
-            * Les deux nomenclatures partagent « regularisation » et « autre » :
-            * concatenees, elles affichaient deux fois la meme entree. Et rien
-            * n'empechait d'enregistrer des frais SGI en recette.
-            */}
+           * Un formulaire par sens, plutot qu'une liste unique.
+           * Les deux nomenclatures partagent « regularisation » et « autre » :
+           * concatenees, elles affichaient deux fois la meme entree. Et rien
+           * n'empechait d'enregistrer des frais SGI en recette.
+           */}
           {[
             {
               sens: SENS_CAISSE.depense,
@@ -158,25 +229,43 @@ export default async function PageCaisse() {
             },
           ].map((f) => (
             <Depliant key={f.sens} titre={f.titre}>
-              <FormulaireAction action={enregistrerMouvement} libelle="Enregistrer">
+              <FormulaireAction
+                action={enregistrerMouvement}
+                libelle="Enregistrer"
+              >
                 <ChampCache nom="sens" valeur={f.sens} />
-                <Selection nom="categorie" libelle="Categorie" options={f.categories} />
-                <Champ nom="montant" libelle="Montant (FCFA)" type="number" min={1} />
+                <Selection
+                  nom="categorie"
+                  libelle="Categorie"
+                  options={f.categories}
+                />
+                <Champ
+                  nom="montant"
+                  libelle="Montant (FCFA)"
+                  type="number"
+                  min={1}
+                />
                 <Champ
                   nom="date"
                   libelle="Date"
                   type="date"
                   valeur={new Date().toISOString().slice(0, 10)}
                 />
-                <Champ nom="note" libelle="Motif" requis={false} aide={f.aide} />
+                <Champ
+                  nom="note"
+                  libelle="Motif"
+                  requis={false}
+                  aide={f.aide}
+                />
               </FormulaireAction>
             </Depliant>
           ))}
           <div className="mt-3">
             <Alerte ton="ambre">
-              Pour une somme dont le detail est perdu — des penalites anciennes deja encaissees, par
-              exemple — choisissez la recette correspondante et decrivez-la dans le motif. Le solde
-              tombera juste, et la provenance restera lisible.
+              Pour une somme dont le detail est perdu — des penalites anciennes
+              deja encaissees, par exemple — choisissez la recette
+              correspondante et decrivez-la dans le motif. Le solde tombera
+              juste, et la provenance restera lisible.
             </Alerte>
           </div>
         </Carte>
@@ -185,10 +274,11 @@ export default async function PageCaisse() {
       {gere && (
         <Carte titre="Regulariser la caisse">
           <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            Quand la caisse reelle ne correspond pas au calcul — des penalites anciennes encaissees
-            sans trace nominative, le plus souvent — annoncez le solde que vous constatez. L&apos;outil
-            ecrit l&apos;ecart dans le bon sens et en garde le motif. Solde calcule a cet instant :{" "}
-            <strong>{fcfa(s.totalEnCaisse)}</strong>.
+            Quand la caisse reelle ne correspond pas au calcul — des penalites
+            anciennes encaissees sans trace nominative, le plus souvent —
+            annoncez le solde que vous constatez. L&apos;outil ecrit
+            l&apos;ecart dans le bon sens et en garde le motif. Solde calcule a
+            cet instant : <strong>{fcfa(s.totalEnCaisse)}</strong>.
           </p>
           <Depliant titre="Aligner sur le solde reel">
             <FormulaireAction
@@ -226,65 +316,114 @@ export default async function PageCaisse() {
           <Vide>Aucun mouvement enregistre.</Vide>
         ) : (
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
-            {mouvements.map((m) => {
-              const depense = m.sens === SENS_CAISSE.depense;
-              return (
-                <li key={m.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
-                  <div className="min-w-0">
-                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                      <span
-                        style={{
-                          color: depense ? "var(--color-rouge-600)" : "var(--color-vert-600)",
-                        }}
-                      >
-                        {depense ? "−" : "+"} {fcfa(m.montant)}
-                      </span>
-                      {m.statut === STATUT_CAISSE.enAttente && <Badge ton="ambre">En attente</Badge>}
-                      {m.statut === STATUT_CAISSE.rejete && <Badge ton="rouge">Rejete</Badge>}
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--discret)" }}>
-                      {libelleCategorie(m.categorie)} &middot; {dateCourte(m.date_mouvement)}
-                      {m.valide_par ? ` · valide par ${m.valide_par}` : ""}
-                    </p>
-                    {m.note && <p className="mt-0.5 text-xs italic">{m.note}</p>}
-                    {m.motif_refus && (
-                      <p className="mt-0.5 text-xs italic" style={{ color: "var(--color-rouge-600)" }}>
-                        Rejet : {m.motif_refus}
-                      </p>
-                    )}
-                  </div>
-                  {/*
-                    * Annuler une ecriture close. Sans ce bouton, corriger une
-                    * ligne validee demandait de lui opposer une ecriture
-                    * inverse, qui decrivait a son tour un mouvement n'ayant pas
-                    * eu lieu : le journal finissait par raconter le contraire de
-                    * ce qui s'etait passe.
-                    */}
-                  {valide && m.statut === STATUT_CAISSE.valide && (
-                    <FormulaireAction
-                      action={rejeterMouvement}
-                      libelle="Annuler"
-                      variante="danger"
-                      compact
-                      confirmation="Annuler ce mouvement deja valide ? Il cessera de compter dans la caisse, et l'operation restera au journal."
+            {groupes.map(({ cle, libelle, lignes, total, depuis, jusqua }) => (
+              <li key={cle}>
+                <GroupeReplie
+                  libelle={libelle}
+                  nombre={lignes.length}
+                  detail={
+                    depuis === jusqua ? depuis : `de ${depuis} a ${jusqua}`
+                  }
+                  total={
+                    <span
+                      style={{
+                        color:
+                          total < 0
+                            ? "var(--color-rouge-600)"
+                            : "var(--color-vert-600)",
+                      }}
                     >
-                      <ChampCache nom="id" valeur={m.id} />
-                      <input
-                        name="motif"
-                        placeholder="Motif"
-                        required
-                        className="mb-1 w-28 rounded border px-2 py-1 text-xs"
-                        style={{
-                          background: "var(--fond)",
-                          borderColor: "var(--bordure)",
-                          color: "var(--texte)",
-                        }}
-                      />
-                    </FormulaireAction>
-                  )}
-                </li>
-              );
-            })}
+                      {total < 0 ? "\u2212" : "+"} {fcfa(Math.abs(total))}
+                    </span>
+                  }
+                >
+                  <ul
+                    className="divide-y"
+                    style={{ borderColor: "var(--bordure)" }}
+                  >
+                    {lignes.map((m) => {
+                      const depense = m.sens === SENS_CAISSE.depense;
+                      return (
+                        <li
+                          key={m.id}
+                          className="flex flex-wrap items-start justify-between gap-2 py-2.5"
+                        >
+                          <div className="min-w-0">
+                            <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                              <span
+                                style={{
+                                  color: depense
+                                    ? "var(--color-rouge-600)"
+                                    : "var(--color-vert-600)",
+                                }}
+                              >
+                                {depense ? "−" : "+"} {fcfa(m.montant)}
+                              </span>
+                              {m.statut === STATUT_CAISSE.enAttente && (
+                                <Badge ton="ambre">En attente</Badge>
+                              )}
+                              {m.statut === STATUT_CAISSE.rejete && (
+                                <Badge ton="rouge">Rejete</Badge>
+                              )}
+                            </p>
+                            <p
+                              className="text-xs"
+                              style={{ color: "var(--discret)" }}
+                            >
+                              {libelleCategorie(m.categorie)} &middot;{" "}
+                              {dateCourte(m.date_mouvement)}
+                              {m.valide_par
+                                ? ` · valide par ${m.valide_par}`
+                                : ""}
+                            </p>
+                            {m.note && (
+                              <p className="mt-0.5 text-xs italic">{m.note}</p>
+                            )}
+                            {m.motif_refus && (
+                              <p
+                                className="mt-0.5 text-xs italic"
+                                style={{ color: "var(--color-rouge-600)" }}
+                              >
+                                Rejet : {m.motif_refus}
+                              </p>
+                            )}
+                          </div>
+                          {/*
+                           * Annuler une ecriture close. Sans ce bouton, corriger une
+                           * ligne validee demandait de lui opposer une ecriture
+                           * inverse, qui decrivait a son tour un mouvement n'ayant pas
+                           * eu lieu : le journal finissait par raconter le contraire de
+                           * ce qui s'etait passe.
+                           */}
+                          {valide && m.statut === STATUT_CAISSE.valide && (
+                            <FormulaireAction
+                              action={rejeterMouvement}
+                              libelle="Annuler"
+                              variante="danger"
+                              compact
+                              confirmation="Annuler ce mouvement deja valide ? Il cessera de compter dans la caisse, et l'operation restera au journal."
+                            >
+                              <ChampCache nom="id" valeur={m.id} />
+                              <input
+                                name="motif"
+                                placeholder="Motif"
+                                required
+                                className="mb-1 w-28 rounded border px-2 py-1 text-xs"
+                                style={{
+                                  background: "var(--fond)",
+                                  borderColor: "var(--bordure)",
+                                  color: "var(--texte)",
+                                }}
+                              />
+                            </FormulaireAction>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </GroupeReplie>
+              </li>
+            ))}
           </ul>
         )}
       </Carte>
