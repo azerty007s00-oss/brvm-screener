@@ -90,7 +90,7 @@ export async function GET(requete: Request) {
       const { ok: parti } = await envoyerCourriel({
         destinataire: d.situation.email,
         sujet: sujetRelance(d, moisCourant),
-        texte: texteRelance(d, siteUrl),
+        texte: texteRelance(d, siteUrl, maintenant),
       });
       (parti ? envoyes : echecs).push(d.situation.email);
     }
@@ -143,19 +143,22 @@ function sujetRelance(d: Destinataire, moisCourant: string): string {
 function texteRelance(
   { situation, arrieres, echeanceDuJour, avanceManquante }: Destinataire,
   siteUrl: string,
+  maintenant: Date,
 ): string {
-  const lignes: string[] = [`Bonjour ${situation.nom},`, ""];
+  // Le blanc qui suit l'appel n'a de sens que s'il precede un paragraphe.
+  const lignes: string[] = [`Bonjour ${situation.nom},`];
 
   if (echeanceDuJour) {
     lignes.push(
+      "",
       `Votre versement de ${fcfa(REGLES.cotisationMensuelle)} pour ${moisLong(echeanceDuJour)} ` +
         `est du aujourd'hui, dernier jour de l'echeance statutaire (art. 8).`,
-      "",
     );
   }
 
   if (arrieres.length > 0) {
     lignes.push(
+      "",
       "Versements encore manquants :",
       arrieres.map((m) => `  - ${moisLong(m)}`).join("\n"),
       "",
@@ -193,21 +196,42 @@ function texteRelance(
   if (situation.nbPenalitesImpayees > 0) {
     const seuil = REGLES.penalitesImpayeesAvantExclusion;
     const effet = EFFET.penalitesIndissociables;
+    const enVigueur = maintenant.toISOString().slice(0, 10) >= effet;
+
+    lignes.push("");
+    /*
+     * Le total des penalites a deja ete dit plus haut a qui a des arrieres :
+     * le repeter donnerait deux chiffres identiques a trois lignes d'intervalle,
+     * et ferait douter qu'ils parlent de la meme chose.
+     */
     lignes.push(
-      "",
-      `Penalites de retard impayees : ${situation.nbPenalitesImpayees}, pour un total de ` +
-        `${fcfa(situation.totalPenalites)}.`,
+      arrieres.length > 0
+        ? `Ces penalites sont au nombre de ${situation.nbPenalitesImpayees}, toutes impayees.`
+        : `Penalites de retard impayees : ${situation.nbPenalitesImpayees}, pour un total de ` +
+          `${fcfa(situation.totalPenalites)}.`,
     );
-    if (situation.nbPenalitesImpayees >= seuil) {
+
+    /*
+     * La regle ne mord qu'a sa date d'effet. Annoncer une exclusion « encourue de
+     * plein droit depuis » une date a venir serait faux, et alarmerait a tort.
+     */
+    if (situation.nbPenalitesImpayees >= seuil && enVigueur) {
       lignes.push(
         `Ce nombre atteint le seuil de ${seuil} fixe par l'assemblee : les penalites etant ` +
           `indissociables des cotisations depuis le ${dateCourte(effet)}, l'exclusion est ` +
           "encourue de plein droit (R5), meme cotisations a jour.",
       );
+    } else if (situation.nbPenalitesImpayees >= seuil) {
+      lignes.push(
+        `Ce nombre atteint deja le seuil de ${seuil} fixe par l'assemblee. A compter du ` +
+          `${dateCourte(effet)}, les penalites deviendront indissociables des cotisations et ` +
+          "ce cumul emportera l'exclusion de plein droit (R5), meme cotisations a jour. " +
+          "Vous avez jusque-la pour regulariser.",
+      );
     } else {
       lignes.push(
-        `A partir de ${seuil} penalites impayees, l'exclusion est encourue de plein droit ` +
-          `(R5) meme cotisations a jour — regle en vigueur le ${dateCourte(effet)}.`,
+        `A partir de ${seuil} penalites impayees, l'exclusion sera encourue de plein droit ` +
+          `(R5) meme cotisations a jour — regle applicable le ${dateCourte(effet)}.`,
       );
     }
   }
