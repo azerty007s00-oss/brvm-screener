@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { descriptionTransport, envoyerCourriel, transportConfigure } from "@/lib/courriel";
+import { versionDeployee } from "@/lib/version";
 import { listerMembres, reglagesEffectifs } from "@/lib/queries";
 import { CLUB, REGLES, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
 import {
@@ -480,7 +481,14 @@ export async function envoyerCourrielEssai(
       "Ce courrier confirme que l'envoi fonctionne : la relance du 10 partira.",
       "",
       `Transport : ${descriptionTransport()}`,
-      `Essai demande le ${new Date().toISOString().slice(0, 10)}.`,
+      /*
+       * Horodatage a la seconde, et revision deployee : deux essais identiques
+       * dans la meme boite sont replies par Gmail sous « texte des messages
+       * precedents masque », et le second parait vide. Ce qui distingue les
+       * messages doit donc figurer dans le corps, pas seulement dans l'en-tete.
+       */
+      `Essai demande le ${new Date().toISOString().slice(0, 19).replace("T", " a ")} UTC.`,
+      `Version en ligne : ${versionDeployee().revision ?? "inconnue"}.`,
       "",
       `Le bureau — ${CLUB.nom}`,
     ].join("\n"),
