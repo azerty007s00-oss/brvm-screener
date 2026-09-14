@@ -6,27 +6,33 @@ import { seDeconnecter } from "@/app/actions/auth";
 import { CLUB, ROLES } from "@/lib/settings";
 import { peut, type Droit } from "@/lib/droits";
 import { Alerte } from "@/components/ui";
+import { Navigation } from "@/components/navigation";
 import { versionDeployee } from "@/lib/version";
 
 /*
- * Presque tout se lit par tous : la transparence des comptes est le principe du
- * club. Seule l'administration n'a rien a montrer a qui ne l'exerce pas, d'ou le
- * droit qui conditionne son entree -- un lien qui ne mene qu'a un refus est une
- * promesse rompue.
+ * Deux rangees, et non plus une barre de dix onglets : on ne voyait pas qu'elle
+ * defilait, et l'on cherchait longtemps une page qui etait la.
+ *
+ * « Mon suivi » porte ce qu'un membre ouvre chaque mois, et tient sans defiler.
+ * « Le club » porte le reste, ouvert a tous : la transparence des comptes est le
+ * principe du club (art. 12).
  */
-const LIENS: { href: string; libelle: string; droit?: Droit }[] = [
-  { href: "/", libelle: "Tableau de bord" },
+const SUIVI: { href: string; libelle: string; droit?: Droit }[] = [
+  { href: "/", libelle: "Accueil" },
   { href: "/versements", libelle: "Versements" },
-  { href: "/caisse", libelle: "Caisse" },
-  { href: "/compte-titres", libelle: "Compte-titres" },
-  { href: "/portefeuille", libelle: "Portefeuille" },
-  { href: "/penalites", libelle: "Penalites" },
-  { href: "/reunions", libelle: "Reunions" },
-  { href: "/membres", libelle: "Membres" },
+  // L'administration est l'outil quotidien du president : elle tient au premier rang.
   { href: "/administration", libelle: "Administration", droit: "gererReglages" },
   { href: "/mon-compte", libelle: "Mon compte" },
 ];
 
+const VIE_DU_CLUB: { href: string; libelle: string; droit?: Droit }[] = [
+  { href: "/caisse", libelle: "Caisse" },
+  { href: "/compte-titres", libelle: "Titres" },
+  { href: "/portefeuille", libelle: "Portefeuille" },
+  { href: "/penalites", libelle: "Penalites" },
+  { href: "/reunions", libelle: "Reunions" },
+  { href: "/membres", libelle: "Membres" },
+];
 export default async function CoquilleApplication({ children }: { children: React.ReactNode }) {
   if (!baseConfiguree()) redirect("/login");
   const membre = await membreCourant();
@@ -68,21 +74,10 @@ export default async function CoquilleApplication({ children }: { children: Reac
           </form>
         </div>
 
-        <nav className="defilement-x mx-auto max-w-5xl px-4 pb-2">
-          <ul className="flex gap-1 whitespace-nowrap">
-            {LIENS.filter((l) => !l.droit || peut(membre, l.droit)).map((l) => (
-              <li key={l.href}>
-                <Link
-                  href={l.href}
-                  className="block rounded-lg px-3 py-1.5 text-xs font-medium transition"
-                  style={{ color: "var(--color-brun-100)" }}
-                >
-                  {l.libelle}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <Navigation
+          suivi={SUIVI.filter((l) => !l.droit || peut(membre, l.droit)).map(({ href, libelle }) => ({ href, libelle }))}
+          club={VIE_DU_CLUB.filter((l) => !l.droit || peut(membre, l.droit)).map(({ href, libelle }) => ({ href, libelle }))}
+        />
       </header>
 
       <main className="mx-auto max-w-5xl space-y-4 px-4 py-5">
