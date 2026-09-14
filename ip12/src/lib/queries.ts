@@ -1,3 +1,4 @@
+import { cache } from "react";
 import "server-only";
 import { db } from "./db";
 import { CLUB, REGLES, debutMois, estExigible, moisDuClub, tauxNormalise } from "./settings";
@@ -85,7 +86,7 @@ function normaliser(champ: keyof Reglages, valeur: number): number | null {
  * `settings` quand elle porte la cle correspondante. Permet de changer le montant
  * de la cotisation sans toucher au code, comme le prevoyait le schema d'origine.
  */
-export async function reglagesEffectifs(): Promise<Reglages> {
+async function reglagesEffectifsBrut(): Promise<Reglages> {
   try {
     const sql = db();
     const rows = await sql`select key, value from settings`;
@@ -116,7 +117,7 @@ const CHAMPS_MEMBRE = `
   to_char(joined_on, 'YYYY-MM-DD') as date_adhesion
 `;
 
-export async function listerMembres(inclureInactifs = false): Promise<MembreListe[]> {
+async function listerMembresBrut(inclureInactifs: boolean): Promise<MembreListe[]> {
   const sql = db();
   const rows = await sql`
     select ${sql.unsafe(CHAMPS_MEMBRE)}
@@ -165,13 +166,13 @@ export async function listerVersements(filtre?: {
   return (rows as Versement[]).map((r) => ({ ...r, montant: n(r.montant) }));
 }
 
-export async function versementsEnAttente(): Promise<Versement[]> {
+async function versementsEnAttenteBrut(): Promise<Versement[]> {
   return listerVersements({ statut: STATUT_VERSEMENT.enAttente });
 }
 
 /* -------------------------------------------------------------- compte-titres */
 
-export async function listerApports(): Promise<Apport[]> {
+async function listerApportsBrut(): Promise<Apport[]> {
   const sql = db();
   const projection = (avecFrais: boolean) => `
     t.id, to_char(t.transfer_date, 'YYYY-MM-DD') as date_transfert,
@@ -198,7 +199,7 @@ export async function listerApports(): Promise<Apport[]> {
   return (rows as Apport[]).map((r) => ({ ...r, montant: n(r.montant), frais: n(r.frais) }));
 }
 
-export async function listerValorisations(): Promise<Valorisation[]> {
+async function listerValorisationsBrut(): Promise<Valorisation[]> {
   const sql = db();
   const rows = await sql`
     select id, to_char(valued_on, 'YYYY-MM-DD') as date_valo,
@@ -221,7 +222,7 @@ export async function listerValorisations(): Promise<Valorisation[]> {
   });
 }
 
-export async function derniereValorisation(): Promise<Valorisation | null> {
+async function derniereValorisationBrut(): Promise<Valorisation | null> {
   const toutes = await listerValorisations();
   return toutes.at(-1) ?? null;
 }
@@ -229,7 +230,7 @@ export async function derniereValorisation(): Promise<Valorisation | null> {
 /* ------------------------------------------------------------ declarations R3 */
 
 /** La table est ajoutee par scripts/migration-r3.sql : son absence n'est pas une erreur. */
-export async function declarationsRetard(): Promise<{ membre_id: string; mois: string }[]> {
+async function declarationsRetardBrut(): Promise<{ membre_id: string; mois: string }[]> {
   try {
     const sql = db();
     const rows = await sql`
@@ -307,7 +308,7 @@ export async function listerPenalites(filtre?: {
  * par la ligne de reprise dit ou s'arrete son decompte. Au-dela, le site prend le
  * relais ; en deca, il se tait, sous peine de compter deux fois la meme realite.
  */
-export async function bornesReprisePenalites(): Promise<Map<string, string>> {
+async function bornesReprisePenalitesBrut(): Promise<Map<string, string>> {
   const bornes = new Map<string, string>();
   try {
     const sql = db();
@@ -330,7 +331,7 @@ export async function bornesReprisePenalites(): Promise<Map<string, string>> {
  * impayees », et chaque ligne de retard porte sur un mois. Les penalites
  * d'absence en sont exclues -- la resolution vise les penalites de retard.
  */
-export async function nbPenalitesRetardDues(): Promise<Map<string, number>> {
+async function nbPenalitesRetardDuesBrut(): Promise<Map<string, number>> {
   try {
     const sql = db();
     const rows = await sql`
@@ -345,7 +346,7 @@ export async function nbPenalitesRetardDues(): Promise<Map<string, number>> {
   }
 }
 
-export async function penalitesDuesParMembre(): Promise<Map<string, number>> {
+async function penalitesDuesParMembreBrut(): Promise<Map<string, number>> {
   const sql = db();
   const rows = await sql`
     select member_id, sum(quantity * unit_amount)::bigint as total
@@ -375,7 +376,7 @@ export type Presence = {
   note: string | null;
 };
 
-export async function listerReunions(): Promise<Reunion[]> {
+async function listerReunionsBrut(): Promise<Reunion[]> {
   const sql = db();
   const rows = await sql`
     select r.id, to_char(r.meeting_date, 'YYYY-MM-DD') as date_reunion,
@@ -416,7 +417,7 @@ export type AbsencesMembre = {
  * consiste a la passer en « excuse » sur la seance concernee, ce qui la retire
  * mecaniquement du compte penalisable.
  */
-export async function absencesParMembre(): Promise<AbsencesMembre[]> {
+async function absencesParMembreBrut(): Promise<AbsencesMembre[]> {
   const sql = db();
   const rows = await sql`
     select m.id as membre_id, m.full_name as nom,
@@ -445,7 +446,7 @@ export async function absencesParMembre(): Promise<AbsencesMembre[]> {
   }));
 }
 
-export async function presencesParReunion(): Promise<Map<string, Map<string, string>>> {
+async function presencesParReunionBrut(): Promise<Map<string, Map<string, string>>> {
   const sql = db();
   const rows = await sql`select meeting_id, member_id, status from attendances`;
   const index = new Map<string, Map<string, string>>();
@@ -472,7 +473,7 @@ export type MouvementCaisse = {
   motif_refus: string | null;
 };
 
-export async function listerMouvementsCaisse(): Promise<MouvementCaisse[]> {
+async function listerMouvementsCaisseBrut(): Promise<MouvementCaisse[]> {
   const sql = db();
   const rows = await sql`
     select c.id, to_char(c.movement_date, 'YYYY-MM-DD') as date_mouvement,
@@ -488,7 +489,7 @@ export async function listerMouvementsCaisse(): Promise<MouvementCaisse[]> {
 }
 
 /** Penalites effectivement encaissees : elles grossissent la caisse. */
-export async function penalitesEncaissees(): Promise<number> {
+async function penalitesEncaisseesBrut(): Promise<number> {
   try {
     const sql = db();
     const rows = await sql`
@@ -534,7 +535,7 @@ export type RegleMembre = {
  * Une regle expiree n'est pas supprimee -- elle a produit ses effets et le
  * registre doit pouvoir le dire -- mais elle cesse de s'appliquer.
  */
-export async function reglesIndividuelles(toutes = false): Promise<RegleMembre[]> {
+async function reglesIndividuellesBrut(toutes: boolean): Promise<RegleMembre[]> {
   try {
     const sql = db();
     const rows = await sql`
@@ -592,7 +593,7 @@ export type AvanceExigee = {
  * L'obligation s'exprime en mois et non en francs : une cotisation revue en
  * assemblee ne doit pas alleger la mesure sans que personne l'ait voulu.
  */
-export async function avancesExigees(aujourdhui = new Date()): Promise<AvanceExigee[]> {
+async function avancesExigeesBrut(aujourdhui: Date): Promise<AvanceExigee[]> {
   const [regles, situations, reglages] = await Promise.all([
     reglesIndividuelles(),
     situationsClub(aujourdhui),
@@ -617,7 +618,7 @@ export async function avancesExigees(aujourdhui = new Date()): Promise<AvanceExi
 }
 
 /** Les derogations en vigueur, indexees par membre, pretes pour le calcul. */
-export async function derogationsParMembre(): Promise<Map<string, ReglesMembre>> {
+async function derogationsParMembreBrut(): Promise<Map<string, ReglesMembre>> {
   const regles = await reglesIndividuelles();
   const index = new Map<string, ReglesMembre>();
   for (const r of regles) {
@@ -650,7 +651,7 @@ export type Sortie = {
   note: string | null;
 };
 
-export async function listerSorties(): Promise<Sortie[]> {
+async function listerSortiesBrut(): Promise<Sortie[]> {
   try {
     const sql = db();
     const rows = await sql`
@@ -706,7 +707,7 @@ export type DecompteSortie = {
  * du membre en diluant sa part. Les deduire une seconde fois les compterait deux
  * fois.
  */
-export async function decomptesSortie(): Promise<DecompteSortie[]> {
+async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
   const [s, dues] = await Promise.all([
     synthese(),
     penalitesDuesParMembre().catch(() => new Map<string, number>()),
@@ -732,7 +733,7 @@ export async function decomptesSortie(): Promise<DecompteSortie[]> {
   });
 }
 
-export async function situationsClub(aujourdhui = new Date()): Promise<SituationClub[]> {
+async function situationsClubBrut(aujourdhui: Date): Promise<SituationClub[]> {
   const sql = db();
   const [membres, declarations, derogations, nbPenalites, reglages] = await Promise.all([
     listerMembres(),
@@ -821,7 +822,7 @@ export type Synthese = {
   enAttenteValidation: number;
 };
 
-export async function synthese(aujourdhui = new Date()): Promise<Synthese> {
+async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
   const [situations, apports, valos, enAttente, duesParMembre, encaissees, caisse] =
     await Promise.all([
       situationsClub(aujourdhui),
@@ -933,3 +934,95 @@ export async function synthese(aujourdhui = new Date()): Promise<Synthese> {
 }
 
 export const CONSTANTES = { CLUB, REGLES };
+
+
+/* =========================================================== deduplication */
+
+/*
+ * Une meme page demande souvent deux fois la meme chose : la page d'accueil
+ * appelle `synthese`, qui appelle `situationsClub`, puis rappelle
+ * `situationsClub` pour son propre compte -- et `situationsClub` recharge a
+ * chaque fois les membres, les declarations, les derogations et les reglages.
+ * Dix-huit allers-retours vers Neon pour douze requetes distinctes. Chaque
+ * aller-retour est une requete HTTP : sur le reseau mobile d'Abidjan, le tiers
+ * de trop se voit.
+ *
+ * `cache` de React memorise le resultat pour la duree d'un rendu, et rien
+ * au-dela : deux membres qui chargent la meme page ne partagent rien, et la
+ * page suivante repart de la base. Ce n'est pas un cache de donnees, c'est la
+ * suppression des doublons d'une seule requete.
+ *
+ * Hors rendu -- la route cron, une action serveur -- `cache` laisse passer
+ * l'appel sans rien memoriser : le comportement y reste celui d'avant.
+ *
+ * Les lectures a filtre (`listerVersements`, `listerPenalites`) restent hors du
+ * dispositif : leur argument est un objet, recree a chaque appel, qu'aucune
+ * memorisation par identite ne saurait reconnaitre. Elles ne sont appelees
+ * qu'une fois par page.
+ */
+
+/**
+ * L'instant de la requete, fige.
+ *
+ * Sans lui, `situationsClub()` et `synthese()` appeles dans la meme page
+ * recevraient chacun une Date differente, et `cache` les tiendrait pour deux
+ * demandes distinctes. Accessoirement, tous les calculs d'une meme page se
+ * rapportent desormais au meme instant, au lieu de deriver de quelques
+ * millisecondes entre eux.
+ */
+const instantCourant = cache(() => new Date());
+
+export const reglagesEffectifs = cache(reglagesEffectifsBrut);
+export const versementsEnAttente = cache(versementsEnAttenteBrut);
+export const listerApports = cache(listerApportsBrut);
+export const listerValorisations = cache(listerValorisationsBrut);
+export const derniereValorisation = cache(derniereValorisationBrut);
+export const declarationsRetard = cache(declarationsRetardBrut);
+export const bornesReprisePenalites = cache(bornesReprisePenalitesBrut);
+export const nbPenalitesRetardDues = cache(nbPenalitesRetardDuesBrut);
+export const penalitesDuesParMembre = cache(penalitesDuesParMembreBrut);
+export const listerReunions = cache(listerReunionsBrut);
+export const absencesParMembre = cache(absencesParMembreBrut);
+export const presencesParReunion = cache(presencesParReunionBrut);
+export const listerMouvementsCaisse = cache(listerMouvementsCaisseBrut);
+export const penalitesEncaissees = cache(penalitesEncaisseesBrut);
+export const derogationsParMembre = cache(derogationsParMembreBrut);
+export const listerSorties = cache(listerSortiesBrut);
+export const decomptesSortie = cache(decomptesSortieBrut);
+
+/*
+ * Les lectures a valeur par defaut passent par une enveloppe.
+ *
+ * `cache` distingue les appels par leurs arguments, et `f()` n'est pas `f(x)`
+ * meme quand x est precisement la valeur par defaut de f : la page appelait
+ * `situationsClub()` pendant que `synthese` appelait `situationsClub(jour)`, et
+ * les deux s'executaient. Resoudre la valeur par defaut ici, en amont du cache,
+ * fait arriver tous les appels avec la meme arite -- donc la meme cle.
+ *
+ * Le defaut ne se contente pas d'etre `new Date()` : c'est l'instant fige de la
+ * requete, sans quoi deux Date differentes rouvriraient deux entrees.
+ */
+const situationsClubCache = cache(situationsClubBrut);
+export function situationsClub(aujourdhui: Date = instantCourant()): Promise<SituationClub[]> {
+  return situationsClubCache(aujourdhui);
+}
+
+const syntheseCache = cache(syntheseBrut);
+export function synthese(aujourdhui: Date = instantCourant()): Promise<Synthese> {
+  return syntheseCache(aujourdhui);
+}
+
+const avancesExigeesCache = cache(avancesExigeesBrut);
+export function avancesExigees(aujourdhui: Date = instantCourant()): Promise<AvanceExigee[]> {
+  return avancesExigeesCache(aujourdhui);
+}
+
+const listerMembresCache = cache(listerMembresBrut);
+export function listerMembres(inclureInactifs = false): Promise<MembreListe[]> {
+  return listerMembresCache(inclureInactifs);
+}
+
+const reglesIndividuellesCache = cache(reglesIndividuellesBrut);
+export function reglesIndividuelles(toutes = false): Promise<RegleMembre[]> {
+  return reglesIndividuellesCache(toutes);
+}
