@@ -159,3 +159,46 @@ export async function supprimerValorisation(
   revalidatePath("/", "layout");
   return { ok: true, message: "Releve supprime." };
 }
+
+/**
+ * Supprime un mouvement de compte-titres.
+ *
+ * Une ecriture financiere ne se retire pas a la legere, mais l'absence de toute
+ * suppression coutait plus cher : une saisie fautive restait a jamais, et il
+ * fallait lui opposer une ecriture inverse qui decrivait, elle aussi, quelque
+ * chose qui n'avait pas eu lieu. Deux mensonges valent moins qu'un repentir.
+ *
+ * La ligne est relue avant d'etre effacee et son contenu passe au journal : la
+ * trace survit a la donnee, avec le nom de qui a decide.
+ */
+export async function supprimerApport(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererCompteTitres");
+  const id = String(donnees.get("id") ?? "");
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, erreur: "Mouvement introuvable." };
+
+  const sql = db();
+  const lignes = (await sql`
+    select to_char(transfer_date, 'YYYY-MM-DD') as date_transfert, amount, direction, note
+    from securities_transfers
+    where id = ${id}::uuid
+  `) as { date_transfert: string; amount: number | string; direction: string; note: string | null }[];
+  if (lignes.length === 0) return { ok: false, erreur: "Mouvement introuvable." };
+
+  await sql`delete from securities_transfers where id = ${id}::uuid`;
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "suppression_mouvement_compte_titres",
+    { entite: "securities_transfers", id },
+    {
+      date: lignes[0].date_transfert,
+      montant: Number(lignes[0].amount),
+      sens: lignes[0].direction,
+      note: lignes[0].note,
+    },
+  );
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Mouvement supprime." };
+}

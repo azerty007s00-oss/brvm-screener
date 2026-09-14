@@ -12,6 +12,11 @@ Phoenix Capital Management.
   restant requise. Personne ne valide son propre versement.
 - **Avances et retards** — une déclaration peut couvrir plusieurs mois d'avance. Les mois
   échus non couverts basculent automatiquement en retard après le 10 (art. 8).
+- **Corriger une écriture** — un mouvement de compte-titres se supprime, une écriture de caisse
+  déjà validée s'annule (motif obligatoire). Sans cela, corriger une saisie fautive demandait de
+  lui opposer une écriture inverse, qui décrivait à son tour un mouvement n'ayant pas eu lieu : le
+  journal finissait par raconter le contraire de ce qui s'était passé. La ligne supprimée passe au
+  journal avant d'être effacée — la trace survit à la donnée, avec le nom de qui a décidé.
 - **Frais de compte-titres** — ils se règlent de trois façons, et les trois se saisissent :
   retenus à l'arrivée sur un virement, payés à part depuis la caisse (catégorie *Frais SGI* ou
   *Frais bancaires*), ou **prélevés seuls dans le compte-titres** par la SGI, sans virement qui

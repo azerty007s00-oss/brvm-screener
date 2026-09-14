@@ -253,6 +253,35 @@ export default async function PageCaisse() {
                       </p>
                     )}
                   </div>
+                  {/*
+                    * Annuler une ecriture close. Sans ce bouton, corriger une
+                    * ligne validee demandait de lui opposer une ecriture
+                    * inverse, qui decrivait a son tour un mouvement n'ayant pas
+                    * eu lieu : le journal finissait par raconter le contraire de
+                    * ce qui s'etait passe.
+                    */}
+                  {valide && m.statut === STATUT_CAISSE.valide && (
+                    <FormulaireAction
+                      action={rejeterMouvement}
+                      libelle="Annuler"
+                      variante="danger"
+                      compact
+                      confirmation="Annuler ce mouvement deja valide ? Il cessera de compter dans la caisse, et l'operation restera au journal."
+                    >
+                      <ChampCache nom="id" valeur={m.id} />
+                      <input
+                        name="motif"
+                        placeholder="Motif"
+                        required
+                        className="mb-1 w-28 rounded border px-2 py-1 text-xs"
+                        style={{
+                          background: "var(--fond)",
+                          borderColor: "var(--bordure)",
+                          color: "var(--texte)",
+                        }}
+                      />
+                    </FormulaireAction>
+                  )}
                 </li>
               );
             })}

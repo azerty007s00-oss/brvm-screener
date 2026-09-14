@@ -1,10 +1,10 @@
 import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { listerApports, listerMouvementsCaisse, synthese } from "@/lib/queries";
-import { enregistrerApport } from "@/app/actions/titres";
+import { enregistrerApport, supprimerApport } from "@/app/actions/titres";
 import { CLUB, dateCourte, fcfa } from "@/lib/settings";
 import { SENS_TRANSFERT } from "@/lib/valeurs";
-import { Champ, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
+import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { Badge, Carte, Statistique, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
@@ -187,6 +187,23 @@ export default async function PageCompteTitres() {
                       {a.note ? ` · ${a.note}` : ""}
                     </p>
                   </div>
+                  {/*
+                    * Une saisie fautive restait a jamais : il fallait lui opposer
+                    * un mouvement inverse, qui decrivait a son tour un virement
+                    * n'ayant pas eu lieu. La ligne passe au journal avant d'etre
+                    * effacee -- la trace survit a la donnee.
+                    */}
+                  {peutSaisir && (
+                    <FormulaireAction
+                      action={supprimerApport}
+                      libelle="Supprimer"
+                      variante="danger"
+                      compact
+                      confirmation="Supprimer ce mouvement ? Il disparaitra des comptes ; le journal en gardera le detail et votre nom."
+                    >
+                      <ChampCache nom="id" valeur={a.id} />
+                    </FormulaireAction>
+                  )}
                 </li>
               );
             })}

@@ -94,23 +94,35 @@ export async function rejeterMouvement(
   const motif = String(donnees.get("motif") ?? "").trim();
   if (!motif) return { ok: false, erreur: "Indiquez le motif du rejet." };
 
+  /*
+   * Le rejet valait pour les seules lignes en attente. Une ligne validee etait
+   * donc definitive : la corriger demandait de lui opposer une ecriture inverse,
+   * qui decrivait a son tour un mouvement n'ayant pas eu lieu. Une ecriture close
+   * s'annule desormais aussi -- acte plus lourd, reserve au president comme le
+   * rejet, motif obligatoire, et trace au journal de l'etat d'ou l'on vient.
+   */
   const sql = db();
-  const rows = await sql`
+  const rows = (await sql`
     update cash_movements
     set status = ${STATUT_CAISSE.rejete}, reviewed_by = ${auteur.id}::uuid,
         reviewed_at = now(), review_note = ${motif}
-    where id = ${id}::uuid and status = ${STATUT_CAISSE.enAttente}
-    returning id
-  `;
-  if (rows.length === 0) return { ok: false, erreur: "Mouvement introuvable ou deja traite." };
+    where id = ${id}::uuid and status <> ${STATUT_CAISSE.rejete}
+    returning id, amount, direction, category
+  `) as { id: string; amount: number | string; direction: string; category: string }[];
+  if (rows.length === 0) return { ok: false, erreur: "Mouvement introuvable ou deja rejete." };
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "rejet_mouvement_caisse",
     { entite: "cash_movements", id },
-    { motif },
+    {
+      motif,
+      montant: Number(rows[0].amount),
+      sens: rows[0].direction,
+      categorie: rows[0].category,
+    },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Mouvement rejete." };
+  return { ok: true, message: "Mouvement rejete : il ne compte plus dans la caisse." };
 }
 
 /**
