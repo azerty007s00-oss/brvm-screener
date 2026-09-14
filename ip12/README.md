@@ -40,6 +40,8 @@ Phoenix Capital Management.
 | R3 | Déclaration du retard au groupe obligatoire à l'entrée dans le 2e mois |
 | R4 | Dès 3 mois de retard, pénalités des 3 derniers mois doublées (30 % → 60 %) |
 | R5 | Retard non déclaré : exclusion de plein droit. Déclaré : plan de redressement unique |
+| AG 2026 | Pénalités indissociables des cotisations : 3 pénalités de retard impayées emportent l'exclusion (R5), à compter du 10/01/2027 |
+| AG 2026 | Avance minimale imposable à un membre, à titre disciplinaire, exprimée en mois |
 
 Ces valeurs sont centralisées dans `src/lib/settings.ts` : un amendement des statuts se
 répercute partout en modifiant ce seul fichier.

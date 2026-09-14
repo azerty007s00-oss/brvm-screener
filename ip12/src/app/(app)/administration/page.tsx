@@ -410,7 +410,9 @@ export default async function PageAdministration() {
                       <Badge ton="ambre">
                         {r.nature === REGLE_MEMBRE.multiplicateurPenalite
                           ? `x ${r.valeur}`
-                          : fcfa(r.valeur)}
+                          : r.nature === REGLE_MEMBRE.avanceMinimale
+                            ? `${r.valeur} mois`
+                            : fcfa(r.valeur)}
                       </Badge>
                     )}
                   </p>
@@ -456,7 +458,7 @@ export default async function PageAdministration() {
               type="number"
               min={1}
               requis={false}
-              aide="Un montant en FCFA pour la cotisation et l'avance ; un multiplicateur (2 = double) pour les penalites. Laisser vide pour un plan ou une note."
+              aide="Un montant en FCFA pour la cotisation ; un NOMBRE DE MOIS pour l'avance minimale ; un multiplicateur (2 = double) pour les penalites. Laisser vide pour un plan ou une note."
             />
             <Champ nom="debut" libelle="A compter du" type="date" requis={false} />
             <Champ

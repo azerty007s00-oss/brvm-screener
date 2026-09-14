@@ -1,6 +1,12 @@
 import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
-import { absencesParMembre, listerMembres, listerPenalites, situationsClub } from "@/lib/queries";
+import {
+  absencesParMembre,
+  avancesExigees,
+  listerMembres,
+  listerPenalites,
+  situationsClub,
+} from "@/lib/queries";
 import {
   ajouterPenalite,
   annulerPenalite,
@@ -9,7 +15,7 @@ import {
   reglerPenalite,
 } from "@/app/actions/penalites";
 import { tranchesAbsence } from "@/lib/penalites";
-import { REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { EFFET, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { KIND_PENALITE, STATUT_PENALITE } from "@/lib/valeurs";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { Alerte, Badge, Carte, Statistique, Vide } from "@/components/ui";
@@ -27,13 +33,14 @@ export default async function PagePenalites() {
   const membre = await exigerMembre();
   const gere = peut(membre, "gererPenalites");
 
-  let penalites, membres, situations, absences;
+  let penalites, membres, situations, absences, avances;
   try {
-    [penalites, membres, situations, absences] = await Promise.all([
+    [penalites, membres, situations, absences, avances] = await Promise.all([
       listerPenalites(gere ? undefined : { membreId: membre.id }),
       listerMembres(),
       situationsClub(),
       absencesParMembre().catch(() => []),
+      avancesExigees().catch(() => []),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -62,6 +69,16 @@ export default async function PagePenalites() {
       .map((t) => ({ nom: a.nom, ...t })),
   );
 
+  /*
+   * Les membres que le cumul de penalites expose a l'exclusion. La regle ne mord
+   * qu'a sa date d'effet : avant elle, le decompte s'affiche en avertissement.
+   */
+  const exposes = situations.filter(
+    (x) => x.nbPenalitesImpayees >= REGLES.penalitesImpayeesAvantExclusion,
+  );
+  const regleEnVigueur = new Date().toISOString().slice(0, 10) >= EFFET.penalitesIndissociables;
+  const dateEffet = EFFET.penalitesIndissociables.split("-").reverse().join("/");
+
   return (
     <>
       <div className="grid grid-cols-3 gap-3">
@@ -69,6 +86,60 @@ export default async function PagePenalites() {
         <Statistique libelle="Reglees" valeur={fcfa(total(STATUT_PENALITE.payee))} accent="vert" />
         <Statistique libelle="Annulees" valeur={fcfa(total(STATUT_PENALITE.annulee))} />
       </div>
+
+      {exposes.length > 0 && (
+        <Alerte
+          ton={regleEnVigueur ? "rouge" : "ambre"}
+          titre={
+            regleEnVigueur
+              ? `${exposes.length} membre(s) exclus de plein droit`
+              : `${exposes.length} membre(s) exposes a compter du ${dateEffet}`
+          }
+        >
+          <p>
+            Les penalites sont indissociables des cotisations :{" "}
+            {REGLES.penalitesImpayeesAvantExclusion} penalites de retard impayees emportent
+            l&apos;exclusion (R5), meme si les cotisations sont a jour.
+            {regleEnVigueur ? "" : ` La regle prend effet le ${dateEffet}.`}
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {exposes.map((x) => (
+              <li key={x.membreId}>
+                {x.nom} &middot; {x.nbPenalitesImpayees} penalites impayees
+              </li>
+            ))}
+          </ul>
+        </Alerte>
+      )}
+
+      {avances.length > 0 && (
+        <Carte titre="Avances imposees">
+          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+            Mesure disciplinaire : le membre doit detenir en permanence l&apos;avance indiquee.
+            Elle s&apos;exprime en mois, pour qu&apos;une cotisation revue en assemblee ne
+            l&apos;allege pas sans qu&apos;on l&apos;ait voulu.
+          </p>
+          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {avances.map((a) => (
+              <li key={a.membreId} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <div>
+                  <p className="flex items-center gap-1.5 text-sm font-medium">
+                    {a.membreNom}
+                    <Badge ton={a.respectee ? "vert" : "rouge"}>
+                      {a.respectee ? "Respectee" : "Non respectee"}
+                    </Badge>
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--discret)" }}>
+                    {a.mois} mois exiges, soit {fcfa(a.montantExige)} &middot; detenu{" "}
+                    {fcfa(a.avanceDetenue)}
+                    {a.fin ? ` · jusqu'au ${dateCourte(a.fin)}` : ""}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </Carte>
+      )}
 
       {gere && (
         <Carte titre="Constater les retards">

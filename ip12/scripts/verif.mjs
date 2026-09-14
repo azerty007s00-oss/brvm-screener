@@ -332,4 +332,50 @@ assert.equal(majoreesR4[0].montant, 2_000);
 // Une derogation absente laisse le regime commun intact.
 assert.equal(calculerPenalites(["2026-07-01"], [], {})[0].montant, 500);
 
-console.log("OK - 71 verifications : performance, parts et avances, penalites art. 9 et R4, regles individuelles, retards, absences, R3, R5, relance");
+/* ------------------ penalites indissociables des cotisations (effet differe) */
+
+const avantEffet = new Date("2026-12-31T12:00:00Z");
+const apresEffet = new Date("2027-01-10T12:00:00Z");
+
+// Cotisations a jour, trois penalites impayees : rien avant la date d'effet.
+const aJourAvant = situationMembre("m", ["2026-01-01"], [
+  { mois_couvert: "2026-01-01", montant: 5000, statut: "valide", date_versement: "2026-01-05" },
+], [], avantEffet, undefined, {}, 3);
+assert.equal(aJourAvant.exclusionParPenalites, false, "la regle ne retroagit pas");
+assert.equal(aJourAvant.exclusionEncourue, false);
+
+// La meme situation, a la date d'effet : exclusion encourue par les seules penalites.
+const aJourApres = situationMembre("m", ["2026-01-01"], [
+  { mois_couvert: "2026-01-01", montant: 5000, statut: "valide", date_versement: "2026-01-05" },
+], [], apresEffet, undefined, {}, 3);
+assert.equal(aJourApres.exclusionParPenalites, true);
+assert.equal(aJourApres.exclusionEncourue, true, "3 penalites impayees exposent a l'exclusion");
+
+// Deux penalites ne suffisent pas : le seuil est bien de trois.
+const deuxSeulement = situationMembre("m", ["2026-01-01"], [
+  { mois_couvert: "2026-01-01", montant: 5000, statut: "valide", date_versement: "2026-01-05" },
+], [], apresEffet, undefined, {}, 2);
+assert.equal(deuxSeulement.exclusionEncourue, false);
+
+// Cotisations a jour + penalites : exclusion de plein droit, R3 n'a pas a proteger.
+const parPenalites = issueR5(0, true, false, 3, apresEffet);
+assert.equal(parPenalites.applicable, true);
+assert.equal(parPenalites.voie, "exclusion_plein_droit");
+assert.ok(/indissociables/.test(parPenalites.texte));
+
+// Avant la date d'effet, la meme situation n'ouvre aucune voie.
+assert.equal(issueR5(0, true, false, 3, avantEffet).applicable, false);
+
+/*
+ * Le membre en retard de cotisations qui a declare (R3) garde son plan : la regle
+ * nouvelle ne doit pas rendre lettre morte la branche que R5 lui reserve. Mais le
+ * plan porte alors sur l'ensemble de sa dette, penalites comprises.
+ */
+const planAvecPenalites = issueR5(3, true, false, 3, apresEffet);
+assert.equal(planAvecPenalites.voie, "plan_redressement");
+assert.ok(/l'ensemble de sa dette/.test(planAvecPenalites.texte));
+
+// Retard non declare : l'exclusion de plein droit prime, comme avant.
+assert.equal(issueR5(3, false, false, 3, apresEffet).voie, "exclusion_plein_droit");
+
+console.log("OK - 82 verifications : performance, parts et avances, penalites art. 9, R4 et indissociabilite, regles individuelles, retards, absences, R3, R5, relance");

@@ -3,7 +3,13 @@ import { db } from "./db";
 import { CLUB, REGLES, debutMois, estExigible, moisDuClub } from "./settings";
 import type { Role } from "./settings";
 import { situationMembre, type ReglesMembre, type SituationMembre } from "./penalites";
-import { REGLE_MEMBRE, STATUT_PENALITE, STATUT_VERSEMENT, SENS_TRANSFERT } from "./valeurs";
+import {
+  KIND_PENALITE,
+  REGLE_MEMBRE,
+  STATUT_PENALITE,
+  STATUT_VERSEMENT,
+  SENS_TRANSFERT,
+} from "./valeurs";
 import { dietzModifie, dureeEnAnnees, repartirParts, tri, type Flux, type PartMembre } from "./perf";
 
 /** bigint et numeric reviennent en chaine avec le pilote Postgres : on normalise. */
@@ -311,6 +317,28 @@ export async function bornesReprisePenalites(): Promise<Map<string, string>> {
 }
 
 /** Totaux par membre, sur les seules penalites encore dues. */
+/**
+ * Nombre de penalites de retard encore dues, par membre.
+ *
+ * Un compte, non un montant : la resolution parle de « 3 mois de penalites
+ * impayees », et chaque ligne de retard porte sur un mois. Les penalites
+ * d'absence en sont exclues -- la resolution vise les penalites de retard.
+ */
+export async function nbPenalitesRetardDues(): Promise<Map<string, number>> {
+  try {
+    const sql = db();
+    const rows = await sql`
+      select member_id, count(*)::int as nb
+      from penalties
+      where status = ${STATUT_PENALITE.due} and kind = ${KIND_PENALITE.retard}
+      group by member_id
+    `;
+    return new Map(rows.map((r) => [String(r.member_id), n(r.nb)]));
+  } catch {
+    return new Map();
+  }
+}
+
 export async function penalitesDuesParMembre(): Promise<Map<string, number>> {
   const sql = db();
   const rows = await sql`
@@ -538,6 +566,50 @@ export async function reglesIndividuelles(toutes = false): Promise<RegleMembre[]
   }
 }
 
+export type AvanceExigee = {
+  membreId: string;
+  membreNom: string;
+  /** Nombre de mois d'avance imposes au membre. */
+  mois: number;
+  /** Le montant correspondant, au tarif en vigueur. */
+  montantExige: number;
+  /** Ce qu'il detient effectivement en avance. */
+  avanceDetenue: number;
+  respectee: boolean;
+  /** Terme de l'obligation, s'il en a ete fixe un. */
+  fin: string | null;
+};
+
+/**
+ * Ou en est chaque membre soumis a une avance minimale.
+ *
+ * L'obligation s'exprime en mois et non en francs : une cotisation revue en
+ * assemblee ne doit pas alleger la mesure sans que personne l'ait voulu.
+ */
+export async function avancesExigees(aujourdhui = new Date()): Promise<AvanceExigee[]> {
+  const [regles, situations, reglages] = await Promise.all([
+    reglesIndividuelles(),
+    situationsClub(aujourdhui),
+    reglagesEffectifs(),
+  ]);
+  return regles
+    .filter((r) => r.nature === REGLE_MEMBRE.avanceMinimale && (r.valeur ?? 0) > 0)
+    .map((r) => {
+      const mois = r.valeur ?? 0;
+      const montantExige = mois * reglages.cotisationMensuelle;
+      const avanceDetenue = situations.find((x) => x.membreId === r.membreId)?.avance ?? 0;
+      return {
+        membreId: r.membreId,
+        membreNom: r.membreNom,
+        mois,
+        montantExige,
+        avanceDetenue,
+        respectee: avanceDetenue >= montantExige,
+        fin: r.fin,
+      };
+    });
+}
+
 /** Les derogations en vigueur, indexees par membre, pretes pour le calcul. */
 export async function derogationsParMembre(): Promise<Map<string, ReglesMembre>> {
   const regles = await reglesIndividuelles();
@@ -656,10 +728,11 @@ export async function decomptesSortie(): Promise<DecompteSortie[]> {
 
 export async function situationsClub(aujourdhui = new Date()): Promise<SituationClub[]> {
   const sql = db();
-  const [membres, declarations, derogations] = await Promise.all([
+  const [membres, declarations, derogations, nbPenalites] = await Promise.all([
     listerMembres(),
     declarationsRetard(),
     derogationsParMembre(),
+    nbPenalitesRetardDues(),
   ]);
   const mois = moisDuClub(debutMois(aujourdhui));
 
@@ -691,6 +764,7 @@ export async function situationsClub(aujourdhui = new Date()): Promise<Situation
       aujourdhui,
       `${m.date_adhesion.slice(0, 8)}01`,
       derogations.get(m.id) ?? {},
+      nbPenalites.get(m.id) ?? 0,
     );
 
     return {

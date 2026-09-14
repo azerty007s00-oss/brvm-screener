@@ -1,4 +1,4 @@
-import { REGLES, decalerMois, estExigible } from "./settings";
+import { EFFET, REGLES, decalerMois, estExigible } from "./settings";
 
 export type StatutMois =
   | "paye"
@@ -35,8 +35,12 @@ export type SituationMembre = {
   voteSuspendu: boolean;
   /** R3 - la declaration WhatsApp devient obligatoire a l'entree dans le 2e mois. */
   declarationRequise: boolean;
-  /** R5 - 3 mois de retard atteints. */
+  /** R5 - 3 mois de retard atteints, ou 3 penalites impayees une fois la regle en vigueur. */
   exclusionEncourue: boolean;
+  /** Penalites de retard constatees et non reglees. */
+  nbPenalitesImpayees: number;
+  /** Vrai quand c'est le cumul de penalites, non les cotisations, qui l'expose. */
+  exclusionParPenalites: boolean;
   penalites: PenaliteCalculee[];
   totalPenalites: number;
 };
@@ -89,6 +93,7 @@ export function situationMembre(
   aujourdhui: Date = new Date(),
   moisAdhesion?: string,
   propres: ReglesMembre = {},
+  nbPenalitesImpayees = 0,
 ): SituationMembre {
   const parMois = new Map<string, VersementConnu>();
   for (const v of versements) {
@@ -127,6 +132,16 @@ export function situationMembre(
     }
   }
 
+  /*
+   * Les penalites deviennent indissociables des cotisations : les laisser courir
+   * en reglant sa cotisation ne protege plus. La regle ne vaut qu'a partir de sa
+   * date d'effet -- une sanction ne retroagit pas sur des retards anterieurs a la
+   * decision qui l'institue.
+   */
+  const exclusionParPenalites =
+    aujourdhui.toISOString().slice(0, 10) >= EFFET.penalitesIndissociables &&
+    nbPenalitesImpayees >= REGLES.penalitesImpayeesAvantExclusion;
+
   const nbMoisRetard = moisEnRetard.length;
   const joursDeRetard = nbMoisRetard === 0 ? 0 : joursDepuisEcheance(moisEnRetard[0], aujourdhui);
   const penalites = calculerPenalites(moisEnRetard, moisRegularisesEnRetard, propres);
@@ -142,7 +157,9 @@ export function situationMembre(
     declarationRequise:
       nbMoisRetard >= REGLES.declarationObligatoireApresMois &&
       !moisEnRetard.every((m) => moisDeclares.includes(m)),
-    exclusionEncourue: nbMoisRetard >= REGLES.exclusionApresMois,
+    exclusionEncourue: nbMoisRetard >= REGLES.exclusionApresMois || exclusionParPenalites,
+    nbPenalitesImpayees,
+    exclusionParPenalites,
     penalites,
     totalPenalites: penalites.reduce((total, p) => total + p.montant, 0),
   };
@@ -197,9 +214,29 @@ export function issueR5(
   nbMoisRetard: number,
   retardDeclare: boolean,
   planDejaUtilise: boolean,
+  nbPenalitesImpayees = 0,
+  aujourdhui: Date = new Date(),
 ): { applicable: boolean; voie: "exclusion_plein_droit" | "plan_redressement" | "vote_art20" | null; texte: string } {
+  /*
+   * Les penalites sont devenues indissociables des cotisations. Un membre a jour
+   * de ses cotisations mais laissant courir ses penalites est desormais expose :
+   * c'est precisement l'abus que l'assemblee a voulu fermer.
+   */
+  const parPenalites =
+    aujourdhui.toISOString().slice(0, 10) >= EFFET.penalitesIndissociables &&
+    nbPenalitesImpayees >= REGLES.penalitesImpayeesAvantExclusion;
+
   if (nbMoisRetard < REGLES.exclusionApresMois) {
-    return { applicable: false, voie: null, texte: "" };
+    if (!parPenalites) return { applicable: false, voie: null, texte: "" };
+    return {
+      applicable: true,
+      voie: "exclusion_plein_droit",
+      texte:
+        `${nbPenalitesImpayees} penalites de retard impayees, alors que les cotisations ` +
+        "sont a jour. Les penalites etant indissociables des cotisations depuis le " +
+        `${EFFET.penalitesIndissociables.split("-").reverse().join("/")}, l'exclusion est ` +
+        "acquise de plein droit (R5).",
+    };
   }
   if (!retardDeclare) {
     return {
@@ -225,7 +262,11 @@ export function issueR5(
     voie: "plan_redressement",
     texte:
       "Retard declare au groupe : le membre garde le benefice d'un plan de redressement, " +
-      "accordable une seule fois sur la duree du club.",
+      "accordable une seule fois sur la duree du club." +
+      (parPenalites
+        ? ` Le plan porte sur l'ensemble de sa dette : ses ${nbPenalitesImpayees} penalites ` +
+          "impayees en font partie, celles-ci etant indissociables des cotisations."
+        : ""),
   };
 }
 

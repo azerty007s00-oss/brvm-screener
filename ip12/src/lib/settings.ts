@@ -36,6 +36,15 @@ export const REGLES = {
   fraisCession: 0.02,
   /** R5 - remboursement sous 4 mois en cas d'exclusion de plein droit. */
   delaiRemboursementMois: 4,
+  /**
+   * Nombre de penalites de retard impayees qui emporte l'exclusion.
+   *
+   * Resolution d'assemblee : les penalites deviennent indissociables des
+   * cotisations. Regler sa cotisation en laissant courir ses penalites ne
+   * protege plus -- c'est l'abus que l'assemblee a constate, jusqu'a quinze mois
+   * de penalites en souffrance.
+   */
+  penalitesImpayeesAvantExclusion: 3,
   /** Penalite due par tranche d'absences injustifiees en reunion, en FCFA. */
   penaliteAbsence: 2_000,
   /**
@@ -47,6 +56,18 @@ export const REGLES = {
   absencesParTranche: 2,
   /** Le president releve la valeur du compte-titres tous les 2 mois. */
   periodiciteValorisationMois: 2,
+} as const;
+
+/**
+ * Dates d'effet des decisions d'assemblee.
+ *
+ * Separees de REGLES, qui ne porte que des valeurs numeriques surchargeables par
+ * la table `settings`. Une sanction ne retroagit pas sur des faits anterieurs a
+ * la decision qui l'institue : ces dates sont donc du metier, pas du reglage.
+ */
+export const EFFET = {
+  /** Exclusion pour penalites impayees : applicable a partir de cette date. */
+  penalitesIndissociables: "2027-01-10",
 } as const;
 
 /**
