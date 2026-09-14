@@ -107,7 +107,21 @@ l'exécuter sur la base de production.
 npm install
 cp .env.example .env.local   # puis renseigner DATABASE_URL et SESSION_SECRET
 npm run dev
-npm run verif                # vérifie TRI, Dietz modifié et répartition des parts
+npm run verif                # 102 contrôles de calcul : TRI, Dietz modifié, parts, pénalités, R3, R5
+npm run verif:sql            # rejoue les 96 requêtes SQL contre le schéma de production
+```
+
+`verif` porte sur les calculs, en mémoire, sans base. `verif:sql` porte sur le SQL :
+il charge `scripts/test/schema-local.sql` **et les migrations** dans une base jetable,
+puis passe chaque requête du site par `EXPLAIN`, dans une transaction annulée — rien
+n'est exécuté, rien n'est écrit. Il attrape ce qu'aucun compilateur ne voit : une
+colonne renommée, une table oubliée, une faute de frappe dans un nom. Sans PostgreSQL
+joignable, il s'annonce ignoré et rend la main sans bloquer les autres contrôles.
+
+```bash
+# Un PostgreSQL de test, le temps du contrôle
+initdb -D /tmp/pgtest && pg_ctl -D /tmp/pgtest -o "-k /tmp -p 5433" start
+PGPORT_TEST=5433 npm run verif:sql
 ```
 
 ## Architecture

@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "verif": "tsc src/lib/perf.ts src/lib/penalites.ts src/lib/settings.ts --target es2022 --module es2022 --moduleResolution bundler --outDir .verif && for f in .verif/*.js; do mv \"$f\" \"${f%.js}.mjs\"; done && sed -i 's|from \"./settings\"|from \"./settings.mjs\"|' .verif/penalites.mjs && node scripts/verif.mjs"
+    "verif": "tsc src/lib/perf.ts src/lib/penalites.ts src/lib/settings.ts --target es2022 --module es2022 --moduleResolution bundler --outDir .verif && for f in .verif/*.js; do mv \"$f\" \"${f%.js}.mjs\"; done && sed -i 's|from \"./settings\"|from \"./settings.mjs\"|' .verif/penalites.mjs && node scripts/verif.mjs",
+    "verif:sql": "node scripts/test/requetes.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.1.0",
