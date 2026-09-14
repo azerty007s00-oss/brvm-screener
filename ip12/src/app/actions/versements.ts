@@ -6,7 +6,8 @@ import { db } from "@/lib/db";
 import { exigerMembre, exigerRole } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
-import { reglagesEffectifs } from "@/lib/queries";
+import { derogationsParMembre, reglagesEffectifs } from "@/lib/queries";
+import type { ReglesMembre } from "@/lib/penalites";
 import { decalerMois, moisLong } from "@/lib/settings";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
@@ -59,16 +60,38 @@ export async function declarerVersement(
   const mois = Array.from({ length: nbMois }, (_, i) => decalerMois(moisDebut, i));
   const sql = db();
 
-  const existants = await sql`
-    select to_char(period, 'YYYY-MM-DD') as mois
+  /*
+   * Un mois n'est ferme que lorsqu'il est complet.
+   *
+   * La regle d'avant refusait tout second versement sur un mois deja touche :
+   * qui versait 2 000 sur 5 000 ne pouvait plus jamais ajouter les 3 000
+   * manquants, et le mois restait incomplet a jamais. On compte donc ce qui est
+   * deja porte au mois, et l'on ne refuse que ce qui est reellement solde.
+   */
+  const derogations = await derogationsParMembre().catch(() => new Map<string, ReglesMembre>());
+  const requis =
+    derogations.get(membreCible)?.cotisationMensuelle ?? reglages.cotisationMensuelle;
+
+  const deja = (await sql`
+    select to_char(period, 'YYYY-MM-DD') as mois, coalesce(sum(amount), 0)::bigint as total
     from contributions
     where member_id = ${membreCible}::uuid
       and status <> ${STATUT_VERSEMENT.rejete}
       and period = any(${mois}::date[])
+    group by period
     order by period
-  `;
-  if (existants.length > 0) {
-    return { ok: false, erreur: `Ces mois sont deja couverts : ${existants.map((r) => r.mois).join(", ")}.` };
+  `) as { mois: string; total: string | number }[];
+
+  const portes = new Map(deja.map((r) => [r.mois, Number(r.total)]));
+  const soldes = [...portes.entries()].filter(([, total]) => total >= requis).map(([m]) => m);
+  if (soldes.length > 0) {
+    return {
+      ok: false,
+      erreur:
+        soldes.length === mois.length
+          ? `Ces mois sont deja soldes : ${soldes.join(", ")}.`
+          : `Deja soldes, a retirer de la periode : ${soldes.join(", ")}.`,
+    };
   }
 
   const lot = randomUUID();

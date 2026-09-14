@@ -29,6 +29,12 @@ const PASTILLE: Record<StatutMois, { ton: string; fond: string; texte: string }>
     texte: "var(--color-or-600)",
   },
   en_attente: { ton: "En attente", fond: "var(--color-ambre-100)", texte: "var(--color-ambre-600)" },
+  /*
+   * Le rouge, comme un mois sans rien : la penalite est la meme, l'obligation
+   * n'est pas eteinte. Seul le mot change, pour que le membre voie qu'il a
+   * verse quelque chose et sache combien il lui reste a verser.
+   */
+  partiel: { ton: "Incomplet", fond: "var(--color-rouge-100)", texte: "var(--color-rouge-600)" },
   retard: { ton: "Retard", fond: "var(--color-rouge-100)", texte: "var(--color-rouge-600)" },
   a_venir: { ton: "A venir", fond: "var(--color-brun-100)", texte: "var(--color-brun-600)" },
   hors_periode: { ton: "-", fond: "transparent", texte: "var(--discret)" },
@@ -295,10 +301,25 @@ export default async function PageVersements() {
                   </td>
                   {s.cellules.slice(-14).map((c) => (
                     <td key={c.mois} className="py-2 text-center">
+                      {/*
+                        * Un mois incomplet porte un lisere : la couleur seule ne
+                        * distingue pas « rien verse » de « verse en partie », et
+                        * l'infobulle dit ce qui manque.
+                        */}
                       <span
-                        title={`${moisLong(c.mois)} — ${PASTILLE[c.statut].ton}`}
+                        title={
+                          c.manque > 0 && c.montant > 0
+                            ? `${moisLong(c.mois)} — ${PASTILLE[c.statut].ton} : ${fcfa(c.montant)} sur ${fcfa(c.requis)}, il manque ${fcfa(c.manque)}`
+                            : `${moisLong(c.mois)} — ${PASTILLE[c.statut].ton}`
+                        }
                         className="inline-block h-5 w-5 rounded"
-                        style={{ background: PASTILLE[c.statut].fond }}
+                        style={{
+                          background: PASTILLE[c.statut].fond,
+                          boxShadow:
+                            c.manque > 0 && c.montant > 0
+                              ? "inset 0 0 0 2px var(--color-rouge-600)"
+                              : undefined,
+                        }}
                       />
                     </td>
                   ))}
@@ -309,7 +330,7 @@ export default async function PageVersements() {
           </table>
         </div>
         <div className="mt-3 flex flex-wrap gap-3 text-[11px]" style={{ color: "var(--discret)" }}>
-          {(["paye", "paye_en_retard", "en_attente", "retard", "a_venir"] as StatutMois[]).map((k) => (
+          {(["paye", "paye_en_retard", "en_attente", "partiel", "retard", "a_venir"] as StatutMois[]).map((k) => (
             <span key={k} className="inline-flex items-center gap-1.5">
               <span className="inline-block h-3 w-3 rounded" style={{ background: PASTILLE[k].fond }} />
               {PASTILLE[k].ton}

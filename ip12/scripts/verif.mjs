@@ -1,6 +1,28 @@
 // Verification de la logique metier : calculs de performance et regime des retards.
 // Lancement : npm run verif
-import { strict as assert } from "node:assert";
+import { strict as strict0 } from "node:assert";
+
+/*
+ * Le nombre annonce en fin de course etait tenu a la main, et il avait derive :
+ * 102 y etait ecrit quand le fichier en portait davantage, sans compter celles
+ * qui tournent dans une boucle. Il se compte desormais tout seul, et ne peut
+ * plus mentir.
+ */
+let verifications = 0;
+const assert = new Proxy(strict0, {
+  apply(cible, _ceci, arguments_) {
+    verifications++;
+    return Reflect.apply(cible, undefined, arguments_);
+  },
+  get(cible, propriete) {
+    const valeur = Reflect.get(cible, propriete);
+    if (typeof valeur !== "function") return valeur;
+    return (...arguments_) => {
+      verifications++;
+      return valeur.apply(cible, arguments_);
+    };
+  },
+});
 
 const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair } = await import(
   "../.verif/perf.mjs"
@@ -430,4 +452,123 @@ for (const mois of ["2026-01-01", "2026-03-01", "2026-12-01"]) {
 assert.equal(deMois("2026-10-01"), "d'octobre 2026");
 assert.equal(deMois("2026-01-01"), "de janvier 2026");
 
-console.log("OK - 102 verifications : performance, parts et avances, penalites art. 9, R4 et indissociabilite, regles individuelles, retards, absences, R3, R5, relance");
+/* ------------------------------------------------ versements partiels (2026-09) */
+
+/*
+ * Decision d'assemblee : un mois paye en partie reste en retard, le complement
+ * reste possible, et la penalite porte sur la cotisation entiere. Les trois
+ * regles se tiennent -- sans la premiere, verser 100 F suffirait a effacer une
+ * penalite ; sans la deuxieme, un acompte fermerait le mois a jamais.
+ */
+const septembre = new Date("2026-09-20T12:00:00Z");
+const moisPartiel = ["2026-09-01"];
+
+// 2 000 sur 5 000, echeance passee : le mois reste du, et il est dit incomplet.
+const partiel = situationMembre(
+  "p1",
+  moisPartiel,
+  [{ mois_couvert: "2026-09-01", montant: 2000, statut: "valide", date_versement: "2026-09-03" }],
+  [],
+  septembre,
+);
+assert.equal(partiel.cellules[0].statut, "partiel", "un mois incomplet n'est pas un mois paye");
+assert.equal(partiel.cellules[0].montant, 2000);
+assert.equal(partiel.cellules[0].manque, 3000, "le reste a verser doit etre affiche");
+assert.equal(partiel.nbMoisRetard, 1, "un mois incomplet compte comme un retard");
+
+// La penalite porte sur la cotisation entiere, jamais sur le seul reliquat.
+assert.equal(
+  partiel.totalPenalites,
+  500,
+  `penalite attendue 500 (10 % de 5 000), obtenue ${partiel.totalPenalites}`,
+);
+const rienVerse = situationMembre("p2", moisPartiel, [], [], septembre);
+assert.equal(
+  partiel.totalPenalites,
+  rienVerse.totalPenalites,
+  "verser un acompte ne doit pas reduire la penalite",
+);
+
+// Le complement solde le mois : deux lignes, 2 000 puis 3 000.
+const complete = situationMembre(
+  "p3",
+  moisPartiel,
+  [
+    { mois_couvert: "2026-09-01", montant: 2000, statut: "valide", date_versement: "2026-09-03" },
+    { mois_couvert: "2026-09-01", montant: 3000, statut: "valide", date_versement: "2026-09-08" },
+  ],
+  [],
+  septembre,
+);
+assert.equal(complete.cellules[0].statut, "paye", "deux acomptes avant le 10 soldent le mois");
+assert.equal(complete.cellules[0].montant, 5000);
+assert.equal(complete.cellules[0].manque, 0);
+assert.equal(complete.nbMoisRetard, 0);
+assert.equal(complete.totalPenalites, 0);
+
+/*
+ * Le mois est solde a la date du versement qui le complete, non a celle du
+ * premier acompte : 2 000 le 5, 3 000 le 15, c'est une regularisation en retard.
+ * La penalite de l'art. 9 reste due, "definitivement acquise au benefice du club".
+ */
+const tardif = situationMembre(
+  "p4",
+  moisPartiel,
+  [
+    { mois_couvert: "2026-09-01", montant: 2000, statut: "valide", date_versement: "2026-09-05" },
+    { mois_couvert: "2026-09-01", montant: 3000, statut: "valide", date_versement: "2026-09-15" },
+  ],
+  [],
+  septembre,
+);
+assert.equal(tardif.cellules[0].statut, "paye_en_retard", "c'est la date du solde qui compte");
+assert.equal(tardif.cellules[0].dateVersement, "2026-09-15");
+assert.equal(tardif.nbMoisRetard, 0, "le mois est couvert, il n'est plus un retard");
+assert.equal(tardif.totalPenalites, 500, "mais la penalite de retard reste due");
+
+// Le compte n'y est qu'avec une declaration non validee : c'est au tresorier de trancher.
+const attenteDeSolde = situationMembre(
+  "p5",
+  moisPartiel,
+  [
+    { mois_couvert: "2026-09-01", montant: 2000, statut: "valide", date_versement: "2026-09-03" },
+    { mois_couvert: "2026-09-01", montant: 3000, statut: "en_attente", date_versement: "2026-09-04" },
+  ],
+  [],
+  septembre,
+);
+assert.equal(attenteDeSolde.cellules[0].statut, "en_attente");
+assert.equal(attenteDeSolde.nbMoisRetard, 0, "la validation est en cours, pas un retard");
+
+// Un acompte avant l'echeance ne fait pas un retard, mais le manque est connu.
+const acompteTot = situationMembre(
+  "p6",
+  moisPartiel,
+  [{ mois_couvert: "2026-09-01", montant: 2000, statut: "valide", date_versement: "2026-09-02" }],
+  [],
+  new Date("2026-09-05T12:00:00Z"),
+);
+assert.equal(acompteTot.cellules[0].statut, "a_venir");
+assert.equal(acompteTot.cellules[0].manque, 3000);
+assert.equal(acompteTot.nbMoisRetard, 0);
+
+// Cotisation particuliere : le seuil de couverture suit la derogation.
+const derogue = situationMembre(
+  "p7",
+  moisPartiel,
+  [{ mois_couvert: "2026-09-01", montant: 3000, statut: "valide", date_versement: "2026-09-03" }],
+  [],
+  septembre,
+  undefined,
+  { cotisationMensuelle: 3000 },
+);
+assert.equal(derogue.cellules[0].statut, "paye", "3 000 soldent un membre a 3 000");
+assert.equal(derogue.cellules[0].requis, 3000);
+assert.equal(derogue.nbMoisRetard, 0);
+
+
+console.log(
+  `OK - ${verifications} verifications : performance, parts et avances, ` +
+    "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
+    "individuelles, retards, absences, R3, R5, relance",
+);

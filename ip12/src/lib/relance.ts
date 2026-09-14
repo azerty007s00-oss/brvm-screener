@@ -58,8 +58,16 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
   return situations
     .map((situation) => {
       const cellule = situation.cellules.find((c) => c.mois === moisCourant);
+      /*
+       * « partiel » compte au meme titre que « retard » : un acompte ne solde
+       * pas le mois, et l'oublier ici priverait de relance precisement celui qui
+       * a commence a payer et croit en avoir fini.
+       */
       const echeanceDuJour =
-        cellule && (cellule.statut === "a_venir" || cellule.statut === "retard") ? moisCourant : null;
+        cellule &&
+        (cellule.statut === "a_venir" || cellule.statut === "retard" || cellule.statut === "partiel")
+          ? moisCourant
+          : null;
       const avance = avances.find((a) => a.membreId === situation.membreId);
       return {
         situation,
@@ -192,15 +200,30 @@ export function texteRelance(
 
   if (echeanceDuJour) {
     const reste = joursAvantEcheance(maintenant);
+    /*
+     * Le montant annonce est ce qui reste a verser, non la cotisation entiere :
+     * ecrire « votre versement de 5 000 est du » a quelqu'un qui en a deja verse
+     * 2 000 lui ferait croire a une erreur du site, ou pire, le ferait payer deux
+     * fois. La cellule connait le compte exact, taux particulier compris.
+     */
+    const cellule = situation.cellules.find((c) => c.mois === echeanceDuJour);
+    const dejaVerse = cellule?.montant ?? 0;
+    const du = cellule && cellule.requis > 0 ? cellule.manque : REGLES.cotisationMensuelle;
+    const rappelAcompte =
+      dejaVerse > 0
+        ? ` Vous avez deja verse ${fcfa(dejaVerse)} sur ${fcfa(cellule?.requis ?? 0)} : ` +
+          "le mois n'est solde qu'au dernier franc, et la penalite de l'art. 9 porte " +
+          "sur la cotisation entiere."
+        : "";
     lignes.push(
       "",
-      reste > 0
-        ? `Votre versement de ${fcfa(REGLES.cotisationMensuelle)} pour ` +
+      (reste > 0
+        ? `Votre versement de ${fcfa(du)} pour ` +
           `${moisLong(echeanceDuJour)} est attendu au plus tard le ${REGLES.jourEcheance} ` +
           `(art. 8) : il vous reste ${reste} jour${reste > 1 ? "s" : ""}.`
-        : `Votre versement de ${fcfa(REGLES.cotisationMensuelle)} pour ` +
+        : `Votre versement de ${fcfa(du)} pour ` +
           `${moisLong(echeanceDuJour)} est du aujourd'hui, dernier jour de l'echeance ` +
-          "statutaire (art. 8).",
+          "statutaire (art. 8).") + rappelAcompte,
     );
   }
 
@@ -208,7 +231,19 @@ export function texteRelance(
     lignes.push(
       "",
       "Versements encore manquants :",
-      arrieres.map((m) => `  - ${moisLong(m)}`).join("\n"),
+      /*
+       * Le detail du mois entame : dire « septembre » a qui a deja verse 2 000
+       * le laisserait croire a une erreur du site. Le montant qui manque leve
+       * l'ambiguite et evite un echange.
+       */
+      arrieres
+        .map((m) => {
+          const c = situation.cellules.find((x) => x.mois === m);
+          return c && c.montant > 0
+            ? `  - ${moisLong(m)} : ${fcfa(c.montant)} verses sur ${fcfa(c.requis)}, il manque ${fcfa(c.manque)}`
+            : `  - ${moisLong(m)}`;
+        })
+        .join("\n"),
       "",
       `Penalites dues a ce jour (art. 9) : ${fcfa(situation.totalPenalites)}.`,
     );

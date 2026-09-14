@@ -4,6 +4,8 @@ export type StatutMois =
   | "paye"
   | "paye_en_retard"
   | "en_attente"
+  /** Echeance passee, quelque chose a ete verse, mais pas tout. */
+  | "partiel"
   | "retard"
   | "a_venir"
   | "hors_periode";
@@ -11,7 +13,13 @@ export type StatutMois =
 export type CelluleMois = {
   mois: string;
   statut: StatutMois;
+  /** Tout ce qui est connu pour ce mois, validations en attente comprises. */
   montant: number;
+  /** La cotisation attendue ce mois-la, taux particulier compris. */
+  requis: number;
+  /** Ce qui manque pour solder le mois. Zero des qu'il est couvert. */
+  manque: number;
+  /** Date du versement qui a complete le mois, non du premier acompte. */
   dateVersement: string | null;
 };
 
@@ -97,11 +105,36 @@ export function situationMembre(
   propres: ReglesMembre = {},
   nbPenalitesImpayees = 0,
 ): SituationMembre {
-  const parMois = new Map<string, VersementConnu>();
+  /*
+   * Un mois peut porter plusieurs versements : un acompte, puis le complement.
+   * Ce n'est couvert que lorsque la somme atteint la cotisation attendue --
+   * verser 2 000 sur 5 000 ne libere pas de l'obligation de l'art. 8.
+   */
+  const requis = propres.cotisationMensuelle ?? REGLES.cotisationMensuelle;
+  const parMois = new Map<string, VersementConnu[]>();
   for (const v of versements) {
     if (v.statut === "rejete") continue;
-    parMois.set(v.mois_couvert.slice(0, 10), v);
+    const cle = v.mois_couvert.slice(0, 10);
+    const liste = parMois.get(cle);
+    if (liste) liste.push(v);
+    else parMois.set(cle, [v]);
   }
+
+  /**
+   * La date a laquelle un mois est solde : celle du versement qui le complete,
+   * non celle du premier acompte. Un acompte le 5 et le solde le 15 font un mois
+   * regularise en retard, avec la penalite que l'art. 9 y attache.
+   */
+  const dateDeSolde = (lignes: VersementConnu[]): string | null => {
+    let cumul = 0;
+    for (const v of [...lignes].sort((a, b) =>
+      (a.date_versement ?? "").localeCompare(b.date_versement ?? ""),
+    )) {
+      cumul += v.montant;
+      if (cumul >= requis) return v.date_versement;
+    }
+    return null;
+  };
 
   const cellules: CelluleMois[] = [];
   const moisEnRetard: string[] = [];
@@ -110,27 +143,62 @@ export function situationMembre(
 
   for (const mois of moisDuClub) {
     if (moisAdhesion && mois < moisAdhesion) {
-      cellules.push({ mois, statut: "hors_periode", montant: 0, dateVersement: null });
+      cellules.push({ mois, statut: "hors_periode", montant: 0, requis: 0, manque: 0, dateVersement: null });
       continue;
     }
-    const v = parMois.get(mois);
-    if (v) {
-      const tardif = verseEnRetard(mois, v.date_versement);
+    const lignes = parMois.get(mois) ?? [];
+    const connu = lignes.reduce((t, v) => t + v.montant, 0);
+    const valide = lignes.filter((v) => v.statut === "valide").reduce((t, v) => t + v.montant, 0);
+    const manque = Math.max(0, requis - connu);
+
+    /*
+     * Couvert au sens strict : les versements valides suffisent. Si le compte n'y
+     * est qu'en comptant les declarations non encore validees, le mois est en
+     * attente -- c'est au tresorier de trancher, pas au declarant.
+     */
+    if (valide >= requis) {
+      const tardif = verseEnRetard(mois, dateDeSolde(lignes.filter((v) => v.statut === "valide")));
       if (tardif) moisRegularisesEnRetard.push(mois);
       cellules.push({
         mois,
-        statut:
-          v.statut !== "valide" ? "en_attente" : tardif ? "paye_en_retard" : "paye",
-        montant: v.montant,
-        dateVersement: v.date_versement,
+        statut: tardif ? "paye_en_retard" : "paye",
+        montant: connu,
+        requis,
+        manque: 0,
+        dateVersement: dateDeSolde(lignes.filter((v) => v.statut === "valide")),
       });
       continue;
     }
+    if (connu >= requis) {
+      cellules.push({
+        mois,
+        statut: "en_attente",
+        montant: connu,
+        requis,
+        manque: 0,
+        dateVersement: dateDeSolde(lignes),
+      });
+      continue;
+    }
+
+    /*
+     * Le compte n'y est pas. Passe l'echeance, le mois est en retard, qu'il ait
+     * recu un acompte ou rien du tout : la penalite de l'art. 9 porte sur
+     * l'obligation, pas sur ce qui reste a payer. « Partiel » n'est qu'un mot
+     * plus juste pour le membre, jamais un traitement plus doux.
+     */
     if (estExigible(mois, aujourdhui)) {
-      cellules.push({ mois, statut: "retard", montant: 0, dateVersement: null });
+      cellules.push({
+        mois,
+        statut: connu > 0 ? "partiel" : "retard",
+        montant: connu,
+        requis,
+        manque,
+        dateVersement: null,
+      });
       moisEnRetard.push(mois);
     } else {
-      cellules.push({ mois, statut: "a_venir", montant: 0, dateVersement: null });
+      cellules.push({ mois, statut: "a_venir", montant: connu, requis, manque, dateVersement: null });
     }
   }
 

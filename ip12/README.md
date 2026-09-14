@@ -12,6 +12,12 @@ Phoenix Capital Management.
   restant requise. Personne ne valide son propre versement.
 - **Avances et retards** — une déclaration peut couvrir plusieurs mois d'avance. Les mois
   échus non couverts basculent automatiquement en retard après le 10 (art. 8).
+- **Versements partiels** — un mois n'est soldé que lorsque la somme des versements atteint la
+  cotisation attendue. En dessous, le mois reste dû et la pénalité de l'art. 9 porte sur la
+  cotisation entière, jamais sur le seul reliquat : verser un acompte ne réduit pas la sanction.
+  Le complément reste possible à tout moment — plusieurs versements peuvent porter sur le même
+  mois — et le mois est réputé soldé **à la date du versement qui le complète**, si bien qu'un
+  acompte le 5 et le solde le 15 font une régularisation en retard.
 - **Compte-titres** — le président enregistre et valide les virements vers la SGI (art. 14).
 - **Portefeuille** — le président saisit la valeur du compte tous les 2 mois ; les parts sont
   recalculées au prorata du **capital échu** de chaque membre, diminué de ses pénalités dues.
