@@ -59,6 +59,31 @@ function optionsSmtp() {
 }
 
 /**
+ * Le meme texte, en HTML.
+ *
+ * Un message sans partie HTML s'affiche vide dans certains clients, dont
+ * l'application mobile de Gmail : le corps est bien la, personne ne le voit. Les
+ * deux parties portent le meme contenu -- le texte reste la source, le HTML n'en
+ * est qu'un rendu.
+ */
+function enHtml(texte: string): string {
+  const echappe = texte
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const corps = echappe
+    .split("\n")
+    .map((l) => (l.trim() === "" ? "<br>" : `<div>${l}</div>`))
+    .join("");
+  return (
+    '<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;' +
+    'font-size:15px;line-height:1.5;color:#1f1b16;white-space:pre-wrap">' +
+    corps +
+    "</div>"
+  );
+}
+
+/**
  * Quelles variables d'envoi le serveur voit, et sous quel environnement.
  *
  * « Aucun transport configure » a plusieurs causes que rien ne distinguait :
@@ -131,6 +156,7 @@ export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi
         to: courriel.destinataire,
         subject: courriel.sujet,
         text: courriel.texte,
+        html: enHtml(courriel.texte),
       });
       /*
        * `accepted` porte les destinataires que le serveur a pris en charge. Une
@@ -152,6 +178,7 @@ export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi
         to: courriel.destinataire,
         subject: courriel.sujet,
         text: courriel.texte,
+        html: enHtml(courriel.texte),
       });
       /*
        * Resend rend l'erreur plutot que de la lever : sans ce test, un refus du
