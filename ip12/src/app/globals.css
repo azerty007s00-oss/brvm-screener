@@ -102,3 +102,90 @@ body {
   tr { break-inside: avoid; }
   thead { display: table-header-group; }
 }
+
+/*
+ * Mouvement.
+ *
+ * Trois gestes seulement, et tous coupes des que le systeme signale une
+ * preference pour moins d'animation : une apparition au chargement pour les
+ * blocs du haut, une apparition au defilement pour ceux d'en bas, et un
+ * enfoncement au doigt. Les durees restent entre 130 et 420 ms : au-dela, sur
+ * un telephone d'entree de gamme, l'animation se lit comme une lenteur.
+ */
+@keyframes apparait {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Bloc visible d'emblee : decalage en cascade, plafonne a six rangs. */
+  .apparait {
+    animation: apparait 340ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+    animation-delay: calc(var(--rang, 0) * 55ms);
+  }
+
+  /*
+   * Bloc plus bas : l'animation suit le defilement plutot que l'horloge, sinon
+   * elle se joue hors ecran et on ne la voit jamais. Sans le support du
+   * navigateur la regle ne s'applique pas et le bloc s'affiche normalement.
+   */
+  @supports (animation-timeline: view()) {
+    .revele {
+      animation: apparait 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 20%;
+    }
+  }
+
+  /* Retour au doigt : la surface s'enfonce le temps de l'appui. */
+  .tapable {
+    transition: transform 130ms ease, box-shadow 130ms ease, background-color 130ms ease;
+  }
+  .tapable:active { transform: scale(0.985); }
+
+  /* Ouverture d'un depliant. */
+  @keyframes deplie {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: none; }
+  }
+  details[open] > .contenu-depliant {
+    animation: deplie 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+}
+
+/* Le chevron d'un depliant pivote, y compris sans animation (sans transition). */
+.chevron { transition: transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1); }
+details[open] > summary .chevron { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .chevron { transition: none; } }
+
+/* Ombre douce des cartes en relief, plutot qu'un trait a plat. */
+.relief {
+  box-shadow: 0 1px 2px rgba(42, 26, 16, 0.05), 0 10px 20px -16px rgba(42, 26, 16, 0.35);
+}
+.relief-fort {
+  box-shadow: 0 2px 4px rgba(42, 26, 16, 0.06), 0 18px 30px -22px rgba(42, 26, 16, 0.5);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .relief,
+  :root:not([data-theme="light"]) .relief-fort { box-shadow: none; }
+}
+:root[data-theme="dark"] .relief,
+:root[data-theme="dark"] .relief-fort { box-shadow: none; }
+
+@media print {
+  .apparait, .revele { animation: none !important; }
+  .relief, .relief-fort { box-shadow: none !important; }
+}
+
+/* Anneau d'attente des boutons. Il disparait si le systeme demande moins d'animation. */
+.rouet {
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  opacity: 0.85;
+  animation: tourne 620ms linear infinite;
+}
+@keyframes tourne { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rouet { animation: none; } }

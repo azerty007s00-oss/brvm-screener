@@ -51,9 +51,15 @@ export function FormulaireAction({
         type="submit"
         disabled={enCours}
         style={styles}
-        className={`${compact ? "px-3 py-1.5 text-xs" : "mt-3 w-full px-4 py-2.5 text-sm"} rounded-lg font-medium transition disabled:opacity-50`}
+        className={`tapable ${compact ? "px-3 py-1.5 text-xs" : "mt-3 w-full px-4 py-2.5 text-sm"} inline-flex items-center justify-center gap-2 rounded-lg font-medium transition disabled:opacity-60`}
       >
-        {enCours ? "..." : libelle}
+        {/*
+          * Pendant l'envoi, un anneau qui tourne plutot que trois points fixes :
+          * sur une connexion lente, l'attente dure assez longtemps pour qu'un
+          * libelle immobile passe pour un bouton casse.
+          */}
+        {enCours && <span className="rouet" aria-hidden="true" />}
+        {enCours ? "Envoi en cours" : libelle}
       </button>
       {etat.erreur && (
         <p className="mt-2 text-xs" style={{ color: "var(--color-rouge-600)" }}>
