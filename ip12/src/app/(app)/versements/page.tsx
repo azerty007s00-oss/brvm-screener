@@ -1,6 +1,7 @@
 import { exigerMembre } from "@/lib/auth";
 import { listerMembres, listerVersements, situationsClub, versementsEnAttente } from "@/lib/queries";
 import { REGLES, dateCourte, debutMois, fcfa, moisLong } from "@/lib/settings";
+import { relancerMaintenant } from "@/app/actions/administration";
 import {
   annulerVersementValide,
   corrigerVersement,
@@ -52,6 +53,7 @@ export default async function PageVersements() {
 
   const peutValider = peut(membre, "validerVersement");
   const peutCorriger = peut(membre, "corrigerVersement");
+  const peutRelancer = peut(membre, "relancer");
   // Les corrections portent sur des saisies recentes : au-dela, on ne corrige plus, on regularise.
   const corrigibles = valides.slice(0, 40);
   const saisieDirecte = peut(membre, "saisirVersementValide");
@@ -240,6 +242,22 @@ export default async function PageVersements() {
               </li>
             ))}
           </ul>
+        </Carte>
+      )}
+
+      {peutRelancer && (
+        <Carte titre="Relancer les retardataires">
+          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+            La relance part d&apos;elle-meme le 10 de chaque mois. Entre deux, vous pouvez
+            l&apos;envoyer a la main : c&apos;est exactement le meme courrier — mois manquants,
+            penalites, rappels R2, R3 et R4, mesures disciplinaires. Seuls les membres concernes
+            le recoivent ; ceux qui sont a jour ne sont jamais ecrits.
+          </p>
+          <FormulaireAction
+            action={relancerMaintenant}
+            libelle="Relancer maintenant"
+            confirmation="Envoyer la relance a tous les membres concernes ?"
+          />
         </Carte>
       )}
 

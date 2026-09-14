@@ -10,6 +10,7 @@ import { reglagesEffectifs } from "@/lib/queries";
 import { decalerMois, moisLong } from "@/lib/settings";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
+import { avertirDeclaration } from "@/lib/avis";
 import type { EtatFormulaire } from "./auth";
 
 const METHODES = Object.values(METHODE) as string[];
@@ -86,7 +87,27 @@ export async function declarerVersement(
     `;
   }
 
-  await enregistrerJustificatif(donnees, lot, membreCible, auteur.id);
+  const pieces = await enregistrerJustificatif(donnees, lot, membreCible, auteur.id);
+
+  /*
+   * Une declaration en attente peut dormir des jours si personne n'ouvre le site.
+   * L'avis porte l'information a qui doit valider -- inutile quand la saisie vaut
+   * deja validation, puisqu'il n'y a alors rien a attendre.
+   */
+  if (!saisieDirecte) {
+    const nomCible =
+      membreCible === auteur.id
+        ? auteur.nom
+        : ((await sql`select full_name from members where id = ${membreCible}::uuid`)[0]
+            ?.full_name as string) ?? "Un membre";
+    await avertirDeclaration({
+      auteurId: auteur.id,
+      membreNom: nomCible,
+      mois,
+      montant: Math.round(montantParMois) * nbMois,
+      avecJustificatif: pieces.joint,
+    }).catch(() => 0);
+  }
 
   await journaliser(
     { id: auteur.id, nom: auteur.nom },

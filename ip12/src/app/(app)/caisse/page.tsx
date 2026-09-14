@@ -137,37 +137,41 @@ export default async function PageCaisse() {
               ? "Votre saisie vaut validation."
               : "Votre saisie attendra la validation du president."}
           </p>
-          <Depliant titre="Enregistrer une depense ou une recette">
-            <FormulaireAction action={enregistrerMouvement} libelle="Enregistrer">
-              <Selection
-                nom="sens"
-                libelle="Sens"
-                valeur={SENS_CAISSE.depense}
-                options={[
-                  { valeur: SENS_CAISSE.depense, libelle: "Depense — sortie de caisse" },
-                  { valeur: SENS_CAISSE.recette, libelle: "Recette — entree en caisse" },
-                ]}
-              />
-              <Selection
-                nom="categorie"
-                libelle="Categorie"
-                options={[...CATEGORIES_DEPENSE, ...CATEGORIES_RECETTE]}
-              />
-              <Champ nom="montant" libelle="Montant (FCFA)" type="number" min={1} />
-              <Champ
-                nom="date"
-                libelle="Date"
-                type="date"
-                valeur={new Date().toISOString().slice(0, 10)}
-              />
-              <Champ
-                nom="note"
-                libelle="Motif"
-                requis={false}
-                aide="Ce que vous voudrez relire dans six mois : d'ou vient cet argent, ou a-t-il servi."
-              />
-            </FormulaireAction>
-          </Depliant>
+          {/*
+            * Un formulaire par sens, plutot qu'une liste unique.
+            * Les deux nomenclatures partagent « regularisation » et « autre » :
+            * concatenees, elles affichaient deux fois la meme entree. Et rien
+            * n'empechait d'enregistrer des frais SGI en recette.
+            */}
+          {[
+            {
+              sens: SENS_CAISSE.depense,
+              titre: "Enregistrer une depense",
+              categories: CATEGORIES_DEPENSE,
+              aide: "Ce que vous voudrez relire dans six mois : a quoi cet argent a servi.",
+            },
+            {
+              sens: SENS_CAISSE.recette,
+              titre: "Enregistrer une recette",
+              categories: CATEGORIES_RECETTE,
+              aide: "Ce que vous voudrez relire dans six mois : d'ou vient cet argent.",
+            },
+          ].map((f) => (
+            <Depliant key={f.sens} titre={f.titre}>
+              <FormulaireAction action={enregistrerMouvement} libelle="Enregistrer">
+                <ChampCache nom="sens" valeur={f.sens} />
+                <Selection nom="categorie" libelle="Categorie" options={f.categories} />
+                <Champ nom="montant" libelle="Montant (FCFA)" type="number" min={1} />
+                <Champ
+                  nom="date"
+                  libelle="Date"
+                  type="date"
+                  valeur={new Date().toISOString().slice(0, 10)}
+                />
+                <Champ nom="note" libelle="Motif" requis={false} aide={f.aide} />
+              </FormulaireAction>
+            </Depliant>
+          ))}
           <div className="mt-3">
             <Alerte ton="ambre">
               Pour une somme dont le detail est perdu — des penalites anciennes deja encaissees, par

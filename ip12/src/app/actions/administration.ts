@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { descriptionTransport, envoyerCourriel, transportConfigure } from "@/lib/courriel";
+import { destinatairesDuJour, envoyerRelances } from "@/lib/relance";
 import { versionDeployee } from "@/lib/version";
 import { listerMembres, reglagesEffectifs } from "@/lib/queries";
 import { CLUB, REGLES, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
@@ -519,5 +520,51 @@ export async function envoyerCourrielEssai(
     message:
       `Courrier remis a ${destinataire} — verifiez cette boite, et son dossier Spam. ` +
       `Reponse du serveur : ${detail}`,
+  };
+}
+
+/* ------------------------------------------------- relance declenchee a la main */
+
+/**
+ * Envoie la relance hors du 10.
+ *
+ * Le cron ne part qu'une fois par mois : entre deux, le bureau n'avait aucun
+ * moyen d'ecrire aux retardataires. Le courrier est exactement celui du 10 --
+ * deux redactions divergentes feraient douter de celle qu'on a recue.
+ *
+ * Sans trace dans `reminder_log` : cette table porte une ligne par membre et par
+ * periode, et y inscrire un envoi manuel ferait croire que la relance du mois est
+ * partie. Le journal, lui, garde qui a decide d'ecrire.
+ */
+export async function relancerMaintenant(
+  _precedent: EtatFormulaire,
+  _donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("relancer");
+
+  if (transportConfigure() === "aucun") {
+    return { ok: false, erreur: "Aucun transport configure : aucun courrier ne peut partir." };
+  }
+
+  const maintenant = new Date();
+  const destinataires = await destinatairesDuJour(maintenant);
+  if (destinataires.length === 0) {
+    return { ok: true, message: "Personne a relancer : tout le monde est a jour." };
+  }
+
+  const { envoyes, echecs } = await envoyerRelances(destinataires, maintenant);
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "relance_manuelle",
+    { entite: "reminder_log" },
+    { concernes: destinataires.length, envoyes: envoyes.length, echecs: echecs.length },
+  );
+  revalidatePath("/", "layout");
+
+  const reste = echecs.length > 0 ? ` ${echecs.length} envoi(s) ont echoue.` : "";
+  return {
+    ok: echecs.length === 0,
+    message: `${envoyes.length} relance(s) envoyee(s) sur ${destinataires.length} membre(s) concerne(s).${reste}`,
+    erreur: echecs.length > 0 ? `${echecs.length} envoi(s) ont echoue.` : undefined,
   };
 }

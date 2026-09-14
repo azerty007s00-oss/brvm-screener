@@ -40,6 +40,15 @@ export const DROITS = {
   /** Journal de caisse : depenses et recettes hors cotisations. */
   gererCaisse: ["tresorier", "president"],
 
+/**
+   * Declencher une relance hors du 10.
+   *
+   * Le tresorier tient la caisse et sait qui n'a pas verse ; le president preside.
+   * Relancer n'engage rien d'irreversible, mais s'adresse a tous : le droit est
+   * nomme pour que la trace dise qui a decide d'ecrire au club.
+   */
+  relancer: ["tresorier", "president"],
+
   /** Penalites : constat, reglement, annulation. */
   gererPenalites: ["tresorier", "president"],
 
