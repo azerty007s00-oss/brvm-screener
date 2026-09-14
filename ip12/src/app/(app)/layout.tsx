@@ -5,7 +5,7 @@ import { baseConfiguree } from "@/lib/db";
 import { seDeconnecter } from "@/app/actions/auth";
 import { CLUB, ROLES } from "@/lib/settings";
 import { peut, type Droit } from "@/lib/droits";
-import { Alerte } from "@/components/ui";
+import { Bienvenue } from "@/components/bienvenue";
 import { Navigation } from "@/components/navigation";
 import { versionDeployee } from "@/lib/version";
 
@@ -74,23 +74,26 @@ export default async function CoquilleApplication({ children }: { children: Reac
           </form>
         </div>
 
-        <Navigation
-          suivi={SUIVI.filter((l) => !l.droit || peut(membre, l.droit)).map(({ href, libelle }) => ({ href, libelle }))}
-          club={VIE_DU_CLUB.filter((l) => !l.droit || peut(membre, l.droit)).map(({ href, libelle }) => ({ href, libelle }))}
-        />
+        {/*
+          * Pas de menu tant que le mot de passe est provisoire : les onglets
+          * menent tous au meme ecran d'accueil, et les proposer donnerait le
+          * sentiment d'un site qui ne repond pas.
+          */}
+        {!membre.must_change_password && (
+          <Navigation
+            suivi={SUIVI.filter((l) => !l.droit || peut(membre, l.droit)).map(({ href, libelle }) => ({ href, libelle }))}
+            club={VIE_DU_CLUB.filter((l) => !l.droit || peut(membre, l.droit)).map(({ href, libelle }) => ({ href, libelle }))}
+          />
+        )}
       </header>
 
+      {/*
+        * Premiere connexion : l'ecran d'accueil prend la place du contenu, sur
+        * toutes les routes. C'est une porte, pas une redirection -- aucune page
+        * n'est atteignable par l'adresse directe, et « Quitter » reste offert.
+        */}
       <main className="mx-auto max-w-5xl space-y-4 px-4 py-5">
-        {membre.must_change_password && (
-          <Alerte ton="ambre" titre="Mot de passe provisoire">
-            Votre mot de passe a ete cree par le president.{" "}
-            <Link href="/mon-compte" className="underline">
-              Definissez le votre
-            </Link>{" "}
-            pour securiser votre compte.
-          </Alerte>
-        )}
-        {children}
+        {membre.must_change_password ? <Bienvenue membre={membre} /> : children}
       </main>
 
       <footer className="sans-impression mx-auto max-w-5xl px-4 pb-8 pt-2 text-center text-[11px]" style={{ color: "var(--discret)" }}>
