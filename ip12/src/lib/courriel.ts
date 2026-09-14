@@ -110,6 +110,33 @@ export function etatVariablesEnvoi(): EtatVariables {
   };
 }
 
+/**
+ * Reglages de securite a verifier avant d'ouvrir le site aux membres.
+ *
+ * Deux variables gouvernent des portes ouvertes sur l'exterieur, et leur etat ne
+ * se lit nulle part ailleurs : mieux vaut que le president le voie que d'avoir a
+ * s'en souvenir.
+ */
+export function controlesOuverture(): { cle: string; ok: boolean; explication: string }[] {
+  return [
+    {
+      cle: "CRON_SECRET",
+      ok: variable("CRON_SECRET", "") !== "",
+      explication:
+        "Protege la route de relance. Absente, la relance est desactivee : sans elle, " +
+        "n'importe qui connaissant l'adresse pourrait ecrire a tous les membres.",
+    },
+    {
+      cle: "SETUP_TOKEN",
+      // Ici, l'absence est le bon etat : c'est une porte d'amorcage.
+      ok: variable("SETUP_TOKEN", "") === "",
+      explication:
+        "Jeton d'amorcage : il permet de reinitialiser le mot de passe du president. " +
+        "Il ne sert qu'une fois, et doit etre supprime des variables d'environnement.",
+    },
+  ];
+}
+
 /** L'adresse du compte d'envoi : la boite du club, ou l'essai peut aussi aboutir. */
 export function adresseDuCompte(): string {
   return variable("SMTP_USER", "") || variable("EMAIL_EXPEDITEUR", "");

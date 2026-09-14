@@ -1,6 +1,7 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { debutMois } from "@/lib/settings";
+import { debutMois, variable } from "@/lib/settings";
 import { destinatairesDuJour, envoyerRelances } from "@/lib/relance";
 import { avertirLeBureau } from "@/lib/avis";
 import { transportConfigure } from "@/lib/courriel";
@@ -23,9 +24,27 @@ export const maxDuration = 30;
  * les alertes, seul le courrier ne part pas.
  */
 export async function GET(requete: Request) {
-  const attendu = process.env.CRON_SECRET;
-  const recu = requete.headers.get("authorization");
-  if (attendu && recu !== `Bearer ${attendu}`) {
+  /*
+   * Garde fermee par defaut. Sans secret configure, cette route etait appelable
+   * par quiconque en connaissait l'adresse : dix membres relances autant de fois
+   * que l'appelant le voulait. Refuser d'agir vaut mieux qu'agir pour un inconnu.
+   */
+  const attendu = variable("CRON_SECRET", "");
+  if (attendu === "") {
+    return NextResponse.json(
+      {
+        erreur:
+          "CRON_SECRET n'est pas definie : la relance est desactivee pour empecher " +
+          "un declenchement par un tiers. Renseignez-la dans les variables " +
+          "d'environnement, puis redeployez.",
+      },
+      { status: 503 },
+    );
+  }
+  const recu = requete.headers.get("authorization") ?? "";
+  const fourni = Buffer.from(recu);
+  const reference = Buffer.from(`Bearer ${attendu}`);
+  if (fourni.length !== reference.length || !timingSafeEqual(fourni, reference)) {
     return NextResponse.json({ erreur: "Non autorise" }, { status: 401 });
   }
 

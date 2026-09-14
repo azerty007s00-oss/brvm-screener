@@ -23,6 +23,7 @@ import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/comp
 import { REGLE_MEMBRE } from "@/lib/valeurs";
 import {
   adresseDuCompte,
+  controlesOuverture,
   descriptionTransport,
   etatVariablesEnvoi,
   transportConfigure,
@@ -46,6 +47,7 @@ export default async function PageAdministration() {
   const transport = transportConfigure();
   const adresseClub = adresseDuCompte();
   const etatEnvoi = etatVariablesEnvoi();
+  const controles = controlesOuverture();
   if (!peut(membre, "gererReglages")) {
     return (
       <Carte titre="Administration">
@@ -299,6 +301,26 @@ export default async function PageAdministration() {
         <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
           Chaque validation, correction et constat y laisse une trace nominative.
         </p>
+      </Carte>
+
+      <Carte titre="Securite">
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Deux variables gouvernent des portes ouvertes sur l&apos;exterieur. Leur etat ne se lit
+          nulle part ailleurs : le voici, pour n&apos;avoir pas a s&apos;en souvenir.
+        </p>
+        <ul className="space-y-2">
+          {controles.map((c) => (
+            <li key={c.cle} className="text-sm">
+              <p className="flex flex-wrap items-center gap-1.5 font-medium">
+                <code>{c.cle}</code>
+                <Badge ton={c.ok ? "vert" : "rouge"}>{c.ok ? "Conforme" : "A corriger"}</Badge>
+              </p>
+              <p className="text-xs" style={{ color: "var(--discret)" }}>
+                {c.explication}
+              </p>
+            </li>
+          ))}
+        </ul>
       </Carte>
 
       <Carte titre="Relance du 10">
