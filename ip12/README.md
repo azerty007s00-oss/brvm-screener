@@ -52,6 +52,7 @@ Phoenix Capital Management.
 | Art. 12 | Droits de vote proportionnels aux parts, calculees sur le capital echu |
 | Art. 14 | Le président transmet les ordres de bourse, le trésorier par délégation |
 | Art. 20 | Exclusion à 3 mois de retard, majorité des 3/4, remboursement moins 2 % de frais |
+| R1 | Souscription à la bourse en ligne, mandat au bureau ; ordres transmis par le président ou le trésorier par délégation (art. 14) |
 | R2 | Droit de vote suspendu dès 30 jours de retard, jusqu'à régularisation |
 | R3 | Déclaration du retard au groupe obligatoire à l'entrée dans le 2e mois |
 | R4 | Dès 3 mois de retard, pénalités des 3 derniers mois doublées (30 % → 60 %) |

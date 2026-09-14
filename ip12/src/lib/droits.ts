@@ -31,8 +31,19 @@ export const DROITS = {
    */
   corrigerVersement: ["tresorier", "president"],
 
-  /** Mouvements vers la SGI et releves de portefeuille (art. 14). */
-  gererCompteTitres: ["president", "vice_president"],
+  /**
+   * Mouvements vers la SGI et releves de portefeuille (art. 14).
+   *
+   * R1 a mandate le bureau pour souscrire a la bourse en ligne, les ordres etant
+   * transmis par le president ou par le tresorier sur delegation. Le circuit par
+   * courriel qu'elle remplace avait coute au club l'operation Uniwax : un ordre
+   * qui attend une seule signature n'est pas passe. Le tresorier figure donc ici,
+   * pour que la trace de l'ordre porte le nom de qui l'a reellement transmis.
+   *
+   * Le vice-president conserve l'acces qu'il tenait de l'art. 14 : R1 ajoute un
+   * titulaire, elle n'en retire aucun.
+   */
+  gererCompteTitres: ["president", "vice_president", "tresorier"],
 
   /** Reunions et feuille de presence. */
   gererReunions: ["secretaire", "president"],
