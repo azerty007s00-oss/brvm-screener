@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "ticker": "NSBC",
+    "entry_price": 24200.0,
+    "quantity": 7,
+    "stop_loss": null,
+    "take_profit": null,
+    "entry_date": "2026-09-15",
+    "current_price": 24200.0,
+    "refreshed_at": "2026-09-15 12:10"
+  }
+]
