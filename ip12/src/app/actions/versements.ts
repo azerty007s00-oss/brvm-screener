@@ -8,7 +8,7 @@ import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
 import { derogationsParMembre, reglagesEffectifs } from "@/lib/queries";
 import type { ReglesMembre } from "@/lib/penalites";
-import { decalerMois, moisLong } from "@/lib/settings";
+import { decalerMois, moisLong, premierDuMois } from "@/lib/settings";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
 import { avertirDeclaration } from "@/lib/avis";
@@ -34,7 +34,11 @@ export async function declarerVersement(
 ): Promise<EtatFormulaire> {
   const auteur = await exigerMembre();
   const membreCible = String(donnees.get("membreId") ?? auteur.id);
-  const moisDebut = String(donnees.get("moisDebut") ?? "").slice(0, 10);
+  /*
+   * Le champ mois du navigateur envoie « 2026-08 » ; la base range les periodes
+   * au premier du mois. La conversion se fait ici, et accepte les deux formes.
+   */
+  const moisDebut = premierDuMois(String(donnees.get("moisDebut") ?? ""));
   const nbMois = Math.max(1, Math.min(24, Number(donnees.get("nbMois") ?? 1)));
   const reglages = await reglagesEffectifs();
   const montantParMois = Number(donnees.get("montant") ?? reglages.cotisationMensuelle);
@@ -50,7 +54,7 @@ export async function declarerVersement(
       erreur: "Seuls le tresorier et le president peuvent enregistrer un versement pour autrui.",
     };
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(moisDebut)) return { ok: false, erreur: "Mois de depart invalide." };
+  if (moisDebut === null) return { ok: false, erreur: "Mois de depart invalide." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVersement)) return { ok: false, erreur: "Date de versement invalide." };
   if (!Number.isFinite(montantParMois) || montantParMois <= 0) {
     return { ok: false, erreur: "Montant invalide." };

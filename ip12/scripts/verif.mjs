@@ -29,7 +29,9 @@ const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair } = await 
 );
 const { situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence } =
   await import("../.verif/penalites.mjs");
-const { tauxNormalise, deMois, lienDuSite } = await import("../.verif/settings.mjs");
+const { tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois } = await import(
+  "../.verif/settings.mjs"
+);
 
 /* ------------------------------------------------------------- performance */
 
@@ -619,6 +621,37 @@ for (const [pose, attendu] of [
 }
 delete process.env.NEXT_PUBLIC_SITE_URL;
 assert.equal(lienDuSite(), "", "adresse absente : chaine vide, jamais undefined");
+
+
+/* --------------------------------------------- mois saisi au navigateur */
+
+/*
+ * Un `<input type="month">` envoie sept caracteres, « 2026-08 », quand la base
+ * range les periodes au premier du mois. L'action de declaration en exigeait
+ * dix : aucune declaration ne pouvait aboutir, et le message accusait
+ * l'utilisateur d'une faute qu'il n'avait pas commise. Defaut trouve en
+ * production par le tresorier, un mois apres la mise en ligne.
+ */
+assert.equal(premierDuMois("2026-08"), "2026-08-01", "le champ mois du navigateur doit passer");
+assert.equal(premierDuMois("2026-08-17"), "2026-08-01", "une date complete est ramenee au 1er");
+assert.equal(premierDuMois("  2026-08  "), "2026-08-01", "les espaces autour ne genent pas");
+assert.equal(premierDuMois("2026-1"), null, "un mois sans zero initial est refuse");
+assert.equal(premierDuMois("2026-13"), null, "le treizieme mois n'existe pas");
+assert.equal(premierDuMois("2026-00"), null, "le mois zero n'existe pas");
+assert.equal(premierDuMois(""), null, "une saisie vide est refusee");
+assert.equal(premierDuMois("aout 2026"), null, "du texte est refuse");
+
+/*
+ * Le cas signale : trois mois d'avance a partir d'aout 2026. Les periodes
+ * ecrites doivent etre aout, septembre et octobre, chacune au premier du mois.
+ */
+const depart = premierDuMois("2026-08");
+const couverts = [0, 1, 2].map((i) => decalerMois(depart, i));
+assert.deepEqual(
+  couverts,
+  ["2026-08-01", "2026-09-01", "2026-10-01"],
+  `trois mois a partir d'aout 2026 : ${couverts.join(", ")}`,
+);
 
 
 console.log(

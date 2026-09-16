@@ -161,6 +161,26 @@ export function debutMois(d: Date = new Date()): string {
 }
 
 /** Decale un mois ISO de n mois. */
+/**
+ * Le premier jour du mois saisi, ou null si la saisie n'en est pas un.
+ *
+ * Un `<input type="month">` envoie « 2026-08 », sept caracteres, tandis que la
+ * base range les periodes au premier du mois. Exiger dix caracteres la ou le
+ * navigateur en envoie sept rejetait toute saisie -- et le message « mois de
+ * depart invalide » accusait l'utilisateur d'une faute qu'il n'avait pas
+ * commise.
+ *
+ * Les deux formes sont acceptees : le champ mois du navigateur, et une date
+ * complete dont seul le mois compte.
+ */
+export function premierDuMois(saisie: string): string | null {
+  const net = saisie.trim();
+  if (!/^\d{4}-\d{2}(-\d{2})?$/.test(net)) return null;
+  const [annee, mois] = net.split("-").map(Number);
+  if (mois < 1 || mois > 12) return null;
+  return `${String(annee).padStart(4, "0")}-${String(mois).padStart(2, "0")}-01`;
+}
+
 export function decalerMois(isoMois: string, n: number): string {
   const [a, m] = isoMois.split("-").map(Number);
   const d = new Date(Date.UTC(a, m - 1 + n, 1));
