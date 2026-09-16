@@ -381,3 +381,58 @@ export function tranchesAbsence(
     montant: regles.penaliteAbsence,
   }));
 }
+
+/* ------------------------------------------- rapprochement avec le registre */
+
+/**
+ * Une penalite deja portee au registre, telle que la page la connait.
+ *
+ * `cle` est la cle de rapprochement des versions actuelles ; elle manque sur
+ * les lignes ecrites par une version anterieure, d'ou le second critere.
+ */
+export type PenaliteAuRegistre = {
+  membreId: string;
+  nature: string;
+  dateConstat: string;
+  cle: string | null;
+};
+
+/** La cle de rapprochement d'une penalite de retard. */
+export function cleRetard(membreId: string, mois: string): string {
+  return `retard:${membreId}:${mois}`;
+}
+
+/** L'echeance du mois : la date a laquelle la penalite est inscrite. */
+export function echeanceDuMois(mois: string, jourEcheance = REGLES.jourEcheance): string {
+  return `${mois.slice(0, 8)}${String(jourEcheance).padStart(2, "0")}`;
+}
+
+/**
+ * Vrai si cette penalite de retard figure deja au registre.
+ *
+ * Le rapprochement se fait sur la cle, mais aussi sur le couple membre-echeance :
+ * la base porte des lignes ecrites par une version anterieure, dont les cles
+ * suivaient une autre convention. Ne chercher que les cles actuelles ferait
+ * paraitre indefiniment « a constater » ce qui est deja inscrit -- le bureau
+ * appuie sur le bouton, l'action reconnait la ligne et ne la recree pas, et la
+ * liste ne desemplit jamais.
+ *
+ * La borne de reprise ecarte en outre ce que le tresorier a deja compte a la
+ * main : au-dela, le constat automatique prend le relais.
+ */
+export function dejaAuRegistre(
+  membreId: string,
+  mois: string,
+  registre: PenaliteAuRegistre[],
+  borne?: string,
+  jourEcheance = REGLES.jourEcheance,
+): boolean {
+  if (borne && mois <= borne) return true;
+  const cle = cleRetard(membreId, mois);
+  const echeance = echeanceDuMois(mois, jourEcheance);
+  return registre.some(
+    (p) =>
+      p.cle === cle ||
+      (p.membreId === membreId && p.nature === "retard" && p.dateConstat.slice(0, 10) === echeance),
+  );
+}

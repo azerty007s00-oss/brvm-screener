@@ -3,6 +3,7 @@ import { peut } from "@/lib/droits";
 import {
   absencesParMembre,
   avancesExigees,
+  bornesReprisePenalites,
   listerMembres,
   listerPenalites,
   situationsClub,
@@ -15,7 +16,7 @@ import {
   constaterPenalitesRetard,
   reglerPenalite,
 } from "@/app/actions/penalites";
-import { tranchesAbsence } from "@/lib/penalites";
+import { dejaAuRegistre, tranchesAbsence } from "@/lib/penalites";
 import { EFFET, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { KIND_PENALITE, STATUT_PENALITE } from "@/lib/valeurs";
 import {
@@ -43,15 +44,17 @@ export default async function PagePenalites() {
   const membre = await exigerMembre();
   const gere = peut(membre, "gererPenalites");
 
-  let penalites, membres, situations, absences, avances;
+  let penalites, membres, situations, absences, avances, bornes;
   try {
-    [penalites, membres, situations, absences, avances] = await Promise.all([
-      listerPenalites(gere ? undefined : { membreId: membre.id }),
-      listerMembres(),
-      situationsClub(),
-      absencesParMembre().catch(() => []),
-      avancesExigees().catch(() => []),
-    ]);
+    [penalites, membres, situations, absences, avances, bornes] =
+      await Promise.all([
+        listerPenalites(gere ? undefined : { membreId: membre.id }),
+        listerMembres(),
+        situationsClub(),
+        absencesParMembre().catch(() => []),
+        avancesExigees().catch(() => []),
+        bornesReprisePenalites().catch(() => new Map<string, string>()),
+      ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
     throw e;
@@ -62,13 +65,31 @@ export default async function PagePenalites() {
       .filter((p) => p.statut === statut)
       .reduce((s, p) => s + p.montant, 0);
 
-  // Ce que les statuts prevoient et qui n'a pas encore ete porte au registre.
-  const dejaConstatees = new Set(
+  /*
+   * Ce que les statuts prevoient et qui n'a pas encore ete porte au registre.
+   *
+   * Le rapprochement suit exactement la regle de l'action, `dejaAuRegistre` :
+   * la cle, mais aussi le couple membre-echeance pour les lignes ecrites par une
+   * version anterieure, et la borne de reprise du tresorier. La page ne
+   * regardait que la cle : elle reclamait indefiniment le constat de penalites
+   * deja inscrites, que l'action reconnaissait et ne recreait pas. Le bureau
+   * appuyait, et la liste ne desemplissait pas.
+   */
+  const clesPortees = new Set(
     penalites.map((p) => p.source_key).filter(Boolean),
   );
+  const registre = penalites.map((p) => ({
+    membreId: p.membre_id,
+    nature: p.nature,
+    dateConstat: p.date_constat,
+    cle: p.source_key,
+  }));
   const aConstater = situations.flatMap((s) =>
     s.penalites
-      .filter((p) => !dejaConstatees.has(`retard:${s.membreId}:${p.mois}`))
+      .filter(
+        (p) =>
+          !dejaAuRegistre(s.membreId, p.mois, registre, bornes.get(s.membreId)),
+      )
       .map((p) => ({ nom: s.nom, ...p })),
   );
 
@@ -79,7 +100,7 @@ export default async function PagePenalites() {
    */
   const absencesAConstater = absences.flatMap((a) =>
     tranchesAbsence(a.injustifiees, REGLES)
-      .filter((t) => !dejaConstatees.has(`absence:${a.membreId}:${t.rang}`))
+      .filter((t) => !clesPortees.has(`absence:${a.membreId}:${t.rang}`))
       .map((t) => ({ nom: a.nom, ...t })),
   );
 

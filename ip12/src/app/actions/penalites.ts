@@ -10,15 +10,14 @@ import {
   reglagesEffectifs,
   situationsClub,
 } from "@/lib/queries";
-import { REGLES, moisLong } from "@/lib/settings";
-import { tranchesAbsence } from "@/lib/penalites";
+import { moisLong } from "@/lib/settings";
+import { cleRetard, echeanceDuMois, tranchesAbsence } from "@/lib/penalites";
 import { KIND_PENALITE, STATUT_PENALITE } from "@/lib/valeurs";
 import type { EtatFormulaire } from "./auth";
 
 const NATURES = Object.values(KIND_PENALITE) as string[];
 
 /** Identifiant stable d'une penalite de retard : rend le constat idempotent. */
-const cleRetard = (membreId: string, mois: string) => `retard:${membreId}:${mois}`;
 
 /** Motif lisible, qui dit pourquoi la penalite est due et a quel titre. */
 function motifPenalite(p: { mois: string; doublee: boolean; figee: boolean }): string {
@@ -57,7 +56,7 @@ export async function constaterPenalitesRetard(
         continue;
       }
       const cle = cleRetard(s.membreId, p.mois);
-      const echeance = `${p.mois.slice(0, 8)}${String(REGLES.jourEcheance).padStart(2, "0")}`;
+      const echeance = echeanceDuMois(p.mois);
 
       /*
        * On cherche la ligne par sa cle, mais aussi par le couple membre-echeance :

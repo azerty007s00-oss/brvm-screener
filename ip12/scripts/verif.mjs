@@ -27,8 +27,10 @@ const assert = new Proxy(strict0, {
 const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair } = await import(
   "../.verif/perf.mjs"
 );
-const { situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence } =
-  await import("../.verif/penalites.mjs");
+const {
+  situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
+  dejaAuRegistre, cleRetard, echeanceDuMois,
+} = await import("../.verif/penalites.mjs");
 const { tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois } = await import(
   "../.verif/settings.mjs"
 );
@@ -652,6 +654,69 @@ assert.deepEqual(
   ["2026-08-01", "2026-09-01", "2026-10-01"],
   `trois mois a partir d'aout 2026 : ${couverts.join(", ")}`,
 );
+
+
+/* --------------------------------- rapprochement avec le registre des penalites */
+
+/*
+ * La page listait « a constater » ce que l'action reconnaissait deja : elle ne
+ * rapprochait que par la cle, l'action rapprochait aussi par le couple
+ * membre-echeance et sautait ce que la reprise du tresorier couvrait. Le bureau
+ * appuyait sur le bouton, rien ne se creait, et la liste ne desemplissait pas.
+ * La regle est desormais unique, et tenue ici.
+ */
+const MEMBRE = "11111111-1111-1111-1111-111111111111";
+assert.equal(cleRetard(MEMBRE, "2026-08-01"), `retard:${MEMBRE}:2026-08-01`);
+assert.equal(echeanceDuMois("2026-08-01"), "2026-08-10", "l'echeance est le 10 du mois");
+
+// Rien au registre : la penalite est bien a constater.
+assert.equal(dejaAuRegistre(MEMBRE, "2026-08-01", []), false);
+
+// Portee sous la cle actuelle.
+assert.equal(
+  dejaAuRegistre(MEMBRE, "2026-08-01", [
+    { membreId: MEMBRE, nature: "retard", dateConstat: "2026-08-10", cle: cleRetard(MEMBRE, "2026-08-01") },
+  ]),
+  true,
+);
+
+// Portee par une version anterieure : cle absente, mais membre et echeance concordent.
+assert.equal(
+  dejaAuRegistre(MEMBRE, "2026-08-01", [
+    { membreId: MEMBRE, nature: "retard", dateConstat: "2026-08-10", cle: null },
+  ]),
+  true,
+  "une ligne sans cle mais a la bonne echeance est deja portee",
+);
+
+// Une cle d'une autre convention, meme echeance : reconnue aussi.
+assert.equal(
+  dejaAuRegistre(MEMBRE, "2026-08-01", [
+    { membreId: MEMBRE, nature: "retard", dateConstat: "2026-08-10T00:00:00Z", cle: "retard:2026-08" },
+  ]),
+  true,
+  "l'horodatage complet ne doit pas empecher le rapprochement",
+);
+
+// Le bon mois, mais un autre membre : toujours a constater.
+assert.equal(
+  dejaAuRegistre(MEMBRE, "2026-08-01", [
+    { membreId: "22222222-2222-2222-2222-222222222222", nature: "retard", dateConstat: "2026-08-10", cle: null },
+  ]),
+  false,
+);
+
+// Le bon membre, mais une absence : une nature ne vaut pas l'autre.
+assert.equal(
+  dejaAuRegistre(MEMBRE, "2026-08-01", [
+    { membreId: MEMBRE, nature: "absence", dateConstat: "2026-08-10", cle: null },
+  ]),
+  false,
+);
+
+// Couverte par la reprise manuelle du tresorier.
+assert.equal(dejaAuRegistre(MEMBRE, "2026-06-01", [], "2026-07-01"), true, "sous la borne : deja compte");
+assert.equal(dejaAuRegistre(MEMBRE, "2026-08-01", [], "2026-07-01"), false, "au-dela : a constater");
 
 
 console.log(
