@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { exigerRole, hacherMotDePasse, motDePasseProvisoire } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { envoyerAcces } from "@/lib/avis";
-import { CLUB, POSTES_UNIQUES, ROLES, variable } from "@/lib/settings";
+import { CLUB, POSTES_UNIQUES, ROLES, lienDuSite } from "@/lib/settings";
 import type { Role } from "@/lib/settings";
 import type { EtatFormulaire } from "./auth";
 
@@ -18,7 +18,7 @@ const ROLES_VALIDES = Object.keys(ROLES) as Role[];
  * l'apprendre du message de retour, non d'un membre perdu.
  */
 function lienManquant(): string {
-  return variable("NEXT_PUBLIC_SITE_URL", "") === ""
+  return lienDuSite() === ""
     ? " Attention : NEXT_PUBLIC_SITE_URL n'est pas renseignee dans Vercel, le courrier part sans l'adresse du site."
     : "";
 }

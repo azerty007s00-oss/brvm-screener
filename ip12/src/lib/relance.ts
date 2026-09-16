@@ -2,17 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import { avancesExigees, situationsClub, type AvanceExigee, type SituationClub } from "@/lib/queries";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
-import {
-  CLUB,
-  EFFET,
-  REGLES,
-  dateCourte,
-  debutMois,
-  deMois,
-  fcfa,
-  moisLong,
-  variable,
-} from "@/lib/settings";
+import { CLUB, EFFET, REGLES, dateCourte, deMois, debutMois, fcfa, lienDuSite, moisLong } from "@/lib/settings";
 
 /**
  * Fabrique et envoi des relances.
@@ -95,7 +85,7 @@ export async function envoyerRelances(
   if (transportConfigure() === "aucun") return { envoyes, echecs };
 
   const moisCourant = debutMois(maintenant);
-  const siteUrl = variable("NEXT_PUBLIC_SITE_URL", "");
+  const siteUrl = lienDuSite();
   for (const d of destinataires) {
     const { ok } = await envoyerCourriel({
       destinataire: d.situation.email,

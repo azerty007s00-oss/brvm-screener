@@ -112,6 +112,19 @@ export function variable(nom: string, repli: string): string {
   return brut && brut.trim() !== "" ? brut.trim() : repli;
 }
 
+/**
+ * L'adresse du site, sans barre oblique finale.
+ *
+ * Les courriers y accrochent des chemins -- `${lien}/versements` -- et une barre
+ * de trop donnerait `https://site//versements`. La plupart des serveurs le
+ * pardonnent, pas tous, et personne ne pense a l'enlever en collant une adresse
+ * copiee depuis la barre du navigateur. Autant la retirer ici une fois pour
+ * toutes que de compter sur la vigilance.
+ */
+export function lienDuSite(): string {
+  return variable("NEXT_PUBLIC_SITE_URL", "").replace(/\/+$/, "");
+}
+
 export type Role = "president" | "vice_president" | "tresorier" | "secretaire" | "membre";
 
 export const ROLES: Record<Role, string> = {

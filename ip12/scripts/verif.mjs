@@ -29,7 +29,7 @@ const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair } = await 
 );
 const { situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence } =
   await import("../.verif/penalites.mjs");
-const { tauxNormalise, deMois } = await import("../.verif/settings.mjs");
+const { tauxNormalise, deMois, lienDuSite } = await import("../.verif/settings.mjs");
 
 /* ------------------------------------------------------------- performance */
 
@@ -598,6 +598,27 @@ assert.ok(
   Math.abs(triSansFluxNul - 0.2) < 0.001,
   `TRI attendu ~0,20, obtenu ${triSansFluxNul}`,
 );
+
+
+/* ------------------------------------------------- adresse du site */
+
+/*
+ * Les courriers accrochent des chemins a l'adresse du site. Une barre oblique
+ * finale -- celle que laisse un copier-coller depuis la barre du navigateur --
+ * donnerait « https://site//versements ». Elle est retiree a la lecture.
+ */
+for (const [pose, attendu] of [
+  ["https://ip12.vercel.app", "https://ip12.vercel.app"],
+  ["https://ip12.vercel.app/", "https://ip12.vercel.app"],
+  ["https://ip12.vercel.app///", "https://ip12.vercel.app"],
+  ["  https://ip12.vercel.app/  ", "https://ip12.vercel.app"],
+  ["", ""],
+]) {
+  process.env.NEXT_PUBLIC_SITE_URL = pose;
+  assert.equal(lienDuSite(), attendu, `adresse « ${pose} » mal normalisee`);
+}
+delete process.env.NEXT_PUBLIC_SITE_URL;
+assert.equal(lienDuSite(), "", "adresse absente : chaine vide, jamais undefined");
 
 
 console.log(

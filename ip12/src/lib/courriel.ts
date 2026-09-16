@@ -1,5 +1,5 @@
 import "server-only";
-import { CLUB, variable } from "@/lib/settings";
+import { CLUB, lienDuSite, variable } from "@/lib/settings";
 
 /**
  * Envoi de courrier, par SMTP ou par Resend.
@@ -125,6 +125,17 @@ export function controlesOuverture(): { cle: string; ok: boolean; explication: s
       explication:
         "Protege la route de relance. Absente, la relance est desactivee : sans elle, " +
         "n'importe qui connaissant l'adresse pourrait ecrire a tous les membres.",
+    },
+    {
+      cle: "NEXT_PUBLIC_SITE_URL",
+      ok: lienDuSite() !== "",
+      explication:
+        lienDuSite() !== ""
+          ? `Adresse portee par les courriers : ${lienDuSite()}. Verifiez que c'est bien ` +
+            "l'adresse de production, non celle d'un apercu : un membre qui l'ouvrirait " +
+            "tomberait sur une version figee."
+          : "Absente : les courriers d'acces et de relance partent sans le lien du site, " +
+            "et le membre ne sait pas ou aller. Renseignez-la, puis redeployez.",
     },
     {
       cle: "SETUP_TOKEN",

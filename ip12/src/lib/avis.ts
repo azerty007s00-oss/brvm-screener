@@ -1,7 +1,7 @@
 import "server-only";
 import { listerMembres } from "@/lib/queries";
 import { envoyerCourriel } from "@/lib/courriel";
-import { CLUB, dateCourte, fcfa, moisLong, variable } from "@/lib/settings";
+import { CLUB, dateCourte, fcfa, lienDuSite, moisLong } from "@/lib/settings";
 import { titulaires, DROITS } from "@/lib/droits";
 import type { Destinataire } from "@/lib/relance";
 import type { Role } from "@/lib/settings";
@@ -65,7 +65,7 @@ export async function avertirLeBureau(
     lignes.push(`  ${d.situation.nom} — ${motifs.join(", ")}`);
   }
 
-  const siteUrl = variable("NEXT_PUBLIC_SITE_URL", "");
+  const siteUrl = lienDuSite();
   if (siteUrl) lignes.push("", `Valider les encaissements : ${siteUrl}/versements`);
   lignes.push("", `Le suivi du club — ${CLUB.nom}`);
 
@@ -113,7 +113,7 @@ export async function avertirDeclaration(params: {
     "",
     "La ligne est visible de tous et attend votre validation.",
   ];
-  const siteUrl = variable("NEXT_PUBLIC_SITE_URL", "");
+  const siteUrl = lienDuSite();
   if (siteUrl) lignes.push("", `Valider : ${siteUrl}/versements`);
   lignes.push("", `Le suivi du club — ${CLUB.nom}`);
 
@@ -175,7 +175,7 @@ export async function avertirAbsence(params: {
     "Si votre absence etait justifiee, signalez-le au secretaire : il la passera en " +
       "« excuse », et elle sortira du compte penalisable.",
   ];
-  const siteUrl = variable("NEXT_PUBLIC_SITE_URL", "");
+  const siteUrl = lienDuSite();
   if (siteUrl) lignes.push("", `Feuille de presence : ${siteUrl}/reunions`);
   lignes.push("", `Le suivi du club — ${CLUB.nom}`);
 
@@ -203,7 +203,7 @@ export async function envoyerAcces(
   membre: { nom: string; email: string },
   motDePasseProvisoire: string,
 ): Promise<{ ok: boolean; detail: string }> {
-  const url = variable("NEXT_PUBLIC_SITE_URL", "");
+  const url = lienDuSite();
   const prenom = membre.nom.trim().split(/\s+/)[1] ?? membre.nom;
 
   const lignes = [
