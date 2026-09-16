@@ -268,23 +268,111 @@ export async function reglerPenalite(
   const auteur = await exigerDroit("gererPenalites");
   const id = String(donnees.get("id") ?? "");
   const note = String(donnees.get("note") ?? "").trim() || null;
+  const saisie = String(donnees.get("quantite") ?? "").trim();
 
   const sql = db();
-  const rows = await sql`
-    update penalties
-    set status = ${STATUT_PENALITE.payee}, settled_on = current_date,
-        settlement_note = ${note}, resolved_by = ${auteur.id}::uuid, resolved_at = now()
+  const lignes = (await sql`
+    select member_id, kind, quantity, unit_amount, reason, created_by,
+           to_char(incurred_on, 'YYYY-MM-DD') as incurred_on
+    from penalties
     where id = ${id}::uuid and status = ${STATUT_PENALITE.due}
+  `) as {
+    member_id: string;
+    kind: string;
+    quantity: number;
+    unit_amount: number | string;
+    reason: string | null;
+    created_by: string;
+    incurred_on: string;
+  }[];
+  if (lignes.length === 0) return { ok: false, erreur: "Penalite introuvable ou deja soldee." };
+
+  const ligne = lignes[0];
+  const restant = Number(ligne.quantity);
+
+  /*
+   * Une quantite illisible arrete tout.
+   *
+   * Sans ce controle, un `restant` a NaN traversait la garde qui suit -- toute
+   * comparaison avec NaN est fausse, y compris « quantite > restant » -- et la
+   * ligne partait en reglement partiel avec une quantite impossible. Mieux vaut
+   * refuser d'agir que d'ecrire un nombre qui n'en est pas un.
+   */
+  if (!Number.isInteger(restant) || restant < 1) {
+    return { ok: false, erreur: "Quantite de la penalite illisible : rien n'a ete modifie." };
+  }
+
+  /*
+   * Un membre en retard de onze mois ne solde pas ses onze penalites d'un coup :
+   * il en regle quatre, puis progressivement le reste. Sans quantite, la ligne
+   * entiere passait reglee, et le club croyait encaisse ce qu'il attendait
+   * encore.
+   */
+  const quantite = saisie === "" ? restant : Number(saisie);
+  if (!Number.isInteger(quantite) || quantite < 1 || quantite > restant) {
+    return {
+      ok: false,
+      erreur: `Indiquez un nombre entier entre 1 et ${restant} : c'est ce qui reste dû sur cette ligne.`,
+    };
+  }
+
+  if (quantite === restant) {
+    const faites = await sql`
+      update penalties
+      set status = ${STATUT_PENALITE.payee}, settled_on = current_date,
+          settlement_note = ${note}, resolved_by = ${auteur.id}::uuid, resolved_at = now()
+      where id = ${id}::uuid and status = ${STATUT_PENALITE.due} and quantity = ${restant}
+      returning id
+    `;
+    if (faites.length === 0) {
+      return { ok: false, erreur: "La ligne a change entre-temps : rouvrez la page et reprenez." };
+    }
+    await journaliser(
+      { id: auteur.id, nom: auteur.nom },
+      "reglement_penalite",
+      { entite: "penalties", id },
+      { quantite, restant: 0 },
+    );
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Penalite soldee : ${quantite} mois regle(s).` };
+  }
+
+  /*
+   * Reglement partiel : la ligne est scindee plutot qu'amputee. Ce qui est paye
+   * devient une ligne soldee, ce qui reste demeure dû sur l'originale. Les
+   * totaux, qui multiplient la quantite par le montant unitaire, tombent juste
+   * sans qu'aucune colonne ait a etre ajoutee -- et l'historique garde la trace
+   * de chaque encaissement, avec sa date.
+   */
+  const reste = restant - quantite;
+  const ajuste = await sql`
+    update penalties set quantity = ${reste}
+    where id = ${id}::uuid and status = ${STATUT_PENALITE.due} and quantity = ${restant}
     returning id
   `;
-  if (rows.length === 0) return { ok: false, erreur: "Penalite introuvable ou deja soldee." };
+  if (ajuste.length === 0) {
+    return { ok: false, erreur: "La ligne a change entre-temps : rouvrez la page et reprenez." };
+  }
+  await sql`
+    insert into penalties
+      (member_id, kind, quantity, unit_amount, reason, incurred_on, status,
+       settled_on, settlement_note, created_by, resolved_by, resolved_at)
+    values (${ligne.member_id}::uuid, ${ligne.kind}, ${quantite}, ${Number(ligne.unit_amount)},
+            ${ligne.reason}, ${ligne.incurred_on}::date, ${STATUT_PENALITE.payee},
+            current_date, ${note}, ${ligne.created_by}::uuid, ${auteur.id}::uuid, now())
+  `;
 
-  await journaliser({ id: auteur.id, nom: auteur.nom }, "reglement_penalite", {
-    entite: "penalties",
-    id,
-  });
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "reglement_partiel_penalite",
+    { entite: "penalties", id },
+    { quantite, restant: reste, montant: quantite * Number(ligne.unit_amount) },
+  );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Penalite marquee reglee." };
+  return {
+    ok: true,
+    message: `${quantite} mois regle(s). Il reste ${reste} mois dû(s) sur cette ligne.`,
+  };
 }
 
 export async function annulerPenalite(
@@ -314,4 +402,47 @@ export async function annulerPenalite(
   );
   revalidatePath("/", "layout");
   return { ok: true, message: "Penalite annulee." };
+}
+
+/**
+ * Remet une penalite en dû.
+ *
+ * Une ligne marquee reglee, ou annulee, etait definitive : ni le reglement ni
+ * l'annulation ne se reprenaient. Une erreur de manipulation du tresorier --
+ * la mauvaise ligne cochee, le mauvais membre -- restait donc inscrite pour
+ * toujours, et la seule issue etait d'inventer une penalite compensatoire qui
+ * n'avait jamais ete constatee.
+ *
+ * Le retour en dû efface la trace du reglement sur la ligne, jamais la ligne
+ * elle-meme : l'etat d'ou l'on revient part au journal avec le motif et le nom.
+ */
+export async function rouvrirPenalite(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererPenalites");
+  const id = String(donnees.get("id") ?? "");
+  const motif = String(donnees.get("motif") ?? "").trim();
+  if (!motif) return { ok: false, erreur: "Indiquez pourquoi cette penalite redevient due." };
+
+  const sql = db();
+  const rows = (await sql`
+    update penalties
+    set status = ${STATUT_PENALITE.due}, settled_on = null, settlement_note = null,
+        resolved_by = null, resolved_at = null
+    where id = ${id}::uuid and status <> ${STATUT_PENALITE.due}
+    returning id, quantity, unit_amount
+  `) as { id: string; quantity: number; unit_amount: number | string }[];
+  if (rows.length === 0) {
+    return { ok: false, erreur: "Penalite introuvable, ou deja due : il n'y a rien a reprendre." };
+  }
+
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "reouverture_penalite",
+    { entite: "penalties", id },
+    { motif, quantite: rows[0].quantity, montant: Number(rows[0].unit_amount) * rows[0].quantity },
+  );
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Penalite remise en dû." };
 }

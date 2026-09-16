@@ -12,6 +12,17 @@ Phoenix Capital Management.
   restant requise. Personne ne valide son propre versement.
 - **Avances et retards** — une déclaration peut couvrir plusieurs mois d'avance. Les mois
   échus non couverts basculent automatiquement en retard après le 10 (art. 8).
+- **Pénalités réglées par acomptes** — onze mois de retard ne se soldent pas d'un coup. Le
+  règlement porte un nombre de mois : la ligne est alors **scindée**, ce qui est payé devient une
+  ligne soldée et le reste demeure dû. Les totaux tombent juste sans colonne supplémentaire, et
+  chaque encaissement garde sa date. Laisser le champ vide solde la ligne entière.
+- **Reprendre une pénalité** — une ligne réglée ou annulée se remet en dû, motif obligatoire.
+  Sans cela, une erreur de manipulation restait inscrite pour toujours et la seule issue était
+  d'inventer une pénalité compensatoire qui n'avait jamais été constatée.
+- **Justificatifs et notes, ouverts à tous** — ils n'apparaissaient que dans la carte « à valider »,
+  réservée au trésorier : une fois le versement validé, plus personne ne les voyait, pas même celui
+  qui les avait joints. La carte des versements validés est désormais ouverte à tous, pièces et
+  notes comprises ; corriger et annuler restent au trésorier et au président. Voir n'est pas écrire.
 - **Journal de caisse** — le trésorier y inscrit dépenses et recettes, et **sa saisie vaut
   validation** : il tient la caisse, il constate ce qui en sort. Il peut aussi annuler sa propre
   écriture, motif à l'appui. La règle des versements ne bouge pas — là, elle sépare deux personnes,
