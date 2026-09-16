@@ -40,6 +40,11 @@ export const dynamic = "force-dynamic";
 export default async function PageCaisse() {
   const membre = await exigerMembre();
   const gere = peut(membre, "gererCaisse");
+  /*
+   * `gere` ouvre la saisie et l'annulation : c'est le meme titre, celui qui
+   * tient la caisse. Le visa d'une ecriture restee en attente demeure au
+   * president -- il n'en arrive plus de nouvelle, mais la base en porte peut-etre.
+   */
   const valide = peut(membre, "gererReglages");
 
   let mouvements, s;
@@ -204,9 +209,9 @@ export default async function PageCaisse() {
       {gere && (
         <Carte titre="Nouveau mouvement">
           <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            {valide
-              ? "Votre saisie vaut validation."
-              : "Votre saisie attendra la validation du president."}
+            Votre saisie vaut validation : vous tenez la caisse, vous constatez ce
+            qui en sort et ce qui y entre. Une ecriture fautive s&apos;annule depuis le
+            journal, motif a l&apos;appui.
           </p>
           {/*
            * Un formulaire par sens, plutot qu'une liste unique.
@@ -395,7 +400,7 @@ export default async function PageCaisse() {
                            * eu lieu : le journal finissait par raconter le contraire de
                            * ce qui s'etait passe.
                            */}
-                          {valide && m.statut === STATUT_CAISSE.valide && (
+                          {gere && m.statut === STATUT_CAISSE.valide && (
                             <FormulaireAction
                               action={rejeterMouvement}
                               libelle="Annuler"

@@ -3,7 +3,6 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerDroit } from "@/lib/auth";
-import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
 import { SENS_CAISSE, STATUT_CAISSE } from "@/lib/valeurs";
 import { synthese } from "@/lib/queries";
@@ -36,31 +35,37 @@ export async function enregistrerMouvement(
   }
   if (!Number.isFinite(montant) || montant <= 0) return { ok: false, erreur: "Montant invalide." };
 
-  // Le president valide sa propre saisie ; celle du tresorier attend son visa.
-  const valideDOffice = peut(auteur, "gererReglages");
+  /*
+   * La saisie vaut validation, pour le tresorier comme pour le president.
+   *
+   * L'ecriture du tresorier attendait le visa du president -- separation des
+   * roles calquee sur celle des versements. Le club en a decide autrement : le
+   * tresorier tient la caisse, il constate ses depenses lui-meme. La regle des
+   * versements, elle, ne bouge pas : la elle separe deux personnes, le membre
+   * qui declare et le tresorier qui encaisse, tandis qu'ici le tresorier etait
+   * seul des deux cotes et le visa n'ajoutait qu'un delai.
+   *
+   * Seuls le tresorier et le president atteignent cette action (droit
+   * `gererCaisse`) : aucune ecriture n'arrive donc plus en attente. Le circuit
+   * de validation reste en place pour les lignes deja en attente en base, et
+   * pour annuler une ecriture close.
+   */
   const sql = db();
   await sql`
     insert into cash_movements
       (movement_date, direction, category, amount, note, status, created_by, reviewed_by, reviewed_at)
     values (${date}::date, ${sens}, ${categorie}, ${Math.round(montant)}, ${note},
-            ${valideDOffice ? STATUT_CAISSE.valide : STATUT_CAISSE.enAttente},
-            ${auteur.id}::uuid,
-            ${valideDOffice ? auteur.id : null}::uuid,
-            ${valideDOffice ? new Date().toISOString() : null}::timestamptz)
+            ${STATUT_CAISSE.valide}, ${auteur.id}::uuid, ${auteur.id}::uuid,
+            ${new Date().toISOString()}::timestamptz)
   `;
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "mouvement_caisse",
     { entite: "cash_movements" },
-    { date, sens, categorie, montant: Math.round(montant), valideDOffice },
+    { date, sens, categorie, montant: Math.round(montant) },
   );
   revalidatePath("/", "layout");
-  return {
-    ok: true,
-    message: valideDOffice
-      ? "Mouvement enregistre et valide."
-      : "Mouvement enregistre. Il attend la validation du president.",
-  };
+  return { ok: true, message: "Mouvement enregistre et valide." };
 }
 
 export async function validerMouvement(
@@ -89,7 +94,16 @@ export async function rejeterMouvement(
   _precedent: EtatFormulaire,
   donnees: FormData,
 ): Promise<EtatFormulaire> {
-  const auteur = await exigerDroit("gererReglages");
+  /*
+   * Qui tient la caisse peut annuler ce qu'il y a inscrit.
+   *
+   * L'annulation etait reservee au president, du temps ou le tresorier n'osait
+   * pas valider seul. Maintenant qu'il valide, lui refuser de se reprendre le
+   * laisserait sans recours devant sa propre faute de frappe -- ou pire, le
+   * pousserait a inscrire une ecriture inverse, qui decrirait un mouvement
+   * n'ayant pas eu lieu. Le motif reste obligatoire et le journal garde le nom.
+   */
+  const auteur = await exigerDroit("gererCaisse");
   const id = String(donnees.get("id") ?? "");
   const motif = String(donnees.get("motif") ?? "").trim();
   if (!motif) return { ok: false, erreur: "Indiquez le motif du rejet." };

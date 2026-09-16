@@ -12,6 +12,11 @@ Phoenix Capital Management.
   restant requise. Personne ne valide son propre versement.
 - **Avances et retards** — une déclaration peut couvrir plusieurs mois d'avance. Les mois
   échus non couverts basculent automatiquement en retard après le 10 (art. 8).
+- **Journal de caisse** — le trésorier y inscrit dépenses et recettes, et **sa saisie vaut
+  validation** : il tient la caisse, il constate ce qui en sort. Il peut aussi annuler sa propre
+  écriture, motif à l'appui. La règle des versements ne bouge pas — là, elle sépare deux personnes,
+  le membre qui déclare et le trésorier qui encaisse ; ici le trésorier était seul des deux côtés,
+  et le visa du président n'ajoutait qu'un délai.
 - **Corriger une écriture** — un mouvement de compte-titres se supprime, une écriture de caisse
   déjà validée s'annule (motif obligatoire). Sans cela, corriger une saisie fautive demandait de
   lui opposer une écriture inverse, qui décrivait à son tour un mouvement n'ayant pas eu lieu : le
