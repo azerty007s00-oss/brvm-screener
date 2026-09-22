@@ -84,6 +84,7 @@ Phoenix Capital Management.
 | Art. 8 | Exigible au plus tard le 10 du mois |
 | Art. 9 | Pénalité de 10 % du versement dû, versée à l'actif du club |
 | Art. 12 | Droits de vote proportionnels aux parts, calculees sur le capital echu |
+| Ouverture du compte-titres | 17/07/2023 — les virements antérieurs portent la date de sortie de caisse ; le TRI les ramène à ce jour, le capital n'étant pas encore placé |
 | Art. 14 | Le président transmet les ordres de bourse, le trésorier par délégation |
 | Art. 20 | Exclusion à 3 mois de retard, majorité des 3/4, remboursement moins 2 % de frais |
 | R1 | Souscription à la bourse en ligne, mandat au bureau ; ordres transmis par le président ou le trésorier par délégation (art. 14) |

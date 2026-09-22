@@ -897,7 +897,17 @@ async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
        * n'est. Le taux serait juste, la phrase qui l'accompagne fausse.
        */
       if (net(a) !== 0 && a.date_transfert <= valorisation.date_valo) {
-        flux.push({ date: a.date_transfert, montant: -net(a) });
+        /*
+         * Un virement anterieur a l'ouverture du compte est ramene au jour de
+         * l'ouverture : avant, l'argent avait quitte la caisse mais n'etait pas
+         * encore place. Le dater plus tot ferait porter au capital des semaines
+         * ou il ne travaillait pas, et le taux annualise en sortirait diminue.
+         */
+        const quand =
+          a.date_transfert < CLUB.ouvertureCompteTitres
+            ? CLUB.ouvertureCompteTitres
+            : a.date_transfert;
+        flux.push({ date: quand, montant: -net(a) });
       }
     }
     if (flux.length > 0) {

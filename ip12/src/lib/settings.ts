@@ -9,6 +9,20 @@ export const CLUB = {
   ville: "Abidjan, Cote d'Ivoire",
   sgi: "Phoenix Capital Management",
   dateCreation: "2023-05-22",
+  /*
+   * Ouverture du compte-titres chez la SGI.
+   *
+   * Les premiers virements portent la date a laquelle l'argent a quitte la
+   * caisse, plusieurs semaines avant que le compte existe : il a dormi en
+   * transit, il n'etait pas place. Le TRI les ramene a cette date -- compter le
+   * capital comme investi avant qu'il ne le soit allonge la periode et abaisse
+   * le taux annualise, qui annoncerait alors moins que ce que le club a
+   * reellement obtenu.
+   *
+   * Les ecritures, elles, gardent leur date : c'est bien ce jour-la que la
+   * caisse s'est videe.
+   */
+  ouvertureCompteTitres: "2023-07-17",
   dureeAnnees: 10,
   membresMin: 5,
   membresMax: 20,

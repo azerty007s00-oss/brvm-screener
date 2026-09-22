@@ -719,6 +719,47 @@ assert.equal(dejaAuRegistre(MEMBRE, "2026-06-01", [], "2026-07-01"), true, "sous
 assert.equal(dejaAuRegistre(MEMBRE, "2026-08-01", [], "2026-07-01"), false, "au-dela : a constater");
 
 
+/* ------------------------------- ouverture du compte-titres et periode du TRI */
+
+/*
+ * Les premiers virements portent la date a laquelle l'argent a quitte la
+ * caisse, plusieurs semaines avant l'ouverture du compte chez la SGI : il a
+ * dormi en transit, il n'etait pas place. Les compter comme investis des ce
+ * jour-la allonge la periode et abaisse le taux annualise -- le club
+ * annoncerait moins que ce qu'il a obtenu.
+ *
+ * La regle : un flux anterieur a l'ouverture est ramene au jour de l'ouverture.
+ */
+const OUVERTURE = "2023-07-17";
+const ramener = (d) => (d < OUVERTURE ? OUVERTURE : d);
+assert.equal(ramener("2023-06-01"), OUVERTURE, "un virement anterieur est ramene a l'ouverture");
+assert.equal(ramener("2023-07-17"), "2023-07-17", "le jour meme ne bouge pas");
+assert.equal(ramener("2024-05-13"), "2024-05-13", "un virement posterieur garde sa date");
+
+// A capital et valeur finale egaux, une periode plus courte donne un taux plus eleve.
+const fluxLong = [
+  { date: "2023-06-01", montant: -1_000_000 },
+  { date: "2026-09-17", montant: 3_000_000 },
+];
+const fluxCourt = [
+  { date: OUVERTURE, montant: -1_000_000 },
+  { date: "2026-09-17", montant: 3_000_000 },
+];
+const tLong = tri(fluxLong);
+const tCourt = tri(fluxCourt);
+assert.ok(tLong !== null && tCourt !== null, "les deux taux doivent etre calculables");
+assert.ok(
+  tCourt > tLong,
+  `ramener le depart releve le taux annualise (${tLong} contre ${tCourt})`,
+);
+
+// La duree annoncee suit le depart retenu, non la date de sortie de caisse.
+assert.ok(
+  dureeEnAnnees(OUVERTURE, "2026-09-17") < dureeEnAnnees("2023-06-01", "2026-09-17"),
+  "la periode affichee se raccourcit d'autant",
+);
+
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +

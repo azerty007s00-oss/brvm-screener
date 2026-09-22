@@ -4,7 +4,10 @@ import { situationsClub, synthese } from "@/lib/queries";
 import { dureeEnClair, pourcent } from "@/lib/perf";
 import { CLUB, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Alerte, Badge, Carte, Statistique, Vide } from "@/components/ui";
-import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import {
+  EcranInitialisation,
+  estTableAbsente,
+} from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +33,11 @@ export default async function TableauDeBord() {
         <Statistique
           libelle="Portefeuille"
           valeur={s.valorisation ? fcfa(s.valorisation.total) : "--"}
-          detail={s.valorisation ? `Releve du ${dateCourte(s.valorisation.date_valo)}` : "Aucun releve saisi"}
+          detail={
+            s.valorisation
+              ? `Releve du ${dateCourte(s.valorisation.date_valo)}`
+              : "Aucun releve saisi"
+          }
           accent="or"
         />
         <Statistique
@@ -62,21 +69,44 @@ export default async function TableauDeBord() {
               <div>
                 <p
                   className="text-2xl font-semibold"
-                  style={{ color: s.tri >= 0 ? "var(--color-vert-600)" : "var(--color-rouge-600)" }}
+                  style={{
+                    color:
+                      s.tri >= 0
+                        ? "var(--color-vert-600)"
+                        : "var(--color-rouge-600)",
+                  }}
                 >
                   {pourcent(s.tri)}
-                  <span className="ml-1 text-xs font-normal" style={{ color: "var(--discret)" }}>
+                  <span
+                    className="ml-1 text-xs font-normal"
+                    style={{ color: "var(--discret)" }}
+                  >
                     par an
                   </span>
                 </p>
                 <p className="text-xs" style={{ color: "var(--discret)" }}>
-                  TRI annualise sur les dates reelles de virement au compte-titres.
+                  TRI annualise sur les dates reelles de virement au
+                  compte-titres.
                   {s.triPeriode && (
                     <>
                       {" "}
-                      Il porte sur {dureeEnClair(s.triPeriode.annees)} de placement, du{" "}
-                      {dateCourte(s.triPeriode.debut)} au {dateCourte(s.triPeriode.fin)}, date du
-                      dernier releve.
+                      Il porte sur {dureeEnClair(s.triPeriode.annees)} de
+                      placement, du {dateCourte(s.triPeriode.debut)} au{" "}
+                      {dateCourte(s.triPeriode.fin)}, date du dernier releve.
+                      {/*
+                       * Les premiers virements portent la date a laquelle l'argent a
+                       * quitte la caisse, avant que le compte existe. Le dire evite de
+                       * laisser croire a une date choisie au hasard -- et rappelle que
+                       * le taux ne compte pas les semaines de transit.
+                       */}
+                      {s.triPeriode.debut === CLUB.ouvertureCompteTitres && (
+                        <>
+                          {" "}
+                          La periode part de l&apos;ouverture du compte chez{" "}
+                          {CLUB.sgi} : les virements anterieurs avaient quitte
+                          la caisse, mais n&apos;etaient pas encore places.
+                        </>
+                      )}
                     </>
                   )}
                 </p>
@@ -87,14 +117,18 @@ export default async function TableauDeBord() {
                 <p
                   className="text-2xl font-semibold"
                   style={{
-                    color: s.exercice.rendement >= 0 ? "var(--color-vert-600)" : "var(--color-rouge-600)",
+                    color:
+                      s.exercice.rendement >= 0
+                        ? "var(--color-vert-600)"
+                        : "var(--color-rouge-600)",
                   }}
                 >
                   {pourcent(s.exercice.rendement)}
                 </p>
                 <p className="text-xs" style={{ color: "var(--discret)" }}>
                   Exercice en cours (Dietz modifie) &middot; gain de gestion{" "}
-                  {fcfa(s.exercice.gain)} sur un capital moyen de {fcfa(s.exercice.capitalMoyen)}.
+                  {fcfa(s.exercice.gain)} sur un capital moyen de{" "}
+                  {fcfa(s.exercice.capitalMoyen)}.
                 </p>
               </div>
             )}
@@ -105,7 +139,8 @@ export default async function TableauDeBord() {
       <Carte titre="Ma situation">
         {!maSituation || maSituation.nbMoisRetard === 0 ? (
           <Alerte ton="vert">
-            Vous etes a jour de vos versements. Prochaine echeance : le {REGLES.jourEcheance} du mois.
+            Vous etes a jour de vos versements. Prochaine echeance : le{" "}
+            {REGLES.jourEcheance} du mois.
           </Alerte>
         ) : (
           <div className="space-y-3">
@@ -113,20 +148,32 @@ export default async function TableauDeBord() {
               ton={maSituation.exclusionEncourue ? "rouge" : "ambre"}
               titre={`${maSituation.nbMoisRetard} mois de retard`}
             >
-              {maSituation.moisEnRetard.map((m) => moisLong(m)).join(", ")}. Penalites dues :{" "}
+              {maSituation.moisEnRetard.map((m) => moisLong(m)).join(", ")}.
+              Penalites dues :{" "}
               <strong>{fcfa(maSituation.totalPenalites)}</strong> (art. 9
-              {maSituation.penalites.some((p) => p.doublee) ? ", doublees par R4" : ""}).
+              {maSituation.penalites.some((p) => p.doublee)
+                ? ", doublees par R4"
+                : ""}
+              ).
             </Alerte>
             {maSituation.voteSuspendu && (
-              <p className="text-xs" style={{ color: "var(--color-rouge-600)" }}>
-                R2 : votre droit de vote est suspendu au-dela de {REGLES.suspensionVoteApresJours} jours
-                de retard, jusqu&apos;a regularisation complete.
+              <p
+                className="text-xs"
+                style={{ color: "var(--color-rouge-600)" }}
+              >
+                R2 : votre droit de vote est suspendu au-dela de{" "}
+                {REGLES.suspensionVoteApresJours} jours de retard, jusqu&apos;a
+                regularisation complete.
               </p>
             )}
             {maSituation.declarationRequise && (
-              <p className="text-xs" style={{ color: "var(--color-ambre-600)" }}>
-                R3 : vous devez declarer ce retard sur le groupe WhatsApp du club en taguant tous les
-                membres, puis l&apos;enregistrer depuis la page{" "}
+              <p
+                className="text-xs"
+                style={{ color: "var(--color-ambre-600)" }}
+              >
+                R3 : vous devez declarer ce retard sur le groupe WhatsApp du
+                club en taguant tous les membres, puis l&apos;enregistrer depuis
+                la page{" "}
                 <Link href="/versements" className="underline">
                   Versements
                 </Link>
@@ -140,8 +187,8 @@ export default async function TableauDeBord() {
       {estBureau && s.enAttenteValidation > 0 && (
         <Carte titre="A traiter">
           <Alerte ton="ambre">
-            {s.enAttenteValidation} versement{s.enAttenteValidation > 1 ? "s" : ""} en attente de
-            validation.{" "}
+            {s.enAttenteValidation} versement
+            {s.enAttenteValidation > 1 ? "s" : ""} en attente de validation.{" "}
             <Link href="/versements" className="underline">
               Ouvrir la liste
             </Link>
@@ -151,23 +198,32 @@ export default async function TableauDeBord() {
 
       <Carte titre={`Retardataires (${retardataires.length})`}>
         {retardataires.length === 0 ? (
-          <Vide>Aucun retard : les {situations.length} membres sont a jour.</Vide>
+          <Vide>
+            Aucun retard : les {situations.length} membres sont a jour.
+          </Vide>
         ) : (
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {retardataires.map((r) => (
-              <li key={r.membreId} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+              <li
+                key={r.membreId}
+                className="flex flex-wrap items-center justify-between gap-2 py-2.5"
+              >
                 <div>
                   <p className="text-sm font-medium">{r.nom}</p>
                   <p className="text-xs" style={{ color: "var(--discret)" }}>
-                    {r.nbMoisRetard} mois &middot; {r.joursDeRetard} jours &middot;{" "}
-                    {fcfa(r.totalPenalites)} de penalites
+                    {r.nbMoisRetard} mois &middot; {r.joursDeRetard} jours
+                    &middot; {fcfa(r.totalPenalites)} de penalites
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
                   {r.voteSuspendu && <Badge ton="rouge">Vote suspendu</Badge>}
                   {r.exclusionEncourue && <Badge ton="rouge">Art. 20</Badge>}
-                  {r.declarationRequise && <Badge ton="ambre">R3 a declarer</Badge>}
-                  {r.retardDeclare && <Badge ton="neutre">Retard declare</Badge>}
+                  {r.declarationRequise && (
+                    <Badge ton="ambre">R3 a declarer</Badge>
+                  )}
+                  {r.retardDeclare && (
+                    <Badge ton="neutre">Retard declare</Badge>
+                  )}
                 </div>
               </li>
             ))}
@@ -175,9 +231,13 @@ export default async function TableauDeBord() {
         )}
       </Carte>
 
-      <p className="text-center text-[11px]" style={{ color: "var(--discret)" }}>
-        Cotisation statutaire : {fcfa(REGLES.cotisationMensuelle)} par mois et par membre, exigible le{" "}
-        {REGLES.jourEcheance} (art. 8). Club fonde le {dateCourte(CLUB.dateCreation)}.
+      <p
+        className="text-center text-[11px]"
+        style={{ color: "var(--discret)" }}
+      >
+        Cotisation statutaire : {fcfa(REGLES.cotisationMensuelle)} par mois et
+        par membre, exigible le {REGLES.jourEcheance} (art. 8). Club fonde le{" "}
+        {dateCourte(CLUB.dateCreation)}.
       </p>
     </>
   );
