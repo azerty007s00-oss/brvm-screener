@@ -1,0 +1,131 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0;
+           font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+           -webkit-font-smoothing: antialiased; }
+    .rub { margin: 0 0 2px; font-size: 10.5px; font-weight: 700; letter-spacing: .14em;
+           text-transform: uppercase; color: #b99c82; }
+    .ligne { display: flex; align-items: center; gap: 12px; padding: 17px 0; border-top: 1px solid #f0e9df; }
+    .ligne h3 { margin: 0; font-size: 15px; font-weight: 500; letter-spacing: -.01em; }
+    .ligne p { margin: 2px 0 0; font-size: 12px; color: #7a695a; line-height: 1.4; }
+    .num { font-variant-numeric: tabular-nums; letter-spacing: -.025em; }
+    .fleche { flex: none; }
+  </style>
+</helmet>
+
+<div style="width: 390px; background: #fff; color: #2a1a10; padding-bottom: 36px">
+
+  <!-- En-tete sobre, filet d'or -->
+  <div style="padding: 22px 22px 18px; border-bottom: 3px solid #2a1a10">
+    <div style="display: flex; align-items: baseline; justify-content: space-between">
+      <div>
+        <div style="font-size: 10.5px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; color: #c9a227">Investment Pioneers</div>
+        <h1 style="margin: 5px 0 0; font-size: 27px; font-weight: 600; letter-spacing: -.03em">Administration</h1>
+      </div>
+      <span style="font-size: 11px; color: #7a695a">Président</span>
+    </div>
+  </div>
+
+  <!-- Le chiffre qui compte, seul, en haut -->
+  <div style="padding: 24px 22px 22px; background: #faf6ef">
+    <div style="font-size: 11px; color: #7a695a">À encaisser ce mois</div>
+    <div class="num" style="font-size: 40px; font-weight: 600; line-height: 1.05; margin-top: 4px">
+      35 500 <span style="font-size: 15px; font-weight: 500; color: #7a695a; letter-spacing: 0">FCFA</span>
+    </div>
+    <div style="display: flex; gap: 18px; margin-top: 14px; font-size: 12px; color: #4d3120">
+      <span><b class="num" style="font-weight: 600">10</b> membres</span>
+      <span style="color: #d8cec0">&middot;</span>
+      <span><b class="num" style="font-weight: 600; color: #a8322c">2</b> en retard</span>
+      <span style="color: #d8cec0">&middot;</span>
+      <span><b class="num" style="font-weight: 600">8</b> à jour</span>
+    </div>
+  </div>
+
+  <!-- Alertes : un filet rouge, pas un bloc colore -->
+  <div style="padding: 0 22px">
+    <div style="border-left: 3px solid #a8322c; padding: 14px 0 14px 14px; margin-top: 22px">
+      <div style="font-size: 12.5px; font-weight: 600; color: #a8322c; margin-bottom: 8px">2 points à régler avant de partager le lien</div>
+      <div style="font-size: 12.5px; line-height: 1.55; color: #3b2415">
+        <b style="font-weight: 600">CRON_SECRET</b> absent — aucune relance ne partira le 7, le 9 ni le 10.<br>
+        <b style="font-weight: 600">SETUP_TOKEN</b> encore présent — à supprimer.
+      </div>
+      <div style="margin-top: 11px; font-size: 12px; font-weight: 600; color: #a8861d">Voir la marche à suivre &rarr;</div>
+    </div>
+  </div>
+
+  <!-- Reglages : trois valeurs alignees, sans cadre -->
+  <div style="padding: 26px 22px 0">
+    <h2 class="rub">Le club</h2>
+    <div style="display: flex; gap: 26px; padding: 14px 0 16px; border-top: 1px solid #f0e9df; margin-top: 10px">
+      <div>
+        <div class="num" style="font-size: 21px; font-weight: 600; color: #a8861d">5 000</div>
+        <div style="font-size: 11px; color: #7a695a; margin-top: 1px">cotisation</div>
+      </div>
+      <div>
+        <div class="num" style="font-size: 21px; font-weight: 600">le 10</div>
+        <div style="font-size: 11px; color: #7a695a; margin-top: 1px">échéance</div>
+      </div>
+      <div>
+        <div class="num" style="font-size: 21px; font-weight: 600">10 %</div>
+        <div style="font-size: 11px; color: #7a695a; margin-top: 1px">pénalité</div>
+      </div>
+    </div>
+
+    <div class="ligne">
+      <span style="flex: 1"><h3>Réglages du club</h3><p>Cotisation, échéance, taux, doublement.</p></span>
+      <svg class="fleche" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c9bdae" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+    </div>
+    <div class="ligne">
+      <span style="flex: 1"><h3>Règles individuelles</h3><p>Dérogations au régime commun.</p></span>
+      <span class="num" style="font-size: 12.5px; color: #7a695a">2</span>
+      <svg class="fleche" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c9bdae" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+    </div>
+  </div>
+
+  <div style="padding: 26px 22px 0">
+    <h2 class="rub">Au quotidien</h2>
+    <div class="ligne" style="margin-top: 10px">
+      <span style="flex: 1"><h3>Relances</h3><p>Le 7, le 9 et le 10, après vérification des paiements.</p></span>
+      <span style="flex: none; font-size: 10.5px; font-weight: 600; color: #a8322c; background: #fdf2f1; border-radius: 999px; padding: 4px 9px">à l'arrêt</span>
+      <svg class="fleche" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c9bdae" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+    </div>
+    <div class="ligne">
+      <span style="flex: 1"><h3>Reprise de l'historique</h3><p>Versements antérieurs à l'outil.</p></span>
+      <svg class="fleche" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c9bdae" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+    </div>
+    <div class="ligne">
+      <span style="flex: 1"><h3>Reprise des pénalités</h3><p>Le décompte tenu à la main par le trésorier.</p></span>
+      <svg class="fleche" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c9bdae" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+    </div>
+  </div>
+
+  <div style="padding: 26px 22px 0">
+    <h2 class="rub">Contrôle</h2>
+    <div class="ligne" style="margin-top: 10px">
+      <span style="flex: 1"><h3>Journal des validations</h3><p>Chaque validation y laisse une trace nominative.</p></span>
+      <span class="num" style="font-size: 12.5px; color: #7a695a">30</span>
+      <svg class="fleche" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c9bdae" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+    </div>
+    <div class="ligne">
+      <span style="flex: 1"><h3>Sorties et exclusions</h3><p>Décompte de sortie, article 20.</p></span>
+      <svg class="fleche" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c9bdae" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+    </div>
+    <div class="ligne">
+      <span style="flex: 1"><h3>Sécurité</h3><p>Clés d'ouverture du site.</p></span>
+      <span style="flex: none; font-size: 10.5px; font-weight: 600; color: #a8322c; background: #fdf2f1; border-radius: 999px; padding: 4px 9px">2 alertes</span>
+      <svg class="fleche" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#c9bdae" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
