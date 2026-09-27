@@ -2,25 +2,50 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef } from "react";
+import { Icone, type NomIcone } from "@/components/icones";
 
-export type Lien = { href: string; libelle: string };
+export type Lien = { href: string; libelle: string; icone: NomIcone };
 
 /**
- * Navigation du site, en deux rangees.
- *
- * Dix onglets dans une seule barre qui defile : on ne voyait pas qu'elle
- * defilait, et l'on cherchait longtemps une page qui etait la -- le president
- * lui-meme n'a pas trouve l'administration.
- *
- * La premiere rangee porte ce qu'on ouvre chaque mois, et l'administration pour
- * qui l'exerce : elle tient sans defiler sur un ecran de 360 px, ce qui etait
- * tout l'objet. La seconde porte la vie du club, en teinte secondaire et ouverte
- * a tous : les comptes sont transparents (art. 12), rien n'y est cache.
- *
- * Et la page courante se marque, ce qui manquait : on ignorait ou l'on etait.
+ * Les initiales, a l'ivoirienne : NOM d'abord, prenoms ensuite. « SORO Tielina
+ * Aboudramane » donne « ST », non « SA » -- c'est le prenom d'usage qui compte,
+ * et c'est le deuxieme mot.
  */
-export function Navigation({ suivi, club }: { suivi: Lien[]; club: Lien[] }) {
+function initiales(nom: string): string {
+  const mots = nom.trim().split(/\s+/);
+  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase();
+  return (mots[0][0] + mots[1][0]).toUpperCase();
+}
+
+/**
+ * Navigation du site, en tiroir.
+ *
+ * Dix onglets ont d'abord tenu dans une barre qui defilait : on ne voyait pas
+ * qu'elle defilait, et l'on cherchait longtemps une page qui etait la. Deux
+ * rangees ont corrige cela, mais au prix des libelles de groupe -- sur un ecran
+ * de 360 px ils mangeaient la largeur au point de couper « Administration »,
+ * c'est-a-dire la page meme qu'on cherchait a rendre trouvable. La hierarchie
+ * ne passait donc que par la couleur.
+ *
+ * Le tiroir leve cette contrainte : la largeur n'est plus disputee, les groupes
+ * reprennent leur nom, et le haut des dix ecrans se libere de deux rangees.
+ *
+ * Il repose sur un <details> : sans JavaScript, le menu s'ouvre et se ferme
+ * quand meme, et chaque navigation recharge la page, ce qui le referme. Avec
+ * JavaScript, il se ferme au changement de page et a la touche d'echappement.
+ */
+export function Navigation({
+  suivi,
+  club,
+  membre,
+}: {
+  suivi: Lien[];
+  club: Lien[];
+  membre: { nom: string; email: string; role: string };
+}) {
   const chemin = usePathname();
+  const tiroir = useRef<HTMLDetailsElement>(null);
 
   /*
    * « Actif » se decide sur le prefixe pour les pages a sous-chemin -- un releve
@@ -29,45 +54,145 @@ export function Navigation({ suivi, club }: { suivi: Lien[]; club: Lien[] }) {
    */
   const actif = (href: string) => (href === "/" ? chemin === "/" : chemin.startsWith(href));
 
-  /*
-   * Les libelles de groupe ont ete essayes puis retires : sur un ecran de 360 px
-   * ils mangeaient la largeur au point de couper « Administration », c'est-a-dire
-   * la page meme qu'on cherchait a rendre trouvable. La hierarchie passe donc par
-   * la couleur, non par des mots.
-   */
-  const rangee = (liens: Lien[], secondaire: boolean) => (
-    <div className="relative">
-      <ul className="defilement-x flex gap-0.5 whitespace-nowrap">
-        {liens.map((l) => (
-          <li key={l.href}>
-            <Link
-              href={l.href}
-              aria-current={actif(l.href) ? "page" : undefined}
-              className="block rounded-lg px-2 py-1.5 text-xs font-medium transition"
-              style={
-                actif(l.href)
-                  ? { background: "var(--color-or-500)", color: "var(--color-brun-900)" }
-                  : { color: secondaire ? "var(--color-brun-300)" : "var(--color-brun-100)" }
-              }
-            >
-              {l.libelle}
-            </Link>
-          </li>
-        ))}
+  /* Changer de page referme le tiroir : le laisser ouvert masquerait l'arrivee. */
+  useEffect(() => {
+    if (tiroir.current) tiroir.current.open = false;
+  }, [chemin]);
+
+  useEffect(() => {
+    const surTouche = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && tiroir.current?.open) tiroir.current.open = false;
+    };
+    document.addEventListener("keydown", surTouche);
+    return () => document.removeEventListener("keydown", surTouche);
+  }, []);
+
+  const fermer = () => {
+    if (tiroir.current) tiroir.current.open = false;
+  };
+
+  const groupe = (titre: string, liens: Lien[], teinte: string) => (
+    <div className="mb-5">
+      <p className="mb-1.5 flex items-center gap-2 px-3 text-[10.5px] font-semibold tracking-[0.14em] uppercase">
+        <span
+          aria-hidden
+          className="inline-block h-1.5 w-1.5 flex-none rounded-full"
+          style={{ background: teinte }}
+        />
+        <span style={{ color: "var(--discret)" }}>{titre}</span>
+      </p>
+      <ul>
+        {liens.map((l) => {
+          const ici = actif(l.href);
+          const Dessin = Icone[l.icone];
+          return (
+            <li key={l.href}>
+              <Link
+                href={l.href}
+                onClick={fermer}
+                aria-current={ici ? "page" : undefined}
+                className="tapable my-0.5 flex min-h-11 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium"
+                /*
+                  * L'or sur brun marquait deja l'onglet actif dans l'ancienne
+                  * barre : la convention est gardee. Elle a l'avantage de tenir
+                  * dans les deux themes, ce qu'un brun plein ne fait pas -- en
+                  * sombre, le fond des cartes est ce meme brun, et la pastille
+                  * s'y effacait entierement.
+                  */
+                style={
+                  ici
+                    ? { background: "var(--color-or-500)", color: "var(--color-brun-900)" }
+                    : { color: "var(--texte)" }
+                }
+              >
+                <span
+                  className="flex-none"
+                  style={{ color: ici ? "var(--color-brun-900)" : teinte }}
+                >
+                  <Dessin taille={18} />
+                </span>
+                {l.libelle}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
-      {/* Le degrade dit qu'il reste des onglets a droite : sans lui, on ignore que la rangee defile. */}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 w-7"
-        style={{ background: "linear-gradient(to right, transparent, var(--color-brun-900))" }}
-      />
     </div>
   );
 
   return (
-    <nav className="mx-auto max-w-5xl space-y-1 px-4 pb-2">
-      {rangee(suivi, false)}
-      {rangee(club, true)}
-    </nav>
+    <details ref={tiroir} className="tiroir sans-impression">
+      <summary
+        className="tapable flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-xl"
+        style={{ color: "var(--color-brun-100)" }}
+        aria-label="Ouvrir le menu"
+      >
+        <span className="bouton-menu">
+          <Icone.menu taille={22} />
+        </span>
+        <span className="bouton-fermer">
+          <Icone.croix taille={22} />
+        </span>
+      </summary>
+
+      {/* Le voile : il assombrit la page et se ferme au doigt. */}
+      <button type="button" className="voile" onClick={fermer} tabIndex={-1} aria-hidden />
+
+      <nav
+        className="panneau"
+        aria-label="Menu principal"
+        style={{ background: "var(--carte)" }}
+      >
+        <div className="px-3 pt-4 pb-5">
+          <span className="flex items-center gap-2.5 px-3">
+            <span
+              className="grid h-9 w-9 flex-none place-items-center rounded-xl text-xs font-bold"
+              style={{ background: "var(--color-or-500)", color: "var(--color-brun-900)" }}
+            >
+              IP
+            </span>
+            <span className="leading-tight">
+              <span className="block text-sm font-semibold">Investment Pioneers</span>
+              <span className="block text-[11px]" style={{ color: "var(--discret)" }}>
+                Club d&apos;investissement
+              </span>
+            </span>
+          </span>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-3">
+          {groupe("Mon suivi", suivi, "var(--color-or-500)")}
+          {groupe("La vie du club", club, "var(--discret)")}
+        </div>
+
+        {/*
+          * Qui suis-je, et sous quel titre. L'adresse y figure en clair : c'est
+          * a elle que partent les relances, et c'est le seul endroit ou un
+          * membre s'apercevra qu'elle est fausse.
+          */}
+        <div className="border-t px-4 py-3.5" style={{ borderColor: "var(--bordure)" }}>
+          <span className="flex items-center gap-3">
+            <span
+              className="grid h-10 w-10 flex-none place-items-center rounded-full text-xs font-semibold"
+              style={{ background: "var(--color-brun-100)", color: "var(--color-brun-700)" }}
+            >
+              {initiales(membre.nom)}
+            </span>
+            <span className="min-w-0 flex-1 leading-tight">
+              <span className="block truncate text-[13px] font-semibold">{membre.nom}</span>
+              <span className="block truncate text-[11px]" style={{ color: "var(--discret)" }}>
+                {membre.email}
+              </span>
+              <span
+                className="mt-0.5 block text-[10.5px] font-semibold tracking-wider uppercase"
+                style={{ color: "var(--color-or-600)" }}
+              >
+                {membre.role}
+              </span>
+            </span>
+          </span>
+        </div>
+      </nav>
+    </details>
   );
 }

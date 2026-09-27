@@ -44,8 +44,10 @@ export const Icone = {
   ),
   reglages: (p: Props) => (
     <Trait {...p}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" />
+      <path d="M4 7h10M18 7h2M4 12h2M10 12h10M4 17h8M16 17h4" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="8" cy="12" r="2" />
+      <circle cx="14" cy="17" r="2" />
     </Trait>
   ),
   personnes: (p: Props) => (
@@ -77,6 +79,62 @@ export const Icone = {
     <Trait {...p}>
       <path d="M12 9v4M12 17h.01" />
       <path d="M10.3 3.9 2.4 17.6a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+    </Trait>
+  ),
+  maison: (p: Props) => (
+    <Trait {...p}>
+      <path d="M3 10.5 12 3l9 7.5" />
+      <path d="M5.5 9.5V20h13V9.5" />
+      <path d="M9.5 20v-6h5v6" />
+    </Trait>
+  ),
+  billets: (p: Props) => (
+    <Trait {...p}>
+      <rect x="2" y="6" width="20" height="12" rx="2.5" />
+      <circle cx="12" cy="12" r="2.6" />
+      <path d="M5.5 9.5h.01M18.5 14.5h.01" />
+    </Trait>
+  ),
+  personne: (p: Props) => (
+    <Trait {...p}>
+      <circle cx="12" cy="8" r="3.5" />
+      <path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
+    </Trait>
+  ),
+  coffre: (p: Props) => (
+    <Trait {...p}>
+      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H17v2.5" />
+      <rect x="3" y="7.5" width="18" height="11.5" rx="2.5" />
+      <path d="M21 11.5h-4a2 2 0 0 0 0 4h4" />
+    </Trait>
+  ),
+  echange: (p: Props) => (
+    <Trait {...p}>
+      <path d="M4 8h13l-3.2-3.2" />
+      <path d="M20 16H7l3.2 3.2" />
+    </Trait>
+  ),
+  graphique: (p: Props) => (
+    <Trait {...p}>
+      <path d="M4 19V5" />
+      <path d="M4 19h16" />
+      <path d="m7.5 15 3.5-4 3 2.5L20 7" />
+    </Trait>
+  ),
+  calendrier: (p: Props) => (
+    <Trait {...p}>
+      <rect x="3" y="5" width="18" height="16" rx="2.5" />
+      <path d="M3 10h18M8 3v4M16 3v4" />
+    </Trait>
+  ),
+  menu: (p: Props) => (
+    <Trait {...p}>
+      <path d="M4 7h16M4 12h16M4 17h16" />
+    </Trait>
+  ),
+  croix: (p: Props) => (
+    <Trait {...p}>
+      <path d="M6 6l12 12M18 6L6 18" />
     </Trait>
   ),
   chevron: (p: Props) => (

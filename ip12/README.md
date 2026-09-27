@@ -170,6 +170,7 @@ PGPORT_TEST=5433 npm run verif:sql
 
 | Fichier | Rôle |
 |---|---|
+| `src/components/navigation.tsx` | Tiroir de navigation : groupes nommés, page courante, carte du membre |
 | `src/lib/settings.ts` | Statuts et résolutions traduits en constantes |
 | `src/lib/penalites.ts` | Situation mensuelle d'un membre, retards, pénalités, issues R5 |
 | `src/lib/perf.ts` | TRI (XIRR), Dietz modifié, répartition des parts |
