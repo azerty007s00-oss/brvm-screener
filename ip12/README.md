@@ -39,6 +39,10 @@ Phoenix Capital Management.
   les accompagne. Ce dernier cas s'inscrit avec un montant viré nul : la caisse n'a rien versé,
   elle ne bouge pas, et le relevé du portefeuille porte déjà la baisse. Inscrire un retrait à la
   place ferait remonter la caisse comme si l'argent était revenu.
+- **Grille lisible sans la couleur** — chaque case porte un signe autant qu'une teinte :
+  coche pour un mois payé, `?` en attente de validation, `½` incomplet, `!` en retard, `·` à venir.
+  La couleur seule excluait un homme sur douze, et l'infobulle ne rattrapait rien : elle demande
+  un survol, et il n'y a pas de survol au doigt.
 - **Versements partiels** — un mois n'est soldé que lorsque la somme des versements atteint la
   cotisation attendue. En dessous, le mois reste dû et la pénalité de l'art. 9 porte sur la
   cotisation entière, jamais sur le seul reliquat : verser un acompte ne réduit pas la sanction.
@@ -55,6 +59,10 @@ Phoenix Capital Management.
 - **Releve individuel** — chaque membre edite le sien, le bureau celui de tous : versements,
   part, penalites et situation statutaire, mis en page pour le papier. L'impression du
   navigateur produit le PDF, sans rien a installer.
+- **La relance explique le chemin** — elle donnait un lien et s'arrêtait là ; un membre qui
+  ouvrait le site pour la première fois ne savait pas où déclarer, renvoyait un message au groupe,
+  et le trésorier saisissait à sa place — ce que l'outil est censé supprimer. Cinq lignes décrivent
+  désormais la marche à suivre, du menu jusqu'à la validation.
 - **Relances des 7, 9 et 10** — un cron Vercel écrit trois fois par mois aux membres qui n'ont
   pas versé. Les 7 et 9 préviennent avant l'échéance en disant les jours restants ; le 10 est le
   dernier jour de l'art. 8. **La liste est recalculée à chaque passage** : qui a versé le 8 n'est

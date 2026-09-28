@@ -35,21 +35,32 @@ import { MODES_AFFICHES, STATUT_VERSEMENT, libelleMode } from "@/lib/valeurs";
 
 export const dynamic = "force-dynamic";
 
+/*
+ * Chaque etat porte un signe autant qu'une couleur.
+ *
+ * La grille ne se lisait qu'en teinte : un homme sur douze distingue mal le
+ * rouge du vert, et le club en compte dix. L'infobulle ne rattrapait rien --
+ * elle demande un survol, et il n'y a pas de survol au doigt. Le signe, lui,
+ * se lit sur n'importe quel ecran et par n'importe quel oeil.
+ */
 const PASTILLE: Record<
   StatutMois,
-  { ton: string; fond: string; texte: string }
+  { ton: string; signe: string; fond: string; texte: string }
 > = {
   paye: {
+    signe: "\u2713",
     ton: "Paye",
     fond: "var(--color-vert-100)",
     texte: "var(--color-vert-600)",
   },
   paye_en_retard: {
+    signe: "\u2713",
     ton: "Paye en retard",
     fond: "var(--color-or-200)",
     texte: "var(--color-or-600)",
   },
   en_attente: {
+    signe: "?",
     ton: "En attente",
     fond: "var(--color-ambre-100)",
     texte: "var(--color-ambre-600)",
@@ -60,21 +71,24 @@ const PASTILLE: Record<
    * verse quelque chose et sache combien il lui reste a verser.
    */
   partiel: {
+    signe: "\u00bd",
     ton: "Incomplet",
     fond: "var(--color-rouge-100)",
     texte: "var(--color-rouge-600)",
   },
   retard: {
+    signe: "!",
     ton: "Retard",
     fond: "var(--color-rouge-100)",
     texte: "var(--color-rouge-600)",
   },
   a_venir: {
+    signe: "\u00b7",
     ton: "A venir",
     fond: "var(--color-brun-100)",
     texte: "var(--color-brun-600)",
   },
-  hors_periode: { ton: "-", fond: "transparent", texte: "var(--discret)" },
+  hors_periode: { signe: "", ton: "-", fond: "transparent", texte: "var(--discret)" },
 };
 
 export default async function PageVersements() {
@@ -498,15 +512,15 @@ export default async function PageVersements() {
                             ? `${moisLong(c.mois)} — ${PASTILLE[c.statut].ton} : ${fcfa(c.montant)} sur ${fcfa(c.requis)}, il manque ${fcfa(c.manque)}`
                             : `${moisLong(c.mois)} — ${PASTILLE[c.statut].ton}`
                         }
-                        className="inline-block h-5 w-5 rounded"
+                        aria-label={`${moisLong(c.mois)} : ${PASTILLE[c.statut].ton}`}
+                        className="inline-grid h-5 w-5 place-items-center rounded text-[11px] leading-none font-bold"
                         style={{
                           background: PASTILLE[c.statut].fond,
-                          boxShadow:
-                            c.manque > 0 && c.montant > 0
-                              ? "inset 0 0 0 2px var(--color-rouge-600)"
-                              : undefined,
+                          color: PASTILLE[c.statut].texte,
                         }}
-                      />
+                      >
+                        {PASTILLE[c.statut].signe}
+                      </span>
                     </td>
                   ))}
                   <td className="py-2 pl-3 text-right font-semibold whitespace-nowrap">
@@ -533,9 +547,11 @@ export default async function PageVersements() {
           ).map((k) => (
             <span key={k} className="inline-flex items-center gap-1.5">
               <span
-                className="inline-block h-3 w-3 rounded"
-                style={{ background: PASTILLE[k].fond }}
-              />
+                className="inline-grid h-4 w-4 place-items-center rounded text-[10px] leading-none font-bold"
+                style={{ background: PASTILLE[k].fond, color: PASTILLE[k].texte }}
+              >
+                {PASTILLE[k].signe}
+              </span>
               {PASTILLE[k].ton}
             </span>
           ))}

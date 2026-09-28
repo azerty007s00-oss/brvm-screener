@@ -324,7 +324,29 @@ export function texteRelance(
     );
   }
 
-  if (siteUrl) lignes.push("", `Regulariser : ${siteUrl}`);
+  /*
+   * Le chemin, pas seulement l'adresse.
+   *
+   * La relance donnait un lien et s'arretait la. Un membre qui ouvre le site
+   * pour la premiere fois y arrive sans savoir ou declarer : il renvoie alors un
+   * message au groupe, et le tresorier saisit a sa place -- ce que l'outil etait
+   * cense supprimer. Cinq lignes suffisent a le rendre autonome.
+   */
+  if (siteUrl) {
+    lignes.push(
+      "",
+      "COMMENT ENREGISTRER VOTRE VERSEMENT",
+      `  1. Ouvrez ${siteUrl} et connectez-vous.`,
+      "  2. Touchez le menu, en haut a gauche, puis « Versements ».",
+      "  3. Ouvrez « Declarer un versement » et indiquez le mois couvert,",
+      "     le montant, la date et le moyen de paiement.",
+      "  4. Joignez la capture de votre transfert : elle epargne une question.",
+      "  5. Le tresorier valide, et votre mois se marque d'une coche.",
+      "",
+      "Tant que la validation n'a pas eu lieu, votre declaration reste visible de",
+      "tous, marquee « en attente » : rien ne se perd.",
+    );
+  }
   /*
    * La date distingue les passages du mois. Trois courriers au texte identique
    * sont replies par la messagerie sous « messages precedents masques », et le
