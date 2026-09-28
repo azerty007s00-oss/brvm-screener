@@ -39,10 +39,18 @@ Phoenix Capital Management.
   les accompagne. Ce dernier cas s'inscrit avec un montant viré nul : la caisse n'a rien versé,
   elle ne bouge pas, et le relevé du portefeuille porte déjà la baisse. Inscrire un retrait à la
   place ferait remonter la caisse comme si l'argent était revenu.
-- **Grille lisible sans la couleur** — chaque case porte un signe autant qu'une teinte :
-  coche pour un mois payé, `?` en attente de validation, `½` incomplet, `!` en retard, `·` à venir.
-  La couleur seule excluait un homme sur douze, et l'infobulle ne rattrapait rien : elle demande
-  un survol, et il n'y a pas de survol au doigt.
+- **Registre lisible sans la couleur** — chaque mois porte une **forme** avant une teinte : carré
+  plein et coche pour un mois payé, coin corné s'il l'a été en retard, pointillé en attente de
+  validation, moitié basse pleine si incomplet, contour et `!` en retard, anneau discret à venir.
+  La couleur seule excluait un homme sur douze — le club en compte dix. Les signes typographiques
+  qui ont précédé (`?`, `½`) dépendaient de la fonte, se brouillaient à 15 px et disparaissaient à
+  la photocopie ; un dessin, non. Vérifié sous filtre de deutéranopie et en aperçu d'impression :
+  les six états se distinguent sans une couleur.
+- **Le registre tient dans un téléphone** — le tableau de 640 px qui défilait horizontalement est
+  remplacé par un bloc par membre : nom, état en toutes lettres (« Retard : mai, juin +1 »), frise
+  des 14 mois, et le détail des 4 derniers mois au doigt — montant, date, note, justificatif.
+  L'ordre des lignes bascule entre urgence et nom ; c'est un ordre d'affichage, aucun chiffre n'en
+  dépend. Aucune requête de plus : le détail lit les lignes déjà chargées.
 - **Versements partiels** — un mois n'est soldé que lorsque la somme des versements atteint la
   cotisation attendue. En dessous, le mois reste dû et la pénalité de l'art. 9 porte sur la
   cotisation entière, jamais sur le seul reliquat : verser un acompte ne réduit pas la sanction.

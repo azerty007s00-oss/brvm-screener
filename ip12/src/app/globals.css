@@ -26,6 +26,21 @@
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
+/*
+ * Les trois etats, en trois roles chacun.
+ *
+ * La palette fixe (--color-vert-600 et ses voisines) ne bascule pas avec le
+ * theme : elle est juste sur carte blanche et fausse sur carte brune -- le
+ * rouge y tombe a 2,5:1, illisible. Les jetons ci-dessous portent le role et
+ * non la teinte, et changent de valeur avec le theme :
+ *
+ *   --vert       couleur pleine du glyphe et des contours ;
+ *   --vert-fond  aplat derriere le glyphe ;
+ *   --vert-encre texte d'etat sur une carte, ou seule la lisibilite compte.
+ *
+ * Mesure : encres a 6,7:1 au moins en clair, 8,8:1 au moins en sombre ; coche
+ * de la pastille pleine a 5:1 en clair, 7,4:1 en sombre.
+ */
 :root {
   color-scheme: light;
   --fond: var(--color-brun-50);
@@ -33,6 +48,17 @@
   --carte: #ffffff;
   --bordure: var(--color-brun-100);
   --discret: #6b5a4a;
+  --vert: var(--color-vert-600);
+  --vert-fond: var(--color-vert-100);
+  --vert-encre: #23603f;
+  --ambre: var(--color-ambre-600);
+  --ambre-fond: var(--color-ambre-100);
+  --ambre-encre: #7a540c;
+  --rouge: var(--color-rouge-600);
+  --rouge-fond: var(--color-rouge-100);
+  --rouge-encre: #8c2822;
+  /* Teinte d'une ligne mise en avant : elle passe sous l'encre du theme, jamais dessus. */
+  --or-doux: #f7edd0;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -43,6 +69,16 @@
     --carte: var(--color-brun-900);
     --bordure: var(--color-brun-700);
     --discret: var(--color-brun-300);
+    --vert: #5fbf8c;
+    --vert-fond: #16301f;
+    --vert-encre: #8fd9b0;
+    --ambre: #e0b25a;
+    --ambre-fond: #33260d;
+    --ambre-encre: #eec57c;
+    --rouge: #ec8a80;
+    --rouge-fond: #3a1714;
+    --rouge-encre: #f3aaa2;
+    --or-doux: #3d3018;
   }
 }
 
@@ -53,6 +89,16 @@
   --carte: var(--color-brun-900);
   --bordure: var(--color-brun-700);
   --discret: var(--color-brun-300);
+  --vert: #5fbf8c;
+  --vert-fond: #16301f;
+  --vert-encre: #8fd9b0;
+  --ambre: #e0b25a;
+  --ambre-fond: #33260d;
+  --ambre-encre: #eec57c;
+  --rouge: #ec8a80;
+  --rouge-fond: #3a1714;
+  --rouge-encre: #f3aaa2;
+  --or-doux: #3d3018;
 }
 
 body {
@@ -83,6 +129,22 @@ body {
     --texte: #000;
     --discret: #444;
     --bordure: #999;
+
+    /*
+     * Les etats passent au noir : sur papier, c'est la forme du glyphe qui
+     * porte l'information, jamais la teinte. Un aplat vert photocopie devient
+     * un gris qu'on ne distingue plus du rouge.
+     */
+    --vert: #111;
+    --vert-fond: #fff;
+    --vert-encre: #111;
+    --ambre: #111;
+    --ambre-fond: #fff;
+    --ambre-encre: #111;
+    --rouge: #111;
+    --rouge-fond: #fff;
+    --rouge-encre: #111;
+    --or-doux: #f2f2f2;
   }
 
   body { background: #fff !important; color: #000 !important; }
@@ -157,6 +219,17 @@ body {
 .chevron { transition: transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1); }
 details[open] > summary .chevron { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .chevron { transition: none; } }
+
+/*
+ * Lignes du registre : le triangle par defaut du navigateur tomberait a cote du
+ * nom, ou le chevron dit deja l'ouverture.
+ */
+.ligne-registre > summary { list-style: none; -webkit-tap-highlight-color: transparent; }
+.ligne-registre > summary::-webkit-details-marker { display: none; }
+.ligne-registre > summary::marker { content: ""; }
+@media (prefers-reduced-motion: no-preference) {
+  .ligne-registre[open] > summary + div { animation: deplie 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+}
 
 /* Ombre douce des cartes en relief, plutot qu'un trait a plat. */
 .relief {

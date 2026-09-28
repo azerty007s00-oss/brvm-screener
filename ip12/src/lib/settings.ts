@@ -154,7 +154,18 @@ export const POSTES_UNIQUES: Role[] = ["president", "vice_president", "tresorier
 
 /** Montant en FCFA, sans decimale : 5000 -> "5 000 FCFA". */
 export function fcfa(montant: number): string {
-  return `${Math.round(montant).toLocaleString("fr-FR").replace(/ | /g, " ")} FCFA`;
+  return `${nombre(montant)} FCFA`;
+}
+
+/**
+ * Le nombre seul : 5000 -> "5 000".
+ *
+ * Reserve aux couples ou l'unite vaut pour les deux : « 2 500 sur 5 000 FCFA »
+ * tient sur une ligne la ou « 2 500 FCFA sur 5 000 FCFA » passe a la suivante,
+ * et le premier FCFA n'apprend rien.
+ */
+export function nombre(montant: number): string {
+  return Math.round(montant).toLocaleString("fr-FR").replace(/ | /g, " ");
 }
 
 /** "2026-09-01" -> "septembre 2026" */

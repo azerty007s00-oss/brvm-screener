@@ -1,3 +1,5 @@
+import Link from "next/link";
+import type { CelluleMois } from "@/lib/penalites";
 import { exigerMembre } from "@/lib/auth";
 import {
   listerMembres,
@@ -5,7 +7,7 @@ import {
   situationsClub,
   versementsEnAttente,
 } from "@/lib/queries";
-import { REGLES, dateCourte, debutMois, fcfa, moisLong } from "@/lib/settings";
+import { REGLES, dateCourte, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
 import { relancerMaintenant } from "@/app/actions/administration";
 import {
   annulerVersementValide,
@@ -30,69 +32,69 @@ import {
   EcranInitialisation,
   estTableAbsente,
 } from "@/components/initialisation";
-import type { StatutMois } from "@/lib/penalites";
+import {
+  Frise,
+  GlypheEtat,
+  LegendeEtats,
+  LIBELLE_STATUT,
+  initialeMois,
+  statutLigne,
+} from "@/components/glyphe-etat";
 import { MODES_AFFICHES, STATUT_VERSEMENT, libelleMode } from "@/lib/valeurs";
 
 export const dynamic = "force-dynamic";
 
-/*
- * Chaque etat porte un signe autant qu'une couleur.
+/**
+ * La phrase qui accompagne un mois dans le detail.
  *
- * La grille ne se lisait qu'en teinte : un homme sur douze distingue mal le
- * rouge du vert, et le club en compte dix. L'infobulle ne rattrapait rien --
- * elle demande un survol, et il n'y a pas de survol au doigt. Le signe, lui,
- * se lit sur n'importe quel ecran et par n'importe quel oeil.
+ * Une seule formule pour six etats disait forcement une betise a l'un d'eux :
+ * « il manque 5 000 FCFA » sur un mois pas encore du, ou « rien de verse » sur
+ * un mois paye d'avance. Chaque etat a donc sa phrase, et aucune ne calcule
+ * quoi que ce soit -- tout vient de la cellule.
  */
-const PASTILLE: Record<
-  StatutMois,
-  { ton: string; signe: string; fond: string; texte: string }
-> = {
-  paye: {
-    signe: "\u2713",
-    ton: "Paye",
-    fond: "var(--color-vert-100)",
-    texte: "var(--color-vert-600)",
-  },
-  paye_en_retard: {
-    signe: "\u2713",
-    ton: "Paye en retard",
-    fond: "var(--color-or-200)",
-    texte: "var(--color-or-600)",
-  },
-  en_attente: {
-    signe: "?",
-    ton: "En attente",
-    fond: "var(--color-ambre-100)",
-    texte: "var(--color-ambre-600)",
-  },
-  /*
-   * Le rouge, comme un mois sans rien : la penalite est la meme, l'obligation
-   * n'est pas eteinte. Seul le mot change, pour que le membre voie qu'il a
-   * verse quelque chose et sache combien il lui reste a verser.
-   */
-  partiel: {
-    signe: "\u00bd",
-    ton: "Incomplet",
-    fond: "var(--color-rouge-100)",
-    texte: "var(--color-rouge-600)",
-  },
-  retard: {
-    signe: "!",
-    ton: "Retard",
-    fond: "var(--color-rouge-100)",
-    texte: "var(--color-rouge-600)",
-  },
-  a_venir: {
-    signe: "\u00b7",
-    ton: "A venir",
-    fond: "var(--color-brun-100)",
-    texte: "var(--color-brun-600)",
-  },
-  hors_periode: { signe: "", ton: "-", fond: "transparent", texte: "var(--discret)" },
-};
+function detailDuMois(c: CelluleMois): string {
+  const verse = c.dateVersement ? `Verse le ${dateCourte(c.dateVersement)}.` : null;
+  switch (c.statut) {
+    case "paye":
+      return verse ?? "Mois solde.";
+    case "paye_en_retard":
+      return `${verse ?? "Mois solde"} La penalite reste due (art. 9).`;
+    case "en_attente":
+      return "Declare, en attente de validation par le tresorier.";
+    case "partiel":
+      return `${verse ? `${verse} ` : ""}Il manque ${fcfa(c.manque)}.`;
+    case "retard":
+      return `Rien de verse : ${fcfa(c.manque > 0 ? c.manque : c.requis)} dus depuis le ${REGLES.jourEcheance}.`;
+    case "a_venir":
+      return verse
+        ? `${verse} Mois paye d'avance.`
+        : `Pas encore du : echeance au ${REGLES.jourEcheance}.`;
+    case "hors_periode":
+      return "";
+  }
+}
 
-export default async function PageVersements() {
+/** Le chevron des lignes depliantes : tourne quand le detail s'ouvre. */
+function Chevron() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      className="chevron h-4 w-4 flex-none"
+      style={{ fill: "none", stroke: "var(--discret)", strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" }}
+    >
+      <path d="M9.5 6 L15.5 12 L9.5 18" />
+    </svg>
+  );
+}
+
+export default async function PageVersements({
+  searchParams,
+}: {
+  searchParams: Promise<{ ordre?: string }>;
+}) {
   const membre = await exigerMembre();
+  const ordre = (await searchParams).ordre === "nom" ? "nom" : "urgence";
 
   let situations, enAttente, membres, pieces, valides;
   try {
@@ -118,6 +120,59 @@ export default async function PageVersements() {
   const moisAffiches = (situations[0]?.cellules ?? []).slice(-14);
   const maSituation = situations.find((s) => s.membreId === membre.id);
   const aujourdhui = debutMois();
+
+  /* Une grille unique : l'echelle des mois et les dix frises s'y alignent. */
+  const colonnes = {
+    gridTemplateColumns: `repeat(${Math.max(moisAffiches.length, 1)}, minmax(0, 1fr))`,
+  };
+
+  /* Les annees du bandeau, chacune couvrant ses mois de la fenetre. */
+  const annees = moisAffiches.reduce<{ annee: string; nb: number }[]>((acc, c) => {
+    const annee = c.mois.slice(0, 4);
+    const dernier = acc.at(-1);
+    if (dernier?.annee === annee) dernier.nb++;
+    else acc.push({ annee, nb: 1 });
+    return acc;
+  }, []);
+
+  /*
+   * Le detail d'un mois va chercher sa note et sa piece dans les lignes deja
+   * chargees pour les cartes du dessus -- validees comme en attente. Aucune
+   * requete de plus : le registre ne coute que sa mise en page.
+   */
+  const versementsDuMois = new Map<string, typeof valides>();
+  for (const v of [...valides, ...enAttente]) {
+    const cle = `${v.membre_id}|${v.mois}`;
+    const deja = versementsDuMois.get(cle);
+    if (deja) deja.push(v);
+    else versementsDuMois.set(cle, [v]);
+  }
+
+  /*
+   * L'ordre d'urgence remonte ce qui reclame une action : ce qui manque, puis
+   * ce qui attend une validation, puis ce qui est en regle ; a egalite, le plus
+   * de mois concernes d'abord, puis le nom. C'est un ordre d'affichage : il ne
+   * touche a aucun calcul, et le tri par nom rend la liste au classement connu.
+   */
+  const lignesRegistre = situations
+    .map((s) => {
+      const fenetre = s.cellules.slice(-14);
+      const du = fenetre.filter((c) => c.statut === "retard" || c.statut === "partiel").length;
+      const attente = fenetre.filter((c) => c.statut === "en_attente").length;
+      return {
+        s,
+        fenetre,
+        statut: statutLigne(fenetre),
+        moi: s.membreId === membre.id,
+        rang: du > 0 ? 0 : attente > 0 ? 1 : 2,
+        poids: du > 0 ? du : attente,
+      };
+    })
+    .sort((a, b) =>
+      ordre === "nom"
+        ? a.s.nom.localeCompare(b.s.nom, "fr")
+        : a.rang - b.rang || b.poids - a.poids || a.s.nom.localeCompare(b.s.nom, "fr"),
+    );
 
   return (
     <>
@@ -456,105 +511,193 @@ export default async function PageVersements() {
         </Carte>
       )}
 
-      <Carte titre="Etat des versements">
-        <div className="defilement-x -mx-1 px-1">
-          <table className="w-full min-w-[640px] border-collapse text-xs">
-            <thead>
-              <tr>
-                <th
-                  className="sticky left-0 z-[1] pb-2 pr-3 text-left font-semibold"
-                  style={{ background: "var(--carte)" }}
-                >
-                  Membre
-                </th>
-                {moisAffiches.map((c) => (
-                  <th
-                    key={c.mois}
-                    className="pb-2 text-center font-medium"
-                    style={{ color: "var(--discret)" }}
-                  >
-                    {moisLong(c.mois).slice(0, 3)}
-                    <br />
-                    <span className="opacity-60">{c.mois.slice(2, 4)}</span>
-                  </th>
-                ))}
-                <th className="pb-2 pl-3 text-right font-semibold">Verse</th>
-              </tr>
-            </thead>
-            <tbody>
-              {situations.map((s) => (
-                <tr
-                  key={s.membreId}
-                  className="border-t"
-                  style={{ borderColor: "var(--bordure)" }}
-                >
-                  <td
-                    className="sticky left-0 z-[1] py-2 pr-3 font-medium whitespace-nowrap"
-                    style={{ background: "var(--carte)" }}
-                  >
-                    {s.nom}
-                    {s.nbMoisRetard > 0 && (
-                      <span className="ml-1.5">
-                        <Badge ton="rouge">{s.nbMoisRetard}</Badge>
-                      </span>
-                    )}
-                  </td>
-                  {s.cellules.slice(-14).map((c) => (
-                    <td key={c.mois} className="py-2 text-center">
-                      {/*
-                       * Un mois incomplet porte un lisere : la couleur seule ne
-                       * distingue pas « rien verse » de « verse en partie », et
-                       * l'infobulle dit ce qui manque.
-                       */}
-                      <span
-                        title={
-                          c.manque > 0 && c.montant > 0
-                            ? `${moisLong(c.mois)} — ${PASTILLE[c.statut].ton} : ${fcfa(c.montant)} sur ${fcfa(c.requis)}, il manque ${fcfa(c.manque)}`
-                            : `${moisLong(c.mois)} — ${PASTILLE[c.statut].ton}`
-                        }
-                        aria-label={`${moisLong(c.mois)} : ${PASTILLE[c.statut].ton}`}
-                        className="inline-grid h-5 w-5 place-items-center rounded text-[11px] leading-none font-bold"
-                        style={{
-                          background: PASTILLE[c.statut].fond,
-                          color: PASTILLE[c.statut].texte,
-                        }}
-                      >
-                        {PASTILLE[c.statut].signe}
-                      </span>
-                    </td>
-                  ))}
-                  <td className="py-2 pl-3 text-right font-semibold whitespace-nowrap">
-                    {fcfa(s.verse)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      <Carte titre="Registre des cotisations">
+        <div className="mb-4">
+          <LegendeEtats />
         </div>
-        <div
-          className="mt-3 flex flex-wrap gap-3 text-[11px]"
-          style={{ color: "var(--discret)" }}
-        >
-          {(
-            [
-              "paye",
-              "paye_en_retard",
-              "en_attente",
-              "partiel",
-              "retard",
-              "a_venir",
-            ] as StatutMois[]
-          ).map((k) => (
-            <span key={k} className="inline-flex items-center gap-1.5">
-              <span
-                className="inline-grid h-4 w-4 place-items-center rounded text-[10px] leading-none font-bold"
-                style={{ background: PASTILLE[k].fond, color: PASTILLE[k].texte }}
+
+        {/*
+         * L'ordre des lignes est un lien, non un bouton : la page est rendue au
+         * serveur, et le tri survit alors au rechargement comme au partage du
+         * lien. C'est un ordre d'affichage -- aucun chiffre n'en depend.
+         */}
+        <div className="sans-impression mb-3 flex items-center gap-2 text-xs">
+          <span style={{ color: "var(--discret)" }}>Ordre des lignes</span>
+          <div
+            className="ml-auto inline-flex overflow-hidden rounded-xl border"
+            style={{ borderColor: "var(--bordure)" }}
+          >
+            {(
+              [
+                ["urgence", "Urgence"],
+                ["nom", "Nom"],
+              ] as const
+            ).map(([cle, libelle]) => (
+              <Link
+                key={cle}
+                href={cle === "urgence" ? "/versements" : "/versements?ordre=nom"}
+                scroll={false}
+                aria-current={ordre === cle ? "true" : undefined}
+                className="grid min-h-11 place-items-center px-4 text-[13px] font-semibold"
+                style={
+                  ordre === cle
+                    ? { background: "var(--color-or-500)", color: "var(--color-brun-900)" }
+                    : { color: "var(--discret)" }
+                }
               >
-                {PASTILLE[k].signe}
-              </span>
-              {PASTILLE[k].ton}
-            </span>
-          ))}
+                {libelle}
+              </Link>
+            ))}
+          </div>
+        </div>
+
+        <div
+          className="overflow-hidden rounded-xl border"
+          style={{ borderColor: "var(--bordure)" }}
+        >
+          {/* L'echelle des mois, posee une fois pour toutes les frises. */}
+          <div
+            className="border-b px-3 pt-2 pb-1.5"
+            style={{ borderColor: "var(--bordure)", background: "var(--fond)" }}
+          >
+            <div className="grid" style={colonnes}>
+              {annees.map((a) => (
+                <span
+                  key={a.annee}
+                  className="border-l pl-1 text-[10px] font-semibold"
+                  style={{
+                    gridColumn: `span ${a.nb}`,
+                    borderColor: "var(--bordure)",
+                    color: "var(--discret)",
+                  }}
+                >
+                  {a.annee}
+                </span>
+              ))}
+            </div>
+            <div className="mt-0.5 grid gap-1" style={colonnes}>
+              {moisAffiches.map((c) => (
+                <span
+                  key={c.mois}
+                  className="rounded text-center text-[11px] leading-5"
+                  style={
+                    c.mois === aujourdhui
+                      ? {
+                          background: "var(--color-or-200)",
+                          color: "var(--color-brun-900)",
+                          fontWeight: 700,
+                        }
+                      : { color: "var(--discret)" }
+                  }
+                >
+                  {initialeMois(c.mois)}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {lignesRegistre.map(({ s, fenetre, statut, moi }) => (
+              <li key={s.membreId} style={moi ? { background: "var(--or-doux)" } : undefined}>
+                {/*
+                 * Un seul detail ouvert a la fois : le nom du groupe suffit, le
+                 * navigateur ferme les autres sans une ligne de JavaScript.
+                 */}
+                <details name="registre" className="ligne-registre">
+                  <summary className="tapable cursor-pointer px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{s.nom}</span>
+                      {moi && (
+                        <span
+                          className="rounded px-1.5 py-0.5 text-[10px] font-bold"
+                          style={{
+                            background: "var(--color-or-500)",
+                            color: "var(--color-brun-900)",
+                          }}
+                        >
+                          MOI
+                        </span>
+                      )}
+                      {s.nbMoisRetard > 0 && <Badge ton="rouge">{s.nbMoisRetard}</Badge>}
+                      <span
+                        className="flex-none text-[12px] font-semibold"
+                        style={{ color: statut.encre }}
+                      >
+                        {statut.texte}
+                      </span>
+                      <Chevron />
+                    </div>
+                    <div className="mt-1.5">
+                      <Frise cellules={fenetre} taille={18} etiquette={s.nom} />
+                    </div>
+                  </summary>
+
+                  <div
+                    className="border-t px-3 py-3"
+                    style={{ borderColor: "var(--bordure)", background: "var(--carte)" }}
+                  >
+                    <ul className="space-y-2.5">
+                      {fenetre
+                        .filter((c) => c.statut !== "hors_periode" && !(c.statut === "a_venir" && c.montant === 0))
+                        .slice(-4)
+                        .reverse()
+                        .map((c) => {
+                          const lignes = versementsDuMois.get(`${s.membreId}|${c.mois}`) ?? [];
+                          const note = lignes.find((v) => v.note)?.note ?? null;
+                          const justificatifs = lignes.flatMap((v) => pieces.get(v.lot) ?? []);
+                          return (
+                            <li key={c.mois} className="flex gap-2">
+                              <span className="mt-0.5">
+                                <GlypheEtat statut={c.statut} taille={16} />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
+                                  <span className="font-semibold">{moisLong(c.mois)}</span>
+                                  <span style={{ color: "var(--discret)" }}>
+                                    {LIBELLE_STATUT[c.statut]}
+                                  </span>
+                                  <span className="ml-auto font-semibold whitespace-nowrap tabular-nums">
+                                    {c.manque > 0 && c.montant > 0
+                                      ? `${nombre(c.montant)} sur ${fcfa(c.requis)}`
+                                      : fcfa(c.montant > 0 ? c.montant : c.requis)}
+                                  </span>
+                                </div>
+                                <p className="text-[12px]" style={{ color: "var(--discret)" }}>
+                                  {detailDuMois(c)}
+                                  {note ? ` Note : ${note}` : ""}
+                                </p>
+                                {justificatifs.length > 0 && (
+                                  <p className="text-[12px]">
+                                    {justificatifs.map((j) => (
+                                      <a
+                                        key={j.id}
+                                        href={`/api/justificatif/${j.id}`}
+                                        target="_blank"
+                                        rel="noopener"
+                                        className="mr-3 underline"
+                                        style={{ color: "var(--color-or-600)" }}
+                                      >
+                                        {j.nom}
+                                      </a>
+                                    ))}
+                                  </p>
+                                )}
+                              </div>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                    <p className="mt-3 text-[12px]" style={{ color: "var(--discret)" }}>
+                      Verse depuis le debut :{" "}
+                      <span className="font-semibold tabular-nums" style={{ color: "var(--texte)" }}>
+                        {fcfa(s.verse)}
+                      </span>
+                    </p>
+                  </div>
+                </details>
+              </li>
+            ))}
+          </ul>
         </div>
       </Carte>
 
