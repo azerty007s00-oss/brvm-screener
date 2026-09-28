@@ -147,8 +147,9 @@ export function Bienvenue({ membre }: { membre: Membre }) {
         </ul>
         <p className="mt-3 text-[11.5px] leading-snug" style={{ color: "var(--discret)" }}>
           Vous etes inscrit comme {ROLES[membre.role].toLowerCase()}. Declarer un versement se fait
-          depuis l&apos;onglet Versements ; le tresorier en est prevenu par courriel et le valide
-          ensuite — inutile de lui ecrire en plus. Personne ne valide le sien.
+          depuis l&apos;onglet Versements ; le tresorier en est prevenu par courriel, vous et le
+          president en copie, et il valide ensuite — inutile de lui ecrire en plus. Personne ne
+          valide le sien.
         </p>
       </div>
     </div>

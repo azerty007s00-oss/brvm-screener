@@ -343,9 +343,10 @@ export function texteRelance(
       "  4. Joignez la capture de votre transfert : elle epargne une question.",
       "  5. Le tresorier valide, et votre mois se marque d'une coche.",
       "",
-      "Le tresorier est prevenu par courriel des que vous declarez : inutile de lui",
-      "ecrire en plus. Tant que la validation n'a pas eu lieu, votre declaration",
-      "reste visible de tous, marquee « en attente » : rien ne se perd.",
+      "Le tresorier est prevenu par courriel des que vous declarez, le president et",
+      "vous-meme en copie : inutile d'ecrire en plus, et vous gardez la trace de ce",
+      "que vous avez declare. Tant que la validation n'a pas eu lieu, votre",
+      "declaration reste visible de tous, marquee « en attente » : rien ne se perd.",
     );
   }
   /*

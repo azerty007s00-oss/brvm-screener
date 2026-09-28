@@ -63,8 +63,9 @@ Phoenix Capital Management.
   ouvrait le site pour la première fois ne savait pas où déclarer, renvoyait un message au groupe,
   et le trésorier saisissait à sa place — ce que l'outil est censé supprimer. Cinq lignes décrivent
   désormais la marche à suivre, du menu jusqu'à la validation, et précisent que **le trésorier
-  est prévenu par courriel dès la déclaration** — inutile de lui écrire en plus. L'avis existait
-  déjà ; il n'était dit nulle part, si bien que chacun doublait sa déclaration d'un message au groupe.
+  est prévenu par courriel dès la déclaration, le président et le membre lui-même en copie** —
+  inutile d'écrire en plus. L'avis existait déjà ; il n'était dit nulle part, si bien que chacun
+  doublait sa déclaration d'un message au groupe.
 - **Relances des 7, 9 et 10** — un cron Vercel écrit trois fois par mois aux membres qui n'ont
   pas versé. Les 7 et 9 préviennent avant l'échéance en disant les jours restants ; le 10 est le
   dernier jour de l'art. 8. **La liste est recalculée à chaque passage** : qui a versé le 8 n'est
@@ -85,6 +86,12 @@ Phoenix Capital Management.
   courrier part sans l'adresse du site et le message de retour le signale.
 - **Avis au bureau** — déclaration de versement en attente, récapitulatif de ce qu'il y a à
   encaisser, absence relevée par le secrétariat : le site n'attend plus qu'on l'ouvre.
+- **L'avis de déclaration part en un seul courrier** — au trésorier, **le président et le membre
+  qui déclare en copie**. Trois envois séparés ouvraient trois fils où personne ne voyait la
+  réponse des autres, et le membre, exclu de la liste au motif qu'il savait déjà, n'avait aucune
+  trace de sa déclaration : il rouvrait le site pour vérifier, ou écrivait au groupe. La copie lui
+  tient lieu d'accusé de réception. Sans trésorier actif, le courrier va au président et la copie
+  ne le double pas.
 
 ## Règles appliquées
 

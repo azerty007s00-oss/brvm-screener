@@ -129,7 +129,7 @@ export default async function PageVersements() {
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
           {saisieDirecte
             ? "Votre saisie vaut validation : vous constatez un encaissement, pour vous ou pour un autre membre."
-            : "Votre declaration est visible de tous immediatement, et reste en attente jusqu'a la validation du tresorier qui tient la caisse."}
+            : "Votre declaration est visible de tous immediatement, et reste en attente jusqu'a la validation du tresorier qui tient la caisse. Il en est prevenu par courriel, vous et le president en copie."}
         </p>
         <FormulaireAction action={declarerVersement} libelle="Declarer">
           {saisieDirecte && (

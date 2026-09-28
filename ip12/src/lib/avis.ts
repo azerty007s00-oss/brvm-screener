@@ -1,7 +1,7 @@
 import "server-only";
 import { listerMembres } from "@/lib/queries";
 import { envoyerCourriel } from "@/lib/courriel";
-import { CLUB, dateCourte, fcfa, lienDuSite, moisLong } from "@/lib/settings";
+import { CLUB, dateCourte, fcfa, lienDuSite, moisLong, ROLES } from "@/lib/settings";
 import { titulaires, DROITS } from "@/lib/droits";
 import type { Destinataire } from "@/lib/relance";
 import type { Role } from "@/lib/settings";
@@ -85,9 +85,18 @@ export async function avertirLeBureau(
 /**
  * Avis de declaration : un membre dit avoir verse, la ligne attend validation.
  *
- * Adresse aux titulaires du droit de valider. L'auteur de la declaration en est
- * exclu : s'avertir soi-meme n'apprend rien, et le tresorier qui saisit pour lui
- * recevrait un courrier a chaque geste.
+ * Un seul courrier, et non un par titulaire : le tresorier en destinataire, le
+ * president et le membre qui declare en copie.
+ *
+ * Les envois separes ouvraient autant de fils de discussion que de
+ * destinataires -- le tresorier repondait « c'est encaisse » a un courrier que
+ * le president ne verrait jamais. Et l'auteur, exclu de la liste au motif qu'il
+ * savait deja, n'avait aucune trace de sa propre declaration : il rouvrait le
+ * site pour verifier qu'elle etait bien partie, ou ecrivait au groupe. La copie
+ * lui tient lieu d'accuse de reception.
+ *
+ * A defaut de tresorier actif, le courrier va au premier titulaire du droit de
+ * valider -- le president -- et la copie ne le double pas.
  */
 export async function avertirDeclaration(params: {
   auteurId: string;
@@ -96,9 +105,41 @@ export async function avertirDeclaration(params: {
   montant: number;
   avecJustificatif: boolean;
 }): Promise<number> {
-  const bureau = await adresses("validerVersement");
   const membres = await listerMembres().catch(() => []);
-  const auteur = membres.find((m) => String(m.id) === params.auteurId);
+  const joignables = membres.filter((m) => m.actif && m.email);
+  const valideurs = DROITS.validerVersement as readonly Role[];
+
+  const principal =
+    joignables.find((m) => m.role === "tresorier") ??
+    joignables.find((m) => valideurs.includes(m.role));
+  if (!principal) return 0;
+
+  /*
+   * Une meme personne peut cumuler les qualites -- le tresorier qui declare
+   * pour lui-meme, le president qui tient la caisse par interim -- et la casse
+   * d'une adresse n'en fait pas une autre. On compare en minuscules, pour ne
+   * mettre personne en copie de son propre courrier.
+   */
+  const declarant = joignables.find((m) => String(m.id) === params.auteurId);
+  const president = joignables.find((m) => m.role === "president");
+  const vues = new Set([principal.email.toLowerCase()]);
+  const copie: { email: string; libelle: string }[] = [];
+  for (const [personne, libelle] of [
+    [president, "le president"],
+    [declarant, "le membre qui declare"],
+  ] as const) {
+    if (!personne) continue;
+    const adresse = personne.email.toLowerCase();
+    if (vues.has(adresse)) continue;
+    vues.add(adresse);
+    copie.push({ email: personne.email, libelle });
+  }
+
+  const libelles = copie.map((c) => c.libelle);
+  const enCopie =
+    libelles.length === 0
+      ? null
+      : `En copie : ${libelles.length === 1 ? libelles[0] : libelles.join(" et ")}.`;
 
   const lignes = [
     "Bonjour,",
@@ -111,24 +152,22 @@ export async function avertirDeclaration(params: {
       ? "Un justificatif est joint."
       : "Aucun justificatif n'est joint pour l'instant.",
     "",
-    "La ligne est visible de tous et attend votre validation.",
+    `A valider par le ${ROLES[principal.role].toLowerCase()}.` + (enCopie ? ` ${enCopie}` : ""),
+    "La ligne est deja visible de tous, marquee « en attente » : rien ne se perd",
+    "tant que la validation n'a pas eu lieu.",
   ];
   const siteUrl = lienDuSite();
   if (siteUrl) lignes.push("", `Valider : ${siteUrl}/versements`);
   lignes.push("", `Le suivi du club — ${CLUB.nom}`);
 
-  let partis = 0;
-  for (const m of bureau) {
-    // Averti celui qui vient de saisir n'apprend rien a personne.
-    if (auteur && m.email === auteur.email) continue;
-    const { ok } = await envoyerCourriel({
-      destinataire: m.email,
-      sujet: `${CLUB.sigle} — versement declare par ${params.membreNom}, a valider`,
-      texte: lignes.join("\n"),
-    });
-    if (ok) partis++;
-  }
-  return partis;
+  const { ok } = await envoyerCourriel({
+    destinataire: principal.email,
+    copie: copie.map((c) => c.email),
+    sujet: `${CLUB.sigle} — versement declare par ${params.membreNom}, a valider`,
+    texte: lignes.join("\n"),
+  });
+  // Ce que l'appelant compte, ce sont les personnes atteintes, non les envois.
+  return ok ? 1 + copie.length : 0;
 }
 
 /** Qui recoit ces avis, pour le dire a l'ecran. */

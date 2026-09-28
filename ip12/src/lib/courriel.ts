@@ -15,6 +15,15 @@ import { CLUB, lienDuSite, variable } from "@/lib/settings";
  */
 export type Courriel = {
   destinataire: string;
+  /**
+   * Adresses en copie, visibles de tous les destinataires.
+   *
+   * La copie n'est pas un second envoi : c'est le meme courrier, avec le meme
+   * fil de discussion. Le tresorier qui repond « c'est encaisse » repond a tout
+   * le monde d'un coup, et le membre voit que sa declaration est bien partie.
+   * Une copie cachee ferait l'inverse : chacun ignorerait que les autres savent.
+   */
+  copie?: string[];
   sujet: string;
   texte: string;
 };
@@ -192,6 +201,7 @@ export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi
       const info = await envoi.sendMail({
         from,
         to: courriel.destinataire,
+        ...(courriel.copie?.length ? { cc: courriel.copie } : {}),
         subject: courriel.sujet,
         text: courriel.texte,
         html: enHtml(courriel.texte),
@@ -214,6 +224,7 @@ export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi
       const { data, error } = await resend.emails.send({
         from,
         to: courriel.destinataire,
+        ...(courriel.copie?.length ? { cc: courriel.copie } : {}),
         subject: courriel.sujet,
         text: courriel.texte,
         html: enHtml(courriel.texte),
