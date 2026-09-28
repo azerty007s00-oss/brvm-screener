@@ -62,7 +62,9 @@ Phoenix Capital Management.
 - **La relance explique le chemin** — elle donnait un lien et s'arrêtait là ; un membre qui
   ouvrait le site pour la première fois ne savait pas où déclarer, renvoyait un message au groupe,
   et le trésorier saisissait à sa place — ce que l'outil est censé supprimer. Cinq lignes décrivent
-  désormais la marche à suivre, du menu jusqu'à la validation.
+  désormais la marche à suivre, du menu jusqu'à la validation, et précisent que **le trésorier
+  est prévenu par courriel dès la déclaration** — inutile de lui écrire en plus. L'avis existait
+  déjà ; il n'était dit nulle part, si bien que chacun doublait sa déclaration d'un message au groupe.
 - **Relances des 7, 9 et 10** — un cron Vercel écrit trois fois par mois aux membres qui n'ont
   pas versé. Les 7 et 9 préviennent avant l'échéance en disant les jours restants ; le 10 est le
   dernier jour de l'art. 8. **La liste est recalculée à chaque passage** : qui a versé le 8 n'est
