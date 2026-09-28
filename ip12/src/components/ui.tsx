@@ -126,10 +126,21 @@ export function EnTeteEcran({
   titre,
   sous,
   marque,
+  chiffre,
+  detail,
 }: {
   titre: string;
   sous?: ReactNode;
   marque?: ReactNode;
+  /**
+   * Le chiffre que la page existe pour donner, s'il y en a un.
+   *
+   * L'or ne se lit pas sur fond clair : 2,3:1, une devinette. Sur le brun de
+   * l'en-tete il tient a 8,7:1 -- c'est le seul endroit du site ou un montant
+   * peut etre dore.
+   */
+  chiffre?: ReactNode;
+  detail?: ReactNode;
 }) {
   return (
     <div
@@ -152,6 +163,24 @@ export function EnTeteEcran({
         </div>
         {marque}
       </div>
+      {chiffre && (
+        <div className="mx-auto mt-2 max-w-5xl">
+          <p
+            className="text-[34px] leading-none font-bold tracking-tight tabular-nums"
+            style={{ color: "var(--color-or-400)" }}
+          >
+            {chiffre}
+          </p>
+          {detail && (
+            <p
+              className="mt-1.5 text-[12px] leading-snug"
+              style={{ color: "var(--color-brun-300)" }}
+            >
+              {detail}
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

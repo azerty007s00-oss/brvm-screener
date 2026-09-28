@@ -51,6 +51,13 @@ Phoenix Capital Management.
   des 14 mois, et le détail des 4 derniers mois au doigt — montant, date, note, justificatif.
   L'ordre des lignes bascule entre urgence et nom ; c'est un ordre d'affichage, aucun chiffre n'en
   dépend. Aucune requête de plus : le détail lit les lignes déjà chargées.
+- **L'accueil répond d'abord à « est-ce que je dois quelque chose ? »** — c'est la question qui
+  fait ouvrir le site. Elle était au milieu de la page, après quatre chiffres de gestion. L'écran
+  commence désormais par la part du membre, en or sur le brun de l'en-tête — le seul fond où l'or
+  se lit (8,7:1 ; sur fond clair il tombe à 2,3:1) —, puis **À faire** (le mois dû, la pénalité, et
+  le bouton qui mène à la déclaration), puis **À traiter** pour le bureau, puis la frise des 14 mois
+  du membre et l'état du club ce mois-ci, un glyphe par membre. Une performance négative reste en
+  encre : le rouge ne sert qu'à ce qui manque ou bloque.
 - **Versements partiels** — un mois n'est soldé que lorsque la somme des versements atteint la
   cotisation attendue. En dessous, le mois reste dû et la pénalité de l'art. 9 porte sur la
   cotisation entière, jamais sur le seul reliquat : verser un acompte ne réduit pas la sanction.

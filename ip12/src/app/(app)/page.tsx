@@ -2,14 +2,113 @@ import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import { situationsClub, synthese } from "@/lib/queries";
 import { dureeEnClair, pourcent } from "@/lib/perf";
-import { CLUB, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
-import { Alerte, Badge, Carte, Statistique, Vide } from "@/components/ui";
+import { CLUB, REGLES, dateCourte, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
+import { Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
+import {
+  Frise,
+  GlypheEtat,
+  LIBELLE_STATUT,
+  STATUTS_LEGENDE,
+  statutLigne,
+} from "@/components/glyphe-etat";
 import {
   EcranInitialisation,
   estTableAbsente,
 } from "@/components/initialisation";
+import type { StatutMois } from "@/lib/penalites";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Le bouton qui mene a l'action, quand la page en designe une.
+ *
+ * L'or plein porte l'encre brune : 6,9:1, le seul emploi de l'or ou le texte
+ * pose dessus reste lisible dans les deux themes.
+ */
+function BoutonPrincipal({ href, children }: { href: string; children: string }) {
+  return (
+    <Link
+      href={href}
+      className="tapable grid h-13 place-items-center rounded-2xl text-[15px] font-bold"
+      style={{ background: "var(--color-or-500)", color: "var(--color-brun-900)" }}
+    >
+      {children}
+    </Link>
+  );
+}
+
+/** Deux chiffres cote a cote, sous un titre : « Cotisation due », « Penalite ». */
+function Couple({
+  gauche,
+  droite,
+}: {
+  gauche: { libelle: string; valeur: string };
+  droite: { libelle: string; valeur: string };
+}) {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      {[gauche, droite].map((c) => (
+        <div key={c.libelle}>
+          <p className="text-[12px]" style={{ color: "var(--discret)" }}>
+            {c.libelle}
+          </p>
+          <p className="text-[17px] font-bold whitespace-nowrap tabular-nums">{c.valeur}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Une ligne-resume : un compte, ce qu'il designe, et ou cela se traite. */
+function LigneATraiter({
+  compte,
+  ton,
+  titre,
+  detail,
+  href,
+}: {
+  compte: number;
+  ton: "ambre" | "rouge";
+  titre: string;
+  detail: string;
+  href: string;
+}) {
+  return (
+    <li>
+      <Link href={href} className="tapable flex items-center gap-3 py-2.5">
+        <span
+          className="grid h-9 w-9 flex-none place-items-center rounded-xl text-[15px] font-bold"
+          style={{
+            background: ton === "rouge" ? "var(--rouge-fond)" : "var(--ambre-fond)",
+            color: ton === "rouge" ? "var(--rouge-encre)" : "var(--ambre-encre)",
+          }}
+        >
+          {compte}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[15px] font-semibold">{titre}</span>
+          <span className="block truncate text-[12px]" style={{ color: "var(--discret)" }}>
+            {detail}
+          </span>
+        </span>
+        <svg
+          viewBox="0 0 24 24"
+          aria-hidden="true"
+          className="h-4 w-4 flex-none"
+          style={{
+            fill: "none",
+            stroke: "var(--discret)",
+            strokeWidth: 2,
+            strokeLinecap: "round",
+            strokeLinejoin: "round",
+          }}
+        >
+          <path d="M9.5 6 L15.5 12 L9.5 18" />
+        </svg>
+      </Link>
+    </li>
+  );
+}
 
 export default async function TableauDeBord() {
   const membre = await exigerMembre();
@@ -27,55 +126,255 @@ export default async function TableauDeBord() {
   const retardataires = situations.filter((x) => x.nbMoisRetard > 0);
   const estBureau = membre.role === "president" || membre.role === "tresorier";
 
+  const maFenetre = maSituation?.cellules.slice(-14) ?? [];
+  const moisCourant = debutMois();
+
+  /*
+   * Ce qui me reste a verser ce mois-ci : la cellule du mois courant le sait
+   * deja, taux particulier compris. Rien n'est recalcule ici.
+   */
+  const celluleDuMois = maSituation?.cellules.find((c) => c.mois === moisCourant);
+  const aFaire =
+    maSituation && (maSituation.nbMoisRetard > 0 || maSituation.totalPenalites > 0);
+
+  /* L'etat du mois courant, membre par membre : un glyphe chacun, tries. */
+  const rangStatut = (st: StatutMois) => {
+    const i = STATUTS_LEGENDE.indexOf(st);
+    return i < 0 ? STATUTS_LEGENDE.length : i;
+  };
+  const moisDuClub = situations
+    .map((x) => x.cellules.find((c) => c.mois === moisCourant))
+    .filter((c): c is NonNullable<typeof c> => Boolean(c) && c!.statut !== "hors_periode")
+    .sort((a, b) => rangStatut(a.statut) - rangStatut(b.statut));
+  const payesCeMois = moisDuClub.filter(
+    (c) => c.statut === "paye" || c.statut === "paye_en_retard",
+  ).length;
+  const compteParEtat = STATUTS_LEGENDE.map((st) => ({
+    statut: st,
+    nb: moisDuClub.filter((c) => c.statut === st).length,
+  })).filter((x) => x.nb > 0);
+
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Statistique
-          libelle="Portefeuille"
-          valeur={s.valorisation ? fcfa(s.valorisation.total) : "--"}
-          detail={
-            s.valorisation
-              ? `Releve du ${dateCourte(s.valorisation.date_valo)}`
-              : "Aucun releve saisi"
+      <EnTeteEcran
+        titre="Ma part"
+        sous={
+          s.valorisation
+            ? `au ${dateCourte(s.valorisation.date_valo)}`
+            : "aucun releve saisi"
+        }
+        chiffre={maPart && s.valorisation ? fcfa(maPart.valeur) : "--"}
+        detail={
+          maPart
+            ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % du portefeuille, au prorata de mes versements valides.`
+            : "Votre part se calcule des votre premier versement valide."
+        }
+      />
+
+      <CarteEtat
+        chiffres={[
+          {
+            /*
+             * Le nombre seul : « 2 347 910 FCFA » en 22 px passe a la ligne sur
+             * une demi-largeur de telephone, et un montant coupe en deux se
+             * relit mal. L'unite tient dans le libelle, ou elle ne coute rien.
+             */
+            libelle: "portefeuille du club, en FCFA",
+            valeur: s.valorisation ? nombre(s.valorisation.total) : "--",
+            accent: "or",
+          },
+          {
+            libelle: "performance annualisee",
+            valeur: s.tri !== null ? pourcent(s.tri) : "--",
+          },
+        ]}
+      />
+
+      {/*
+       * Ce qu'il y a a faire, avant tout le reste.
+       *
+       * Un membre ouvre le site pour savoir s'il doit quelque chose. La reponse
+       * etait auparavant au milieu de la page, apres quatre chiffres de
+       * gestion : elle est desormais la premiere chose qui suit sa part.
+       */}
+      {maSituation && (
+        <Carte titre="A faire">
+          {!aFaire ? (
+            <p className="flex items-center gap-2 text-[14px]">
+              <GlypheEtat statut="paye" taille={22} />
+              <span>
+                Rien a faire. Prochaine echeance le {REGLES.jourEcheance} du mois.
+              </span>
+            </p>
+          ) : (
+            <div
+              className="rounded-2xl p-3.5"
+              style={{ background: "var(--rouge-fond)" }}
+            >
+              <div className="flex items-start gap-2.5">
+                <span className="mt-0.5">
+                  <GlypheEtat statut="retard" taille={26} />
+                </span>
+                <div className="min-w-0">
+                  <p
+                    className="text-[15px] leading-snug font-bold"
+                    style={{ color: "var(--rouge-encre)" }}
+                  >
+                    {maSituation.nbMoisRetard > 0
+                      ? `${maSituation.nbMoisRetard} mois de cotisation en retard`
+                      : "Penalites de retard a regler"}
+                  </p>
+                  <p className="mt-0.5 text-[13px] leading-snug">
+                    {maSituation.moisEnRetard.length > 0
+                      ? `${maSituation.moisEnRetard.map((m) => moisLong(m)).join(", ")}. `
+                      : ""}
+                    La penalite de l&apos;art. 9 reste acquise au club, meme apres
+                    regularisation.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--bordure)" }}>
+                <Couple
+                  gauche={{
+                    libelle: "Cotisation due",
+                    valeur: fcfa(celluleDuMois?.manque ?? REGLES.cotisationMensuelle),
+                  }}
+                  droite={{
+                    libelle: `Penalites (${Math.round(REGLES.tauxPenalite * 100)} %)`,
+                    valeur: fcfa(maSituation.totalPenalites),
+                  }}
+                />
+              </div>
+
+              <div className="mt-3">
+                <BoutonPrincipal href="/versements">
+                  Declarer mon versement
+                </BoutonPrincipal>
+              </div>
+            </div>
+          )}
+
+          {maSituation.voteSuspendu && (
+            <p className="mt-3 text-xs" style={{ color: "var(--rouge-encre)" }}>
+              R2 : votre droit de vote est suspendu au-dela de{" "}
+              {REGLES.suspensionVoteApresJours} jours de retard, jusqu&apos;a
+              regularisation complete.
+            </p>
+          )}
+          {maSituation.declarationRequise && (
+            <p className="mt-2 text-xs" style={{ color: "var(--ambre-encre)" }}>
+              R3 : vous devez declarer ce retard sur le groupe WhatsApp du club en
+              taguant tous les membres, puis l&apos;enregistrer depuis la page{" "}
+              <Link href="/versements" className="underline">
+                Versements
+              </Link>
+              .
+            </p>
+          )}
+        </Carte>
+      )}
+
+      {estBureau && (s.enAttenteValidation > 0 || retardataires.length > 0) && (
+        <Carte titre="A traiter">
+          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {s.enAttenteValidation > 0 && (
+              <LigneATraiter
+                compte={s.enAttenteValidation}
+                ton="ambre"
+                titre={`Versement${s.enAttenteValidation > 1 ? "s" : ""} a valider`}
+                detail="Declares par les membres, en attente de votre visa"
+                href="/versements"
+              />
+            )}
+            {retardataires.length > 0 && (
+              <LigneATraiter
+                compte={retardataires.length}
+                ton="rouge"
+                titre={`Membre${retardataires.length > 1 ? "s" : ""} en retard`}
+                detail={retardataires.map((r) => r.nom).join(", ")}
+                href="/penalites"
+              />
+            )}
+          </ul>
+        </Carte>
+      )}
+
+      {maSituation && (
+        <Carte
+          titre="Mon suivi"
+          action={
+            <Link href="/versements" className="text-xs underline" style={{ color: "var(--color-or-600)" }}>
+              Voir le registre
+            </Link>
           }
-          accent="or"
-        />
-        <Statistique
-          libelle="Ma part"
-          valeur={maPart && s.valorisation ? fcfa(maPart.valeur) : "--"}
-          detail={
-            maPart
-              ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % du club${s.valorisation ? "" : " — releve a saisir"}`
-              : undefined
-          }
-        />
-        <Statistique
-          libelle="Verse par le club"
-          valeur={fcfa(s.totalVerse)}
-          detail={`dont ${fcfa(s.totalApports)} places en bourse`}
-        />
-        <Statistique
-          libelle="En caisse"
-          valeur={fcfa(s.totalEnCaisse)}
-          detail="Encaisse non encore investi"
-          accent={s.totalEnCaisse < 0 ? "rouge" : "neutre"}
-        />
-      </div>
+        >
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="truncate text-[15px] font-semibold">{maSituation.nom}</span>
+            <span
+              className="flex-none text-[12px] font-semibold"
+              style={{ color: statutLigne(maFenetre).encre }}
+            >
+              {statutLigne(maFenetre).texte}
+            </span>
+          </div>
+          <Frise cellules={maFenetre} taille={18} etiquette={maSituation.nom} />
+          <div className="mt-3 border-t pt-3" style={{ borderColor: "var(--bordure)" }}>
+            <Couple
+              gauche={{ libelle: "Versements valides", valeur: fcfa(maSituation.verse) }}
+              droite={{
+                libelle: "Penalites dues",
+                valeur: fcfa(maSituation.totalPenalites),
+              }}
+            />
+          </div>
+        </Carte>
+      )}
+
+      <Carte
+        titre={`Le club en ${moisLong(moisCourant)}`}
+        action={
+          <span className="text-xs" style={{ color: "var(--discret)" }}>
+            {payesCeMois} sur {moisDuClub.length} payees
+          </span>
+        }
+      >
+        {moisDuClub.length === 0 ? (
+          <Vide>Aucun mois en cours a suivre.</Vide>
+        ) : (
+          <>
+            <div
+              role="img"
+              aria-label={`Cotisations de ${moisLong(moisCourant)} : ${compteParEtat
+                .map((x) => `${x.nb} ${LIBELLE_STATUT[x.statut].toLowerCase()}`)
+                .join(", ")}`}
+              className="flex flex-wrap gap-1.5"
+            >
+              {moisDuClub.map((c, i) => (
+                <GlypheEtat key={i} statut={c.statut} taille={24} />
+              ))}
+            </div>
+            <p className="mt-2.5 text-[12px]" style={{ color: "var(--discret)" }}>
+              {compteParEtat
+                .map((x) => `${x.nb} ${LIBELLE_STATUT[x.statut].toLowerCase()}`)
+                .join(", ")}
+              .
+            </p>
+          </>
+        )}
+      </Carte>
 
       {(s.tri !== null || s.exercice) && (
         <Carte titre="Performance">
           <div className="grid gap-4 sm:grid-cols-2">
             {s.tri !== null && (
               <div>
-                <p
-                  className="text-2xl font-semibold"
-                  style={{
-                    color:
-                      s.tri >= 0
-                        ? "var(--color-vert-600)"
-                        : "var(--color-rouge-600)",
-                  }}
-                >
+                {/*
+                 * Une performance negative reste en encre : le rouge est reserve
+                 * a ce qui manque ou bloque, et un marche qui baisse ne demande
+                 * aucune action au membre qui lit la page.
+                 */}
+                <p className="text-2xl font-semibold tabular-nums">
                   {pourcent(s.tri)}
                   <span
                     className="ml-1 text-xs font-normal"
@@ -114,15 +413,7 @@ export default async function TableauDeBord() {
             )}
             {s.exercice?.rendement != null && (
               <div>
-                <p
-                  className="text-2xl font-semibold"
-                  style={{
-                    color:
-                      s.exercice.rendement >= 0
-                        ? "var(--color-vert-600)"
-                        : "var(--color-rouge-600)",
-                  }}
-                >
+                <p className="text-2xl font-semibold tabular-nums">
                   {pourcent(s.exercice.rendement)}
                 </p>
                 <p className="text-xs" style={{ color: "var(--discret)" }}>
@@ -133,66 +424,22 @@ export default async function TableauDeBord() {
               </div>
             )}
           </div>
-        </Carte>
-      )}
-
-      <Carte titre="Ma situation">
-        {!maSituation || maSituation.nbMoisRetard === 0 ? (
-          <Alerte ton="vert">
-            Vous etes a jour de vos versements. Prochaine echeance : le{" "}
-            {REGLES.jourEcheance} du mois.
-          </Alerte>
-        ) : (
-          <div className="space-y-3">
-            <Alerte
-              ton={maSituation.exclusionEncourue ? "rouge" : "ambre"}
-              titre={`${maSituation.nbMoisRetard} mois de retard`}
-            >
-              {maSituation.moisEnRetard.map((m) => moisLong(m)).join(", ")}.
-              Penalites dues :{" "}
-              <strong>{fcfa(maSituation.totalPenalites)}</strong> (art. 9
-              {maSituation.penalites.some((p) => p.doublee)
-                ? ", doublees par R4"
-                : ""}
-              ).
-            </Alerte>
-            {maSituation.voteSuspendu && (
-              <p
-                className="text-xs"
-                style={{ color: "var(--color-rouge-600)" }}
-              >
-                R2 : votre droit de vote est suspendu au-dela de{" "}
-                {REGLES.suspensionVoteApresJours} jours de retard, jusqu&apos;a
-                regularisation complete.
-              </p>
-            )}
-            {maSituation.declarationRequise && (
-              <p
-                className="text-xs"
-                style={{ color: "var(--color-ambre-600)" }}
-              >
-                R3 : vous devez declarer ce retard sur le groupe WhatsApp du
-                club en taguant tous les membres, puis l&apos;enregistrer depuis
-                la page{" "}
-                <Link href="/versements" className="underline">
-                  Versements
-                </Link>
-                .
-              </p>
-            )}
+          <div
+            className="mt-4 grid grid-cols-2 gap-3 border-t pt-3"
+            style={{ borderColor: "var(--bordure)" }}
+          >
+            <Couple
+              gauche={{ libelle: "Verse par le club", valeur: fcfa(s.totalVerse) }}
+              droite={{ libelle: "Place en bourse", valeur: fcfa(s.totalApports) }}
+            />
+            <Couple
+              gauche={{ libelle: "En caisse", valeur: fcfa(s.totalEnCaisse) }}
+              droite={{
+                libelle: "Membres",
+                valeur: String(situations.length),
+              }}
+            />
           </div>
-        )}
-      </Carte>
-
-      {estBureau && s.enAttenteValidation > 0 && (
-        <Carte titre="A traiter">
-          <Alerte ton="ambre">
-            {s.enAttenteValidation} versement
-            {s.enAttenteValidation > 1 ? "s" : ""} en attente de validation.{" "}
-            <Link href="/versements" className="underline">
-              Ouvrir la liste
-            </Link>
-          </Alerte>
         </Carte>
       )}
 
