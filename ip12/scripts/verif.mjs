@@ -34,6 +34,9 @@ const {
 const { tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois } = await import(
   "../.verif/settings.mjs"
 );
+const { statutLigne, moisCourt, initialeMois, resumeFrise, LIBELLE_STATUT } = await import(
+  "../.verif/etats.mjs"
+);
 
 /* ------------------------------------------------------------- performance */
 
@@ -760,8 +763,72 @@ assert.ok(
 );
 
 
+/* ------------------------------------------------------- etats et vocabulaire */
+
+const cel = (mois, statut) => ({ mois, statut, montant: 0, requis: 5000, manque: 0, dateVersement: null });
+
+// Les mois nommes suivent le calendrier, quel que soit leur etat. La premiere
+// version listait les retards puis les incomplets : « Retard : juin, avr. ».
+assert.equal(
+  statutLigne([cel("2026-04-01", "partiel"), cel("2026-05-01", "paye"), cel("2026-06-01", "retard")]).texte,
+  "Retard : avr., juin",
+  "les mois dus se nomment dans l'ordre du calendrier",
+);
+
+// Ce qui manque prime sur ce qui attend, et ce qui attend sur ce qui est en regle.
+assert.equal(
+  statutLigne([cel("2026-05-01", "en_attente"), cel("2026-06-01", "retard")]).texte,
+  "Retard : juin",
+  "un mois du l'emporte sur un mois en attente",
+);
+assert.equal(
+  statutLigne([cel("2026-05-01", "paye"), cel("2026-06-01", "en_attente")]).texte,
+  "En attente : juin",
+  "a defaut de retard, l'attente est ce qui reste a dire",
+);
+assert.equal(statutLigne([cel("2026-05-01", "paye")]).texte, "A jour");
+
+// Au-dela de deux mois, on compte au lieu d'enumerer : la phrase doit tenir a
+// cote du nom, sinon le navigateur coupe les deux.
+assert.equal(
+  statutLigne([
+    cel("2026-03-01", "retard"), cel("2026-04-01", "retard"),
+    cel("2026-05-01", "retard"), cel("2026-06-01", "retard"),
+  ]).texte,
+  "Retard : mars, avr. +2",
+  "trois mois et plus se resument",
+);
+
+// Une avance porte sur un mois futur : elle se dit, sans rien changer aux droits.
+{
+  const futur = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 2, 1))
+    .toISOString()
+    .slice(0, 10);
+  const r = statutLigne([cel("2026-01-01", "paye"), cel(futur, "paye")]);
+  assert.ok(r.texte.startsWith("A jour, avance "), `avance attendue, obtenu « ${r.texte} »`);
+}
+
+// Les mois hors periode -- avant l'entree du membre -- ne comptent pas.
+assert.equal(statutLigne([cel("2026-01-01", "hors_periode"), cel("2026-02-01", "paye")]).texte, "A jour");
+
+// Abreviations : sans accent, et distinctes deux a deux.
+assert.equal(moisCourt("2026-08-01"), "aout");
+assert.equal(moisCourt("2026-01-01"), "janv.");
+assert.equal(initialeMois("2026-09-01"), "S");
+assert.ok(
+  !/[\u00c0-\u017f]/.test(Object.values(LIBELLE_STATUT).join("") + moisCourt("2026-08-01")),
+  "les libelles d'etat et les mois courts restent sans accent",
+);
+
+// Le resume parle a qui ecoute la page : il compte, et il ignore le hors-periode.
+assert.equal(
+  resumeFrise([cel("2026-01-01", "hors_periode"), cel("2026-02-01", "paye"), cel("2026-03-01", "retard")], "Awa"),
+  "Awa, 2 mois : 1 paye, 1 en retard",
+);
+
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
-    "individuelles, retards, absences, R3, R5, relance",
+    "individuelles, retards, absences, R3, R5, relance, etats du registre",
 );

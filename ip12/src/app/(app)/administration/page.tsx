@@ -187,6 +187,98 @@ export default async function PageAdministration() {
         </div>
       )}
 
+      <Rubrique>Au quotidien</Rubrique>
+
+      <Tuile
+        icone={<Icone.courriel />}
+        titre="Relances"
+        resume="Depart automatique le 7, le 9 et le 10, apres verification des paiements."
+        marque={<Badge ton={transport === "aucun" ? "rouge" : "vert"}>{transport === "aucun" ? "a l'arret" : "active"}</Badge>}
+      >
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Le courrier part le 7, le 9 et le 10 de chaque mois aux membres qui n&apos;ont toujours
+          pas verse a cette date — chaque envoi reverifie qui a paye entre-temps. Sans
+          transport configure, les alertes restent visibles sur le site mais rien ne part — et
+          cela ne se remarque pas.
+        </p>
+        <p className="mb-3 text-sm">
+          Transport :{" "}
+          <span style={{ color: transport === "aucun" ? "var(--color-rouge-600)" : "var(--color-vert-600)" }}>
+            {descriptionTransport()}
+          </span>
+        </p>
+        {/*
+          * Le resultat du dernier essai, lu au journal. Sans lui, « je n'ai rien
+          * recu » ne se distingue pas de « le serveur a refuse » : le message de
+          * confirmation disparait au rechargement, et l'on ne sait plus quoi
+          * chercher.
+          */}
+        {dernierEssai && (
+          <div
+            className="mb-3 rounded-lg border px-3 py-2 text-xs"
+            style={{
+              borderColor: essaiReussi ? "var(--color-vert-600)" : "var(--color-rouge-600)",
+              color: "var(--discret)",
+            }}
+          >
+            <p className="font-medium" style={{ color: essaiReussi ? "var(--color-vert-600)" : "var(--color-rouge-600)" }}>
+              Dernier essai du {dateCourte(dernierEssai.created_at)} :{" "}
+              {essaiReussi ? "accepte par le serveur" : "refuse"}
+            </p>
+            {detailEssai.destinataire && <p>Remis a : {detailEssai.destinataire}</p>}
+            {detailEssai.detail && <p className="break-words">Reponse : {detailEssai.detail}</p>}
+          </div>
+        )}
+
+        {transport === "aucun" ? (
+          <Alerte ton="ambre" titre="Rien ne partira, ni le 7, ni le 9, ni le 10">
+            <p>
+              Voici ce que le serveur voit reellement. Les noms seulement : une valeur de mot de
+              passe ne s&apos;affiche pas, meme ici.
+            </p>
+            <ul className="mt-2 space-y-0.5">
+              {etatEnvoi.variables.map((v) => (
+                <li key={v.nom}>
+                  <code>{v.nom}</code> —{" "}
+                  <strong style={{ color: v.presente ? "var(--color-vert-600)" : "var(--color-rouge-600)" }}>
+                    {v.presente ? "presente" : "absente"}
+                  </strong>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2">
+              Environnement servi : <code>{etatEnvoi.environnement}</code>.
+            </p>
+            <p className="mt-2">
+              {etatEnvoi.variables.every((v) => !v.presente)
+                ? "Aucune n'arrive : les variables sont enregistrees sur un autre projet, ou pour un autre environnement que celui indique ci-dessus, ou le formulaire n'a pas ete valide. Verifiez que le projet Vercel ouvert est bien celui qui sert cette adresse, et que la case correspondant a l'environnement ci-dessus est cochee."
+                : "Certaines arrivent et d'autres non : les manquantes portent vraisemblablement une faute de frappe dans leur nom, ou un espace avant ou apres. Le nom doit s'ecrire exactement comme ci-dessus, en majuscules."}
+            </p>
+          </Alerte>
+        ) : (
+          <FormulaireAction action={envoyerCourrielEssai} libelle="Envoyer un courrier d'essai">
+            <Selection
+              nom="destination"
+              libelle="Envoyer a"
+              valeur="moi"
+              options={[
+                { valeur: "moi", libelle: `Mon adresse — ${membre.email}` },
+                ...(adresseClub
+                  ? [{ valeur: "club", libelle: `L'adresse du club — ${adresseClub}` }]
+                  : []),
+              ]}
+            />
+          </FormulaireAction>
+        )}
+        <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
+          Seules ces deux adresses, deja connues du site, sont proposees : un formulaire qui
+          enverrait ou l&apos;on veut depuis l&apos;adresse du club serait un relais ouvert. Si
+          le courrier n&apos;arrive pas alors que le serveur l&apos;a accepte, il est dans les
+          indesirables : un premier message entre deux adresses qui n&apos;ont jamais
+          correspondu y atterrit souvent.
+        </p>
+      </Tuile>
+
       <Rubrique>Le club</Rubrique>
 
       <Tuile
@@ -326,218 +418,6 @@ export default async function PageAdministration() {
             <Champ nom="note" libelle="Motif ou reference de la decision" requis={false} />
           </FormulaireAction>
         </Depliant>
-      </Tuile>
-
-      <Rubrique>Au quotidien</Rubrique>
-
-      <Tuile
-        icone={<Icone.courriel />}
-        titre="Relances"
-        resume="Depart automatique le 7, le 9 et le 10, apres verification des paiements."
-        marque={<Badge ton={transport === "aucun" ? "rouge" : "vert"}>{transport === "aucun" ? "a l'arret" : "active"}</Badge>}
-      >
-        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          Le courrier part le 7, le 9 et le 10 de chaque mois aux membres qui n&apos;ont toujours
-          pas verse a cette date — chaque envoi reverifie qui a paye entre-temps. Sans
-          transport configure, les alertes restent visibles sur le site mais rien ne part — et
-          cela ne se remarque pas.
-        </p>
-        <p className="mb-3 text-sm">
-          Transport :{" "}
-          <span style={{ color: transport === "aucun" ? "var(--color-rouge-600)" : "var(--color-vert-600)" }}>
-            {descriptionTransport()}
-          </span>
-        </p>
-        {/*
-          * Le resultat du dernier essai, lu au journal. Sans lui, « je n'ai rien
-          * recu » ne se distingue pas de « le serveur a refuse » : le message de
-          * confirmation disparait au rechargement, et l'on ne sait plus quoi
-          * chercher.
-          */}
-        {dernierEssai && (
-          <div
-            className="mb-3 rounded-lg border px-3 py-2 text-xs"
-            style={{
-              borderColor: essaiReussi ? "var(--color-vert-600)" : "var(--color-rouge-600)",
-              color: "var(--discret)",
-            }}
-          >
-            <p className="font-medium" style={{ color: essaiReussi ? "var(--color-vert-600)" : "var(--color-rouge-600)" }}>
-              Dernier essai du {dateCourte(dernierEssai.created_at)} :{" "}
-              {essaiReussi ? "accepte par le serveur" : "refuse"}
-            </p>
-            {detailEssai.destinataire && <p>Remis a : {detailEssai.destinataire}</p>}
-            {detailEssai.detail && <p className="break-words">Reponse : {detailEssai.detail}</p>}
-          </div>
-        )}
-
-        {transport === "aucun" ? (
-          <Alerte ton="ambre" titre="Rien ne partira, ni le 7, ni le 9, ni le 10">
-            <p>
-              Voici ce que le serveur voit reellement. Les noms seulement : une valeur de mot de
-              passe ne s&apos;affiche pas, meme ici.
-            </p>
-            <ul className="mt-2 space-y-0.5">
-              {etatEnvoi.variables.map((v) => (
-                <li key={v.nom}>
-                  <code>{v.nom}</code> —{" "}
-                  <strong style={{ color: v.presente ? "var(--color-vert-600)" : "var(--color-rouge-600)" }}>
-                    {v.presente ? "presente" : "absente"}
-                  </strong>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-2">
-              Environnement servi : <code>{etatEnvoi.environnement}</code>.
-            </p>
-            <p className="mt-2">
-              {etatEnvoi.variables.every((v) => !v.presente)
-                ? "Aucune n'arrive : les variables sont enregistrees sur un autre projet, ou pour un autre environnement que celui indique ci-dessus, ou le formulaire n'a pas ete valide. Verifiez que le projet Vercel ouvert est bien celui qui sert cette adresse, et que la case correspondant a l'environnement ci-dessus est cochee."
-                : "Certaines arrivent et d'autres non : les manquantes portent vraisemblablement une faute de frappe dans leur nom, ou un espace avant ou apres. Le nom doit s'ecrire exactement comme ci-dessus, en majuscules."}
-            </p>
-          </Alerte>
-        ) : (
-          <FormulaireAction action={envoyerCourrielEssai} libelle="Envoyer un courrier d'essai">
-            <Selection
-              nom="destination"
-              libelle="Envoyer a"
-              valeur="moi"
-              options={[
-                { valeur: "moi", libelle: `Mon adresse — ${membre.email}` },
-                ...(adresseClub
-                  ? [{ valeur: "club", libelle: `L'adresse du club — ${adresseClub}` }]
-                  : []),
-              ]}
-            />
-          </FormulaireAction>
-        )}
-        <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
-          Seules ces deux adresses, deja connues du site, sont proposees : un formulaire qui
-          enverrait ou l&apos;on veut depuis l&apos;adresse du club serait un relais ouvert. Si
-          le courrier n&apos;arrive pas alors que le serveur l&apos;a accepte, il est dans les
-          indesirables : un premier message entre deux adresses qui n&apos;ont jamais
-          correspondu y atterrit souvent.
-        </p>
-      </Tuile>
-
-      <Tuile
-        icone={<Icone.plus />}
-        titre="Reprise de l'historique"
-        resume="Marquer payes, en une fois, les mois anterieurs a l'outil."
-      >
-        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          Marque payes, en une operation, tous les mois encore decouverts jusqu&apos;au mois choisi.
-          Chaque ligne est datee de l&apos;echeance du mois qu&apos;elle couvre, jamais
-          d&apos;aujourd&apos;hui : antidater au {reglages.jourEcheance} evite de creer des
-          penalites fictives sur du passe deja regle.
-        </p>
-        {moisDecouverts > 0 && (
-          <div className="mb-3">
-            <Alerte ton="ambre">
-              {moisDecouverts} mois sont actuellement decouverts, repartis sur{" "}
-              {situations.filter((s) => s.nbMoisRetard > 0).length} membres. Tant que
-              l&apos;historique n&apos;est pas repris, chacun apparait en retard depuis la creation
-              du club.
-            </Alerte>
-          </div>
-        )}
-        <Depliant titre="Reprendre l'historique">
-          <FormulaireAction
-            action={reprendreHistorique}
-            libelle="Marquer ces mois payes"
-            confirmation="Marquer payes tous les mois decouverts de la periode ? L'operation est rejouable et ne double jamais un mois deja couvert."
-          >
-            <Champ
-              nom="depuis"
-              libelle="Premier mois du club"
-              type="month"
-              valeur={CLUB.dateCreation.slice(0, 7)}
-              aide="Le club a-t-il cotise des sa constitution, ou seulement a l'ouverture du compte ?"
-            />
-            <Champ
-              nom="jusqua"
-              libelle="Dernier mois a jour"
-              type="month"
-              valeur={defautJusqua}
-              aide={
-                premierDecouvert
-                  ? `Propose : le mois precedant le premier decouvert (${moisLong(premierDecouvert)}). Les mois suivants resteront des retards.`
-                  : "Le dernier mois ou tout le monde etait a jour."
-              }
-            />
-            <Champ
-              nom="montant"
-              libelle="Montant par mois (FCFA)"
-              type="number"
-              min={1}
-              valeur={reglages.cotisationMensuelle}
-              aide="Les montants particuliers se corrigent ensuite ligne par ligne."
-            />
-            <details className="mt-3">
-              <summary
-                className="cursor-pointer list-none rounded px-2 py-1 text-xs"
-                style={{ background: "var(--color-brun-100)", color: "var(--color-brun-800)" }}
-              >
-                + Une borne differente pour certains membres
-              </summary>
-              <p className="mt-2 text-xs" style={{ color: "var(--discret)" }}>
-                Tous ne sont pas a jour au meme mois. Laissez vide pour appliquer la borne commune.
-              </p>
-              {membres.map((m) => (
-                <Champ
-                  key={m.id}
-                  nom={`jusqua_${m.id}`}
-                  libelle={m.nom}
-                  type="month"
-                  requis={false}
-                />
-              ))}
-            </details>
-          </FormulaireAction>
-        </Depliant>
-      </Tuile>
-
-      <Tuile
-        icone={<Icone.horloge />}
-        titre="Reprise des penalites"
-        resume="Le decompte que le tresorier tenait a la main."
-      >
-        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          Les penalites anterieures ne peuvent pas naitre du calcul : une fois l&apos;historique
-          repris, tous les mois passes portent la date de leur echeance, donc sont a l&apos;heure.
-          Le retard reel de l&apos;epoque n&apos;est connu que du tresorier, qui l&apos;a suivi a la
-          main. Saisissez ici le nombre de mois qu&apos;il annonce pour chacun — a{" "}
-          {fcfa(Math.round(reglages.cotisationMensuelle * reglages.tauxPenalite))} le mois.
-        </p>
-        <Depliant titre="Saisir les mois de penalite par membre">
-          <FormulaireAction action={reprendrePenalites} libelle="Porter au registre">
-            <Champ
-              nom="jusqua"
-              libelle="Decompte arrete a"
-              type="month"
-              valeur={moisCourant}
-              aide="Le dernier mois couvert par le decompte du tresorier. Au-dela, le site prend le relais et ne recompte rien en deca."
-            />
-            {membres.map((m) => (
-              <Champ
-                key={m.id}
-                nom={`mois_${m.id}`}
-                libelle={m.nom}
-                type="number"
-                min={0}
-                max={200}
-                valeur={0}
-                requis={false}
-              />
-            ))}
-          </FormulaireAction>
-        </Depliant>
-        <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
-          Rejouable : la ligne d&apos;un membre est remplacee tant qu&apos;elle n&apos;a pas ete
-          soldee, jamais dupliquee. Laissez a zero ceux qui ne doivent rien. Le mois
-          d&apos;arret compte : le constat automatique ne produira plus rien en deca, ce qui evite
-          de compter deux fois les memes retards.
-        </p>
       </Tuile>
 
       <Rubrique>Controle</Rubrique>
@@ -700,6 +580,137 @@ export default async function PageAdministration() {
           ))}
         </ul>
       </Tuile>
+
+      {/*
+        * Ce qui ne sert qu'une fois.
+        *
+        * Les deux reprises figuraient sous « Au quotidien », entre les relances
+        * et le journal. Elles n'ont pourtant servi qu'a amorcer l'outil : les
+        * garder au milieu du travail courant laisse croire qu'il y a la quelque
+        * chose a faire chaque mois, et expose a les rejouer par megarde.
+        */}
+      <Rubrique>Mise en place, servie une seule fois</Rubrique>
+
+      <Tuile
+        icone={<Icone.plus />}
+        titre="Reprise de l'historique"
+        resume="Marquer payes, en une fois, les mois anterieurs a l'outil."
+      >
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Marque payes, en une operation, tous les mois encore decouverts jusqu&apos;au mois choisi.
+          Chaque ligne est datee de l&apos;echeance du mois qu&apos;elle couvre, jamais
+          d&apos;aujourd&apos;hui : antidater au {reglages.jourEcheance} evite de creer des
+          penalites fictives sur du passe deja regle.
+        </p>
+        {moisDecouverts > 0 && (
+          <div className="mb-3">
+            <Alerte ton="ambre">
+              {moisDecouverts} mois sont actuellement decouverts, repartis sur{" "}
+              {situations.filter((s) => s.nbMoisRetard > 0).length} membres. Tant que
+              l&apos;historique n&apos;est pas repris, chacun apparait en retard depuis la creation
+              du club.
+            </Alerte>
+          </div>
+        )}
+        <Depliant titre="Reprendre l'historique">
+          <FormulaireAction
+            action={reprendreHistorique}
+            libelle="Marquer ces mois payes"
+            confirmation="Marquer payes tous les mois decouverts de la periode ? L'operation est rejouable et ne double jamais un mois deja couvert."
+          >
+            <Champ
+              nom="depuis"
+              libelle="Premier mois du club"
+              type="month"
+              valeur={CLUB.dateCreation.slice(0, 7)}
+              aide="Le club a-t-il cotise des sa constitution, ou seulement a l'ouverture du compte ?"
+            />
+            <Champ
+              nom="jusqua"
+              libelle="Dernier mois a jour"
+              type="month"
+              valeur={defautJusqua}
+              aide={
+                premierDecouvert
+                  ? `Propose : le mois precedant le premier decouvert (${moisLong(premierDecouvert)}). Les mois suivants resteront des retards.`
+                  : "Le dernier mois ou tout le monde etait a jour."
+              }
+            />
+            <Champ
+              nom="montant"
+              libelle="Montant par mois (FCFA)"
+              type="number"
+              min={1}
+              valeur={reglages.cotisationMensuelle}
+              aide="Les montants particuliers se corrigent ensuite ligne par ligne."
+            />
+            <details className="mt-3">
+              <summary
+                className="cursor-pointer list-none rounded px-2 py-1 text-xs"
+                style={{ background: "var(--color-brun-100)", color: "var(--color-brun-800)" }}
+              >
+                + Une borne differente pour certains membres
+              </summary>
+              <p className="mt-2 text-xs" style={{ color: "var(--discret)" }}>
+                Tous ne sont pas a jour au meme mois. Laissez vide pour appliquer la borne commune.
+              </p>
+              {membres.map((m) => (
+                <Champ
+                  key={m.id}
+                  nom={`jusqua_${m.id}`}
+                  libelle={m.nom}
+                  type="month"
+                  requis={false}
+                />
+              ))}
+            </details>
+          </FormulaireAction>
+        </Depliant>
+      </Tuile>
+
+      <Tuile
+        icone={<Icone.horloge />}
+        titre="Reprise des penalites"
+        resume="Le decompte que le tresorier tenait a la main."
+      >
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Les penalites anterieures ne peuvent pas naitre du calcul : une fois l&apos;historique
+          repris, tous les mois passes portent la date de leur echeance, donc sont a l&apos;heure.
+          Le retard reel de l&apos;epoque n&apos;est connu que du tresorier, qui l&apos;a suivi a la
+          main. Saisissez ici le nombre de mois qu&apos;il annonce pour chacun — a{" "}
+          {fcfa(Math.round(reglages.cotisationMensuelle * reglages.tauxPenalite))} le mois.
+        </p>
+        <Depliant titre="Saisir les mois de penalite par membre">
+          <FormulaireAction action={reprendrePenalites} libelle="Porter au registre">
+            <Champ
+              nom="jusqua"
+              libelle="Decompte arrete a"
+              type="month"
+              valeur={moisCourant}
+              aide="Le dernier mois couvert par le decompte du tresorier. Au-dela, le site prend le relais et ne recompte rien en deca."
+            />
+            {membres.map((m) => (
+              <Champ
+                key={m.id}
+                nom={`mois_${m.id}`}
+                libelle={m.nom}
+                type="number"
+                min={0}
+                max={200}
+                valeur={0}
+                requis={false}
+              />
+            ))}
+          </FormulaireAction>
+        </Depliant>
+        <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
+          Rejouable : la ligne d&apos;un membre est remplacee tant qu&apos;elle n&apos;a pas ete
+          soldee, jamais dupliquee. Laissez a zero ceux qui ne doivent rien. Le mois
+          d&apos;arret compte : le constat automatique ne produira plus rien en deca, ce qui evite
+          de compter deux fois les memes retards.
+        </p>
+      </Tuile>
+
 
       <p className="text-center text-[11px]" style={{ color: "var(--discret)" }}>
         {CLUB.nom} &middot; fonde le {dateCourte(CLUB.dateCreation)} &middot; premier mois repris :{" "}

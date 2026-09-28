@@ -58,6 +58,15 @@ Phoenix Capital Management.
   le bouton qui mène à la déclaration), puis **À traiter** pour le bureau, puis la frise des 14 mois
   du membre et l'état du club ce mois-ci, un glyphe par membre. Une performance négative reste en
   encre : le rouge ne sert qu'à ce qui manque ou bloque.
+- **Le relevé se signe** — il portait les chiffres, pas le calendrier : la frise des 14 mois y
+  figure désormais, avec sa légende, et deux cadres « Le trésorier » / « Le président » attendent
+  une signature manuscrite. Un relevé non signé n'est qu'une impression. À l'impression tout passe
+  au noir et blanc : ce sont les formes qui portent l'information, aucun aplat n'est demandé au
+  papier.
+- **L'administration remet le travail courant en tête** — les relances avant les statuts, et les
+  deux reprises d'historique, qui n'ont servi qu'une fois, descendent dans un groupe « Mise en
+  place, servie une seule fois » : les garder au milieu du travail mensuel laissait croire qu'il y
+  avait là quelque chose à refaire, et exposait à les rejouer.
 - **Versements partiels** — un mois n'est soldé que lorsque la somme des versements atteint la
   cotisation attendue. En dessous, le mois reste dû et la pénalité de l'art. 9 porte sur la
   cotisation entière, jamais sur le seul reliquat : verser un acompte ne réduit pas la sanction.
@@ -216,5 +225,7 @@ PGPORT_TEST=5433 npm run verif:sql
 | `src/lib/courriel.ts` | Envoi du courrier, par SMTP ou Resend |
 | `src/lib/relance.ts` | Qui relancer, et que leur écrire |
 | `src/lib/avis.ts` | Avis adressés au bureau et aux membres absents |
+| `src/lib/etats.ts` | Nom, ordre et résumé des six états d'un mois |
+| `src/components/glyphe-etat.tsx` | Le dessin de ces six états, et la frise |
 | `scripts/migration-r3.sql` | Ajout de la table des déclarations R3 |
 | `scripts/migration-frais.sql` | Ajout des frais de dépôt sur les virements |

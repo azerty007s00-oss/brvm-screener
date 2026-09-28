@@ -13,6 +13,7 @@ import { pourcent } from "@/lib/perf";
 import { STATUT_PENALITE, STATUT_VERSEMENT, libelleMode } from "@/lib/valeurs";
 import { BoutonImprimer } from "@/components/impression";
 import { Alerte, Carte } from "@/components/ui";
+import { Frise, LegendeEtats, initialeMois, statutLigne } from "@/components/glyphe-etat";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
@@ -78,6 +79,9 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
   const penalitesReglees = penalites.filter((p) => p.statut === STATUT_PENALITE.payee);
   const totalDu = penalitesDues.reduce((t, p) => t + p.montant, 0);
   const edite = new Date().toISOString().slice(0, 10);
+  /* Les 14 derniers mois, comme au registre : meme fenetre, memes formes. */
+  const fenetre = situation?.cellules.slice(-14) ?? [];
+  const statut = statutLigne(fenetre);
 
   const ligne = (libelle: string, valeur: string) => (
     <li className="flex justify-between gap-3 py-1">
@@ -134,6 +138,43 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
             </ul>
           </div>
         </section>
+
+        {/*
+         * Les quatorze derniers mois, en formes.
+         *
+         * Les chiffres du dessus disent combien ; la frise dit quand, et c'est
+         * ce qu'on cherche sur un releve signe -- quel mois manque, lequel a ete
+         * regle en retard. A l'impression les glyphes passent au noir : leur
+         * silhouette suffit, aucun aplat de couleur n'est demande au papier.
+         */}
+        {fenetre.length > 0 && (
+          <section className="mt-4">
+            <div className="mb-1 flex items-baseline justify-between gap-3">
+              <h2 className="text-sm font-semibold">Les 14 derniers mois</h2>
+              <span className="text-xs font-semibold" style={{ color: statut.encre }}>
+                {statut.texte}
+              </span>
+            </div>
+            <Frise cellules={fenetre} taille={17} etiquette={membre.nom} />
+            <div
+              className="mt-0.5 grid gap-1"
+              style={{ gridTemplateColumns: `repeat(${fenetre.length}, minmax(0, 1fr))` }}
+            >
+              {fenetre.map((c) => (
+                <span
+                  key={c.mois}
+                  className="text-center text-[10px]"
+                  style={{ color: "var(--discret)" }}
+                >
+                  {initialeMois(c.mois)}
+                </span>
+              ))}
+            </div>
+            <div className="mt-2">
+              <LegendeEtats />
+            </div>
+          </section>
+        )}
 
         <section className="mt-4">
           <h2 className="mb-1 text-sm font-semibold">Penalites (art. 9)</h2>
@@ -215,6 +256,31 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
             </ul>
           </section>
         )}
+
+        {/*
+         * Deux cadres, et la piece devient opposable.
+         *
+         * Un releve non signe n'est qu'une impression : le club en a deja vu
+         * circuler, contestees a l'assemblee suivante faute de savoir qui les
+         * avait arretees. Les cadres restent vides a l'ecran comme au papier --
+         * c'est une signature manuscrite qu'ils appellent, pas une case a
+         * cocher.
+         */}
+        <section className="a-imprimer mt-5 grid grid-cols-2 gap-3">
+          {["Le tresorier", "Le president"].map((qui) => (
+            <div
+              key={qui}
+              className="rounded-lg border p-2"
+              style={{ borderColor: "var(--bordure)" }}
+            >
+              <p className="text-[11px] font-semibold">{qui}</p>
+              <p className="text-[10px]" style={{ color: "var(--discret)" }}>
+                Date et signature
+              </p>
+              <div className="h-14" />
+            </div>
+          ))}
+        </section>
 
         <footer className="mt-5 border-t pt-3 text-[11px]" style={{ borderColor: "var(--bordure)", color: "var(--discret)" }}>
           Piece editee par l&apos;outil de suivi du club, sur les ecritures validees a la date
