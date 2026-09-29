@@ -1,6 +1,7 @@
 import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
-import { listerValorisations, synthese } from "@/lib/queries";
+import { listerApports, listerValorisations, netApport, synthese } from "@/lib/queries";
+import { netPlaceParDate } from "@/lib/placement";
 import { enregistrerValorisation, supprimerValorisation } from "@/app/actions/titres";
 import { pourcent } from "@/lib/perf";
 import { CLUB, REGLES, dateCourte, fcfa, nombre } from "@/lib/settings";
@@ -17,9 +18,13 @@ export const metadata = { title: "Portefeuille" };
 export default async function PagePortefeuille() {
   const membre = await exigerMembre();
 
-  let valos, s;
+  let valos, s, apports;
   try {
-    [valos, s] = await Promise.all([listerValorisations(), synthese()]);
+    /*
+     * `listerApports` est deja lu par `synthese`, et `cache()` le dedoublonne
+     * sur le rendu : le demander ici ne coute aucune requete de plus.
+     */
+    [valos, s, apports] = await Promise.all([listerValorisations(), synthese(), listerApports()]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
     throw e;
@@ -31,6 +36,65 @@ export default async function PagePortefeuille() {
     derniere && precedente ? (derniere.total - precedente.total) / precedente.total : null;
   const ecart = derniere && precedente ? derniere.total - precedente.total : null;
   const peutSaisir = peut(membre, "gererCompteTitres");
+
+  /*
+   * Le net place a la date de chaque releve : la somme des virements vers le
+   * compte-titres, retraits deduits, dates au plus tard ce jour-la. La courbe
+   * en a besoin pour separer ce que le club a verse de ce que la gestion a
+   * rapporte -- sans quoi la hausse de la valeur se lit comme une performance.
+   */
+  const netsPlaces = netPlaceParDate(
+    valos.map((v) => v.date_valo),
+    apports.map((a) => ({ date: a.date_transfert, net: netApport(a) })),
+  );
+  const tracesCourbe = valos.map((v, i) => ({
+    date: v.date_valo,
+    valeur: v.total,
+    netPlace: netsPlaces[i],
+  }));
+
+  /*
+   * LA VARIATION SE PREND SUR LA LISTE ENTIERE, non sur la tranche affichee.
+   *
+   * La page coupait la liste a sept, puis lisait le releve precedent dans la
+   * tranche : la septieme ligne n'en avait pas, et sa variation sortait vide
+   * -- alors que le huitieme releve existe et que l'ecart se calcule.
+   */
+  const duPlusRecent = [...valos].reverse();
+  const lignes = duPlusRecent.map((v, i) => {
+    const avant = duPlusRecent[i + 1];
+    return { v, ecartLigne: avant && avant.total !== 0 ? v.total / avant.total - 1 : null };
+  });
+  const recents = lignes.slice(0, 7);
+  const anciens = lignes.slice(7);
+
+  const ligneReleve = ({ v, ecartLigne }: (typeof lignes)[number]) => (
+    <li
+      key={v.id}
+      className="flex items-center gap-3 py-2 text-[13.5px]"
+      style={{ borderTop: "1px solid var(--line)" }}
+    >
+      <span className="min-w-0 flex-1 tabular-nums">{dateCourte(v.date_valo)}</span>
+      <span className="text-right font-medium tabular-nums">{nombre(v.total)}</span>
+      <span className="w-16 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>
+        {ecartLigne === null ? "" : pourcent(ecartLigne, 1)}
+      </span>
+      {peutSaisir && (
+        <MenuLigne
+          etiquette={`Actions sur le releve du ${dateCourte(v.date_valo)}`}
+          actions={[
+            {
+              libelle: "Supprimer ce releve",
+              action: supprimerValorisation,
+              champs: <ChampCache nom="id" valeur={v.id} />,
+              confirmation: `Supprimer le releve du ${dateCourte(v.date_valo)} ?`,
+              confirmer: "Supprimer",
+            },
+          ]}
+        />
+      )}
+    </li>
+  );
 
   /* Le meme formulaire, sorti du chemin de lecture. */
   const saisie = peutSaisir ? (
@@ -145,7 +209,7 @@ export default async function PagePortefeuille() {
           </span>
         }
       >
-        <CourbePortefeuille points={valos.map((v) => ({ date: v.date_valo, valeur: v.total }))} />
+        <CourbePortefeuille points={tracesCourbe} gainExercice={s.exercice?.gain ?? null} />
       </Carte>
 
       {/*
@@ -284,42 +348,45 @@ export default async function PagePortefeuille() {
           {valos.length === 0 ? (
             <Vide>Aucun releve saisi.</Vide>
           ) : (
-            <ul>
-              {[...valos]
-                .reverse()
-                .slice(0, 7)
-                .map((v, i, liste) => {
-                  const avant = liste[i + 1];
-                  const ecartLigne = avant ? v.total / avant.total - 1 : null;
-                  return (
-                    <li
-                      key={v.id}
-                      className="flex items-center gap-3 py-2 text-[13.5px]"
-                      style={{ borderTop: "1px solid var(--line)" }}
+            <>
+              <ul>{recents.map(ligneReleve)}</ul>
+              {/*
+                * Les plus anciens se replient, ils ne disparaissent pas.
+                *
+                * La page n'en montrait que sept, sans rien dire des autres :
+                * la liste comptait quatorze releves avant la refonte, et les
+                * sept premieres annees du club s'etaient tues. Un <details>
+                * plutot qu'un lien : il n'y a pas d'autre page ou aller, et
+                * celui-ci s'ouvre sans JavaScript.
+                */}
+              {anciens.length > 0 && (
+                <details className="mt-1">
+                  <summary
+                    className="tapable flex h-12 cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 text-[13px] lg:h-11"
+                    style={{ color: "var(--ink-2)" }}
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="14"
+                      height="14"
+                      aria-hidden="true"
+                      className="chevron flex-none"
                     >
-                      <span className="min-w-0 flex-1 tabular-nums">{dateCourte(v.date_valo)}</span>
-                      <span className="text-right font-medium tabular-nums">{nombre(v.total)}</span>
-                      <span className="w-16 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>
-                        {ecartLigne === null ? "" : pourcent(ecartLigne, 1)}
-                      </span>
-                      {peutSaisir && (
-                        <MenuLigne
-                          etiquette={`Actions sur le releve du ${dateCourte(v.date_valo)}`}
-                          actions={[
-                            {
-                              libelle: "Supprimer ce releve",
-                              action: supprimerValorisation,
-                              champs: <ChampCache nom="id" valeur={v.id} />,
-                              confirmation: `Supprimer le releve du ${dateCourte(v.date_valo)} ?`,
-                              confirmer: "Supprimer",
-                            },
-                          ]}
-                        />
-                      )}
-                    </li>
-                  );
-                })}
-            </ul>
+                      <path
+                        d="M9.5 6 L15.5 12 L9.5 18"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    Afficher les {anciens.length} releves plus anciens
+                  </summary>
+                  <ul className="contenu-depliant">{anciens.map(ligneReleve)}</ul>
+                </details>
+              )}
+            </>
           )}
           {peutSaisir && (
             <p className="mt-3 text-[12.5px] leading-relaxed" style={{ color: "var(--ink-3)" }}>

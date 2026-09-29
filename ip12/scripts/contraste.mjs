@@ -1,20 +1,27 @@
 // Contraste des couples fond/encre poses en style en ligne.
 // Lancement : npm run verif:contraste
 //
-// SEPT FOIS la meme faute est passee : un fond et une encre pointes sur le meme
-// jeton, ou sur deux jetons trop proches. Elle ne se voit pas a la lecture -- le
-// code dit « --sunk » d'un cote et « --sunk » de l'autre, ce qui n'a rien
-// d'alarmant -- et ne se voit qu'en ouvrant la page, dans le bon theme.
+// HUIT FOIS la meme faute est passee : une encre posee sur un fond trop proche
+// d'elle. Elle ne se voit pas a la lecture -- le code dit « --sunk » d'un cote
+// et « --sunk » de l'autre, ce qui n'a rien d'alarmant -- et ne se voit qu'en
+// ouvrant la page, dans le bon theme.
 //
-// La premiere version de ce controle en a trouve six, puis en a laisse passer
-// une septieme : la pastille « Acces total » de l'administration, fond en rgba()
-// litteral et encre en jeton, sur deux lignes separees. Elle s'affichait vide
-// sur le site en ligne. Ce script lit donc l'objet de style entier, sur autant
-// de lignes qu'il en occupe, et ramene a une couleur aussi bien les jetons que
-// le #rrggbb et le rgba() -- ce dernier compose avec le fond de la page.
+// Les deux premieres versions lisaient le fichier a l'expression reguliere, et
+// ne mesuraient qu'un objet de style declarant A LA FOIS un fond et une encre.
+// Elles ont donc laisse passer la huitieme : l'explication des reglages
+// manquants, `color: var(--line-2)` seul, sur un fond d'alerte herite du bloc
+// parent -- 1,22:1, illisible, et c'etait justement le texte qui dit ce qui
+// manque.
+//
+// Cette version lit l'arbre du fichier avec le compilateur TypeScript. Elle
+// suit donc la VRAIE imbrication des elements : une encre declaree seule est
+// mesuree contre le fond de son ancetre le plus proche, et a defaut contre le
+// fond de la page. Aucune heuristique d'indentation, donc aucune fausse alerte
+// -- la seule chose qu'un controle ne doit jamais produire.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import ts from "typescript";
 
 const RACINE = new URL("..", import.meta.url).pathname;
 const CSS = readFileSync(join(RACINE, "src/app/globals.css"), "utf8");
@@ -35,13 +42,12 @@ function declarationsDuBloc(bloc) {
  *
  * ON RESOUT APRES AVOIR FUSIONNE, jamais avant.
  *
- * La premiere version resolvait le theme clair, puis partait de ce resultat
+ * Une version precedente resolvait le theme clair, puis partait de ce resultat
  * pour le theme sombre. Or `--discret: var(--ink-2)` n'est declare qu'une fois,
  * dans :root : le bloc sombre ne redefinit que `--ink-2`. En resolvant trop
  * tot, l'alias devenait le brun clair et ne suivait plus -- le controle voyait
  * alors un texte invisible la ou le navigateur, qui resout `var()` a l'emploi,
- * affiche un texte parfaitement lisible. Il a signale une faute qui n'existait
- * pas, ce qui est la seule chose qu'un controle ne doit jamais faire.
+ * affiche un texte parfaitement lisible.
  *
  * Un jeton peut en designer un autre sur deux ou trois rangs ; on deroule avec
  * une borne, sinon une boucle de references ferait tourner le controle au lieu
@@ -91,14 +97,17 @@ function contraste(a, b) {
 /* ------------------------------------------------------------ les couleurs */
 
 /** Une valeur CSS ramenee a un #rrggbb, ou null si elle ne s'y ramene pas. */
-function couleur(valeur, jetons) {
-  const v = valeur.trim();
-  if (v.startsWith("var(")) return jetons[v.slice(4, v.indexOf(")"))] ?? null;
+function couleur(valeur, jetons, dessous) {
+  const v = String(valeur).trim();
+  if (v.startsWith("var(")) {
+    const nom = v.slice(4, v.indexOf(")")).trim();
+    return jetons[nom] ?? null;
+  }
   if (/^#[0-9a-f]{6}$/i.test(v)) return v;
   if (/^#[0-9a-f]{3}$/i.test(v)) return "#" + [...v.slice(1)].map((c) => c + c).join("");
 
   /*
-   * Un rgba() translucide se pose sur le fond de la page : on le compose avec
+   * Un rgba() translucide se pose sur ce qu'il y a dessous : on le compose avec
    * lui, sinon on mesurerait une couleur qui n'existe nulle part.
    */
   const rgba = v.match(
@@ -107,15 +116,15 @@ function couleur(valeur, jetons) {
   if (rgba) {
     const [r, g, b] = rgba.slice(1, 4).map(Number);
     const a = rgba[4] === undefined ? 1 : Number(rgba[4]);
-    const page = jetons["--page"] ?? "#ffffff";
-    const fond = [1, 3, 5].map((i) => parseInt(page.slice(i, i + 2), 16));
+    const base = dessous ?? jetons["--page"] ?? "#ffffff";
+    const fond = [1, 3, 5].map((i) => parseInt(base.slice(i, i + 2), 16));
     const melange = [r, g, b].map((c, i) => Math.round(c * a + fond[i] * (1 - a)));
     return "#" + melange.map((c) => c.toString(16).padStart(2, "0")).join("");
   }
   return null;
 }
 
-/* ------------------------------------------------------------- les couples */
+/* --------------------------------------------------------------- l'arbre */
 
 function fichiers(dossier) {
   return readdirSync(dossier).flatMap((nom) => {
@@ -125,42 +134,112 @@ function fichiers(dossier) {
   });
 }
 
-/** Un objet de style JSX, quelle que soit sa mise en page. */
-const OBJET = /style=\{\{([\s\S]*?)\}\}/g;
-const declaration = (nom, corps) =>
-  corps.match(new RegExp(`(?:^|[,{\\s])${nom}\\s*:\\s*"([^"]+)"`));
+/**
+ * Les valeurs possibles d'une expression de style, en texte.
+ *
+ * Un ternaire donne ses deux branches : `ici ? "var(--ink)" : "var(--ink-2)"`
+ * pose deux encres sur le meme fond, et les deux doivent tenir. Tout ce qui
+ * n'est pas une chaine connue a l'avance -- un appel, une variable -- ne se
+ * mesure pas ici et ne compte pas comme une faute.
+ */
+function valeursPossibles(noeud) {
+  if (ts.isStringLiteral(noeud) || ts.isNoSubstitutionTemplateLiteral(noeud)) return [noeud.text];
+  if (ts.isConditionalExpression(noeud)) {
+    return [...valeursPossibles(noeud.whenTrue), ...valeursPossibles(noeud.whenFalse)];
+  }
+  if (ts.isParenthesizedExpression(noeud)) return valeursPossibles(noeud.expression);
+  /* `a ?? "var(--ink)"` : la branche de droite est celle qu'on peut mesurer. */
+  if (ts.isBinaryExpression(noeud) && noeud.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) {
+    return valeursPossibles(noeud.right);
+  }
+  return [];
+}
+
+/** Le fond et l'encre declares par l'attribut `style` d'une balise. */
+function styleDeLaBalise(ouvrante) {
+  const sortie = { fonds: [], encres: [] };
+  const attr = ouvrante.attributes.properties.find(
+    (p) => ts.isJsxAttribute(p) && p.name.getText() === "style",
+  );
+  if (!attr || !attr.initializer || !ts.isJsxExpression(attr.initializer)) return sortie;
+  const objet = attr.initializer.expression;
+  if (!objet || !ts.isObjectLiteralExpression(objet)) return sortie;
+
+  for (const prop of objet.properties) {
+    if (!ts.isPropertyAssignment(prop)) continue;
+    const nom = ts.isIdentifier(prop.name) || ts.isStringLiteral(prop.name) ? prop.name.text : null;
+    if (nom === "background" || nom === "backgroundColor") {
+      sortie.fonds.push(...valeursPossibles(prop.initializer));
+    } else if (nom === "color") {
+      sortie.encres.push(...valeursPossibles(prop.initializer));
+    }
+  }
+  return sortie;
+}
+
+/* -------------------------------------------------------------- le controle */
 
 let mesures = 0;
 const fautes = [];
+const vus = new Set();
 
 for (const chemin of fichiers(join(RACINE, "src"))) {
   const source = readFileSync(chemin, "utf8");
-  for (const trouve of source.matchAll(OBJET)) {
-    const corps = trouve[1];
-    const fond = declaration("background", corps);
-    const encre = declaration("color", corps);
-    if (!fond || !encre) continue;
-    const ligne = source.slice(0, trouve.index).split("\n").length;
+  const arbre = ts.createSourceFile(chemin, source, ts.ScriptTarget.ESNext, true, ts.ScriptKind.TSX);
 
-    for (const [theme, jetons] of [
-      ["clair", clair],
-      ["sombre", sombre],
-    ]) {
-      const f = couleur(fond[1], jetons);
-      const e = couleur(encre[1], jetons);
-      // Une valeur qu'on ne sait pas ramener a une couleur -- « inherit »,
-      // « currentColor » -- n'est pas une faute : elle n'est pas mesurable ici.
-      if (!f || !e) continue;
-      mesures++;
-      const r = contraste(f, e);
-      if (r < 4.5) {
-        fautes.push(
-          `${chemin.replace(RACINE, "")}:${ligne} — ${fond[1]} sous ${encre[1]}, ` +
-            `${r.toFixed(2)}:1 en ${theme}${r < 3 ? " (invisible)" : ""}`,
-        );
+  /*
+   * On descend l'arbre en portant le dernier fond declare au-dessus. Le fond
+   * de depart est celui de la page : aucune classe utilitaire de fond n'existe
+   * dans ce projet -- tous les fonds passent par un objet `style` --, donc ce
+   * qui n'a pas d'ancetre colore est bien pose sur la page.
+   */
+  const descendre = (noeud, herite) => {
+    let ici = herite;
+    const ouvrante = ts.isJsxElement(noeud)
+      ? noeud.openingElement
+      : ts.isJsxSelfClosingElement(noeud)
+        ? noeud
+        : null;
+
+    if (ouvrante) {
+      const { fonds, encres } = styleDeLaBalise(ouvrante);
+      if (fonds.length > 0) ici = fonds;
+      const ligne = arbre.getLineAndCharacterOfPosition(ouvrante.getStart()).line + 1;
+
+      for (const encre of encres) {
+        for (const fond of ici) {
+          for (const [theme, jetons] of [
+            ["clair", clair],
+            ["sombre", sombre],
+          ]) {
+            const f = couleur(fond, jetons, null);
+            const e = couleur(encre, jetons, f);
+            /*
+             * Une valeur qu'on ne sait pas ramener a une couleur -- « inherit »,
+             * « currentColor », un degrade -- n'est pas une faute : elle n'est
+             * pas mesurable ici.
+             */
+            if (!f || !e) continue;
+            const cle = `${chemin}:${ligne}:${fond}:${encre}:${theme}`;
+            if (vus.has(cle)) continue;
+            vus.add(cle);
+            mesures++;
+            const r = contraste(f, e);
+            if (r < 4.5) {
+              fautes.push(
+                `${chemin.replace(RACINE, "")}:${ligne} — ${fond} sous ${encre}, ` +
+                  `${r.toFixed(2)}:1 en ${theme}${r < 3 ? " (invisible)" : ""}`,
+              );
+            }
+          }
+        }
       }
     }
-  }
+
+    ts.forEachChild(noeud, (enfant) => descendre(enfant, ici));
+  };
+
+  descendre(arbre, ["var(--page)"]);
 }
 
 if (fautes.length > 0) {

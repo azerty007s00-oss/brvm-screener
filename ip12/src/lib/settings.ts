@@ -154,7 +154,9 @@ export const POSTES_UNIQUES: Role[] = ["president", "vice_president", "tresorier
 
 /** Montant en FCFA, sans decimale : 5000 -> "5 000 FCFA". */
 export function fcfa(montant: number): string {
-  return `${nombre(montant)} FCFA`;
+  /* L'unite ne quitte pas son montant : « 3 857 845 » sur une ligne et
+   * « FCFA » sur la suivante se lit comme deux informations. */
+  return `${nombre(montant)} FCFA`;
 }
 
 /**
@@ -163,9 +165,20 @@ export function fcfa(montant: number): string {
  * Reserve aux couples ou l'unite vaut pour les deux : « 2 500 sur 5 000 FCFA »
  * tient sur une ligne la ou « 2 500 FCFA sur 5 000 FCFA » passe a la suivante,
  * et le premier FCFA n'apprend rien.
+ *
+ * LES ESPACES DE GROUPEMENT SONT INSECABLES.
+ *
+ * La premiere version les remplacait par des espaces ordinaires, pour que la
+ * chaine se compare et se cherche comme on l'ecrit. Le navigateur y a vu des
+ * points de coupure : « Dernier releve : 3 / 857 845 FCFA » dans le panneau,
+ * « gain 1 / 005 751 » dans le bandeau sur telephone. Un montant coupe en deux
+ * ne se lit plus comme un montant -- il se lit comme deux nombres. On garde
+ * donc l'insecable, en ramenant l'etroit (U+202F) sur l'ordinaire (U+00A0) :
+ * les deux ne se coupent pas, mais U+202F manque a beaucoup de polices
+ * systeme, et s'y affiche en rectangle vide.
  */
 export function nombre(montant: number): string {
-  return Math.round(montant).toLocaleString("fr-FR").replace(/ | /g, " ");
+  return Math.round(montant).toLocaleString("fr-FR").replace(/ /g, " ");
 }
 
 /** "2026-09-01" -> "septembre 2026" */

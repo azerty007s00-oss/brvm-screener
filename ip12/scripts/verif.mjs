@@ -31,13 +31,14 @@ const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois,
 } = await import("../.verif/penalites.mjs");
-const { tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois } = await import(
+const { tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa } = await import(
   "../.verif/settings.mjs"
 );
 const { statutLigne, moisCourt, initialeMois, resumeFrise, LIBELLE_STATUT } = await import(
   "../.verif/etats.mjs"
 );
 const { borne, retenus, tracable } = await import("../.verif/horizons.mjs");
+const { netPlaceParDate, decomposer, gainConcorde } = await import("../.verif/placement.mjs");
 
 /* ------------------------------------------------------------- performance */
 
@@ -872,8 +873,94 @@ assert.equal(
   false,
 );
 
+/* ------------------------------------------------- net place et gain de gestion */
+
+/*
+ * LE GRAND CONTROLE : la decomposition du graphique et le Dietz de la synthese
+ * doivent tomber sur le meme gain.
+ *
+ * Ils suivent deux chemins independants. Le graphique fait
+ * (V fin - V debut) - (net place fin - net place debut) a partir des releves
+ * traces. La synthese fait V1 - V0 - C a partir des apports bruts. Si les deux
+ * divergent, l'un des deux ment, et la page montre deux verites.
+ */
+{
+  const apports = [
+    { date: "2025-11-20", montant: 300_000, sens: "vers_titres" },
+    { date: "2026-02-10", montant: 400_000, sens: "vers_titres" },
+    { date: "2026-05-04", montant: 350_000, sens: "vers_titres" },
+    { date: "2026-06-18", montant: 66_280, sens: "retrait" },
+    { date: "2026-09-28", montant: 0, sens: "vers_titres" },
+  ];
+  const net = (a) => (a.sens === "retrait" ? -a.montant : a.montant);
+  const flux = apports.map((a) => ({ date: a.date, net: net(a) }));
+
+  const dates = ["2026-01-01", "2026-03-15", "2026-09-28"];
+  const places = netPlaceParDate(dates, flux);
+
+  // Le virement du 20 novembre precede l'exercice : il compte au 1er janvier.
+  assert.equal(places[0], 300_000);
+  assert.equal(places[1], 700_000);
+  // Au plus tard ce jour-la : le mouvement du 28 septembre est dans le releve
+  // du 28 septembre. L'en exclure ferait passer son montant pour un gain.
+  assert.equal(places[2], 300_000 + 400_000 + 350_000 - 66_280);
+
+  const valeurs = [2_166_323, 2_800_000, 3_857_845];
+  const traces = dates.map((d, i) => ({ date: d, valeur: valeurs[i], netPlace: places[i] }));
+  const part = decomposer(traces);
+
+  assert.equal(part.ecartValeur, 3_857_845 - 2_166_323);
+  assert.equal(part.apportsNets, places[2] - places[0]);
+  assert.equal(part.gain, part.ecartValeur - part.apportsNets);
+
+  const dietz = dietzModifie(
+    valeurs[0],
+    valeurs[2],
+    apports.map((a) => ({ date: a.date, montant: net(a) })),
+    "2026-01-01",
+    "2026-09-28",
+  );
+  assert.equal(part.gain, dietz.gain, "le gain du graphique est celui du bandeau");
+  assert.ok(gainConcorde(part.gain, dietz.gain));
+
+  // Et le controle refuse ce qui ne tombe pas juste : un franc passe, deux non.
+  assert.ok(gainConcorde(part.gain, dietz.gain + 1));
+  assert.equal(gainConcorde(part.gain, dietz.gain + 2), false);
+  // Sans reference, on n'affiche rien : l'absence n'est pas une concordance.
+  assert.equal(gainConcorde(part.gain, null), false);
+}
+
+// Une periode d'un seul releve ne se decompose pas.
+assert.equal(decomposer([{ date: "2026-01-01", valeur: 1, netPlace: 1 }]), null);
+
+// Les flux arrivent de la base du plus recent au plus ancien : l'ordre ne
+// change rien au cumul.
+assert.deepEqual(
+  netPlaceParDate(
+    ["2026-06-30"],
+    [
+      { date: "2026-05-01", net: 200 },
+      { date: "2026-01-01", net: 100 },
+      { date: "2026-12-01", net: 900 },
+    ],
+  ),
+  [300],
+);
+
+/* ------------------------------------------------------- montants insecables */
+
+/*
+ * Un montant ne se coupe pas en deux. « 3 857 845 FCFA » revenait a la ligne
+ * entre le 3 et le 857, et se lisait alors comme deux nombres.
+ */
+assert.equal(nombre(3857845).includes(" "), false, "aucune espace ordinaire dans un montant");
+assert.equal(nombre(3857845), "3 857 845");
+assert.equal(fcfa(5000), "5 000 FCFA");
+assert.equal(nombre(3857845).includes(" "), false, "pas d'espace fine : elle manque aux polices systeme");
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
-    "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons",
+    "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons, "
+    + "net place et gain de gestion",
 );

@@ -350,7 +350,13 @@ export default async function TableauDeBord() {
           </Carte>
 
           <Carte titre="Performance">
+            {/*
+              * Deux colonnes, a toute largeur : cette carte occupe une
+              * demi-colonne des 1 280 px, ou quatre montants a sept chiffres
+              * ne tiennent pas cote a cote.
+              */}
             <CarteEtat
+              colonnes={2}
               chiffres={[
                 { libelle: "Verse par le club", valeur: nombre(s.totalVerse), unite: "FCFA" },
                 { libelle: "Place en bourse", valeur: nombre(s.totalApports), unite: "FCFA" },

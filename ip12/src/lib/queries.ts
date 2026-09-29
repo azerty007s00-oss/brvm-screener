@@ -172,6 +172,19 @@ async function versementsEnAttenteBrut(): Promise<Versement[]> {
 
 /* -------------------------------------------------------------- compte-titres */
 
+/**
+ * Le net d'un mouvement du compte-titres : `direction` distingue l'apport du
+ * retrait, et le net investi est leur difference.
+ *
+ * Exporte, et non recalcule chez l'appelant : le graphique du portefeuille
+ * affiche desormais le net place a cote de la valeur, et son chiffre doit etre
+ * celui de la synthese, au franc pres. Deux definitions du meme net finiraient
+ * par diverger, et la page montrerait deux verites.
+ */
+export function netApport(a: Pick<Apport, "montant" | "sens">): number {
+  return a.sens === SENS_TRANSFERT.sortie ? -a.montant : a.montant;
+}
+
 async function listerApportsBrut(): Promise<Apport[]> {
   const sql = db();
   const projection = (avecFrais: boolean) => `
@@ -841,9 +854,7 @@ async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
   const valorisation = valos.at(-1) ?? null;
   const totalVerse = situations.reduce((s, m) => s + m.verse, 0);
 
-  // direction distingue l'apport du retrait : le net investi est la difference.
-  const net = (a: (typeof apports)[number]) =>
-    a.sens === SENS_TRANSFERT.sortie ? -a.montant : a.montant;
+  const net = netApport;
   const totalApports = apports.reduce((s, a) => s + net(a), 0);
 
   /*

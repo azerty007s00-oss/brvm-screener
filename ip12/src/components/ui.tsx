@@ -207,6 +207,7 @@ export function EnTeteEcran({
  */
 export function CarteEtat({
   chiffres,
+  colonnes,
 }: {
   chiffres: {
     libelle: string;
@@ -216,7 +217,18 @@ export function CarteEtat({
     /** Conserve pour les appels existants ; sans effet sur la couleur. */
     accent?: "or" | "vert" | "rouge";
   }[];
+  /**
+   * Le nombre de colonnes une fois la place venue. Par defaut, tous les
+   * chiffres sur une seule rangee.
+   *
+   * A poser a 2 quand le bandeau vit dans une demi-colonne : sur l'accueil, la
+   * carte « Performance » y alignait quatre cellules, et « 2 090 000 »,
+   * « 2 177 635 » et « 84 500 FCFA » debordaient de 44 a 53 px, l'un
+   * par-dessus l'autre. Une rangee de quatre demande la pleine largeur.
+   */
+  colonnes?: number;
 }) {
+  const rangeeUnique = colonnes === undefined;
   return (
     <div
       /*
@@ -224,10 +236,10 @@ export function CarteEtat({
        * chiffres cote a cote se comparent d'un regard, empiles ils se lisent
        * l'un apres l'autre.
        */
-      className="apparait grid grid-cols-2 border-t border-b"
+      className={`apparait grid grid-cols-2 border-t border-b${rangeeUnique ? " rangee-unique" : ""}`}
       style={{
         borderColor: "var(--line)",
-        ["--colonnes" as string]: chiffres.length,
+        ["--colonnes" as string]: colonnes ?? chiffres.length,
         ["--rang" as string]: 1,
       }}
     >

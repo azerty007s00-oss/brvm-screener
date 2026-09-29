@@ -2,15 +2,21 @@
 
 import { useEffect, useRef, useState } from "react";
 import { dateCourte, fcfa, nombre } from "@/lib/settings";
-import { pourcent } from "@/lib/perf";
 import { Selecteur } from "@/components/selecteur";
 import { retenus, tracable, type Horizon } from "@/lib/horizons";
+import { decomposer, gainConcorde, type Trace } from "@/lib/placement";
 
-type Point = { date: string; valeur: number };
+/** La gouttiere des ordonnees, a droite du trace. En HTML, hors du SVG. */
+const GOUTTIERE = 52;
 
 /** Le jour, compte depuis l'epoque : la seule unite comparable entre releves. */
 function enJours(iso: string): number {
   return Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 86_400_000;
+}
+
+/** Un montant signe, avec le moins typographique : « +683 720 », « −12 000 ». */
+function signe(v: number): string {
+  return `${v >= 0 ? "+" : "−"}${nombre(Math.abs(v))}`;
 }
 
 /**
@@ -29,6 +35,11 @@ function enJours(iso: string): number {
  * plus bas releve et finit au plus haut redresse n'importe quelle pente : elle
  * fait d'une hausse de 3 % une ascension.
  *
+ * DEUX COURBES, ET LA BANDE ENTRE ELLES. La valeur relevee, et le net place en
+ * bourse. Ce qui les separe est le gain de gestion : on le voit, et on le lit
+ * sous le graphique. Sans la seconde courbe, la premiere raconte surtout les
+ * cotisations du club.
+ *
  * LA BOITE SUIT LA LARGEUR DISPONIBLE, et non un rapport fixe. Avec un viewBox
  * de 586 par 200, un telephone de 390 px rendait un graphique de 102 px de
  * haut : la courbe s'y ecrasait, et le trait de 2 px devenait un cheveu. Sur un
@@ -36,7 +47,17 @@ function enJours(iso: string): number {
  * place et pose un viewBox a l'echelle 1:1 -- un pixel du dessin vaut un pixel
  * a l'ecran, quel que soit l'ecran.
  */
-export function CourbePortefeuille({ points }: { points: Point[] }) {
+export function CourbePortefeuille({
+  points,
+  gainExercice,
+}: {
+  points: Trace[];
+  /**
+   * Le gain de gestion de l'exercice tel que la synthese le calcule (Dietz
+   * modifie). Sert de controle : voir `gainConcorde`.
+   */
+  gainExercice: number | null;
+}) {
   const boite = useRef<HTMLDivElement>(null);
   /*
    * L'exercice par defaut : c'est la periode dont le club rend compte en
@@ -54,7 +75,17 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
   useEffect(() => {
     const el = boite.current;
     if (!el) return;
-    const suivre = () => setLargeur(Math.max(240, Math.round(el.clientWidth)));
+    /*
+     * ON MESURE LE TRACE, NON LE BLOC QUI LE PORTE.
+     *
+     * `clientWidth` du bloc comprend les 52 px de gouttiere reserves aux
+     * ordonnees. Le viewBox valait donc 52 px de plus que la surface ou le SVG
+     * s'etire, et `preserveAspectRatio="none"` compressait le dessin d'autant :
+     * 1 016 unites pour 964 pixels a 1 440, 350 pour 298 sur un telephone. Les
+     * points, cercles dans le dessin, sortaient en ovales.
+     */
+    const suivre = () =>
+      setLargeur(Math.max(240, Math.round(el.clientWidth - GOUTTIERE)));
     suivre();
     const observateur = new ResizeObserver(suivre);
     observateur.observe(el);
@@ -101,7 +132,11 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
   const t1 = Math.max(...jours);
   const duree = t1 - t0 || 1;
 
-  const valeurs = traces.map((p) => p.valeur);
+  /*
+   * L'echelle couvre les DEUX series : une bande de gain sortie du cadre par le
+   * bas serait pire qu'absente.
+   */
+  const valeurs = traces.flatMap((p) => [p.valeur, p.netPlace]);
   const min = Math.min(...valeurs);
   const max = Math.max(...valeurs);
 
@@ -123,9 +158,18 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
   const paliers: number[] = [];
   for (let v = y0; v <= y1 + 1; v += pas) paliers.push(v);
 
-  const ligne = traces
-    .map((p, i) => `${i === 0 ? "M" : "L"} ${x(p.date).toFixed(1)} ${y(p.valeur).toFixed(1)}`)
-    .join(" ");
+  const chemin = (lire: (p: Trace) => number) =>
+    traces
+      .map((p, i) => `${i === 0 ? "M" : "L"} ${x(p.date).toFixed(1)} ${y(lire(p)).toFixed(1)}`)
+      .join(" ");
+
+  const ligneValeur = chemin((p) => p.valeur);
+  const lignePlace = chemin((p) => p.netPlace);
+  /* La bande : la valeur a l'aller, le net place au retour. */
+  const bande = `${ligneValeur} ${[...traces]
+    .reverse()
+    .map((p) => `L ${x(p.date).toFixed(1)} ${y(p.netPlace).toFixed(1)}`)
+    .join(" ")} Z`;
 
   /** « 1,5 M » plutot que « 1 500 000 » : la gouttiere ne fait que 52 px. */
   const enMillions = (v: number) =>
@@ -135,22 +179,32 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
 
   const dernier = traces[traces.length - 1];
   const premier = traces[0];
-  const ecart = dernier.valeur - premier.valeur;
+
+  /*
+   * LA DECOMPOSITION, ET SON CONTROLE.
+   *
+   * Sur l'exercice, le gain calcule ici doit retomber sur celui que la synthese
+   * annonce par Dietz modifie. Les deux chemins sont independants ; s'ils
+   * divergent, on n'affiche pas le gain -- seulement la variation de la valeur,
+   * en disant qu'elle comprend les apports. Mieux vaut une phrase modeste et
+   * vraie qu'un troisieme chiffre de performance que personne ne peut
+   * rapprocher des deux autres.
+   */
+  const part = decomposer(traces);
+  const concorde =
+    part !== null && (actif !== "exercice" || gainConcorde(part.gain, gainExercice));
+
+  const nomPeriode =
+    actif === "trimestre"
+      ? "Sur trois mois"
+      : actif === "exercice"
+        ? `Sur l'exercice ${fin.slice(0, 4)}`
+        : `Depuis ${dateCourte(premier.date)}`;
 
   return (
     <figure>
       <div className="sans-impression mb-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
-          Sur la periode :{" "}
-          <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
-            {ecart >= 0 ? "+" : "\u2212"}
-            {nombre(Math.abs(ecart))} FCFA
-          </span>{" "}
-          <span className="tabular-nums">
-            ({pourcent(premier.valeur === 0 ? null : ecart / premier.valeur)})
-          </span>
-          , en {traces.length} releves.
-        </p>
+        <Legende />
         <Selecteur
           etiquette="Periode du graphique"
           options={choix}
@@ -166,20 +220,26 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
        * n'etait plus lisible. En HTML il garde sa taille, et se place en
        * pourcentage de la hauteur du trace.
        */}
-      <div ref={boite} className="relative" style={{ paddingRight: 52 }}>
+      <div ref={boite} className="relative" style={{ paddingRight: GOUTTIERE }}>
         {/*
-         * La hauteur est posee en CSS et le dessin s'y etire : avant que le
-         * composant ait mesure sa place -- au premier rendu, et toujours si le
-         * navigateur n'execute rien -- un rapport fixe laissait deux bandes
-         * vides au-dessus et au-dessous. `vector-effect` garde alors le trait a
-         * 2 px, quelle que soit l'echelle.
+         * La hauteur est posee sur le SVG lui-meme, a la valeur qui a servi au
+         * calcul.
+         *
+         * Elle venait de classes de rupture -- 200 px, 300 a partir de 1 024 --
+         * quand `H` se decide, lui, a 520 px de trace. Entre les deux, un
+         * dessin haut de 300 unites entrait dans une boite de 200 pixels : la
+         * courbe s'y ecrasait d'un tiers et les points sortaient en ovales de
+         * 4,6 sur 3,3. Une seule source pour la hauteur, et le rapport reste
+         * 1:1. `vector-effect` garde alors le trait a 2 px, quelle que soit
+         * l'echelle.
          */}
         <svg
           viewBox={`0 0 ${L} ${H}`}
           preserveAspectRatio="none"
-          className="block h-[200px] w-full lg:h-[300px]"
+          className="block w-full"
+          style={{ height: H }}
           role="img"
-          aria-label={`Valeur du compte-titres, ${traces.length} releves du ${dateCourte(premier.date)} au ${dateCourte(dernier.date)} : de ${nombre(min)} a ${nombre(max)} FCFA`}
+          aria-label={`Valeur du compte-titres et net place en bourse, ${traces.length} releves du ${dateCourte(premier.date)} au ${dateCourte(dernier.date)} : de ${nombre(min)} a ${nombre(max)} FCFA`}
         >
           {paliers.map((v) => (
             <line
@@ -194,9 +254,27 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
             />
           ))}
 
+          {/* Ce qui separe les deux courbes est le gain de gestion. */}
+          <path d={bande} fill="var(--c-bande)" stroke="none" />
+
+          {/*
+           * Le net place : en tirets, parce que ce n'est pas une mesure de
+           * marche mais la somme de ce que le club a verse -- un escalier, que
+           * l'on relie faute de connaitre sa marche entre deux releves.
+           */}
+          <path
+            d={lignePlace}
+            fill="none"
+            stroke="var(--ink-3)"
+            strokeWidth="1.25"
+            strokeDasharray="1.5 4"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+
           {/* Des segments droits : entre deux releves, on ne sait rien. */}
           <path
-            d={ligne}
+            d={ligneValeur}
             fill="none"
             stroke="var(--gold)"
             strokeWidth="2"
@@ -232,16 +310,97 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
 
       <div
         className="mt-1 flex justify-between text-[12px] tabular-nums"
-        style={{ color: "var(--ink-3)", paddingRight: 52 }}
+        style={{ color: "var(--ink-3)", paddingRight: GOUTTIERE }}
       >
         <span>{dateCourte(premier.date)}</span>
         <span>{dateCourte(dernier.date)}</span>
       </div>
 
-      <figcaption className="mt-2 flex justify-between text-[12.5px]" style={{ color: "var(--ink-2)" }}>
-        <span>Plus bas {fcfa(min)}</span>
-        <span>Plus haut {fcfa(max)}</span>
+      <figcaption
+        className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-[12.5px]"
+        style={{ color: "var(--ink-2)" }}
+      >
+        <span style={{ color: "var(--ink-3)" }}>{nomPeriode}</span>
+        {part === null ? (
+          <span>
+            Plus bas {fcfa(min)} &middot; plus haut {fcfa(max)}
+          </span>
+        ) : concorde ? (
+          <>
+            <Poste libelle="Valeur" montant={part.ecartValeur} />
+            <Poste libelle="Apports nets" montant={part.apportsNets} />
+            <Poste libelle="Gain de gestion" montant={part.gain} />
+          </>
+        ) : (
+          <span>
+            Variation de la valeur{" "}
+            <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+              {signe(part.ecartValeur)} FCFA
+            </span>
+            , apports compris.
+          </span>
+        )}
       </figcaption>
     </figure>
+  );
+}
+
+/** Un poste de la decomposition : son nom, puis son montant a l'encre. */
+function Poste({ libelle, montant }: { libelle: string; montant: number }) {
+  return (
+    <span>
+      {libelle}{" "}
+      <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+        {signe(montant)}
+      </span>
+    </span>
+  );
+}
+
+/**
+ * La legende. Elle nomme les deux courbes et la bande : sans elle, la seconde
+ * ligne en tirets n'est qu'une ligne en tirets.
+ */
+function Legende() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[12px]" style={{ color: "var(--ink-2)" }}>
+      <span className="flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className="block flex-none"
+          style={{ width: 16, height: 2, background: "var(--gold)", borderRadius: 2 }}
+        />
+        Valeur relevee
+      </span>
+      <span className="flex items-center gap-1.5">
+        <svg width="16" height="2" viewBox="0 0 16 2" aria-hidden="true" className="flex-none">
+          <line
+            x1="0"
+            y1="1"
+            x2="16"
+            y2="1"
+            stroke="var(--ink-3)"
+            strokeWidth="1.5"
+            strokeDasharray="1.5 3"
+            strokeLinecap="round"
+          />
+        </svg>
+        Net place en bourse
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span
+          aria-hidden="true"
+          className="block flex-none"
+          style={{
+            width: 12,
+            height: 12,
+            background: "var(--c-bande)",
+            border: "1px solid var(--line-2)",
+            borderRadius: 3,
+          }}
+        />
+        Gain de gestion
+      </span>
+    </div>
   );
 }

@@ -182,7 +182,13 @@ export default async function PageAdministration() {
                 <code>{c.cle}</code>
               </strong>
               <br />
-              <span style={{ color: "var(--line-2)" }}>{c.explication}</span>
+              {/*
+                * `--line-2` est une couleur de filet, non d'encre : posee sur
+                * le fond d'alerte elle donnait 1,22:1 en clair -- l'explication
+                * de ce qui manque etait la seule chose qu'on ne pouvait pas
+                * lire. `--ink-2` tient 5,35:1 sur ce meme fond.
+                */}
+              <span style={{ color: "var(--ink-2)" }}>{c.explication}</span>
             </p>
           ))}
         </div>

@@ -155,6 +155,29 @@
   --pop: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 240 220 / 0.1);
 }
 
+/*
+ * LE FILET PAR DEFAUT EST LE FILET DU THEME.
+ *
+ * Tailwind pose `border-color: currentColor` sur tout element : un `divide-y`
+ * ou un `border-t` sans classe de couleur prend donc la couleur du TEXTE. Dix-
+ * sept listes de l'application etaient dans ce cas -- Mon compte, Versements,
+ * Titres, Caisse, Penalites, Membres, Administration -- et leurs separateurs
+ * sortaient a l'encre pleine : un trait noir la ou il fallait un filet, et en
+ * theme sombre un trait presque blanc qui decoupait la page en tranches.
+ *
+ * Le corriger a la source vaut mieux que d'ajouter `border-[--line]` partout :
+ * la faute reviendrait au premier `divide-y` ecrit sans y penser.
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--line);
+  }
+}
+
 body {
   background: var(--fond);
   color: var(--texte);
@@ -325,22 +348,44 @@ details[open] > summary .chevron { transform: rotate(90deg); }
  * parce qu'ils changent avec la largeur, ce qu'un style en ligne ne sait pas
  * faire.
  */
+/*
+ * Deux par rangee : la disposition de base, celle du telephone -- et celle que
+ * garde une carte etroite sur grand ecran, comme « Performance » sur l'accueil,
+ * qui occupe une demi-colonne.
+ */
 .cellule-chiffre { padding-inline: 16px 14px; }
 .cellule-chiffre:nth-child(odd) { padding-inline-start: 0; }
 .cellule-chiffre:nth-child(even) { padding-inline-end: 0; border-inline-start: 1px solid var(--line); }
 .cellule-chiffre:nth-child(n + 3) { border-block-start: 1px solid var(--line); }
 
 @media (min-width: 1024px) {
-  /* Une seule rangee : le nombre de colonnes vient du composant. */
-  .cellule-chiffre:first-child { grid-column-start: 1; }
-  .grid:has(> .cellule-chiffre) { grid-template-columns: repeat(var(--colonnes, 2), minmax(0, 1fr)); }
-  .cellule-chiffre {
+  /*
+   * UNE SEULE RANGEE, ET SEULEMENT QUAND LE BANDEAU LA DEMANDE.
+   *
+   * Les regles du telephone au-dessus portent une pseudo-classe : leur poids
+   * est 0,2,0. Celles d'ici etaient ecrites sur la seule classe, 0,1,0, et
+   * perdaient donc -- l'ordre d'ecriture n'y change rien. Resultat visible a
+   * partir de 1 024 px : la troisieme cellule et la cinquieme gardaient
+   * `padding-inline-start: 0` et leur texte touchait le filet, les cellules
+   * paires perdaient leur retrait a droite, et les cellules 3 et suivantes
+   * conservaient un filet horizontal qui les decalait d'un pixel.
+   *
+   * Le descendant `.rangee-unique >` ramene ces regles a 0,2,0 et les place
+   * apres : a poids egal, la derniere ecrite l'emporte. Et le bandeau qui n'a
+   * pas la place d'une rangee ne porte pas la classe, donc garde ses deux
+   * colonnes a toute largeur.
+   */
+  .rangee-unique { grid-template-columns: repeat(var(--colonnes, 2), minmax(0, 1fr)); }
+  .rangee-unique > .cellule-chiffre {
     padding-inline: 20px;
     border-block-start: none;
     border-inline-start: 1px solid var(--line);
   }
-  .cellule-chiffre:first-child { border-inline-start: none; }
-  .cellule-chiffre:last-child { padding-inline-end: 0; }
+  .rangee-unique > .cellule-chiffre:first-child {
+    padding-inline-start: 0;
+    border-inline-start: none;
+  }
+  .rangee-unique > .cellule-chiffre:last-child { padding-inline-end: 0; }
 }
 
 /*

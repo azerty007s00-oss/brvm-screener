@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import { listerVersements, situationsClub, synthese } from "@/lib/queries";
-import { changerMotDePasse } from "@/app/actions/auth";
+import { changerMotDePasse, seDeconnecter } from "@/app/actions/auth";
 import { joindreJustificatif } from "@/app/actions/versements";
 import { ChampJustificatif } from "@/components/justificatif";
 import { justificatifsParLot } from "@/lib/justificatifs";
@@ -9,6 +9,7 @@ import { ROLES, dateCourte, fcfa, moisLong, nombre } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction } from "@/components/formulaires";
 import { libelleMode } from "@/lib/valeurs";
 import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
+import { Bouton } from "@/components/boutons";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
@@ -193,6 +194,20 @@ export default async function PageMonCompte() {
           </div>
         )}
       </Carte>
+
+      {/*
+        * La sortie, sur telephone.
+        *
+        * La barre laterale porte son bouton « Quitter la session » ; elle
+        * n'existe qu'a partir de 1 024 px. En deca, c'est ici -- au bas de la
+        * seule page qui parle de la personne -- que la deconnexion se trouve,
+        * et non dans la navigation basse, qui sert a aller quelque part.
+        */}
+      <form action={seDeconnecter} className="sans-impression pt-2">
+        <Bouton type="submit" variante="secondaire">
+          Se deconnecter
+        </Bouton>
+      </form>
     </>
   );
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icone, type NomIcone } from "@/components/icones";
+import { seDeconnecter } from "@/app/actions/auth";
 
 export type Page = { href: string; libelle: string; icone: NomIcone };
 export type Rubrique = {
@@ -196,6 +197,29 @@ function BarreLaterale({
               </span>
             </span>
           </Link>
+          {/*
+            * LA SORTIE.
+            *
+            * La refonte a remplace le tiroir par cette coque, et le seul
+            * formulaire de deconnexion du site est parti avec lui : pendant
+            * quelques jours, on ne pouvait plus quitter sa session -- sur un
+            * telephone prete, ou depuis l'ordinateur d'un cybercafe d'Abidjan,
+            * c'est une porte laissee ouverte.
+            *
+            * Un formulaire, non un lien : la deconnexion change l'etat du
+            * serveur, et un lien se fait suivre par un prefetch.
+            */}
+          <form action={seDeconnecter} className="flex-none">
+            <button
+              type="submit"
+              aria-label="Quitter la session"
+              title="Quitter la session"
+              className="tapable grid h-9 w-9 place-items-center rounded-lg"
+              style={{ color: "var(--ink-2)" }}
+            >
+              <Icone.sortie taille={17} trait={1.5} />
+            </button>
+          </form>
         </div>
         <p className="text-[11px] leading-relaxed" style={{ color: "var(--ink-3)" }}>
           Investment Pioneers &middot; Abidjan
