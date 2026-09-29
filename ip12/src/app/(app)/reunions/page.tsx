@@ -6,6 +6,7 @@ import { dateCourte } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { Badge, Carte, EnTeteEcran, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
+import { MenuLigne } from "@/components/menu-ligne";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
@@ -121,15 +122,24 @@ export default async function PageReunions() {
                           ))}
                         </FormulaireAction>
                       </Depliant>
-                      <FormulaireAction
-                        action={supprimerReunion}
-                        libelle="Supprimer la seance"
-                        variante="danger"
-                        compact
-                        confirmation="Supprimer cette reunion et sa feuille de presence ?"
-                      >
-                        <ChampCache nom="id" valeur={r.id} />
-                      </FormulaireAction>
+                      {/*
+                        * La suppression d'une seance passe derriere les trois
+                        * points : elle emporte la feuille de presence avec
+                        * elle, et n'a pas a cotoyer le bouton de pointage.
+                        */}
+                      <MenuLigne
+                        etiquette={`Actions sur la seance du ${dateCourte(r.date_reunion)}`}
+                        actions={[
+                          {
+                            libelle: "Supprimer la seance",
+                            action: supprimerReunion,
+                            champs: <ChampCache nom="id" valeur={r.id} />,
+                            confirmation:
+                              "Supprimer cette reunion et sa feuille de presence ?",
+                            confirmer: "Supprimer",
+                          },
+                        ]}
+                      />
                     </div>
                   ) : (
                     pointee && (

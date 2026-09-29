@@ -82,19 +82,29 @@ export function Statistique({
 
 type Ton = "vert" | "rouge" | "ambre" | "neutre" | "or";
 
+/**
+ * UN STATUT EST DU TEXTE, non une pastille.
+ *
+ * « Rejete », « Valide », « En attente », « Due », « Reglee » : chaque ligne en
+ * portait une ou deux, rondes et colorees. Une liste de versements donnait
+ * ainsi quarante pastilles pour quarante lignes, qui pesaient plus a l'oeil que
+ * les montants -- et la couleur y disait tout, ce qu'un ecran mal regle et un
+ * lecteur sur six ne rendent pas.
+ *
+ * Il en reste le mot, a 12,5 px, sans fond ni bord. La teinte ne fait
+ * qu'appuyer : rouge pour ce qui manque ou bloque, ambre pour ce qui attend,
+ * encre discrete pour le reste. Le mot suffit sans elle.
+ */
 export function Badge({ ton = "neutre", children }: { ton?: Ton; children: ReactNode }) {
-  const styles: Record<Ton, { background: string; color: string }> = {
-    vert: { background: "var(--etat-ok-fond)", color: "var(--etat-ok)" },
-    rouge: { background: "var(--etat-manque-fond)", color: "var(--etat-manque)" },
-    ambre: { background: "var(--etat-attente-fond)", color: "var(--etat-attente)" },
-    or: { background: "var(--sunk)", color: "var(--ink-2)" },
-    neutre: { background: "var(--sunk)", color: "var(--ink-2)" },
+  const encre: Record<Ton, string> = {
+    rouge: "var(--etat-manque)",
+    ambre: "var(--etat-attente)",
+    vert: "var(--ink-2)",
+    or: "var(--ink-2)",
+    neutre: "var(--ink-2)",
   };
   return (
-    <span
-      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap"
-      style={styles[ton]}
-    >
+    <span className="text-[12.5px] whitespace-nowrap" style={{ color: encre[ton] }}>
       {children}
     </span>
   );

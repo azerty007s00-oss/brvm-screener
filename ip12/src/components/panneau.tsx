@@ -46,10 +46,43 @@ export function Panneau({
     if (!el) return;
 
     const fermer = () => el.removeAttribute("open");
+
+    /** Ce qui, dans la feuille, peut recevoir le focus, dans l'ordre du DOM. */
+    const atteignables = () =>
+      [
+        ...el.querySelectorAll<HTMLElement>(
+          ".feuille button, .feuille [href], .feuille input:not([type=hidden])," +
+            " .feuille select, .feuille textarea, .feuille [tabindex]:not([tabindex='-1'])",
+        ),
+      ].filter((n) => !n.hasAttribute("disabled") && n.offsetParent !== null);
+
     const surTouche = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && el.open) {
+      if (!el.open) return;
+      if (e.key === "Escape") {
         fermer();
         el.querySelector("summary")?.focus();
+        return;
+      }
+      /*
+       * LE FOCUS NE SORT PAS DE LA FEUILLE.
+       *
+       * Sept tabulations suffisaient a passer sous le voile, et l'on se
+       * retrouvait a remplir la page cachee : les champs y repondaient, mais on
+       * ne les voyait pas. Un panneau qui recouvre la page doit retenir le
+       * clavier comme il retient la souris -- c'est la meme promesse.
+       */
+      if (e.key !== "Tab") return;
+      const cibles = atteignables();
+      if (cibles.length === 0) return;
+      const premier = cibles[0];
+      const dernier = cibles[cibles.length - 1];
+      const ici = document.activeElement as HTMLElement | null;
+      if (e.shiftKey && (ici === premier || !ici || !el.contains(ici))) {
+        e.preventDefault();
+        dernier.focus();
+      } else if (!e.shiftKey && ici === dernier) {
+        e.preventDefault();
+        premier.focus();
       }
     };
     /*
@@ -64,6 +97,13 @@ export function Panneau({
           "input:not([type=hidden]), select, textarea",
         );
         premier?.focus();
+      } else {
+        /*
+         * A la fermeture, le focus revient au bouton qui a ouvert le panneau --
+         * par la croix ou par le voile comme par Echap. Sans cela il retombe
+         * sur le <body>, et la tabulation suivante repart du haut de la page.
+         */
+        el.querySelector("summary")?.focus();
       }
     };
 
@@ -93,7 +133,12 @@ export function Panneau({
         onClick={() => details.current?.removeAttribute("open")}
       />
 
-      <div className="feuille" role="dialog" aria-label={titre}>
+      {/*
+        * `aria-modal` va de pair avec le piege a focus ci-dessus : il dit au
+        * lecteur d'ecran d'ignorer le reste de la page, ce qui ne serait pas
+        * vrai si la tabulation pouvait en sortir.
+        */}
+      <div className="feuille" role="dialog" aria-modal="true" aria-label={titre}>
         <div
           className="flex h-15 flex-none items-center gap-3 px-5 lg:pr-4 lg:pl-7"
           style={{ borderBottom: "1px solid var(--line)" }}

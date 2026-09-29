@@ -27,6 +27,7 @@ import {
 } from "@/components/formulaires";
 import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
+import { ChampMenu, MenuLigne } from "@/components/menu-ligne";
 import {
   EcranInitialisation,
   estTableAbsente,
@@ -280,9 +281,17 @@ export default async function PagePenalites() {
                   )}
                 </ul>
               </Alerte>
+              {/*
+                * UN SEUL BOUTON PLEIN PAR ECRAN, et c'est « Saisir une
+                * penalite », en tete de page. Celui-ci et son jumeau des
+                * absences etaient pleins eux aussi : trois commandes noires sur
+                * un meme ecran ne disent plus laquelle compte. L'encadre qui
+                * les precede designe deja ce qu'il y a a faire.
+                */}
               <FormulaireAction
                 action={constaterPenalitesRetard}
                 libelle="Porter au registre"
+                variante="discret"
                 confirmation={`Constater ${aConstater.length} penalite(s) de retard ?`}
               />
             </>
@@ -350,6 +359,7 @@ export default async function PagePenalites() {
                   <FormulaireAction
                     action={constaterPenalitesAbsence}
                     libelle="Porter au registre"
+                    variante="discret"
                     confirmation={`Constater ${absencesAConstater.length} penalite(s) d'absence ?`}
                   />
                 </>
@@ -423,82 +433,85 @@ export default async function PagePenalites() {
                   </div>
 
                   {/*
-                   * Reprendre un reglement ou une annulation : une erreur de
-                   * manipulation ne doit pas rester inscrite pour toujours.
+                   * LES COMMANDES D'UNE LIGNE VIVENT DERRIERE LES TROIS POINTS.
+                   *
+                   * Chaque penalite portait jusqu'a deux boutons et deux boites
+                   * de saisie -- « Reglee », « Annuler », un motif, un nombre de
+                   * mois -- poses a demeure sur une page qu'on ouvre pour lire.
+                   * Le motif et le nombre de mois n'apparaissent plus qu'au
+                   * moment de repondre a la question, ou l'on sait quoi y
+                   * mettre. Reprendre un reglement ou une annulation reste
+                   * possible : une erreur de manipulation ne doit pas rester
+                   * inscrite pour toujours.
                    */}
-                  {gere && p.statut !== STATUT_PENALITE.due && (
-                    <FormulaireAction
-                      action={rouvrirPenalite}
-                      libelle="Remettre en dû"
-                      compact
-                      confirmation="Remettre cette penalite en dû ?"
-                    >
-                      <ChampCache nom="id" valeur={p.id} />
-                      <input
-                        name="motif"
-                        placeholder="Motif"
-                        required
-                        className="mb-1 w-28 rounded border px-2 py-1 text-xs"
-                        style={{
-                          background: "var(--fond)",
-                          borderColor: "var(--bordure)",
-                          color: "var(--texte)",
-                        }}
-                      />
-                    </FormulaireAction>
-                  )}
-
-                  {gere && p.statut === STATUT_PENALITE.due && (
-                    <div className="flex flex-wrap items-start gap-2">
-                      {/*
-                       * Le nombre de mois regles, quand la ligne en porte
-                       * plusieurs : un retard de onze mois se solde rarement
-                       * d'un coup. Laisse vide, tout est regle.
-                       */}
-                      <FormulaireAction
-                        action={reglerPenalite}
-                        libelle="Reglee"
-                        compact
-                      >
-                        <ChampCache nom="id" valeur={p.id} />
-                        {p.quantite > 1 && (
-                          <input
-                            name="quantite"
-                            type="number"
-                            min={1}
-                            max={p.quantite}
-                            placeholder={`sur ${p.quantite}`}
-                            title={`Combien de mois sont regles ? Laissez vide pour les ${p.quantite}.`}
-                            className="mb-1 w-20 rounded border px-2 py-1 text-xs"
-                            style={{
-                              background: "var(--fond)",
-                              borderColor: "var(--bordure)",
-                              color: "var(--texte)",
-                            }}
-                          />
-                        )}
-                      </FormulaireAction>
-                      <FormulaireAction
-                        action={annulerPenalite}
-                        libelle="Annuler"
-                        variante="danger"
-                        compact
-                        confirmation="Annuler cette penalite ?"
-                      >
-                        <ChampCache nom="id" valeur={p.id} />
-                        <input
-                          name="motif"
-                          placeholder="Motif"
-                          required
-                          className="mb-1 w-28 rounded border px-2 py-1 text-xs"
-                          style={{
-                            background: "var(--fond)",
-                            borderColor: "var(--bordure)",
-                            color: "var(--texte)",
-                          }}
-                        />
-                      </FormulaireAction>
-                    </div>
+                  {gere && (
+                    <MenuLigne
+                      etiquette={`Actions sur la penalite de ${p.membre_nom} du ${dateCourte(p.date_constat)}`}
+                      actions={
+                        p.statut === STATUT_PENALITE.due
+                          ? [
+                              {
+                                libelle: "Marquer reglee",
+                                action: reglerPenalite,
+                                champs: (
+                                  <>
+                                    <ChampCache nom="id" valeur={p.id} />
+                                    {p.quantite > 1 && (
+                                      <ChampMenu
+                                        nom="quantite"
+                                        libelle={`Mois regles, sur ${p.quantite}`}
+                                        type="number"
+                                        min={1}
+                                        max={p.quantite}
+                                        requis={false}
+                                        indication={`Vide : les ${p.quantite}`}
+                                      />
+                                    )}
+                                  </>
+                                ),
+                                confirmation:
+                                  p.quantite > 1
+                                    ? `Combien des ${p.quantite} mois sont regles ? Laissez vide pour tout solder.`
+                                    : "Marquer cette penalite comme reglee ?",
+                                confirmer: "Marquer reglee",
+                              },
+                              {
+                                libelle: "Annuler la penalite",
+                                action: annulerPenalite,
+                                champs: (
+                                  <>
+                                    <ChampCache nom="id" valeur={p.id} />
+                                    <ChampMenu
+                                      nom="motif"
+                                      libelle="Motif de l'annulation"
+                                      indication="Derogation, erreur de constat..."
+                                    />
+                                  </>
+                                ),
+                                confirmation: "Annuler cette penalite ?",
+                                confirmer: "Annuler la penalite",
+                              },
+                            ]
+                          : [
+                              {
+                                libelle: "Remettre en du",
+                                action: rouvrirPenalite,
+                                champs: (
+                                  <>
+                                    <ChampCache nom="id" valeur={p.id} />
+                                    <ChampMenu
+                                      nom="motif"
+                                      libelle="Motif de la reprise"
+                                      indication="Reglement annule, erreur..."
+                                    />
+                                  </>
+                                ),
+                                confirmation: "Remettre cette penalite en du ?",
+                                confirmer: "Remettre en du",
+                              },
+                            ]
+                      }
+                    />
                   )}
                 </div>
               </li>

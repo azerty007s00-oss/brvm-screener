@@ -37,7 +37,7 @@ const { tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, f
 const { statutLigne, moisCourt, initialeMois, resumeFrise, LIBELLE_STATUT } = await import(
   "../.verif/etats.mjs"
 );
-const { borne, retenus, tracable } = await import("../.verif/horizons.mjs");
+const { borne, retenus, tracable, reperesTemps } = await import("../.verif/horizons.mjs");
 const { netPlaceParDate, decomposer, gainConcorde } = await import("../.verif/placement.mjs");
 
 /* ------------------------------------------------------------- performance */
@@ -958,9 +958,45 @@ assert.equal(nombre(3857845), "3 857 845");
 assert.equal(fcfa(5000), "5 000 FCFA");
 assert.equal(nombre(3857845).includes(" "), false, "pas d'espace fine : elle manque aux polices systeme");
 
+/* ------------------------------------------------------ reperes de l'abscisse */
+
+{
+  // Un exercice : les mois, le premier nomme avec son annee.
+  const r = reperesTemps("2026-01-01", "2026-09-28", 1000);
+  assert.deepEqual(
+    r.map((x) => x.libelle),
+    ["janv. 2026", "fevr.", "mars", "avr.", "mai", "juin", "juil.", "aout"],
+  );
+  // Les derniers pixels appartiennent a la date de fin : septembre s'y
+  // superposerait.
+  assert.ok(r.every((x) => x.iso <= "2026-08-01"));
+}
+
+{
+  // Trois ans : on repere les annees, non les mois -- trente-huit etiquettes
+  // n'entrent pas dans mille pixels.
+  const r = reperesTemps("2023-07-17", "2026-09-28", 1000);
+  assert.deepEqual(r.map((x) => x.libelle), ["juil. 2023", "2024", "2025", "2026"]);
+}
+
+{
+  // Une periode trop courte pour deux etiquettes n'en porte qu'une, et jamais
+  // deux collees : l'illisible vaut moins que l'absent.
+  const r = reperesTemps("2026-06-30", "2026-09-28", 260);
+  // Le premier repere porte l'annee, les suivants non.
+  assert.equal(r[0].libelle, "juin 2026");
+  const largeurUtile = 260;
+  const jours = (i) => Date.parse(i + "T00:00:00Z") / 86400000;
+  const px = r.map((x) => ((jours(x.iso) - jours("2026-06-30")) / (jours("2026-09-28") - jours("2026-06-30"))) * largeurUtile);
+  for (let i = 1; i < px.length; i++) assert.ok(px[i] - px[i - 1] >= 60);
+}
+
+// Une periode sans duree ne porte aucun repere plutot qu'une division par zero.
+assert.deepEqual(reperesTemps("2026-09-28", "2026-09-28", 1000), []);
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
     "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons, "
-    + "net place et gain de gestion",
+    + "net place et gain de gestion, reperes de l'abscisse",
 );

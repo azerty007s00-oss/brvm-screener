@@ -55,3 +55,87 @@ export function retenus<T extends Releve>(releves: T[], horizon: Horizon): T[] {
 export function tracable(releves: Releve[], horizon: Horizon): boolean {
   return retenus(releves, horizon).length >= 2;
 }
+
+/* ------------------------------------------------------- reperes de temps */
+
+const MOIS_COURTS = [
+  "janv.", "fevr.", "mars", "avr.", "mai", "juin",
+  "juil.", "aout", "sept.", "oct.", "nov.", "dec.",
+];
+
+export type Repere = { iso: string; libelle: string };
+
+const enJours = (iso: string) => Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 86_400_000;
+
+/**
+ * Les reperes a poser sous l'abscisse : le premier de chaque mois, ou de chaque
+ * annee quand la periode en couvre plus de deux.
+ *
+ * L'axe ne portait que ses deux bouts. Rien ne disait alors ou tombait le
+ * milieu : les cinq releves serres dans le seul mois de septembre 2026 se
+ * lisaient comme une progression etalee sur l'annee, ce qui est exactement le
+ * defaut qu'on avait corrige en passant l'abscisse au temps.
+ *
+ * DEUX REPERES NE SE CHEVAUCHENT PAS. On garde le premier et on laisse tomber
+ * ceux qui tomberaient a moins de `ecartMini` pixels du precedent retenu --
+ * une etiquette illisible vaut moins que pas d'etiquette. Les derniers
+ * `reserve` pixels sont laisses a la date de fin, qui s'y tient a demeure.
+ *
+ * L'annee accompagne le premier repere et chaque mois de janvier : ailleurs
+ * elle se repete pour rien.
+ */
+export function reperesTemps(
+  debut: string,
+  fin: string,
+  largeur: number,
+  ecartMini = 60,
+  reserve = 110,
+): Repere[] {
+  const t0 = enJours(debut);
+  const t1 = enJours(fin);
+  const duree = t1 - t0;
+  if (duree <= 0 || largeur <= 0) return [];
+
+  /* Au-dela de deux ans, trente-huit noms de mois n'entrent nulle part. */
+  const parAnnee = duree > 730;
+
+  const mois = (iso: string) => MOIS_COURTS[Number(iso.slice(5, 7)) - 1];
+  /*
+   * Le premier repere dit ou l'axe commence, avec son annee : rien ne la porte
+   * avant lui, et les suivants ne la repetent qu'en janvier. Le jour n'y figure
+   * pas -- l'etiquette est posee sous le point de depart, qui le dit lui-meme,
+   * et « 30 juin 2026 » ne tient pas sous un graphique de telephone.
+   */
+  const candidats: Repere[] = [
+    { iso: debut, libelle: `${mois(debut)} ${debut.slice(0, 4)}` },
+  ];
+
+  const a0 = Number(debut.slice(0, 4));
+  const a1 = Number(fin.slice(0, 4));
+  for (let a = a0; a <= a1; a++) {
+    for (let m = 1; m <= 12; m++) {
+      if (parAnnee && m !== 1) continue;
+      const iso = `${a}-${String(m).padStart(2, "0")}-01`;
+      if (enJours(iso) <= t0 || enJours(iso) > t1) continue;
+      /* Janvier porte son annee : c'est la seule chose qu'il apprend. */
+      candidats.push({ iso, libelle: m === 1 ? String(a) : mois(iso) });
+    }
+  }
+
+  /*
+   * DEUX ETIQUETTES NE SE CHEVAUCHENT PAS. On garde la premiere et l'on laisse
+   * tomber celles qui suivent de trop pres : une etiquette illisible vaut moins
+   * que pas d'etiquette. Les derniers pixels sont reserves a la date de fin,
+   * qui s'y tient a demeure.
+   */
+  const gardes: Repere[] = [];
+  let dernierX = -Infinity;
+  for (const c of candidats) {
+    const px = ((enJours(c.iso) - t0) / duree) * largeur;
+    if (px > largeur - reserve) break;
+    if (px - dernierX < ecartMini) continue;
+    gardes.push(c);
+    dernierX = px;
+  }
+  return gardes;
+}

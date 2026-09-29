@@ -30,6 +30,7 @@ import {
   Vide,
 } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
+import { ChampMenu, MenuLigne } from "@/components/menu-ligne";
 import {
   EcranInitialisation,
   estTableAbsente,
@@ -281,15 +282,17 @@ export default async function PageCaisse() {
                   detail={
                     depuis === jusqua ? depuis : `de ${depuis} a ${jusqua}`
                   }
+                  /*
+                   * LE SIGNE DIT LE SENS, non la couleur.
+                   *
+                   * Recettes en vert et depenses en rouge, sur chaque ligne
+                   * d'un journal qui n'est fait que de recettes et de
+                   * depenses : la couleur n'y signalait plus rien, sinon que
+                   * de l'argent avait bouge. Une depense prevue n'est pas une
+                   * alerte. Le rouge est garde pour ce qui manque.
+                   */
                   total={
-                    <span
-                      style={{
-                        color:
-                          total < 0
-                            ? "var(--etat-manque)"
-                            : "var(--etat-ok)",
-                      }}
-                    >
+                    <span>
                       {total < 0 ? "\u2212" : "+"} {fcfa(Math.abs(total))}
                     </span>
                   }
@@ -307,14 +310,8 @@ export default async function PageCaisse() {
                         >
                           <div className="min-w-0">
                             <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                              <span
-                                style={{
-                                  color: depense
-                                    ? "var(--etat-manque)"
-                                    : "var(--etat-ok)",
-                                }}
-                              >
-                                {depense ? "−" : "+"} {fcfa(m.montant)}
+                              <span className="tabular-nums">
+                                {depense ? "\u2212" : "+"} {fcfa(m.montant)}
                               </span>
                               {m.statut === STATUT_CAISSE.enAttente && (
                                 <Badge ton="ambre">En attente</Badge>
@@ -346,33 +343,40 @@ export default async function PageCaisse() {
                             )}
                           </div>
                           {/*
-                           * Annuler une ecriture close. Sans ce bouton, corriger une
-                           * ligne validee demandait de lui opposer une ecriture
-                           * inverse, qui decrivait a son tour un mouvement n'ayant pas
-                           * eu lieu : le journal finissait par raconter le contraire de
-                           * ce qui s'etait passe.
+                           * Annuler une ecriture close. Sans cette commande,
+                           * corriger une ligne validee demandait de lui opposer
+                           * une ecriture inverse, qui decrivait a son tour un
+                           * mouvement n'ayant pas eu lieu : le journal finissait
+                           * par raconter le contraire de ce qui s'etait passe.
+                           *
+                           * Elle vit derriere les trois points, comme sur le
+                           * portefeuille : vingt ecritures donnaient vingt
+                           * boutons « Annuler » et vingt boites a motif, poses
+                           * a demeure sur une page qu'on vient lire.
                            */}
                           {gere && m.statut === STATUT_CAISSE.valide && (
-                            <FormulaireAction
-                              action={rejeterMouvement}
-                              libelle="Annuler"
-                              variante="danger"
-                              compact
-                              confirmation="Annuler ce mouvement deja valide ? Il cessera de compter dans la caisse, et l'operation restera au journal."
-                            >
-                              <ChampCache nom="id" valeur={m.id} />
-                              <input
-                                name="motif"
-                                placeholder="Motif"
-                                required
-                                className="mb-1 w-28 rounded border px-2 py-1 text-xs"
-                                style={{
-                                  background: "var(--fond)",
-                                  borderColor: "var(--bordure)",
-                                  color: "var(--texte)",
-                                }}
-                              />
-                            </FormulaireAction>
+                            <MenuLigne
+                              etiquette={`Actions sur l'ecriture du ${dateCourte(m.date_mouvement)}`}
+                              actions={[
+                                {
+                                  libelle: "Annuler ce mouvement",
+                                  action: rejeterMouvement,
+                                  champs: (
+                                    <>
+                                      <ChampCache nom="id" valeur={m.id} />
+                                      <ChampMenu
+                                        nom="motif"
+                                        libelle="Motif de l'annulation"
+                                        indication="Erreur de saisie, doublon..."
+                                      />
+                                    </>
+                                  ),
+                                  confirmation:
+                                    "Annuler ce mouvement deja valide ? Il cessera de compter dans la caisse, et l'operation restera au journal.",
+                                  confirmer: "Annuler le mouvement",
+                                },
+                              ]}
+                            />
                           )}
                         </li>
                       );

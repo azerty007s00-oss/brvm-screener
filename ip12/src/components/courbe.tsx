@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { dateCourte, fcfa, nombre } from "@/lib/settings";
 import { Selecteur } from "@/components/selecteur";
-import { retenus, tracable, type Horizon } from "@/lib/horizons";
+import { reperesTemps, retenus, tracable, type Horizon } from "@/lib/horizons";
 import { decomposer, gainConcorde, type Trace } from "@/lib/placement";
 
 /** La gouttiere des ordonnees, a droite du trace. En HTML, hors du SVG. */
@@ -71,6 +71,15 @@ export function CourbePortefeuille({
    * seule sa hauteur s'ajustera au montage.
    */
   const [largeur, setLargeur] = useState(586);
+  /*
+   * Tant que la largeur n'est pas mesuree, l'axe s'en tient a ses deux dates.
+   *
+   * La regle d'espacement des reperes se calcule en pixels : calculee pour les
+   * 586 px supposes puis rendue dans les 298 d'un telephone, elle laissait
+   * « janv. 2026 » et « fevr. » l'un sur l'autre. Une etiquette illisible vaut
+   * moins qu'aucune -- y compris ici, ou il suffit d'attendre une trame.
+   */
+  const [mesure, setMesure] = useState(false);
 
   useEffect(() => {
     const el = boite.current;
@@ -84,8 +93,10 @@ export function CourbePortefeuille({
      * 1 016 unites pour 964 pixels a 1 440, 350 pour 298 sur un telephone. Les
      * points, cercles dans le dessin, sortaient en ovales.
      */
-    const suivre = () =>
+    const suivre = () => {
       setLargeur(Math.max(240, Math.round(el.clientWidth - GOUTTIERE)));
+      setMesure(true);
+    };
     suivre();
     const observateur = new ResizeObserver(suivre);
     observateur.observe(el);
@@ -180,6 +191,10 @@ export function CourbePortefeuille({
   const dernier = traces[traces.length - 1];
   const premier = traces[0];
 
+  const reperes = mesure
+    ? reperesTemps(premier.date, dernier.date, L - marge.gauche - marge.droite)
+    : [{ iso: premier.date, libelle: dateCourte(premier.date) }];
+
   /*
    * LA DECOMPOSITION, ET SON CONTROLE.
    *
@@ -222,22 +237,36 @@ export function CourbePortefeuille({
        */}
       <div ref={boite} className="relative" style={{ paddingRight: GOUTTIERE }}>
         {/*
-         * La hauteur est posee sur le SVG lui-meme, a la valeur qui a servi au
-         * calcul.
+         * L'ECHELLE EST 1:1, ET LE RESTE MEME AVANT LA MESURE.
          *
-         * Elle venait de classes de rupture -- 200 px, 300 a partir de 1 024 --
-         * quand `H` se decide, lui, a 520 px de trace. Entre les deux, un
-         * dessin haut de 300 unites entrait dans une boite de 200 pixels : la
-         * courbe s'y ecrasait d'un tiers et les points sortaient en ovales de
-         * 4,6 sur 3,3. Une seule source pour la hauteur, et le rapport reste
-         * 1:1. `vector-effect` garde alors le trait a 2 px, quelle que soit
-         * l'echelle.
+         * La hauteur venait de classes de rupture -- 200 px, 300 a partir de
+         * 1 024 -- quand `H` se decide, lui, a 520 px de trace. Entre les deux,
+         * un dessin haut de 300 unites entrait dans une boite de 200 pixels :
+         * la courbe s'y ecrasait d'un tiers et les points sortaient en ovales
+         * de 4,6 sur 3,3. Elle vient desormais du meme `H` qui a servi au
+         * calcul, et la largeur du meme `L` : les deux axes sont a l'echelle 1,
+         * par construction.
+         *
+         * Reste le premier rendu, celui du serveur, ou la largeur n'est pas
+         * encore connue. `preserveAspectRatio="none"` etirait alors un dessin
+         * de 586 sur 1 088 pixels, et les memes points sortaient en ovales de
+         * 9,3 sur 5 -- une image fausse, le temps d'une trame, et pour toujours
+         * si le navigateur n'execute rien. Le reglage par defaut,
+         * `xMidYMid meet`, ne deforme jamais. Et la boite prend le RAPPORT du
+         * dessin au lieu d'une hauteur fixe : une fois la largeur mesuree,
+         * `L / H` redonne exactement `H` pixels de haut, et avant la mesure le
+         * dessin remplit sa boite au lieu d'y flotter entre deux bandes vides.
+         * Les etiquettes d'ordonnee, posees en pourcentage de cette hauteur,
+         * tombent alors sur leur ligne dans les deux cas. `max-height` borne ce
+         * rapport a la hauteur visee : sans elle, un ecran large rendrait un
+         * graphique de 557 px avant la mesure, qui retomberait a 300 en
+         * sautant sous les yeux. `vector-effect` garde
+         * le trait a 2 px quelle que soit l'echelle.
          */}
         <svg
           viewBox={`0 0 ${L} ${H}`}
-          preserveAspectRatio="none"
           className="block w-full"
-          style={{ height: H }}
+          style={{ aspectRatio: `${L} / ${H}`, maxHeight: H }}
           role="img"
           aria-label={`Valeur du compte-titres et net place en bourse, ${traces.length} releves du ${dateCourte(premier.date)} au ${dateCourte(dernier.date)} : de ${nombre(min)} a ${nombre(max)} FCFA`}
         >
@@ -308,12 +337,47 @@ export function CourbePortefeuille({
         ))}
       </div>
 
-      <div
-        className="mt-1 flex justify-between text-[12px] tabular-nums"
-        style={{ color: "var(--ink-3)", paddingRight: GOUTTIERE }}
-      >
-        <span>{dateCourte(premier.date)}</span>
-        <span>{dateCourte(dernier.date)}</span>
+      {/*
+       * L'ABSCISSE PORTE DES REPERES DE TEMPS, non ses deux bouts.
+       *
+       * Avec la seule date de depart et la seule date de fin, rien ne disait ou
+       * tombait le milieu : cinq releves serres dans le seul mois de septembre
+       * se lisaient comme une progression etalee sur l'annee. Les mois -- ou
+       * les annees, quand la periode en couvre plus de deux -- donnent l'echelle
+       * du temps, et la derniere date reste a droite : c'est la date du releve
+       * dont on affiche la valeur.
+       */}
+      <div className="mt-1 text-[12px]" style={{ color: "var(--ink-3)", paddingRight: GOUTTIERE }}>
+        {/*
+         * Le bloc interieur porte les reperes, et non celui qui reserve la
+         * gouttiere : un `left` en pourcentage se mesure sur la boite de
+         * remplissage, gouttiere comprise, et decalerait chaque etiquette de
+         * 52 px a droite de son jour.
+         */}
+        <div className="relative h-4">
+          {reperes.map((r, i) => {
+            /*
+             * Le premier repere se cale a gauche au lieu de se centrer : centre
+             * sur un point pose a 6 px du bord, la moitie de « janv. 2026 »
+             * passait hors de la carte.
+             */
+            const aGauche = i === 0 && x(r.iso) < 40;
+            return (
+              <span
+                key={r.iso}
+                className="absolute top-0 whitespace-nowrap"
+                style={
+                  aGauche
+                    ? { left: 0 }
+                    : { left: `${(x(r.iso) / L) * 100}%`, transform: "translateX(-50%)" }
+                }
+              >
+                {r.libelle}
+              </span>
+            );
+          })}
+          <span className="absolute top-0 right-0 tabular-nums">{dateCourte(dernier.date)}</span>
+        </div>
       </div>
 
       <figcaption

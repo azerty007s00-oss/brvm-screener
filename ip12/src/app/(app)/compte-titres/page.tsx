@@ -12,6 +12,7 @@ import {
 } from "@/components/formulaires";
 import { Badge, Carte, CarteEtat, EnTeteEcran, GroupeReplie, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
+import { MenuLigne } from "@/components/menu-ligne";
 import {
   EcranInitialisation,
   estTableAbsente,
@@ -97,15 +98,19 @@ export default async function PageCompteTitres() {
          * effacee -- la trace survit a la donnee.
          */}
         {peutSaisir && (
-          <FormulaireAction
-            action={supprimerApport}
-            libelle="Supprimer"
-            variante="danger"
-            compact
-            confirmation="Supprimer ce mouvement ? Il disparaitra des comptes ; le journal en gardera le detail et votre nom."
-          >
-            <ChampCache nom="id" valeur={a.id} />
-          </FormulaireAction>
+          <MenuLigne
+            etiquette={`Actions sur le mouvement du ${dateCourte(a.date_transfert)}`}
+            actions={[
+              {
+                libelle: "Supprimer ce mouvement",
+                action: supprimerApport,
+                champs: <ChampCache nom="id" valeur={a.id} />,
+                confirmation:
+                  "Supprimer ce mouvement ? Il disparaitra des comptes ; le journal en gardera le detail et votre nom.",
+                confirmer: "Supprimer",
+              },
+            ]}
+          />
         )}
       </div>
     );
