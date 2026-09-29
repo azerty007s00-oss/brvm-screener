@@ -73,7 +73,7 @@ export function Navigation({
 
   const groupe = (titre: string, liens: Lien[], teinte: string) => (
     <div className="mb-5">
-      <p className="mb-1.5 flex items-center gap-2 px-3 text-[10.5px] font-semibold tracking-[0.14em] uppercase">
+      <p className="mb-1.5 flex items-center gap-2 px-3 text-[10.5px] font-semibold tracking-[0.14em]">
         <span
           aria-hidden
           className="inline-block h-1.5 w-1.5 flex-none rounded-full"
@@ -101,13 +101,13 @@ export function Navigation({
                   */
                 style={
                   ici
-                    ? { background: "var(--color-or-500)", color: "var(--color-brun-900)" }
+                    ? { background: "var(--ink)", color: "var(--page)" }
                     : { color: "var(--texte)" }
                 }
               >
                 <span
                   className="flex-none"
-                  style={{ color: ici ? "var(--color-brun-900)" : teinte }}
+                  style={{ color: ici ? "var(--page)" : teinte }}
                 >
                   <Dessin taille={18} />
                 </span>
@@ -124,7 +124,7 @@ export function Navigation({
     <details ref={tiroir} className="tiroir sans-impression">
       <summary
         className="tapable flex h-11 w-11 cursor-pointer list-none items-center justify-center rounded-xl"
-        style={{ color: "var(--color-brun-100)" }}
+        style={{ color: "var(--sunk)" }}
         aria-label="Ouvrir le menu"
       >
         <span className="bouton-menu">
@@ -147,7 +147,7 @@ export function Navigation({
           <span className="flex items-center gap-2.5 px-3">
             <span
               className="grid h-9 w-9 flex-none place-items-center rounded-xl text-xs font-bold"
-              style={{ background: "var(--color-or-500)", color: "var(--color-brun-900)" }}
+              style={{ background: "var(--ink)", color: "var(--page)" }}
             >
               IP
             </span>
@@ -161,7 +161,7 @@ export function Navigation({
         </div>
 
         <div className="flex-1 overflow-y-auto px-3">
-          {groupe("Mon suivi", suivi, "var(--color-or-500)")}
+          {groupe("Mon suivi", suivi, "var(--gold)")}
           {groupe("La vie du club", club, "var(--discret)")}
         </div>
 
@@ -174,7 +174,7 @@ export function Navigation({
           <span className="flex items-center gap-3">
             <span
               className="grid h-10 w-10 flex-none place-items-center rounded-full text-xs font-semibold"
-              style={{ background: "var(--color-brun-100)", color: "var(--color-brun-700)" }}
+              style={{ background: "var(--sunk)", color: "var(--line-2)" }}
             >
               {initiales(membre.nom)}
             </span>
@@ -184,8 +184,8 @@ export function Navigation({
                 {membre.email}
               </span>
               <span
-                className="mt-0.5 block text-[10.5px] font-semibold tracking-wider uppercase"
-                style={{ color: "var(--color-or-600)" }}
+                className="mt-0.5 block text-[10.5px] font-semibold"
+                style={{ color: "var(--gold-ink)" }}
               >
                 {membre.role}
               </span>

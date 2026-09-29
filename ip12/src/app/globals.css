@@ -1,104 +1,158 @@
 @import "tailwindcss";
 
 @theme {
-  /* Charte du club : brun profond et or, reprise de la banniere. */
-  --color-brun-950: #1d120a;
-  --color-brun-900: #2a1a10;
-  --color-brun-800: #3b2415;
-  --color-brun-700: #4d3120;
-  --color-brun-600: #6b472f;
-  --color-brun-300: #b99c82;
-  --color-brun-100: #ede2d5;
-  --color-brun-50: #faf6ef;
+  /*
+   * Direction « banque privee ».
+   *
+   * La charte brun-et-or de la banniere teintait tout le site : montants en or,
+   * recettes en vert, depenses en rouge, cartes brunes. A force de couleur,
+   * plus rien ne signalait. Ici, une seule couleur d'accent -- l'or -- et
+   * seulement pour la courbe du portefeuille, ses points, l'anneau de focus et
+   * le logo. Les montants sont a l'encre, avec leur signe ; le rouge ne dit que
+   * ce qui manque, l'ambre que ce qui attend.
+   *
+   * Les jetons --color-* servent aux utilitaires Tailwind ; les variables de
+   * :root portent les memes roles et basculent avec le theme.
+   */
+  --color-page: #fdfcfa;
+  --color-side: #f4f1ec;
+  --color-sunk: #efebe5;
+  --color-line: #e8e2d9;
+  --color-line-2: #d6cec2;
+  --color-ink: #1c1713;
+  --color-ink-2: #625950;
+  --color-ink-3: #756b60;
+  --color-gold: #a8842a;
+  --color-gold-ink: #7c6118;
+  --color-brand: #2a1a10;
+  --color-brand-mark: #d4b25a;
+  --color-etat-ok: #4f4740;
+  --color-etat-ok-fond: #e6e0d6;
+  --color-etat-attente: #8a5f0f;
+  --color-etat-attente-fond: #f6ecd8;
+  --color-etat-manque: #a8322c;
+  --color-etat-manque-fond: #f6dedc;
 
-  --color-or-600: #a8861d;
-  --color-or-500: #c9a227;
-  --color-or-400: #d9b84a;
-  --color-or-200: #f0dfa4;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
 
-  --color-vert-600: #2f7d54;
-  --color-vert-100: #dcefe3;
-  --color-rouge-600: #a8322c;
-  --color-rouge-100: #f6dedc;
-  --color-ambre-600: #9a6b12;
-  --color-ambre-100: #f8ebd0;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
 
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ease-doux: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-trace: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
 /*
- * Les trois etats, en trois roles chacun.
+ * Un role par jeton, et le theme n'en change que la valeur.
  *
- * La palette fixe (--color-vert-600 et ses voisines) ne bascule pas avec le
- * theme : elle est juste sur carte blanche et fausse sur carte brune -- le
- * rouge y tombe a 2,5:1, illisible. Les jetons ci-dessous portent le role et
- * non la teinte, et changent de valeur avec le theme :
- *
- *   --vert       couleur pleine du glyphe et des contours ;
- *   --vert-fond  aplat derriere le glyphe ;
- *   --vert-encre texte d'etat sur une carte, ou seule la lisibilite compte.
- *
- * Mesure : encres a 6,7:1 au moins en clair, 8,8:1 au moins en sombre ; coche
- * de la pastille pleine a 5:1 en clair, 7,4:1 en sombre.
+ * Les noms anciens (--fond, --carte, --texte, --discret, --bordure, et les
+ * trois etats) sont conserves et pointes sur les nouveaux : ils sont poses dans
+ * une centaine d'endroits, et ils designent exactement les memes roles. Ce qui
+ * change, ce sont les valeurs -- et le fait qu'une carte n'a plus de fond
+ * propre : les sections se separent par l'espace et un filet.
  */
 :root {
   color-scheme: light;
-  --fond: var(--color-brun-50);
-  --texte: var(--color-brun-900);
-  --carte: #ffffff;
-  --bordure: var(--color-brun-100);
-  --discret: #6b5a4a;
-  --vert: var(--color-vert-600);
-  --vert-fond: var(--color-vert-100);
-  --vert-encre: #23603f;
-  --ambre: var(--color-ambre-600);
-  --ambre-fond: var(--color-ambre-100);
-  --ambre-encre: #7a540c;
-  --rouge: var(--color-rouge-600);
-  --rouge-fond: var(--color-rouge-100);
-  --rouge-encre: #8c2822;
-  /* Teinte d'une ligne mise en avant : elle passe sous l'encre du theme, jamais dessus. */
-  --or-doux: #f7edd0;
+  --page: #fdfcfa;
+  --side: #f4f1ec;
+  --sunk: #efebe5;
+  --line: #e8e2d9;
+  --line-2: #d6cec2;
+  --ink: #1c1713;
+  --ink-2: #625950;
+  --ink-3: #756b60;
+  --gold: #a8842a;
+  --gold-ink: #7c6118;
+  --brand: #2a1a10;
+  --brand-mark: #d4b25a;
+  --voile: rgb(28 23 19 / 0.28);
+
+  --etat-ok: #4f4740;
+  --etat-ok-fond: #e6e0d6;
+  --etat-attente: #8a5f0f;
+  --etat-attente-fond: #f6ecd8;
+  --etat-manque: #a8322c;
+  --etat-manque-fond: #f6dedc;
+
+  /* La bande de gain et le segment « vous » : de l'encre diluee, pas une teinte. */
+  --c-bande: rgb(28 23 19 / 0.05);
+
+  --raise: 0 1px 2px rgb(28 23 19 / 0.07), 0 0 0 1px rgb(28 23 19 / 0.07);
+  --pop: 0 12px 32px -12px rgb(28 23 19 / 0.28), 0 0 0 1px rgb(28 23 19 / 0.08);
+
+  /* Noms anciens, memes roles. */
+  --fond: var(--page);
+  --carte: var(--page);
+  --texte: var(--ink);
+  --discret: var(--ink-2);
+  --bordure: var(--line);
+  --or-doux: var(--sunk);
+  --vert: var(--etat-ok);
+  --vert-fond: var(--etat-ok-fond);
+  --vert-encre: var(--etat-ok);
+  --ambre: var(--etat-attente);
+  --ambre-fond: var(--etat-attente-fond);
+  --ambre-encre: var(--etat-attente);
+  --rouge: var(--etat-manque);
+  --rouge-fond: var(--etat-manque-fond);
+  --rouge-encre: var(--etat-manque);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     color-scheme: dark;
-    --fond: var(--color-brun-950);
-    --texte: var(--color-brun-50);
-    --carte: var(--color-brun-900);
-    --bordure: var(--color-brun-700);
-    --discret: var(--color-brun-300);
-    --vert: #5fbf8c;
-    --vert-fond: #16301f;
-    --vert-encre: #8fd9b0;
-    --ambre: #e0b25a;
-    --ambre-fond: #33260d;
-    --ambre-encre: #eec57c;
-    --rouge: #ec8a80;
-    --rouge-fond: #3a1714;
-    --rouge-encre: #f3aaa2;
-    --or-doux: #3d3018;
+    --page: #13110e;
+    --side: #0e0c0a;
+    --sunk: #1c1915;
+    --line: #26231e;
+    --line-2: #3a352f;
+    --ink: #efe9e1;
+    --ink-2: #a89e92;
+    --ink-3: #8f857a;
+    --gold: #cfae55;
+    --gold-ink: #d9bb66;
+    --brand: #d4b25a;
+    --brand-mark: #1a120a;
+    --voile: rgb(0 0 0 / 0.5);
+    --etat-ok: #d5ccc0;
+    --etat-ok-fond: #2b2722;
+    --etat-attente: #e0b25a;
+    --etat-attente-fond: #33260d;
+    --etat-manque: #ec8a80;
+    --etat-manque-fond: #3a1714;
+    --c-bande: rgb(239 233 225 / 0.07);
+    --raise: 0 0 0 1px rgb(255 240 220 / 0.1), 0 1px 2px rgb(0 0 0 / 0.4);
+    --pop: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 240 220 / 0.1);
   }
 }
 
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --fond: var(--color-brun-950);
-  --texte: var(--color-brun-50);
-  --carte: var(--color-brun-900);
-  --bordure: var(--color-brun-700);
-  --discret: var(--color-brun-300);
-  --vert: #5fbf8c;
-  --vert-fond: #16301f;
-  --vert-encre: #8fd9b0;
-  --ambre: #e0b25a;
-  --ambre-fond: #33260d;
-  --ambre-encre: #eec57c;
-  --rouge: #ec8a80;
-  --rouge-fond: #3a1714;
-  --rouge-encre: #f3aaa2;
-  --or-doux: #3d3018;
+  --page: #13110e;
+  --side: #0e0c0a;
+  --sunk: #1c1915;
+  --line: #26231e;
+  --line-2: #3a352f;
+  --ink: #efe9e1;
+  --ink-2: #a89e92;
+  --ink-3: #8f857a;
+  --gold: #cfae55;
+  --gold-ink: #d9bb66;
+  --brand: #d4b25a;
+  --brand-mark: #1a120a;
+  --voile: rgb(0 0 0 / 0.5);
+  --etat-ok: #d5ccc0;
+  --etat-ok-fond: #2b2722;
+  --etat-attente: #e0b25a;
+  --etat-attente-fond: #33260d;
+  --etat-manque: #ec8a80;
+  --etat-manque-fond: #3a1714;
+  --c-bande: rgb(239 233 225 / 0.07);
+  --raise: 0 0 0 1px rgb(255 240 220 / 0.1), 0 1px 2px rgb(0 0 0 / 0.4);
+  --pop: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 240 220 / 0.1);
 }
 
 body {

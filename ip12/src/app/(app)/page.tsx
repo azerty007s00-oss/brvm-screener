@@ -30,7 +30,7 @@ function BoutonPrincipal({ href, children }: { href: string; children: string })
     <Link
       href={href}
       className="tapable grid h-13 place-items-center rounded-2xl text-[15px] font-bold"
-      style={{ background: "var(--color-or-500)", color: "var(--color-brun-900)" }}
+      style={{ background: "var(--ink)", color: "var(--page)" }}
     >
       {children}
     </Link>
@@ -159,11 +159,10 @@ export default async function TableauDeBord() {
       <EnTeteEcran
         titre="Ma part"
         sous={
-          s.valorisation
-            ? `au ${dateCourte(s.valorisation.date_valo)}`
-            : "aucun releve saisi"
+          s.valorisation ? `au ${dateCourte(s.valorisation.date_valo)}` : "— aucun releve saisi"
         }
-        chiffre={maPart && s.valorisation ? fcfa(maPart.valeur) : "--"}
+        chiffre={maPart && s.valorisation ? nombre(maPart.valeur) : "--"}
+        unite={maPart && s.valorisation ? "FCFA" : undefined}
         detail={
           maPart
             ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % du portefeuille, au prorata de mes versements valides.`
@@ -174,18 +173,14 @@ export default async function TableauDeBord() {
       <CarteEtat
         chiffres={[
           {
-            /*
-             * Le nombre seul : « 2 347 910 FCFA » en 22 px passe a la ligne sur
-             * une demi-largeur de telephone, et un montant coupe en deux se
-             * relit mal. L'unite tient dans le libelle, ou elle ne coute rien.
-             */
-            libelle: "portefeuille du club, en FCFA",
+            libelle: "Portefeuille du club",
             valeur: s.valorisation ? nombre(s.valorisation.total) : "--",
-            accent: "or",
+            unite: s.valorisation ? "FCFA" : undefined,
           },
           {
-            libelle: "performance annualisee",
+            libelle: "Performance annualisee",
             valeur: s.tri !== null ? pourcent(s.tri) : "--",
+            contexte: s.triPeriode ? `TRI depuis le ${dateCourte(s.triPeriode.debut)}` : undefined,
           },
         ]}
       />
@@ -304,7 +299,7 @@ export default async function TableauDeBord() {
         <Carte
           titre="Mon suivi"
           action={
-            <Link href="/versements" className="text-xs underline" style={{ color: "var(--color-or-600)" }}>
+            <Link href="/versements" className="text-xs underline" style={{ color: "var(--gold-ink)" }}>
               Voir le registre
             </Link>
           }

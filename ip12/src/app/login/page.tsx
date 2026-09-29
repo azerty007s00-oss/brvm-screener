@@ -13,8 +13,8 @@ export default async function PageConnexion() {
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
       <div className="mb-8 text-center">
         <p
-          className="inline-block rounded-full px-3 py-1 text-xs font-semibold tracking-widest uppercase"
-          style={{ background: "var(--color-or-200)", color: "var(--color-or-600)" }}
+          className="inline-block rounded-full px-3 py-1 text-xs font-semibold"
+          style={{ background: "var(--sunk)", color: "var(--ink-2)" }}
         >
           {CLUB.sigle}
         </p>

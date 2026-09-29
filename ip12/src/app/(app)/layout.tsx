@@ -53,7 +53,7 @@ export default async function CoquilleApplication({ children }: { children: Reac
         */}
       <header
         className="sans-impression sticky top-0 z-10 border-b"
-        style={{ background: "var(--color-brun-900)", borderColor: "var(--color-brun-700)" }}
+        style={{ background: "var(--page)", borderColor: "var(--line)" }}
       >
         <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
           {/*
@@ -71,7 +71,7 @@ export default async function CoquilleApplication({ children }: { children: Reac
           <Link href="/" className="flex min-w-0 flex-1 items-center gap-2">
             <span
               className="grid h-8 w-8 place-items-center rounded-lg text-xs font-bold"
-              style={{ background: "var(--color-or-500)", color: "var(--color-brun-900)" }}
+              style={{ background: "var(--ink)", color: "var(--page)" }}
             >
               IP
             </span>
@@ -82,10 +82,10 @@ export default async function CoquilleApplication({ children }: { children: Reac
               * dans le tiroir, ou rien ne dispute la largeur.
               */}
             <span className="min-w-0 leading-tight">
-              <span className="block text-sm font-semibold" style={{ color: "var(--color-brun-50)" }}>
+              <span className="block text-sm font-semibold" style={{ color: "var(--ink)" }}>
                 {CLUB.sigle}
               </span>
-              <span className="block truncate text-[11px]" style={{ color: "var(--color-brun-300)" }}>
+              <span className="block truncate text-[11px]" style={{ color: "var(--ink-3)" }}>
                 {ROLES[membre.role]} &middot; {membre.nom}
               </span>
             </span>
@@ -94,7 +94,7 @@ export default async function CoquilleApplication({ children }: { children: Reac
             <button
               type="submit"
               className="rounded-lg px-3 py-1.5 text-xs font-medium"
-              style={{ background: "var(--color-brun-700)", color: "var(--color-brun-100)" }}
+              style={{ background: "var(--line-2)", color: "var(--sunk)" }}
             >
               Quitter
             </button>

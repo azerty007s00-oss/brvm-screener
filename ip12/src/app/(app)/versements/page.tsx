@@ -27,7 +27,7 @@ import {
   FormulaireAction,
   Selection,
 } from "@/components/formulaires";
-import { Badge, Carte, Vide } from "@/components/ui";
+import { Carte, Vide } from "@/components/ui";
 import {
   EcranInitialisation,
   estTableAbsente,
@@ -280,8 +280,8 @@ export default async function PageVersements({
                                 rel="noreferrer"
                                 className="inline-flex items-center rounded px-2 py-0.5 text-xs underline"
                                 style={{
-                                  background: "var(--color-vert-100)",
-                                  color: "var(--color-vert-600)",
+                                  background: "var(--etat-ok-fond)",
+                                  color: "var(--etat-ok)",
                                 }}
                               >
                                 {j.mime === "application/pdf"
@@ -293,7 +293,7 @@ export default async function PageVersements({
                         ) : (
                           <span
                             className="text-xs"
-                            style={{ color: "var(--color-ambre-600)" }}
+                            style={{ color: "var(--etat-attente)" }}
                           >
                             Aucun justificatif joint — a verifier avant de
                             valider.
@@ -378,7 +378,7 @@ export default async function PageVersements({
                     <p
                       className="mb-3 whitespace-pre-line rounded-lg px-2 py-1.5 text-[11px]"
                       style={{
-                        background: "var(--color-brun-100)",
+                        background: "var(--sunk)",
                         color: "var(--discret)",
                       }}
                     >
@@ -403,7 +403,7 @@ export default async function PageVersements({
                               target="_blank"
                               rel="noopener"
                               className="underline"
-                              style={{ color: "var(--color-or-600)" }}
+                              style={{ color: "var(--gold-ink)" }}
                             >
                               {j.nom}
                             </a>
@@ -541,7 +541,7 @@ export default async function PageVersements({
                 className="grid min-h-11 place-items-center px-4 text-[13px] font-semibold"
                 style={
                   ordre === cle
-                    ? { background: "var(--color-or-500)", color: "var(--color-brun-900)" }
+                    ? { background: "var(--ink)", color: "var(--page)" }
                     : { color: "var(--discret)" }
                 }
               >
@@ -582,11 +582,7 @@ export default async function PageVersements({
                   className="rounded text-center text-[11px] leading-5"
                   style={
                     c.mois === aujourdhui
-                      ? {
-                          background: "var(--color-or-200)",
-                          color: "var(--color-brun-900)",
-                          fontWeight: 700,
-                        }
+                      ? { background: "var(--sunk)", color: "var(--ink)", fontWeight: 600 }
                       : { color: "var(--discret)" }
                   }
                 >
@@ -598,7 +594,7 @@ export default async function PageVersements({
 
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {lignesRegistre.map(({ s, fenetre, statut, moi }) => (
-              <li key={s.membreId} style={moi ? { background: "var(--or-doux)" } : undefined}>
+              <li key={s.membreId} >
                 {/*
                  * Un seul detail ouvert a la fois : le nom du groupe suffit, le
                  * navigateur ferme les autres sans une ligne de JavaScript.
@@ -607,18 +603,20 @@ export default async function PageVersements({
                   <summary className="tapable cursor-pointer px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{s.nom}</span>
+                      {/*
+                        * « vous » est un mot, non une pastille doree : c'est un
+                        * reperage, pas une distinction. De meme, un nombre de
+                        * mois de retard se lit mieux ecrit qu'enferme dans une
+                        * gelule rouge, qui criait plus fort que le retard.
+                        */}
                       {moi && (
                         <span
-                          className="rounded px-1.5 py-0.5 text-[10px] font-bold"
-                          style={{
-                            background: "var(--color-or-500)",
-                            color: "var(--color-brun-900)",
-                          }}
+                          className="flex-none text-[12px] font-medium"
+                          style={{ color: "var(--ink-3)" }}
                         >
-                          MOI
+                          vous
                         </span>
                       )}
-                      {s.nbMoisRetard > 0 && <Badge ton="rouge">{s.nbMoisRetard}</Badge>}
                       <span
                         className="flex-none text-[12px] font-semibold"
                         style={{ color: statut.encre }}
@@ -675,7 +673,7 @@ export default async function PageVersements({
                                         target="_blank"
                                         rel="noopener"
                                         className="mr-3 underline"
-                                        style={{ color: "var(--color-or-600)" }}
+                                        style={{ color: "var(--gold-ink)" }}
                                       >
                                         {j.nom}
                                       </a>

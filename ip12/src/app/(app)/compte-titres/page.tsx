@@ -252,7 +252,7 @@ export default async function PageCompteTitres() {
                   nombre={sorties.length}
                   detail={`de ${dateCourte(datesSorties[0])} a ${dateCourte(datesSorties[datesSorties.length - 1])}`}
                   total={
-                    <span style={{ color: "var(--color-rouge-600)" }}>
+                    <span style={{ color: "var(--etat-manque)" }}>
                       &minus; {fcfa(sorties.reduce((t, a) => t + a.montant, 0))}
                     </span>
                   }

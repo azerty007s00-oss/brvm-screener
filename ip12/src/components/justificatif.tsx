@@ -63,7 +63,7 @@ export function ChampJustificatif() {
 
   return (
     <label className="mt-3 block">
-      <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--discret)" }}>
+      <span className="text-xs font-medium" style={{ color: "var(--discret)" }}>
         Justificatif (facultatif)
       </span>
       <input
@@ -83,12 +83,12 @@ export function ChampJustificatif() {
         </span>
       )}
       {erreur && (
-        <span className="mt-1 block text-xs" style={{ color: "var(--color-rouge-600)" }}>
+        <span className="mt-1 block text-xs" style={{ color: "var(--etat-manque)" }}>
           {erreur}
         </span>
       )}
       {etat && !erreur && (
-        <span className="mt-1 block text-xs" style={{ color: "var(--color-vert-600)" }}>
+        <span className="mt-1 block text-xs" style={{ color: "var(--etat-ok)" }}>
           {etat.nom} — {enKo(etat.taille)}
           {etat.origine > etat.taille * 1.2 && ` (reduit depuis ${enKo(etat.origine)})`}
         </span>

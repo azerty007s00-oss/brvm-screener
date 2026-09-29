@@ -70,7 +70,7 @@ export default async function PageMembres() {
                       <Link
                         href={`/releve/${m.id}`}
                         className="sans-impression shrink-0 rounded-lg px-2.5 py-1 text-[11px] font-medium"
-                        style={{ background: "var(--color-brun-100)", color: "var(--color-brun-700)" }}
+                        style={{ background: "var(--sunk)", color: "var(--line-2)" }}
                       >
                         Releve
                       </Link>

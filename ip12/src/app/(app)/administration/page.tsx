@@ -127,9 +127,9 @@ export default async function PageAdministration() {
         sous={`${membre.nom} · president`}
         marque={
           <span
-            className="rounded-full border px-2.5 py-1 text-[10px] font-semibold tracking-wider uppercase"
+            className="rounded-full border px-2.5 py-1 text-[10px] font-semibold"
             style={{
-              color: "var(--color-or-200)",
+              color: "var(--sunk)",
               background: "rgba(201,162,39,0.16)",
               borderColor: "rgba(201,162,39,0.35)",
             }}
@@ -159,14 +159,14 @@ export default async function PageAdministration() {
         <div
           className="apparait overflow-hidden rounded-2xl border"
           style={{
-            background: "var(--color-rouge-100)",
-            borderColor: "var(--color-rouge-600)",
+            background: "var(--etat-manque-fond)",
+            borderColor: "var(--etat-manque)",
             ["--rang" as string]: 2,
           }}
         >
           <p
             className="flex items-center gap-2 px-3.5 pt-3 pb-2.5 text-sm font-semibold"
-            style={{ color: "var(--color-rouge-600)" }}
+            style={{ color: "var(--etat-manque)" }}
           >
             <Icone.alerte taille={17} />
             {aRegler.length} point{aRegler.length > 1 ? "s" : ""} a regler
@@ -175,13 +175,13 @@ export default async function PageAdministration() {
             <p
               key={c.cle}
               className="border-t px-3.5 py-2.5 text-xs"
-              style={{ borderColor: "var(--color-rouge-600)" }}
+              style={{ borderColor: "var(--etat-manque)" }}
             >
               <strong className="text-sm font-semibold">
                 <code>{c.cle}</code>
               </strong>
               <br />
-              <span style={{ color: "var(--color-brun-700)" }}>{c.explication}</span>
+              <span style={{ color: "var(--line-2)" }}>{c.explication}</span>
             </p>
           ))}
         </div>
@@ -203,7 +203,7 @@ export default async function PageAdministration() {
         </p>
         <p className="mb-3 text-sm">
           Transport :{" "}
-          <span style={{ color: transport === "aucun" ? "var(--color-rouge-600)" : "var(--color-vert-600)" }}>
+          <span style={{ color: transport === "aucun" ? "var(--etat-manque)" : "var(--etat-ok)" }}>
             {descriptionTransport()}
           </span>
         </p>
@@ -217,11 +217,11 @@ export default async function PageAdministration() {
           <div
             className="mb-3 rounded-lg border px-3 py-2 text-xs"
             style={{
-              borderColor: essaiReussi ? "var(--color-vert-600)" : "var(--color-rouge-600)",
+              borderColor: essaiReussi ? "var(--etat-ok)" : "var(--etat-manque)",
               color: "var(--discret)",
             }}
           >
-            <p className="font-medium" style={{ color: essaiReussi ? "var(--color-vert-600)" : "var(--color-rouge-600)" }}>
+            <p className="font-medium" style={{ color: essaiReussi ? "var(--etat-ok)" : "var(--etat-manque)" }}>
               Dernier essai du {dateCourte(dernierEssai.created_at)} :{" "}
               {essaiReussi ? "accepte par le serveur" : "refuse"}
             </p>
@@ -240,7 +240,7 @@ export default async function PageAdministration() {
               {etatEnvoi.variables.map((v) => (
                 <li key={v.nom}>
                   <code>{v.nom}</code> —{" "}
-                  <strong style={{ color: v.presente ? "var(--color-vert-600)" : "var(--color-rouge-600)" }}>
+                  <strong style={{ color: v.presente ? "var(--etat-ok)" : "var(--etat-manque)" }}>
                     {v.presente ? "presente" : "absente"}
                   </strong>
                 </li>
@@ -647,7 +647,7 @@ export default async function PageAdministration() {
             <details className="mt-3">
               <summary
                 className="cursor-pointer list-none rounded px-2 py-1 text-xs"
-                style={{ background: "var(--color-brun-100)", color: "var(--color-brun-800)" }}
+                style={{ background: "var(--sunk)", color: "var(--sunk)" }}
               >
                 + Une borne differente pour certains membres
               </summary>

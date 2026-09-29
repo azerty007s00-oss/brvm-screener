@@ -67,6 +67,16 @@ Phoenix Capital Management.
   deux reprises d'historique, qui n'ont servi qu'une fois, descendent dans un groupe « Mise en
   place, servie une seule fois » : les garder au milieu du travail mensuel laissait croire qu'il y
   avait là quelque chose à refaire, et exposait à les rejouer.
+- **Une seule couleur d'accent** — l'or, et seulement pour la courbe du portefeuille et l'anneau de
+  focus. Les montants sont à l'encre, avec leur signe ; le rouge ne dit plus que ce qui manque,
+  l'ambre que ce qui attend. Auparavant tout était teinté — montants en or, recettes en vert,
+  dépenses en rouge, cartes brunes — et à force de couleur plus rien ne signalait.
+- **Le graphique du portefeuille dit la vérité** — ses quatorze relevés étaient espacés
+  régulièrement alors que leurs dates ne le sont pas : six mois séparent les premiers, cinq sont
+  tombés dans le seul mois de septembre 2026. Le dessin montrait une progression régulière là où il
+  y a eu une longue attente puis une rafale. L'abscisse est désormais le temps, et l'ordonnée se
+  cale sur des paliers ronds — une échelle qui part du plus bas relevé redresse n'importe quelle
+  pente.
 - **Versements partiels** — un mois n'est soldé que lorsque la somme des versements atteint la
   cotisation attendue. En dessous, le mois reste dû et la pénalité de l'art. 9 porte sur la
   cotisation entière, jamais sur le seul reliquat : verser un acompte ne réduit pas la sanction.

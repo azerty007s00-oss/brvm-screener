@@ -38,8 +38,8 @@ export function Bienvenue({ membre }: { membre: Membre }) {
         style={{ background: "var(--carte)", borderColor: "var(--bordure)" }}
       >
         <p
-          className="text-[11px] font-semibold tracking-[0.14em] uppercase"
-          style={{ color: "var(--color-or-600)" }}
+          className="text-[11px] font-semibold tracking-[0.14em]"
+          style={{ color: "var(--gold-ink)" }}
         >
           {CLUB.nom}
         </p>
@@ -59,7 +59,7 @@ export function Bienvenue({ membre }: { membre: Membre }) {
         <div className="flex items-start gap-3">
           <span
             className="grid h-[38px] w-[38px] flex-none place-items-center rounded-xl"
-            style={{ background: "var(--color-or-200)", color: "var(--color-or-600)" }}
+            style={{ background: "var(--sunk)", color: "var(--ink-2)" }}
           >
             <Icone.courriel />
           </span>
@@ -86,7 +86,7 @@ export function Bienvenue({ membre }: { membre: Membre }) {
         <div className="mb-3 flex items-start gap-3">
           <span
             className="grid h-[38px] w-[38px] flex-none place-items-center rounded-xl"
-            style={{ background: "var(--color-or-200)", color: "var(--color-or-600)" }}
+            style={{ background: "var(--sunk)", color: "var(--ink-2)" }}
           >
             <Icone.bouclier />
           </span>
@@ -115,12 +115,12 @@ export function Bienvenue({ membre }: { membre: Membre }) {
         className="apparait relief rounded-2xl border p-4"
         style={{ background: "var(--carte)", borderColor: "var(--bordure)", ["--rang" as string]: 3 }}
       >
-        <p className="mb-2.5 text-[11px] font-semibold tracking-[0.1em] uppercase" style={{ color: "var(--color-brun-600)" }}>
+        <p className="mb-2.5 text-[11px] font-semibold tracking-[0.1em]" style={{ color: "var(--ink-2)" }}>
           Ce que le club attend de vous
         </p>
         <ul className="space-y-2 text-[13px] leading-snug">
           <li className="flex gap-2.5">
-            <span className="flex-none font-semibold whitespace-nowrap tabular-nums" style={{ color: "var(--color-or-600)" }}>
+            <span className="flex-none font-semibold whitespace-nowrap tabular-nums" style={{ color: "var(--gold-ink)" }}>
               {fcfa(REGLES.cotisationMensuelle)}
             </span>
             <span style={{ color: "var(--discret)" }}>
@@ -128,7 +128,7 @@ export function Bienvenue({ membre }: { membre: Membre }) {
             </span>
           </li>
           <li className="flex gap-2.5">
-            <span className="flex-none font-semibold whitespace-nowrap tabular-nums" style={{ color: "var(--color-rouge-600)" }}>
+            <span className="flex-none font-semibold whitespace-nowrap tabular-nums" style={{ color: "var(--etat-manque)" }}>
               {(REGLES.tauxPenalite * 100).toFixed(0)} %
             </span>
             <span style={{ color: "var(--discret)" }}>
@@ -136,7 +136,7 @@ export function Bienvenue({ membre }: { membre: Membre }) {
             </span>
           </li>
           <li className="flex gap-2.5">
-            <span className="flex-none font-semibold" style={{ color: "var(--color-brun-600)" }}>
+            <span className="flex-none font-semibold" style={{ color: "var(--ink-2)" }}>
               R3
             </span>
             <span style={{ color: "var(--discret)" }}>

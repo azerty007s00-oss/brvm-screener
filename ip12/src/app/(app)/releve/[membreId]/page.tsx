@@ -103,7 +103,7 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
         style={{ background: "var(--carte)", borderColor: "var(--bordure)" }}
       >
         <header className="border-b pb-3" style={{ borderColor: "var(--bordure)" }}>
-          <p className="text-xs uppercase tracking-widest" style={{ color: "var(--discret)" }}>
+          <p className="text-xs" style={{ color: "var(--discret)" }}>
             {CLUB.nom} &middot; {CLUB.ville}
           </p>
           <h1 className="mt-1 text-xl font-semibold">Releve individuel</h1>

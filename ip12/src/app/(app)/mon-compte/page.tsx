@@ -45,7 +45,7 @@ export default async function PageMonCompte() {
         <Link
           href={`/releve/${membre.id}`}
           className="rounded-lg px-3 py-1.5 text-xs font-medium"
-          style={{ background: "var(--color-brun-700)", color: "var(--color-brun-100)" }}
+          style={{ background: "var(--line-2)", color: "var(--sunk)" }}
         >
           Editer mon releve
         </Link>
@@ -81,19 +81,19 @@ export default async function PageMonCompte() {
       <Carte titre="Mon profil">
         <dl className="grid gap-2 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-xs uppercase" style={{ color: "var(--discret)" }}>Nom</dt>
+            <dt className="text-xs" style={{ color: "var(--discret)" }}>Nom</dt>
             <dd>{membre.nom}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase" style={{ color: "var(--discret)" }}>E-mail</dt>
+            <dt className="text-xs" style={{ color: "var(--discret)" }}>E-mail</dt>
             <dd className="break-all">{membre.email}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase" style={{ color: "var(--discret)" }}>Role</dt>
+            <dt className="text-xs" style={{ color: "var(--discret)" }}>Role</dt>
             <dd>{ROLES[membre.role]}</dd>
           </div>
           <div>
-            <dt className="text-xs uppercase" style={{ color: "var(--discret)" }}>Adhesion</dt>
+            <dt className="text-xs" style={{ color: "var(--discret)" }}>Adhesion</dt>
             <dd>{dateCourte(membre.date_adhesion)}</dd>
           </div>
         </dl>
@@ -160,7 +160,7 @@ export default async function PageMonCompte() {
                       target="_blank"
                       rel="noreferrer"
                       className="text-xs underline"
-                      style={{ color: "var(--color-vert-600)" }}
+                      style={{ color: "var(--etat-ok)" }}
                     >
                       {j.mime === "application/pdf" ? "Bordereau" : "Recu"}
                     </a>

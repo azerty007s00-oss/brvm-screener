@@ -334,8 +334,8 @@ export default async function PageCaisse() {
                       style={{
                         color:
                           total < 0
-                            ? "var(--color-rouge-600)"
-                            : "var(--color-vert-600)",
+                            ? "var(--etat-manque)"
+                            : "var(--etat-ok)",
                       }}
                     >
                       {total < 0 ? "\u2212" : "+"} {fcfa(Math.abs(total))}
@@ -358,8 +358,8 @@ export default async function PageCaisse() {
                               <span
                                 style={{
                                   color: depense
-                                    ? "var(--color-rouge-600)"
-                                    : "var(--color-vert-600)",
+                                    ? "var(--etat-manque)"
+                                    : "var(--etat-ok)",
                                 }}
                               >
                                 {depense ? "−" : "+"} {fcfa(m.montant)}
@@ -387,7 +387,7 @@ export default async function PageCaisse() {
                             {m.motif_refus && (
                               <p
                                 className="mt-0.5 text-xs italic"
-                                style={{ color: "var(--color-rouge-600)" }}
+                                style={{ color: "var(--etat-manque)" }}
                               >
                                 Rejet : {m.motif_refus}
                               </p>

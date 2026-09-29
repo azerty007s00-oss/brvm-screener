@@ -33,10 +33,10 @@ export function FormulaireAction({
 
   const styles =
     variante === "principal"
-      ? { background: "var(--color-brun-800)", color: "var(--color-or-200)" }
+      ? { background: "var(--ink)", color: "var(--page)" }
       : variante === "danger"
-        ? { background: "var(--color-rouge-100)", color: "var(--color-rouge-600)" }
-        : { background: "var(--color-brun-100)", color: "var(--color-brun-800)" };
+        ? { background: "var(--etat-manque-fond)", color: "var(--etat-manque)" }
+        : { background: "var(--sunk)", color: "var(--sunk)" };
 
   return (
     <form
@@ -62,12 +62,12 @@ export function FormulaireAction({
         {enCours ? "Envoi en cours" : libelle}
       </button>
       {etat.erreur && (
-        <p className="mt-2 text-xs" style={{ color: "var(--color-rouge-600)" }}>
+        <p className="mt-2 text-xs" style={{ color: "var(--etat-manque)" }}>
           {etat.erreur}
         </p>
       )}
       {etat.ok && etat.message && (
-        <p className="mt-2 text-xs" style={{ color: "var(--color-vert-600)" }}>
+        <p className="mt-2 text-xs" style={{ color: "var(--etat-ok)" }}>
           {etat.message}
         </p>
       )}
@@ -76,7 +76,7 @@ export function FormulaireAction({
 }
 
 const styleChamp =
-  "mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--color-or-400)]";
+  "mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--gold)]";
 
 export function Champ({
   nom,
@@ -96,7 +96,7 @@ export function Champ({
 } & Record<string, unknown>) {
   return (
     <label className="mt-3 block first:mt-0">
-      <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--discret)" }}>
+      <span className="text-xs font-medium" style={{ color: "var(--discret)" }}>
         {libelle}
       </span>
       <input
@@ -130,7 +130,7 @@ export function Selection({
 }) {
   return (
     <label className="mt-3 block first:mt-0">
-      <span className="text-xs font-medium uppercase tracking-wide" style={{ color: "var(--discret)" }}>
+      <span className="text-xs font-medium" style={{ color: "var(--discret)" }}>
         {libelle}
       </span>
       <select
@@ -159,7 +159,7 @@ export function Depliant({ titre, children }: { titre: string; children: ReactNo
     <details className="group">
       <summary
         className="cursor-pointer list-none rounded-lg px-3 py-2 text-sm font-medium"
-        style={{ background: "var(--color-brun-100)", color: "var(--color-brun-800)" }}
+        style={{ background: "var(--sunk)", color: "var(--sunk)" }}
       >
         + {titre}
       </summary>

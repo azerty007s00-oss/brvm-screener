@@ -13,7 +13,7 @@ export function BoutonImprimer({ libelle = "Imprimer" }: { libelle?: string }) {
       type="button"
       onClick={() => window.print()}
       className="sans-impression rounded-lg px-3 py-1.5 text-xs font-medium"
-      style={{ background: "var(--color-brun-700)", color: "var(--color-brun-100)" }}
+      style={{ background: "var(--line-2)", color: "var(--sunk)" }}
     >
       {libelle}
     </button>

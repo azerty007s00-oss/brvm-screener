@@ -64,17 +64,17 @@ export default async function PagePortefeuille() {
                     {fcfa(p.valeur)}{" "}
                     <span
                       className="text-xs"
-                      style={{ color: p.plusValue >= 0 ? "var(--color-vert-600)" : "var(--color-rouge-600)" }}
+                      style={{ color: p.plusValue >= 0 ? "var(--etat-ok)" : "var(--etat-manque)" }}
                     >
                       ({p.plusValue >= 0 ? "+" : ""}
                       {fcfa(p.plusValue)})
                     </span>
                   </span>
                 </div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full" style={{ background: "var(--color-brun-100)" }}>
+                <div className="mt-1 h-2 overflow-hidden rounded-full" style={{ background: "var(--sunk)" }}>
                   <div
                     className="h-full rounded-full"
-                    style={{ width: `${(p.part * 100).toFixed(2)}%`, background: "var(--color-or-500)" }}
+                    style={{ width: `${(p.part * 100).toFixed(2)}%`, background: "var(--gold)" }}
                   />
                 </div>
                 <p className="mt-0.5 text-[11px]" style={{ color: "var(--discret)" }}>
