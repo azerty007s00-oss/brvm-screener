@@ -12,6 +12,7 @@ import { CourbePortefeuille } from "@/components/courbe";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Portefeuille" };
 
 export default async function PagePortefeuille() {
   const membre = await exigerMembre();

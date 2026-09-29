@@ -404,3 +404,49 @@ details[open] > summary .chevron { transform: rotate(90deg); }
   }
   .menu-ligne { animation: deplie 160ms ease-out both; }
 }
+
+/*
+ * Le focus se voit, partout et de la meme facon.
+ *
+ * Il etait laisse au navigateur, donc bleu sur certains et invisible sur
+ * d'autres -- et l'on ne pouvait pas traverser le site au clavier sans deviner
+ * ou l'on se trouvait. L'anneau d'or est le seul emploi de l'or hors la courbe.
+ */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 1px;
+}
+
+@media print {
+  /*
+   * Le papier ne porte ni navigation, ni bouton, ni menu : ce qui s'imprime,
+   * c'est le contenu et lui seul, sur toute la largeur de la feuille.
+   */
+  aside,
+  nav,
+  .panneau > summary,
+  .menu-ligne,
+  button {
+    display: none !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  table,
+  .defilement-x {
+    width: 100% !important;
+    overflow: visible !important;
+  }
+  li,
+  tr,
+  section {
+    break-inside: avoid;
+  }
+}

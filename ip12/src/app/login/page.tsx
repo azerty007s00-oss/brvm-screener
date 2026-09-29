@@ -6,21 +6,39 @@ import { Champ, FormulaireAction } from "@/components/formulaires";
 import { Alerte } from "@/components/ui";
 import { CLUB } from "@/lib/settings";
 
+export const metadata = { title: "Connexion" };
+
 export default async function PageConnexion() {
   if (baseConfiguree() && (await membreCourant())) redirect("/");
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-10">
-      <div className="mb-8 text-center">
-        <p
-          className="inline-block rounded-full px-3 py-1 text-xs font-semibold"
-          style={{ background: "var(--sunk)", color: "var(--ink-2)" }}
+    <main
+      className="flex min-h-dvh flex-col items-center justify-center px-5 py-10"
+      style={{ background: "var(--side)" }}
+    >
+      <div className="mb-7 flex flex-col items-center text-center">
+        <span
+          className="grid h-8 w-8 place-items-center rounded-[9px]"
+          style={{ background: "var(--brand)", color: "var(--brand-mark)" }}
         >
-          {CLUB.sigle}
+          <svg viewBox="0 0 26 26" width="22" height="22" aria-hidden="true">
+            <path
+              d="M7 17.5 L11.4 13 L14.4 15.4 L19 9.6"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <circle cx="19" cy="9.6" r="1.7" fill="currentColor" />
+          </svg>
+        </span>
+        <h1 className="mt-3 text-[20px] font-semibold">{CLUB.sigle}</h1>
+        <p className="text-[14px]" style={{ color: "var(--ink-2)" }}>
+          {CLUB.nom}
         </p>
-        <h1 className="mt-3 text-2xl font-semibold">{CLUB.nom}</h1>
-        <p className="mt-1 text-sm" style={{ color: "var(--discret)" }}>
-          Club d&apos;investissement &middot; {CLUB.ville}
+        <p className="mt-1 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+          Club d&apos;investissement &middot; {CLUB.ville}, Cote d&apos;Ivoire
         </p>
       </div>
 
@@ -31,8 +49,8 @@ export default async function PageConnexion() {
         </Alerte>
       ) : (
         <div
-          className="rounded-xl border p-5"
-          style={{ background: "var(--carte)", borderColor: "var(--bordure)" }}
+          className="w-full max-w-[400px] rounded-xl border p-8"
+          style={{ background: "var(--page)", borderColor: "var(--line)" }}
         >
           <FormulaireAction action={seConnecter} libelle="Se connecter">
             <Champ nom="email" libelle="Adresse e-mail" type="email" autoComplete="username" />
@@ -43,7 +61,7 @@ export default async function PageConnexion() {
               autoComplete="current-password"
             />
           </FormulaireAction>
-          <p className="mt-4 text-center text-xs" style={{ color: "var(--discret)" }}>
+          <p className="mt-5 text-center text-[12.5px]" style={{ color: "var(--ink-3)" }}>
             Mot de passe oublie ? Demandez au president de le reinitialiser.
           </p>
         </div>

@@ -7,7 +7,7 @@ import {
   rejeterMouvement,
   validerMouvement,
 } from "@/app/actions/caisse";
-import { dateCourte, fcfa } from "@/lib/settings";
+import { dateCourte, fcfa, nombre } from "@/lib/settings";
 import {
   CATEGORIES_DEPENSE,
   CATEGORIES_RECETTE,
@@ -18,24 +18,25 @@ import {
 import {
   Champ,
   ChampCache,
-  Depliant,
   FormulaireAction,
   Selection,
 } from "@/components/formulaires";
 import {
-  Alerte,
   Badge,
   Carte,
+  CarteEtat,
+  EnTeteEcran,
   GroupeReplie,
-  Statistique,
   Vide,
 } from "@/components/ui";
+import { Panneau } from "@/components/panneau";
 import {
   EcranInitialisation,
   estTableAbsente,
 } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Caisse" };
 
 export default async function PageCaisse() {
   const membre = await exigerMembre();
@@ -92,30 +93,91 @@ export default async function PageCaisse() {
     })
     .sort((a, b) => b.recent.localeCompare(a.recent));
 
+  /*
+   * Trois saisies, trois panneaux : le journal n'est plus repousse sous deux
+   * formulaires qu'on ouvre une fois par mois.
+   */
+  const saisies = gere ? (
+    <>
+      <Panneau
+        libelle="Aligner sur le solde reel"
+        titre="Regulariser la caisse"
+        variante="secondaire"
+        introduction={`Quand la caisse reelle ne correspond pas au calcul -- des penalites anciennes encaissees sans trace nominative, le plus souvent -- annoncez le solde que vous constatez. L'outil ecrit l'ecart dans le bon sens et en garde le motif. Solde calcule a cet instant : ${fcfa(s.totalEnCaisse)}.`}
+      >
+        <FormulaireAction action={regulariserCaisse} libelle="Inscrire l'ecart">
+          <Champ
+            nom="soldeReel"
+            libelle="Solde reellement constate (FCFA)"
+            type="number"
+            min={0}
+            valeur={Math.max(0, Math.round(s.totalEnCaisse))}
+            aide="Ce que vous comptez en caisse, ou ce qu'affiche votre releve."
+          />
+          <Champ nom="motif" libelle="Motif" aide="Restera inscrit au journal." />
+        </FormulaireAction>
+      </Panneau>
+
+      {[
+        {
+          sens: SENS_CAISSE.recette,
+          titre: "Enregistrer une recette",
+          categories: CATEGORIES_RECETTE,
+          aide: "Ce que vous voudrez relire dans six mois : d'ou vient cet argent.",
+          variante: "secondaire" as const,
+        },
+        {
+          sens: SENS_CAISSE.depense,
+          titre: "Enregistrer une depense",
+          categories: CATEGORIES_DEPENSE,
+          aide: "Ce que vous voudrez relire dans six mois : a quoi cet argent a servi.",
+          variante: "principal" as const,
+        },
+      ].map((f) => (
+        <Panneau
+          key={f.sens}
+          libelle={f.titre}
+          titre={f.titre}
+          variante={f.variante}
+          introduction="Votre saisie vaut validation : vous tenez la caisse, vous constatez ce qui en sort et ce qui y entre. Une ecriture fautive s'annule depuis le journal, motif a l'appui. Pour une somme dont le detail est perdu, choisissez la categorie la plus proche et decrivez-la dans le motif : le solde tombera juste, et la provenance restera lisible."
+        >
+          <FormulaireAction action={enregistrerMouvement} libelle="Enregistrer">
+            <ChampCache nom="sens" valeur={f.sens} />
+            <Selection nom="categorie" libelle="Categorie" options={f.categories} />
+            <Champ nom="montant" libelle="Montant (FCFA)" type="number" min={1} />
+            <Champ nom="date" libelle="Date" type="date" valeur={new Date().toISOString().slice(0, 10)} />
+            <Champ nom="note" libelle="Motif" requis={false} aide={f.aide} />
+          </FormulaireAction>
+        </Panneau>
+      ))}
+    </>
+  ) : null;
+
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Statistique
-          libelle="Solde en caisse"
-          valeur={fcfa(s.totalEnCaisse)}
-          accent={s.totalEnCaisse < 0 ? "rouge" : "or"}
+      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+        <EnTeteEcran
+          titre="Solde en caisse"
+          sous={`arrete au ${dateCourte(new Date().toISOString().slice(0, 10))}`}
+          chiffre={nombre(s.totalEnCaisse)}
+          unite="FCFA"
+          detail="Hors cotisations placees en bourse. Comparez-le a votre releve : ce qui manque se voit la."
         />
-        <Statistique
-          libelle="Recettes"
-          valeur={fcfa(s.recettes)}
-          accent="vert"
-        />
-        <Statistique
-          libelle="Depenses"
-          valeur={fcfa(s.depenses)}
-          accent="rouge"
-        />
-        <Statistique
-          libelle="Penalites encaissees"
-          valeur={fcfa(s.penalitesEncaissees)}
-          detail="comptees dans le solde"
-        />
+        <div className="sans-impression flex flex-wrap gap-2.5">{saisies}</div>
       </div>
+
+      <CarteEtat
+        chiffres={[
+          { libelle: "Recettes", valeur: nombre(s.recettes), unite: "FCFA" },
+          { libelle: "Depenses", valeur: nombre(s.depenses), unite: "FCFA" },
+          {
+            libelle: "Penalites encaissees",
+            valeur: nombre(s.penalitesEncaissees),
+            unite: "FCFA",
+            contexte: "comptees dans le solde",
+          },
+        ]}
+      />
 
       <Carte titre="Composition du solde">
         <ul className="space-y-1 text-sm">
@@ -203,116 +265,6 @@ export default async function PageCaisse() {
               </li>
             ))}
           </ul>
-        </Carte>
-      )}
-
-      {gere && (
-        <Carte titre="Nouveau mouvement">
-          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            Votre saisie vaut validation : vous tenez la caisse, vous constatez ce
-            qui en sort et ce qui y entre. Une ecriture fautive s&apos;annule depuis le
-            journal, motif a l&apos;appui.
-          </p>
-          {/*
-           * Un formulaire par sens, plutot qu'une liste unique.
-           * Les deux nomenclatures partagent « regularisation » et « autre » :
-           * concatenees, elles affichaient deux fois la meme entree. Et rien
-           * n'empechait d'enregistrer des frais SGI en recette.
-           */}
-          {[
-            {
-              sens: SENS_CAISSE.depense,
-              titre: "Enregistrer une depense",
-              categories: CATEGORIES_DEPENSE,
-              aide: "Ce que vous voudrez relire dans six mois : a quoi cet argent a servi.",
-            },
-            {
-              sens: SENS_CAISSE.recette,
-              titre: "Enregistrer une recette",
-              categories: CATEGORIES_RECETTE,
-              aide: "Ce que vous voudrez relire dans six mois : d'ou vient cet argent.",
-            },
-          ].map((f) => (
-            <Depliant key={f.sens} titre={f.titre}>
-              <FormulaireAction
-                action={enregistrerMouvement}
-                libelle="Enregistrer"
-              >
-                <ChampCache nom="sens" valeur={f.sens} />
-                <Selection
-                  nom="categorie"
-                  libelle="Categorie"
-                  options={f.categories}
-                />
-                <Champ
-                  nom="montant"
-                  libelle="Montant (FCFA)"
-                  type="number"
-                  min={1}
-                />
-                <Champ
-                  nom="date"
-                  libelle="Date"
-                  type="date"
-                  valeur={new Date().toISOString().slice(0, 10)}
-                />
-                <Champ
-                  nom="note"
-                  libelle="Motif"
-                  requis={false}
-                  aide={f.aide}
-                />
-              </FormulaireAction>
-            </Depliant>
-          ))}
-          <div className="mt-3">
-            <Alerte ton="ambre">
-              Pour une somme dont le detail est perdu — des penalites anciennes
-              deja encaissees, par exemple — choisissez la recette
-              correspondante et decrivez-la dans le motif. Le solde tombera
-              juste, et la provenance restera lisible.
-            </Alerte>
-          </div>
-        </Carte>
-      )}
-
-      {gere && (
-        <Carte titre="Regulariser la caisse">
-          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            Quand la caisse reelle ne correspond pas au calcul — des penalites
-            anciennes encaissees sans trace nominative, le plus souvent —
-            annoncez le solde que vous constatez. L&apos;outil ecrit
-            l&apos;ecart dans le bon sens et en garde le motif. Solde calcule a
-            cet instant : <strong>{fcfa(s.totalEnCaisse)}</strong>.
-          </p>
-          <Depliant titre="Aligner sur le solde reel">
-            <FormulaireAction
-              action={regulariserCaisse}
-              libelle="Inscrire l'ecart"
-              confirmation="Inscrire l'ecart entre le solde calcule et le solde constate ?"
-            >
-              <Champ
-                nom="soldeReel"
-                libelle="Solde reellement constate (FCFA)"
-                type="number"
-                min={0}
-                valeur={Math.max(0, Math.round(s.totalEnCaisse))}
-                aide="Ce que vous comptez en caisse, ou ce qu'affiche votre releve."
-              />
-              <Champ
-                nom="date"
-                libelle="Date du constat"
-                type="date"
-                valeur={new Date().toISOString().slice(0, 10)}
-              />
-              <Champ
-                nom="motif"
-                libelle="Motif"
-                valeur="Penalites historiques non documentees"
-                requis={false}
-              />
-            </FormulaireAction>
-          </Depliant>
         </Carte>
       )}
 

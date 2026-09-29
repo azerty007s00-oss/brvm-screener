@@ -5,10 +5,12 @@ import { listerMembres, situationsClub, synthese } from "@/lib/queries";
 import { basculerActivite, creerMembre, modifierMembre, reinitialiserMotDePasse } from "@/app/actions/membres";
 import { CLUB, ROLES, dateCourte, fcfa } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
-import { Badge, Carte, Vide } from "@/components/ui";
+import { Badge, Carte, EnTeteEcran, Vide } from "@/components/ui";
+import { Panneau } from "@/components/panneau";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Membres" };
 
 const OPTIONS_ROLE = Object.entries(ROLES).map(([valeur, libelle]) => ({ valeur, libelle }));
 
@@ -30,8 +32,34 @@ export default async function PageMembres() {
     throw e;
   }
 
+  const saisie = estPresident ? (
+    <Panneau
+      libelle="Nouveau profil"
+      titre="Ajouter un membre"
+      introduction={`Un mot de passe provisoire est genere : transmettez-le au membre, qui devra le remplacer a sa premiere connexion. Statuts : de ${CLUB.membresMin} a ${CLUB.membresMax} membres.`}
+    >
+        <FormulaireAction action={creerMembre} libelle="Creer le profil">
+          <Champ nom="nom" libelle="Nom et prenoms" />
+          <Champ nom="email" libelle="Adresse e-mail" type="email" />
+          <Champ nom="telephone" libelle="Telephone" requis={false} />
+          <Champ nom="titre" libelle="Intitule (facultatif)" requis={false} />
+          <Selection nom="role" libelle="Role" valeur="membre" options={OPTIONS_ROLE} />
+          <Champ nom="dateAdhesion" libelle="Date d'adhesion" type="date" valeur={CLUB.dateCreation} />
+        </FormulaireAction>
+    </Panneau>
+  ) : null;
+
   return (
     <>
+      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+        <EnTeteEcran
+          titre="Effectif"
+          chiffre={`${membres.filter((m) => m.actif).length} sur ${CLUB.membresMax}`}
+          detail={`Les statuts fixent le club entre ${CLUB.membresMin} et ${CLUB.membresMax} membres.`}
+        />
+        <div className="sans-impression">{saisie}</div>
+      </div>
+
       <Carte titre={`Effectif (${membres.filter((m) => m.actif).length} / ${CLUB.membresMax})`}>
         {membres.length === 0 ? (
           <Vide>Aucun membre enregistre.</Vide>
@@ -120,24 +148,6 @@ export default async function PageMembres() {
         )}
       </Carte>
 
-      {estPresident && (
-        <Carte titre="Ajouter un membre">
-          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            Un mot de passe provisoire est genere : transmettez-le au membre, qui devra le remplacer a
-            sa premiere connexion. Statuts : de {CLUB.membresMin} a {CLUB.membresMax} membres.
-          </p>
-          <Depliant titre="Nouveau profil">
-            <FormulaireAction action={creerMembre} libelle="Creer le profil">
-              <Champ nom="nom" libelle="Nom et prenoms" />
-              <Champ nom="email" libelle="Adresse e-mail" type="email" />
-              <Champ nom="telephone" libelle="Telephone" requis={false} />
-              <Champ nom="titre" libelle="Intitule (facultatif)" requis={false} />
-              <Selection nom="role" libelle="Role" valeur="membre" options={OPTIONS_ROLE} />
-              <Champ nom="dateAdhesion" libelle="Date d'adhesion" type="date" valeur={CLUB.dateCreation} />
-            </FormulaireAction>
-          </Depliant>
-        </Carte>
-      )}
     </>
   );
 }

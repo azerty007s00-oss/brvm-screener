@@ -4,10 +4,12 @@ import { listerMembres, listerReunions, presencesParReunion } from "@/lib/querie
 import { creerReunion, enregistrerPresences, supprimerReunion } from "@/app/actions/reunions";
 import { dateCourte } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
-import { Badge, Carte, Statistique, Vide } from "@/components/ui";
+import { Badge, Carte, EnTeteEcran, Vide } from "@/components/ui";
+import { Panneau } from "@/components/panneau";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Reunions" };
 
 const OPTIONS_PRESENCE = [
   { valeur: "present", libelle: "Present" },
@@ -37,43 +39,44 @@ export default async function PageReunions() {
     : 0;
   const tauxPresence = pointesDerniere > 0 ? derniere!.presents / pointesDerniere : null;
 
+  const saisie = gere ? (
+    <Panneau
+      libelle="Convoquer une seance"
+      titre="Nouvelle reunion"
+      introduction="Les reunions et la feuille de presence sont tenues par le secretaire. Une absence peut etre sanctionnee depuis la page Penalites."
+    >
+        <FormulaireAction action={creerReunion} libelle="Creer la reunion">
+          <Champ
+            nom="date"
+            libelle="Date"
+            type="date"
+            valeur={new Date().toISOString().slice(0, 10)}
+          />
+          <Champ
+            nom="titre"
+            libelle="Intitule"
+            requis={false}
+            aide="Par exemple : assemblee generale."
+          />
+          <Champ nom="note" libelle="Ordre du jour ou note" requis={false} />
+        </FormulaireAction>
+    </Panneau>
+  ) : null;
+
   return (
     <>
-      <div className="grid grid-cols-3 gap-3">
-        <Statistique libelle="Reunions tenues" valeur={reunions.length} />
-        <Statistique
-          libelle="Derniere seance"
-          valeur={derniere ? dateCourte(derniere.date_reunion) : "--"}
+      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+        <EnTeteEcran
+          titre="Reunions tenues"
+          chiffre={String(reunions.length)}
+          detail={
+            derniere
+              ? `Derniere seance le ${dateCourte(derniere.date_reunion)}${tauxPresence === null ? "" : `, ${Math.round(tauxPresence * 100)} % de presence`}.`
+              : "Aucune seance enregistree."
+          }
         />
-        <Statistique
-          libelle="Presence"
-          valeur={tauxPresence === null ? "--" : `${Math.round(tauxPresence * 100)} %`}
-          detail={derniere ? `${derniere.presents} presents` : undefined}
-          accent={tauxPresence !== null && tauxPresence < 0.5 ? "rouge" : "vert"}
-        />
+        <div className="sans-impression">{saisie}</div>
       </div>
-
-      {gere && (
-        <Carte titre="Nouvelle reunion">
-          <Depliant titre="Convoquer une seance">
-            <FormulaireAction action={creerReunion} libelle="Creer la reunion">
-              <Champ
-                nom="date"
-                libelle="Date"
-                type="date"
-                valeur={new Date().toISOString().slice(0, 10)}
-              />
-              <Champ
-                nom="titre"
-                libelle="Intitule"
-                requis={false}
-                aide="Par exemple : assemblee generale."
-              />
-              <Champ nom="note" libelle="Ordre du jour ou note" requis={false} />
-            </FormulaireAction>
-          </Depliant>
-        </Carte>
-      )}
 
       <Carte titre={`Seances (${reunions.length})`}>
         {reunions.length === 0 ? (

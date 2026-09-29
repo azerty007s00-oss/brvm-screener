@@ -17,22 +17,23 @@ import {
   reglerPenalite,
 } from "@/app/actions/penalites";
 import { dejaAuRegistre, tranchesAbsence } from "@/lib/penalites";
-import { EFFET, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { EFFET, REGLES, dateCourte, fcfa, moisLong, nombre } from "@/lib/settings";
 import { KIND_PENALITE, STATUT_PENALITE } from "@/lib/valeurs";
 import {
   Champ,
   ChampCache,
-  Depliant,
   FormulaireAction,
   Selection,
 } from "@/components/formulaires";
-import { Alerte, Badge, Carte, Statistique, Vide } from "@/components/ui";
+import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
+import { Panneau } from "@/components/panneau";
 import {
   EcranInitialisation,
   estTableAbsente,
 } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Penalites" };
 
 const LIBELLE_NATURE: Record<string, string> = {
   [KIND_PENALITE.retard]: "Retard de versement",
@@ -118,24 +119,75 @@ export default async function PagePenalites() {
     .reverse()
     .join("/");
 
+  const saisie = gere ? (
+    <Panneau
+      libelle="Saisir une penalite"
+      titre="Penalite manuelle"
+      introduction="Pour une absence en reunion ou tout motif que le calcul automatique ne couvre pas."
+    >
+        <FormulaireAction action={ajouterPenalite} libelle="Enregistrer">
+          <Selection
+            nom="membreId"
+            libelle="Membre"
+            options={membres.map((m) => ({ valeur: m.id, libelle: m.nom }))}
+          />
+          <Selection
+            nom="nature"
+            libelle="Nature"
+            valeur={KIND_PENALITE.absence}
+            options={Object.entries(LIBELLE_NATURE).map(
+              ([valeur, libelle]) => ({
+                valeur,
+                libelle,
+              }),
+            )}
+          />
+          <Champ
+            nom="montantUnitaire"
+            libelle="Montant unitaire (FCFA)"
+            type="number"
+            min={1}
+            valeur={Math.round(
+              REGLES.cotisationMensuelle * REGLES.tauxPenalite,
+            )}
+          />
+          <Champ
+            nom="quantite"
+            libelle="Quantite"
+            type="number"
+            min={1}
+            valeur={1}
+          />
+          <Champ
+            nom="dateConstat"
+            libelle="Date du constat"
+            type="date"
+            valeur={new Date().toISOString().slice(0, 10)}
+          />
+          <Champ nom="motif" libelle="Motif" requis={false} />
+        </FormulaireAction>
+    </Panneau>
+  ) : null;
+
   return (
     <>
-      <div className="grid grid-cols-3 gap-3">
-        <Statistique
-          libelle="Dues"
-          valeur={fcfa(total(STATUT_PENALITE.due))}
-          accent="rouge"
+      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+        <EnTeteEcran
+          titre="Penalites dues"
+          sous="a ce jour"
+          chiffre={nombre(total(STATUT_PENALITE.due))}
+          unite="FCFA"
+          detail="Art. 9 : la penalite reste acquise au club, meme apres regularisation du mois."
         />
-        <Statistique
-          libelle="Reglees"
-          valeur={fcfa(total(STATUT_PENALITE.payee))}
-          accent="vert"
-        />
-        <Statistique
-          libelle="Annulees"
-          valeur={fcfa(total(STATUT_PENALITE.annulee))}
-        />
+        <div className="sans-impression">{saisie}</div>
       </div>
+
+      <CarteEtat
+        chiffres={[
+          { libelle: "Reglees", valeur: nombre(total(STATUT_PENALITE.payee)), unite: "FCFA" },
+          { libelle: "Annulees", valeur: nombre(total(STATUT_PENALITE.annulee)), unite: "FCFA" },
+        ]}
+      />
 
       {exposes.length > 0 && (
         <Alerte
@@ -455,57 +507,7 @@ export default async function PagePenalites() {
         )}
       </Carte>
 
-      {gere && (
-        <Carte titre="Penalite manuelle">
-          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            Pour une absence en reunion ou tout motif que le calcul automatique
-            ne couvre pas.
-          </p>
-          <Depliant titre="Saisir une penalite">
-            <FormulaireAction action={ajouterPenalite} libelle="Enregistrer">
-              <Selection
-                nom="membreId"
-                libelle="Membre"
-                options={membres.map((m) => ({ valeur: m.id, libelle: m.nom }))}
-              />
-              <Selection
-                nom="nature"
-                libelle="Nature"
-                valeur={KIND_PENALITE.absence}
-                options={Object.entries(LIBELLE_NATURE).map(
-                  ([valeur, libelle]) => ({
-                    valeur,
-                    libelle,
-                  }),
-                )}
-              />
-              <Champ
-                nom="montantUnitaire"
-                libelle="Montant unitaire (FCFA)"
-                type="number"
-                min={1}
-                valeur={Math.round(
-                  REGLES.cotisationMensuelle * REGLES.tauxPenalite,
-                )}
-              />
-              <Champ
-                nom="quantite"
-                libelle="Quantite"
-                type="number"
-                min={1}
-                valeur={1}
-              />
-              <Champ
-                nom="dateConstat"
-                libelle="Date du constat"
-                type="date"
-                valeur={new Date().toISOString().slice(0, 10)}
-              />
-              <Champ nom="motif" libelle="Motif" requis={false} />
-            </FormulaireAction>
-          </Depliant>
-        </Carte>
-      )}
+
     </>
   );
 }

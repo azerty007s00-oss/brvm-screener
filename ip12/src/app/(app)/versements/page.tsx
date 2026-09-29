@@ -27,7 +27,8 @@ import {
   FormulaireAction,
   Selection,
 } from "@/components/formulaires";
-import { Carte, Vide } from "@/components/ui";
+import { Carte, EnTeteEcran, Vide } from "@/components/ui";
+import { Panneau } from "@/components/panneau";
 import {
   EcranInitialisation,
   estTableAbsente,
@@ -43,6 +44,7 @@ import {
 import { MODES_AFFICHES, STATUT_VERSEMENT, libelleMode } from "@/lib/valeurs";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Versements" };
 
 /**
  * La phrase qui accompagne un mois dans le detail.
@@ -121,6 +123,12 @@ export default async function PageVersements({
   const maSituation = situations.find((s) => s.membreId === membre.id);
   const aujourdhui = debutMois();
 
+  /* Combien de membres ont solde le mois en cours : l'etat des cellules le dit. */
+  const payesCeMois = situations.filter((x) => {
+    const c = x.cellules.find((y) => y.mois === aujourdhui);
+    return c?.statut === "paye" || c?.statut === "paye_en_retard";
+  }).length;
+
   /* Une grille unique : l'echelle des mois et les dix frises s'y alignent. */
   const colonnes = {
     gridTemplateColumns: `repeat(${Math.max(moisAffiches.length, 1)}, minmax(0, 1fr))`,
@@ -176,66 +184,81 @@ export default async function PageVersements({
 
   return (
     <>
-      <Carte
-        titre={
-          saisieDirecte ? "Enregistrer un versement" : "Declarer un versement"
-        }
-      >
-        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          {saisieDirecte
-            ? "Votre saisie vaut validation : vous constatez un encaissement, pour vous ou pour un autre membre."
-            : "Votre declaration est visible de tous immediatement, et reste en attente jusqu'a la validation du tresorier qui tient la caisse. Il en est prevenu par courriel, vous et le president en copie."}
-        </p>
-        <FormulaireAction action={declarerVersement} libelle="Declarer">
-          {saisieDirecte && (
-            <Selection
-              nom="membreId"
-              libelle="Pour le compte de"
-              valeur={String(membre.id)}
-              options={membres.map((m) => ({
-                valeur: String(m.id),
-                libelle: m.nom,
-              }))}
-            />
+      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+        <EnTeteEcran
+          titre={`Cotisations de ${moisLong(aujourdhui)}`}
+          chiffre={`${payesCeMois} sur ${situations.length}`}
+          detail={
+            enAttente.length > 0
+              ? `${enAttente.length} declaration${enAttente.length > 1 ? "s" : ""} en attente de validation.`
+              : "Aucune declaration en attente."
+          }
+        />
+        <div className="sans-impression flex flex-wrap gap-2.5">
+          {peutRelancer && (
+            <Panneau
+              libelle="Relancer maintenant"
+              titre="Relancer les retardataires"
+              variante="secondaire"
+              introduction="La relance part d'elle-meme le 10 de chaque mois. Entre deux, vous pouvez l'envoyer a la main : c'est exactement le meme courrier -- mois manquants, penalites, rappels R2, R3 et R4, mesures disciplinaires. Seuls les membres concernes le recoivent ; ceux qui sont a jour ne sont jamais ecrits."
+            >
+              <FormulaireAction action={relancerMaintenant} libelle="Relancer maintenant" />
+            </Panneau>
           )}
-          <Champ
-            nom="moisDebut"
-            libelle="Premier mois couvert"
-            type="month"
-            valeur={aujourdhui.slice(0, 7)}
-          />
-          <Champ
-            nom="nbMois"
-            libelle="Nombre de mois"
-            type="number"
-            valeur={1}
-            min={1}
-            max={24}
-            aide="Une avance de plusieurs mois cree une ligne par mois couvert."
-          />
-          <Champ
-            nom="montant"
-            libelle="Montant par mois (FCFA)"
-            type="number"
-            valeur={REGLES.cotisationMensuelle}
-            min={1}
-          />
-          <Champ
-            nom="dateVersement"
-            libelle="Date du versement"
-            type="date"
-            valeur={new Date().toISOString().slice(0, 10)}
-          />
-          <Selection nom="mode" libelle="Mode" options={MODES_AFFICHES} />
-          <Champ
-            nom="reference"
-            libelle="Reference du paiement (facultatif)"
-            requis={false}
-          />
-          <Champ nom="note" libelle="Note (facultatif)" requis={false} />
-          <ChampJustificatif />
-        </FormulaireAction>
-      </Carte>
+          <Panneau
+            libelle={saisieDirecte ? "Enregistrer un versement" : "Declarer un versement"}
+            titre={saisieDirecte ? "Enregistrer un versement" : "Declarer un versement"}
+            introduction={
+              saisieDirecte
+                ? "Votre saisie vaut validation : vous constatez un encaissement, pour vous ou pour un autre membre."
+                : "Votre declaration est visible de tous immediatement, et reste en attente jusqu'a la validation du tresorier qui tient la caisse. Il en est prevenu par courriel, vous et le president en copie."
+            }
+          >
+            <FormulaireAction action={declarerVersement} libelle="Declarer">
+              {saisieDirecte && (
+                <Selection
+                  nom="membreId"
+                  libelle="Pour le compte de"
+                  valeur={String(membre.id)}
+                  options={membres.map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
+                />
+              )}
+              <Champ
+                nom="moisDebut"
+                libelle="Premier mois couvert"
+                type="month"
+                valeur={aujourdhui.slice(0, 7)}
+              />
+              <Champ
+                nom="nbMois"
+                libelle="Nombre de mois"
+                type="number"
+                valeur={1}
+                min={1}
+                max={24}
+                aide="Une avance de plusieurs mois cree une ligne par mois couvert."
+              />
+              <Champ
+                nom="montant"
+                libelle="Montant par mois (FCFA)"
+                type="number"
+                valeur={REGLES.cotisationMensuelle}
+                min={1}
+              />
+              <Champ
+                nom="dateVersement"
+                libelle="Date du versement"
+                type="date"
+                valeur={new Date().toISOString().slice(0, 10)}
+              />
+              <Selection nom="mode" libelle="Mode" options={MODES_AFFICHES} />
+              <Champ nom="reference" libelle="Reference du paiement (facultatif)" requis={false} />
+              <Champ nom="note" libelle="Note (facultatif)" requis={false} />
+              <ChampJustificatif />
+            </FormulaireAction>
+          </Panneau>
+        </div>
+      </div>
 
       {peutValider && (
         <Carte titre={`En attente de validation (${enAttente.length})`}>
@@ -491,23 +514,6 @@ export default async function PageVersements({
               </li>
             ))}
           </ul>
-        </Carte>
-      )}
-
-      {peutRelancer && (
-        <Carte titre="Relancer les retardataires">
-          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            La relance part d&apos;elle-meme le 10 de chaque mois. Entre deux,
-            vous pouvez l&apos;envoyer a la main : c&apos;est exactement le meme
-            courrier — mois manquants, penalites, rappels R2, R3 et R4, mesures
-            disciplinaires. Seuls les membres concernes le recoivent ; ceux qui
-            sont a jour ne sont jamais ecrits.
-          </p>
-          <FormulaireAction
-            action={relancerMaintenant}
-            libelle="Relancer maintenant"
-            confirmation="Envoyer la relance a tous les membres concernes ?"
-          />
         </Carte>
       )}
 

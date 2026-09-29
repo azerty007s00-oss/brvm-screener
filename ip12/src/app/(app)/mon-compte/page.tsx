@@ -5,13 +5,14 @@ import { changerMotDePasse } from "@/app/actions/auth";
 import { joindreJustificatif } from "@/app/actions/versements";
 import { ChampJustificatif } from "@/components/justificatif";
 import { justificatifsParLot } from "@/lib/justificatifs";
-import { ROLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { ROLES, dateCourte, fcfa, moisLong, nombre } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction } from "@/components/formulaires";
 import { libelleMode } from "@/lib/valeurs";
-import { Alerte, Badge, Carte, Statistique, Vide } from "@/components/ui";
+import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Mon compte" };
 
 export default async function PageMonCompte() {
   const membre = await exigerMembre();
@@ -45,38 +46,42 @@ export default async function PageMonCompte() {
         <Link
           href={`/releve/${membre.id}`}
           className="rounded-lg px-3 py-1.5 text-xs font-medium"
-          style={{ background: "var(--line-2)", color: "var(--sunk)" }}
+          style={{ background: "var(--page)", color: "var(--ink)", border: "1px solid var(--line-2)" }}
         >
           Editer mon releve
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Statistique
-          libelle="J'ai verse"
-          valeur={fcfa(maPart?.verse ?? 0)}
-          detail={
-            maPart && maPart.avance > 0
-              ? `dont ${fcfa(maPart.avance)} d'avance, en depot`
-              : undefined
-          }
-        />
-        <Statistique
-          libelle="Ma part"
-          valeur={maPart ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} %` : "--"}
-          detail={
-            maPart && maPart.dues > 0
-              ? `capital diminue de ${fcfa(maPart.dues)} de penalites dues`
-              : "au prorata du capital echu"
-          }
-        />
-        <Statistique libelle="Valeur de ma part" valeur={maPart ? fcfa(maPart.valeur) : "--"} accent="or" />
-        <Statistique
-          libelle="Plus-value"
-          valeur={maPart ? fcfa(maPart.plusValue) : "--"}
-          accent={maPart && maPart.plusValue < 0 ? "rouge" : "vert"}
-        />
-      </div>
+      <EnTeteEcran
+        titre="Valeur de ma part"
+        chiffre={maPart ? nombre(maPart.valeur) : "--"}
+        unite={maPart ? "FCFA" : undefined}
+        detail={
+          maPart
+            ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % au prorata du capital echu \u00b7 plus-value ${fcfa(maPart.plusValue)}`
+            : "Votre part se calcule des votre premier versement valide."
+        }
+      />
+
+      <CarteEtat
+        chiffres={[
+          {
+            libelle: "J'ai verse",
+            valeur: nombre(maPart?.verse ?? 0),
+            unite: "FCFA",
+            contexte:
+              maPart && maPart.avance > 0 ? `dont ${fcfa(maPart.avance)} d'avance, en depot` : undefined,
+          },
+          {
+            libelle: "Ma part",
+            valeur: maPart ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} %` : "--",
+            contexte:
+              maPart && maPart.dues > 0
+                ? `capital diminue de ${fcfa(maPart.dues)} de penalites dues`
+                : "au prorata du capital echu",
+          },
+        ]}
+      />
 
       <Carte titre="Mon profil">
         <dl className="grid gap-2 text-sm sm:grid-cols-2">

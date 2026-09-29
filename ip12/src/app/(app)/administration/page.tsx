@@ -34,6 +34,7 @@ import { Compteur } from "@/components/mouvement";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Administration" };
 
 const LIBELLE_REGLE: Record<string, string> = {
   [REGLE_MEMBRE.cotisationParticuliere]: "cotisation particuliere",

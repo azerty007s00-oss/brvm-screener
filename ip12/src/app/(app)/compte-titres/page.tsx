@@ -2,22 +2,23 @@ import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { listerApports, listerMouvementsCaisse, synthese } from "@/lib/queries";
 import { enregistrerApport, supprimerApport } from "@/app/actions/titres";
-import { CLUB, dateCourte, fcfa } from "@/lib/settings";
+import { CLUB, dateCourte, fcfa, nombre } from "@/lib/settings";
 import { SENS_TRANSFERT } from "@/lib/valeurs";
 import {
   Champ,
   ChampCache,
-  Depliant,
   FormulaireAction,
   Selection,
 } from "@/components/formulaires";
-import { Badge, Carte, GroupeReplie, Statistique, Vide } from "@/components/ui";
+import { Badge, Carte, CarteEtat, EnTeteEcran, GroupeReplie, Vide } from "@/components/ui";
+import { Panneau } from "@/components/panneau";
 import {
   EcranInitialisation,
   estTableAbsente,
 } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "Titres" };
 
 export default async function PageCompteTitres() {
   const membre = await exigerMembre();
@@ -112,31 +113,80 @@ export default async function PageCompteTitres() {
 
   const datesSorties = sorties.map((a) => a.date_transfert).sort();
 
+  const saisie = peutSaisir ? (
+    <Panneau
+      libelle="Enregistrer un mouvement"
+      titre="Mouvement vers la SGI"
+      introduction="L'art. 14 confie la transmission des ordres au president, le bureau agissant par delegation : votre saisie vaut enregistrement, sans validation par un tiers."
+    >
+        <FormulaireAction action={enregistrerApport} libelle="Enregistrer">
+          <Champ
+            nom="dateApport"
+            libelle="Date du virement"
+            type="date"
+            valeur={new Date().toISOString().slice(0, 10)}
+          />
+          <Champ
+            nom="montant"
+            libelle="Montant vire (FCFA)"
+            type="number"
+            min={0}
+            aide="Ce qui quitte la caisse, frais compris. Zero pour n'inscrire que des frais."
+          />
+          <Champ
+            nom="frais"
+            libelle="Frais (FCFA)"
+            type="number"
+            min={0}
+            valeur={0}
+            requis={false}
+            aide="Retenus a l'arrivee sur le virement, ou preleves seuls dans le compte-titres : laissez alors le montant a zero. Zero ici si les frais sont regles a part depuis la caisse."
+          />
+          <Selection
+            nom="sens"
+            libelle="Sens"
+            valeur={SENS_TRANSFERT.entree}
+            options={[
+              {
+                valeur: SENS_TRANSFERT.entree,
+                libelle: "Apport — de la caisse vers la SGI",
+              },
+              {
+                valeur: SENS_TRANSFERT.sortie,
+                libelle: "Retrait — de la SGI vers la caisse",
+              },
+            ]}
+          />
+          <Champ nom="note" libelle="Note ou reference" requis={false} />
+        </FormulaireAction>
+    </Panneau>
+  ) : null;
+
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Statistique
-          libelle="Net place en bourse"
-          valeur={fcfa(s.totalApports)}
-          detail={`Chez ${CLUB.sgi}`}
-          accent="or"
+      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+        <EnTeteEcran
+          titre="Net place en bourse"
+          sous={`chez ${CLUB.sgi}`}
+          chiffre={nombre(s.totalApports)}
+          unite="FCFA"
+          detail="Apports vers la societe de gestion, diminues des retraits revenus en caisse."
         />
-        <Statistique
-          libelle="Apports"
-          valeur={fcfa(entrees.reduce((t, a) => t + a.montant, 0))}
-        />
-        <Statistique
-          libelle="Retraits"
-          valeur={fcfa(sorties.reduce((t, a) => t + a.montant, 0))}
-          accent={sorties.length > 0 ? "rouge" : "neutre"}
-        />
-        <Statistique
-          libelle="Frais supportes"
-          valeur={fcfa(fraisTotaux)}
-          detail="Depot, SGI et banque"
-          accent={fraisTotaux > 0 ? "rouge" : "neutre"}
-        />
+        <div className="sans-impression">{saisie}</div>
       </div>
+
+      <CarteEtat
+        chiffres={[
+          { libelle: "Apports", valeur: nombre(entrees.reduce((t, a) => t + a.montant, 0)), unite: "FCFA" },
+          { libelle: "Retraits", valeur: nombre(sorties.reduce((t, a) => t + a.montant, 0)), unite: "FCFA" },
+          {
+            libelle: "Frais supportes",
+            valeur: nombre(fraisTotaux),
+            unite: "FCFA",
+            contexte: "Depot, SGI et banque",
+          },
+        ]}
+      />
 
       {fraisTotaux > 0 && (
         <Carte titre="Ce que les frais ont coute">
@@ -166,65 +216,6 @@ export default async function PageCompteTitres() {
             arrives sur le compte-titres. Le TRI porte sur le montant vire,
             frais compris : ce sont des sommes engagees, et une performance qui
             les ignorerait flatterait sans rien vouloir dire.
-          </p>
-        </Carte>
-      )}
-
-      {peutSaisir ? (
-        <Carte titre="Nouveau mouvement">
-          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            L&apos;art. 14 confie la transmission des ordres au president, le
-            bureau agissant par delegation : votre saisie vaut enregistrement,
-            sans validation par un tiers.
-          </p>
-          <Depliant titre="Enregistrer un mouvement vers la SGI">
-            <FormulaireAction action={enregistrerApport} libelle="Enregistrer">
-              <Champ
-                nom="dateApport"
-                libelle="Date du virement"
-                type="date"
-                valeur={new Date().toISOString().slice(0, 10)}
-              />
-              <Champ
-                nom="montant"
-                libelle="Montant vire (FCFA)"
-                type="number"
-                min={0}
-                aide="Ce qui quitte la caisse, frais compris. Zero pour n'inscrire que des frais."
-              />
-              <Champ
-                nom="frais"
-                libelle="Frais (FCFA)"
-                type="number"
-                min={0}
-                valeur={0}
-                requis={false}
-                aide="Retenus a l'arrivee sur le virement, ou preleves seuls dans le compte-titres : laissez alors le montant a zero. Zero ici si les frais sont regles a part depuis la caisse."
-              />
-              <Selection
-                nom="sens"
-                libelle="Sens"
-                valeur={SENS_TRANSFERT.entree}
-                options={[
-                  {
-                    valeur: SENS_TRANSFERT.entree,
-                    libelle: "Apport — de la caisse vers la SGI",
-                  },
-                  {
-                    valeur: SENS_TRANSFERT.sortie,
-                    libelle: "Retrait — de la SGI vers la caisse",
-                  },
-                ]}
-              />
-              <Champ nom="note" libelle="Note ou reference" requis={false} />
-            </FormulaireAction>
-          </Depliant>
-        </Carte>
-      ) : (
-        <Carte titre="Mouvements du compte-titres">
-          <p className="text-xs" style={{ color: "var(--discret)" }}>
-            Les mouvements vers la SGI sont enregistres par le president et le
-            vice-president (art. 14). Vous en avez ici la lecture complete.
           </p>
         </Carte>
       )}

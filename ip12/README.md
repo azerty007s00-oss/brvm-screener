@@ -94,6 +94,13 @@ Phoenix Capital Management.
 - **Les commandes d'une ligne passent derrière trois points**, et la confirmation se joue dans la
   même bulle : la question remplace la liste, on répond là où l'on vient de cliquer. Le texte reste
   à l'encre, y compris pour supprimer — c'est la question qui protège, pas la couleur.
+- **Les neuf écrans suivent le même patron** — en-tête avec le chiffre de la page, bandeau de
+  chiffres clés, contenu, et la saisie dans un panneau. Caisse, Titres, Pénalités, Réunions et
+  Membres ouvraient tous sur un formulaire ; aucun ne le fait plus.
+- **Le focus se voit partout** — il était laissé au navigateur, donc bleu sur certains et invisible
+  sur d'autres : on ne pouvait pas traverser le site au clavier sans deviner où l'on se trouvait.
+  Un anneau d'or, le seul emploi de l'or hors la courbe.
+- **Chaque page porte son titre d'onglet** — dix onglets ouverts portaient le même nom.
 - **Versements partiels** — un mois n'est soldé que lorsque la somme des versements atteint la
   cotisation attendue. En dessous, le mois reste dû et la pénalité de l'art. 9 porte sur la
   cotisation entière, jamais sur le seul reliquat : verser un acompte ne réduit pas la sanction.
