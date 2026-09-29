@@ -31,12 +31,19 @@ export function FormulaireAction({
 }) {
   const [etat, envoyer, enCours] = useActionState(action, ETAT_INITIAL);
 
+  /*
+   * Trois variantes, deux styles, aucune couleur de fond hors l'encre.
+   *
+   * « discret » rendait un texte couleur --sunk sur un fond --sunk : invisible.
+   * La faute vient de la refonte des jetons, qui a fait converger deux bruns
+   * distincts vers le meme role ; elle ne se voyait qu'a l'ecran.
+   */
   const styles =
     variante === "principal"
       ? { background: "var(--ink)", color: "var(--page)" }
       : variante === "danger"
-        ? { background: "var(--etat-manque-fond)", color: "var(--etat-manque)" }
-        : { background: "var(--sunk)", color: "var(--sunk)" };
+        ? { background: "var(--page)", color: "var(--etat-manque)", border: "1px solid var(--line-2)" }
+        : { background: "var(--page)", color: "var(--ink)", border: "1px solid var(--line-2)" };
 
   return (
     <form
@@ -51,7 +58,7 @@ export function FormulaireAction({
         type="submit"
         disabled={enCours}
         style={styles}
-        className={`tapable ${compact ? "px-3 py-1.5 text-xs" : "mt-3 w-full px-4 py-2.5 text-sm"} inline-flex items-center justify-center gap-2 rounded-lg font-medium transition disabled:opacity-60`}
+        className={`tapable ${compact ? "h-11 px-3.5 text-[13px] lg:h-8" : "mt-4 h-13 w-full text-[15px] lg:h-10 lg:text-[14px]"} inline-flex items-center justify-center gap-2 rounded-xl font-medium transition disabled:opacity-60 lg:rounded-lg`}
       >
         {/*
           * Pendant l'envoi, un anneau qui tourne plutot que trois points fixes :
@@ -75,8 +82,14 @@ export function FormulaireAction({
   );
 }
 
+/*
+ * 16 px de texte sur telephone : en dessous, iOS agrandit la page a la mise au
+ * point du champ, et l'on se retrouve a faire defiler un formulaire zoome.
+ */
 const styleChamp =
-  "mt-1 w-full rounded-lg border px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-[var(--gold)]";
+  "mt-1.5 h-12 w-full rounded-[10px] border px-3.5 text-[16px] tabular-nums outline-none " +
+  "focus:outline-2 focus:outline-offset-1 focus:outline-[var(--gold)] focus:border-transparent " +
+  "lg:h-10 lg:rounded-lg lg:px-3 lg:text-[14px]";
 
 export function Champ({
   nom,
@@ -96,7 +109,7 @@ export function Champ({
 } & Record<string, unknown>) {
   return (
     <label className="mt-3 block first:mt-0">
-      <span className="text-xs font-medium" style={{ color: "var(--discret)" }}>
+      <span className="text-[13px] font-medium" style={{ color: "var(--ink)" }}>
         {libelle}
       </span>
       <input
@@ -105,11 +118,11 @@ export function Champ({
         defaultValue={valeur}
         required={requis}
         className={styleChamp}
-        style={{ background: "var(--fond)", borderColor: "var(--bordure)", color: "var(--texte)" }}
+        style={{ background: "var(--page)", borderColor: "var(--line-2)", color: "var(--ink)" }}
         {...reste}
       />
       {aide && (
-        <span className="mt-1 block text-xs" style={{ color: "var(--discret)" }}>
+        <span className="mt-1.5 block text-[12px]" style={{ color: "var(--ink-3)" }}>
           {aide}
         </span>
       )}
@@ -130,14 +143,14 @@ export function Selection({
 }) {
   return (
     <label className="mt-3 block first:mt-0">
-      <span className="text-xs font-medium" style={{ color: "var(--discret)" }}>
+      <span className="text-[13px] font-medium" style={{ color: "var(--ink)" }}>
         {libelle}
       </span>
       <select
         name={nom}
         defaultValue={valeur}
         className={styleChamp}
-        style={{ background: "var(--fond)", borderColor: "var(--bordure)", color: "var(--texte)" }}
+        style={{ background: "var(--page)", borderColor: "var(--line-2)", color: "var(--ink)" }}
       >
         {options.map((o) => (
           <option key={o.valeur} value={o.valeur}>
@@ -158,12 +171,15 @@ export function Depliant({ titre, children }: { titre: string; children: ReactNo
   return (
     <details className="group">
       <summary
-        className="cursor-pointer list-none rounded-lg px-3 py-2 text-sm font-medium"
-        style={{ background: "var(--sunk)", color: "var(--sunk)" }}
+        className="tapable flex h-12 cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 text-[13px] lg:h-11"
+        style={{ color: "var(--ink-2)" }}
       >
-        + {titre}
+        <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" className="chevron flex-none">
+          <path d="M9.5 6 L15.5 12 L9.5 18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        {titre}
       </summary>
-      <div className="mt-3">{children}</div>
+      <div className="contenu-depliant pt-1 pb-2 pl-8">{children}</div>
     </details>
   );
 }

@@ -3,9 +3,11 @@ import { peut } from "@/lib/droits";
 import { listerValorisations, synthese } from "@/lib/queries";
 import { enregistrerValorisation, supprimerValorisation } from "@/app/actions/titres";
 import { pourcent } from "@/lib/perf";
-import { REGLES, dateCourte, fcfa } from "@/lib/settings";
-import { Champ, ChampCache, Depliant, FormulaireAction } from "@/components/formulaires";
-import { Carte, Statistique, Vide } from "@/components/ui";
+import { CLUB, REGLES, dateCourte, fcfa, nombre } from "@/lib/settings";
+import { Champ, ChampCache, FormulaireAction } from "@/components/formulaires";
+import { Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
+import { Panneau } from "@/components/panneau";
+import { MenuLigne } from "@/components/menu-ligne";
 import { CourbePortefeuille } from "@/components/courbe";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
@@ -24,133 +26,308 @@ export default async function PagePortefeuille() {
 
   const derniere = valos.at(-1) ?? null;
   const precedente = valos.at(-2) ?? null;
-  const variation = derniere && precedente ? (derniere.total - precedente.total) / precedente.total : null;
+  const variation =
+    derniere && precedente ? (derniere.total - precedente.total) / precedente.total : null;
+  const ecart = derniere && precedente ? derniere.total - precedente.total : null;
+  const peutSaisir = peut(membre, "gererCompteTitres");
+
+  /* Le meme formulaire, sorti du chemin de lecture. */
+  const saisie = peutSaisir ? (
+    <Panneau
+      libelle="Nouveau releve"
+      titre="Nouveau releve"
+      introduction={
+        <>
+          A relever tous les {REGLES.periodiciteValorisationMois} mois sur le compte-titres, par le
+          president ou le vice-president. Une seconde saisie a la meme date remplace la precedente.
+          {derniere ? (
+            <>
+              {" "}
+              Dernier releve : {fcfa(derniere.total)} le {dateCourte(derniere.date_valo)}.
+            </>
+          ) : null}
+        </>
+      }
+    >
+      <FormulaireAction action={enregistrerValorisation} libelle="Enregistrer le releve">
+        <Champ
+          nom="dateValo"
+          libelle="Date du releve"
+          type="date"
+          valeur={new Date().toISOString().slice(0, 10)}
+        />
+        <Champ
+          nom="total"
+          libelle="Valeur totale du compte (FCFA)"
+          type="number"
+          min={1}
+          aide="Le montant global du releve, liquidites comprises."
+        />
+        <Champ
+          nom="liquidites"
+          libelle="Dont liquidites (FCFA)"
+          type="number"
+          min={0}
+          valeur={0}
+          aide="La part non investie. La valeur des titres s'en deduit."
+        />
+        <Champ nom="note" libelle="Note (facultatif)" requis={false} />
+      </FormulaireAction>
+    </Panneau>
+  ) : null;
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Statistique libelle="Valeur totale" valeur={derniere ? fcfa(derniere.total) : "--"} accent="or" />
-        <Statistique libelle="Actions" valeur={derniere ? fcfa(derniere.actions) : "--"} />
-        <Statistique libelle="Liquidites" valeur={derniere ? fcfa(derniere.liquidites) : "--"} />
-        <Statistique
-          libelle="Depuis le releve precedent"
-          valeur={pourcent(variation)}
-          accent={variation !== null && variation < 0 ? "rouge" : "vert"}
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <EnTeteEcran
+          titre="Valeur du portefeuille"
+          sous={derniere ? `au ${dateCourte(derniere.date_valo)}` : "— aucun releve saisi"}
+          chiffre={derniere ? nombre(derniere.total) : "--"}
+          unite={derniere ? "FCFA" : undefined}
+          detail={
+            ecart !== null && variation !== null && precedente ? (
+              <>
+                <span className="font-medium" style={{ color: "var(--ink)" }}>
+                  {ecart >= 0 ? "+" : "−"}
+                  {nombre(Math.abs(ecart))} FCFA ({pourcent(variation)})
+                </span>{" "}
+                depuis le releve du {dateCourte(precedente.date_valo)}.
+              </>
+            ) : (
+              `Compte-titres tenu chez ${CLUB.sgi}.`
+            )
+          }
         />
+        <div className="sans-impression">{saisie}</div>
       </div>
 
-      <Carte titre="Evolution">
+      <CarteEtat
+        chiffres={[
+          {
+            libelle: "Actions",
+            valeur: derniere ? nombre(derniere.actions) : "--",
+            unite: derniere ? "FCFA" : undefined,
+            contexte:
+              derniere && derniere.total > 0
+                ? `${((derniere.actions / derniere.total) * 100).toFixed(1).replace(".", ",")} % de la valeur`
+                : undefined,
+          },
+          {
+            libelle: "Liquidites",
+            valeur: derniere ? nombre(derniere.liquidites) : "--",
+            unite: derniere ? "FCFA" : undefined,
+            contexte:
+              derniere && derniere.total > 0
+                ? `${((derniere.liquidites / derniere.total) * 100).toFixed(1).replace(".", ",")} %, non investies`
+                : undefined,
+          },
+          {
+            libelle: "Performance annualisee",
+            valeur: s.tri !== null ? pourcent(s.tri) : "--",
+            contexte: s.triPeriode ? `TRI depuis le ${dateCourte(s.triPeriode.debut)}` : undefined,
+          },
+          {
+            libelle: "Exercice en cours",
+            valeur: s.exercice?.rendement != null ? pourcent(s.exercice.rendement) : "--",
+            contexte:
+              s.exercice?.gain != null ? `Dietz modifie · gain ${nombre(s.exercice.gain)}` : undefined,
+          },
+        ]}
+      />
+
+      <Carte
+        titre="Valeur relevee"
+        action={
+          <span className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+            {valos.length} releve{valos.length > 1 ? "s" : ""}
+            {valos[0] ? ` depuis le ${dateCourte(valos[0].date_valo)}` : ""}
+          </span>
+        }
+      >
         <CourbePortefeuille points={valos.map((v) => ({ date: v.date_valo, valeur: v.total }))} />
       </Carte>
 
-      <Carte titre="Repartition des parts">
-          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            La quote-part se calcule sur le capital echu de chacun, diminue des penalites
-            dues (art. 9). Une avance ne donne aucun droit tant que le mois qu&apos;elle couvre
-            n&apos;est pas venu : elle est volontaire, donc ni remuneree ni penalisee, et
-            figure a part, rendue au nominal. La repartition porte sur l&apos;avoir du club,
-            compte-titres et caisse reunis.
-          </p>
-
-        {s.parts.length === 0 || !derniere ? (
-          <Vide>Les parts s&apos;afficheront des qu&apos;un releve sera saisi.</Vide>
-        ) : (
-          <ul className="space-y-2">
-            {s.parts.map((p) => (
-              <li key={p.membreId}>
-                <div className="flex items-baseline justify-between gap-2 text-sm">
-                  <span className="font-medium">{p.nom}</span>
-                  <span className="whitespace-nowrap">
-                    {fcfa(p.valeur)}{" "}
-                    <span
-                      className="text-xs"
-                      style={{ color: p.plusValue >= 0 ? "var(--etat-ok)" : "var(--etat-manque)" }}
-                    >
-                      ({p.plusValue >= 0 ? "+" : ""}
-                      {fcfa(p.plusValue)})
-                    </span>
-                  </span>
-                </div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full" style={{ background: "var(--sunk)" }}>
-                  <div
-                    className="h-full rounded-full"
-                    style={{ width: `${(p.part * 100).toFixed(2)}%`, background: "var(--gold)" }}
+      {/*
+        * `grid-cols-1` et non la colonne implicite : une piste `auto` ne
+        * descend jamais sous le contenu minimum de ses elements, et un nom de
+        * membre un peu long faisait deborder toute la page de 152 px.
+        * `minmax(0, 1fr)`, ce que produit `grid-cols-1`, l'y autorise.
+        */}
+      <div className="grid grid-cols-1 gap-11 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:items-start">
+        <Carte
+          titre="Repartition des parts"
+          action={
+            <span className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+              Compte-titres et caisse reunis
+            </span>
+          }
+        >
+          {s.parts.length === 0 || !derniere ? (
+            <Vide>Les parts s&apos;afficheront des qu&apos;un releve sera saisi.</Vide>
+          ) : (
+            <>
+              {/*
+               * Une seule barre pour tout le club, un segment par membre : on y
+               * lit d'un coup le poids de chacun, ce que dix barres separees ne
+               * donnaient pas. Le segment « vous » est a l'encre, les autres au
+               * filet -- aucune couleur n'est necessaire pour s'y reconnaitre.
+               */}
+              <div className="flex gap-0.5" aria-hidden="true">
+                {s.parts.map((p) => (
+                  <span
+                    key={p.membreId}
+                    className="h-2 rounded-sm"
+                    /*
+                     * La part passe par flex-grow, non par une largeur en
+                     * pourcentage : dix segments a 100 % plus neuf ecarts de
+                     * 2 px debordaient de 18 px -- et la page avec.
+                     */
+                    style={{
+                      flex: `${p.part} 1 0%`,
+                      background: p.membreId === membre.id ? "var(--ink)" : "var(--line-2)",
+                    }}
                   />
-                </div>
-                <p className="mt-0.5 text-[11px]" style={{ color: "var(--discret)" }}>
-                  {(p.part * 100).toFixed(1).replace(".", ",")} % &middot; verse {fcfa(p.verse)}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-        <p className="mt-4 text-[11px]" style={{ color: "var(--discret)" }}>
-          Art. 12 : les droits de vote sont proportionnels aux parts, elles-memes proportionnelles aux
-          versements valides.
-        </p>
-      </Carte>
+                ))}
+              </div>
 
-      {peut(membre, "gererCompteTitres") && (
-        <Carte titre="Saisir un releve">
-          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            A relever tous les {REGLES.periodiciteValorisationMois} mois sur le compte-titres, par
-            le president ou le vice-president. Une seconde saisie a la meme date remplace la
-            precedente.
-          </p>
-          <Depliant titre="Nouveau releve">
-            <FormulaireAction action={enregistrerValorisation} libelle="Enregistrer le releve">
-              <Champ nom="dateValo" libelle="Date du releve" type="date" valeur={new Date().toISOString().slice(0, 10)} />
-              <Champ
-                nom="total"
-                libelle="Valeur totale du compte (FCFA)"
-                type="number"
-                min={1}
-                aide="Le montant global du releve, liquidites comprises."
-              />
-              <Champ
-                nom="liquidites"
-                libelle="Dont liquidites (FCFA)"
-                type="number"
-                min={0}
-                valeur={0}
-                aide="La part non investie. La valeur des titres s'en deduit."
-              />
-              <Champ nom="note" libelle="Note" requis={false} />
-            </FormulaireAction>
-          </Depliant>
-        </Carte>
-      )}
+              <ul className="mt-4">
+                {s.parts.map((p) => {
+                  const moi = p.membreId === membre.id;
+                  return (
+                    <li
+                      key={p.membreId}
+                      className="flex items-baseline gap-3 py-2.5 text-[13.5px]"
+                      style={{ borderTop: "1px solid var(--line)" }}
+                    >
+                      <span
+                        className="min-w-0 flex-1 truncate"
+                        style={{ fontWeight: moi ? 600 : 400 }}
+                      >
+                        {p.nom}
+                        {moi && (
+                          <span
+                            className="ml-2 text-[12px] font-medium"
+                            style={{ color: "var(--ink-3)" }}
+                          >
+                            vous
+                          </span>
+                        )}
+                      </span>
+                      <span className="w-24 text-right font-medium tabular-nums">
+                        {nombre(p.valeur)}
+                      </span>
+                      <span className="w-24 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>
+                        {p.plusValue >= 0 ? "+" : "−"}
+                        {nombre(Math.abs(p.plusValue))}
+                      </span>
+                      <span className="w-12 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>
+                        {(p.part * 100).toFixed(1).replace(".", ",")} %
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
 
-      <Carte titre={`Releves (${valos.length})`}>
-        {valos.length === 0 ? (
-          <Vide>Aucun releve saisi.</Vide>
-        ) : (
-          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
-            {[...valos].reverse().map((v) => (
-              <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                <div>
-                  <p className="text-sm font-medium">{fcfa(v.total)}</p>
-                  <p className="text-xs" style={{ color: "var(--discret)" }}>
-                    {dateCourte(v.date_valo)} &middot; actions {fcfa(v.actions)} &middot; liquidites{" "}
-                    {fcfa(v.liquidites)}
+              <details className="mt-3">
+                <summary
+                  className="tapable flex h-12 cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 text-[13px] lg:h-11"
+                  style={{ color: "var(--ink-2)" }}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="14"
+                    height="14"
+                    aria-hidden="true"
+                    className="chevron flex-none"
+                  >
+                    <path
+                      d="M9.5 6 L15.5 12 L9.5 18"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  Comment la part est calculee
+                </summary>
+                <div
+                  className="contenu-depliant space-y-2 pt-1 pb-2 pl-8 text-[13px] leading-relaxed"
+                  style={{ color: "var(--ink-2)" }}
+                >
+                  <p>
+                    La quote-part se calcule sur le capital echu de chacun, diminue des penalites
+                    dues (art. 9). Une avance ne donne aucun droit tant que le mois qu&apos;elle
+                    couvre n&apos;est pas venu : elle est volontaire, donc ni remuneree ni
+                    penalisee, et figure a part, rendue au nominal.
+                  </p>
+                  <p>
+                    Art. 12 : les droits de vote sont proportionnels aux parts, elles-memes
+                    proportionnelles aux versements valides. La repartition porte sur l&apos;avoir
+                    du club, compte-titres et caisse reunis.
                   </p>
                 </div>
-                {peut(membre, "gererCompteTitres") && (
-                  <FormulaireAction
-                    action={supprimerValorisation}
-                    libelle="Supprimer"
-                    variante="danger"
-                    compact
-                    confirmation="Supprimer ce releve ?"
-                  >
-                    <ChampCache nom="id" valeur={v.id} />
-                  </FormulaireAction>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-      </Carte>
+              </details>
+            </>
+          )}
+        </Carte>
+
+        <Carte
+          titre="Releves"
+          action={
+            <span className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+              {valos.length} au total
+            </span>
+          }
+        >
+          {valos.length === 0 ? (
+            <Vide>Aucun releve saisi.</Vide>
+          ) : (
+            <ul>
+              {[...valos]
+                .reverse()
+                .slice(0, 7)
+                .map((v, i, liste) => {
+                  const avant = liste[i + 1];
+                  const ecartLigne = avant ? v.total / avant.total - 1 : null;
+                  return (
+                    <li
+                      key={v.id}
+                      className="flex items-center gap-3 py-2 text-[13.5px]"
+                      style={{ borderTop: "1px solid var(--line)" }}
+                    >
+                      <span className="min-w-0 flex-1 tabular-nums">{dateCourte(v.date_valo)}</span>
+                      <span className="text-right font-medium tabular-nums">{nombre(v.total)}</span>
+                      <span className="w-16 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>
+                        {ecartLigne === null ? "" : pourcent(ecartLigne, 1)}
+                      </span>
+                      {peutSaisir && (
+                        <MenuLigne
+                          etiquette={`Actions sur le releve du ${dateCourte(v.date_valo)}`}
+                          actions={[
+                            {
+                              libelle: "Supprimer ce releve",
+                              action: supprimerValorisation,
+                              champs: <ChampCache nom="id" valeur={v.id} />,
+                              confirmation: `Supprimer le releve du ${dateCourte(v.date_valo)} ?`,
+                              confirmer: "Supprimer",
+                            },
+                          ]}
+                        />
+                      )}
+                    </li>
+                  );
+                })}
+            </ul>
+          )}
+          {peutSaisir && (
+            <p className="mt-3 text-[12.5px] leading-relaxed" style={{ color: "var(--ink-3)" }}>
+              Un releve tous les {REGLES.periodiciteValorisationMois} mois, saisi par le president
+              ou le vice-president. Une seconde saisie a la meme date remplace la precedente.
+            </p>
+          )}
+        </Carte>
+      </div>
     </>
   );
 }

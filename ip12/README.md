@@ -86,6 +86,14 @@ Phoenix Capital Management.
   dans sa navigation, qui ne dit même pas qu'elle existe.
 - **Les étiquettes du graphique sont en HTML** — dans le SVG elles subissaient son échelle : le même
   « 11 px » devenait 19 px sur un écran large et 6 px sur un téléphone, illisible.
+- **La saisie quitte la page** — chaque écran s'ouvrait sur son formulaire : « Saisir un relevé »
+  coupait le portefeuille en deux, alors qu'on ouvre ces pages dix fois pour lire et une fois pour
+  écrire. La saisie passe dans un panneau latéral (feuille sur téléphone), bâti sur un `<details>`
+  pour rester atteignable sans JavaScript — ce qu'un `<dialog>`, qui exige `showModal()`, ne permet
+  pas. Le formulaire, ses champs, leurs noms et son action serveur ne changent pas.
+- **Les commandes d'une ligne passent derrière trois points**, et la confirmation se joue dans la
+  même bulle : la question remplace la liste, on répond là où l'on vient de cliquer. Le texte reste
+  à l'encre, y compris pour supprimer — c'est la question qui protège, pas la couleur.
 - **Versements partiels** — un mois n'est soldé que lorsque la somme des versements atteint la
   cotisation attendue. En dessous, le mois reste dû et la pénalité de l'art. 9 porte sur la
   cotisation entière, jamais sur le seul reliquat : verser un acompte ne réduit pas la sanction.
@@ -245,6 +253,9 @@ PGPORT_TEST=5433 npm run verif:sql
 | `src/lib/relance.ts` | Qui relancer, et que leur écrire |
 | `src/lib/avis.ts` | Avis adressés au bureau et aux membres absents |
 | `src/lib/etats.ts` | Nom, ordre et résumé des six états d'un mois |
+| `src/components/coque.tsx` | Barre latérale, en-tête, onglets, navigation basse |
+| `src/components/panneau.tsx` | Panneau latéral et feuille de saisie |
+| `src/components/menu-ligne.tsx` | Les commandes d'une ligne, et leur confirmation |
 | `src/components/glyphe-etat.tsx` | Le dessin de ces six états, et la frise |
 | `scripts/migration-r3.sql` | Ajout de la table des déclarations R3 |
 | `scripts/migration-frais.sql` | Ajout des frais de dépôt sur les virements |

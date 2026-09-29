@@ -24,7 +24,7 @@ const assert = new Proxy(strict0, {
   },
 });
 
-const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair } = await import(
+const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent } = await import(
   "../.verif/perf.mjs"
 );
 const {
@@ -762,6 +762,12 @@ assert.ok(
   "la periode affichee se raccourcit d'autant",
 );
 
+
+// Le signe d'un pourcentage : un moins typographique, qui s'aligne sur le plus.
+assert.equal(pourcent(0.026), "+2,6 %");
+assert.equal(pourcent(-0.051), "\u22125,1 %");
+assert.equal(pourcent(null), "--");
+assert.equal(pourcent(0.376, 1), "+37,6 %");
 
 /* ------------------------------------------------------- etats et vocabulaire */
 

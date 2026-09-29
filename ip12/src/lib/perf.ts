@@ -191,5 +191,13 @@ export function dureeEnClair(annees: number): string {
 
 export function pourcent(x: number | null, decimales = 1): string {
   if (x === null || !Number.isFinite(x)) return "--";
-  return `${x >= 0 ? "+" : ""}${(x * 100).toFixed(decimales).replace(".", ",")} %`;
+  /*
+   * Le signe moins typographique, non le trait d'union.
+   *
+   * Dans une colonne de chiffres tabulaires, le trait d'union est plus court
+   * et plus haut que le plus : « +2,6 % » et « -5,1 % » ne s'alignaient pas.
+   * U+2212 a la largeur et la hauteur du plus, par construction.
+   */
+  const brut = (Math.abs(x) * 100).toFixed(decimales).replace(".", ",");
+  return `${x >= 0 ? "+" : "\u2212"}${brut} %`;
 }

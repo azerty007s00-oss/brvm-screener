@@ -342,3 +342,65 @@ details[open] > summary .chevron { transform: rotate(90deg); }
   .cellule-chiffre:first-child { border-inline-start: none; }
   .cellule-chiffre:last-child { padding-inline-end: 0; }
 }
+
+/*
+ * Panneau de saisie : lateral sur ordinateur, feuille sur telephone.
+ *
+ * Bati sur un <details> pour rester utilisable sans JavaScript. Le voile et la
+ * feuille sont en position fixe : aucun ancetre ne doit porter de
+ * `backdrop-filter`, qui en ferait son bloc conteneur -- la lecon du tiroir.
+ */
+.panneau > summary { list-style: none; -webkit-tap-highlight-color: transparent; }
+.panneau > summary::-webkit-details-marker { display: none; }
+.panneau > summary::marker { content: ""; }
+
+.panneau > .voile,
+.panneau > .feuille { display: none; }
+
+.panneau[open] > .voile {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--voile);
+}
+
+.panneau[open] > .feuille {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  z-index: 41;
+  background: var(--page);
+  inset-inline: 0;
+  bottom: 0;
+  max-height: calc(100dvh - 48px);
+  border-start-start-radius: 18px;
+  border-start-end-radius: 18px;
+  box-shadow: var(--pop);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (min-width: 1024px) {
+  .panneau[open] > .feuille {
+    inset-block: 0;
+    inset-inline: auto 0;
+    width: 440px;
+    max-height: none;
+    border-radius: 0;
+    border-inline-start: 1px solid var(--line);
+    box-shadow: -24px 0 48px -28px rgb(28 23 19 / 0.35);
+    padding-bottom: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes feuille-monte { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+  @keyframes panneau-glisse { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: none; } }
+  @keyframes voile-parait { from { opacity: 0; } to { opacity: 1; } }
+  .panneau[open] > .voile { animation: voile-parait 220ms ease both; }
+  .panneau[open] > .feuille { animation: feuille-monte 320ms var(--ease-doux, ease) both; }
+  @media (min-width: 1024px) {
+    .panneau[open] > .feuille { animation: panneau-glisse 300ms var(--ease-doux, ease) both; }
+  }
+  .menu-ligne { animation: deplie 160ms ease-out both; }
+}
