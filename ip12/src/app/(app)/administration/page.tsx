@@ -18,7 +18,7 @@ import {
   leverRegleMembre,
 } from "@/app/actions/administration";
 import { listerMembres } from "@/lib/queries";
-import { CLUB, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { CLUB, REGLES, ROLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { REGLE_MEMBRE } from "@/lib/valeurs";
 import {
@@ -123,18 +123,20 @@ export default async function PageAdministration() {
 
   return (
     <>
+      {/*
+        * « Acces total » est un mot, non une pastille doree : le fond pale
+        * portait une encre pale, et la gelule s'affichait vide sur le site en
+        * ligne. Un etat se dit ; il n'a pas besoin d'etre encadre.
+        *
+        * Le nom passe en detail, sur sa propre ligne : accole au titre, il se
+        * lisait « Administration SORO Tielina Aboudramane · president », d'une
+        * seule traite.
+        */}
       <EnTeteEcran
         titre="Administration"
-        sous={`${membre.nom} · president`}
+        detail={`${membre.nom} · ${ROLES[membre.role].toLowerCase()}`}
         marque={
-          <span
-            className="rounded-full border px-2.5 py-1 text-[10px] font-semibold"
-            style={{
-              color: "var(--sunk)",
-              background: "rgba(201,162,39,0.16)",
-              borderColor: "rgba(201,162,39,0.35)",
-            }}
-          >
+          <span className="text-[13px]" style={{ color: "var(--ink-2)" }}>
             Acces total
           </span>
         }
@@ -142,16 +144,14 @@ export default async function PageAdministration() {
 
       <CarteEtat
         chiffres={[
-          { libelle: "membres", valeur: <Compteur valeur={situations.length} /> },
+          { libelle: "Membres", valeur: <Compteur valeur={situations.length} /> },
           {
-            libelle: moisDecouverts > 1 ? "mois decouverts" : "mois decouvert",
+            libelle: moisDecouverts > 1 ? "Mois decouverts" : "Mois decouvert",
             valeur: <Compteur valeur={moisDecouverts} />,
-            accent: moisDecouverts > 0 ? "rouge" : "vert",
           },
           {
-            libelle: penalitesDues > 1 ? "penalites dues" : "penalite due",
+            libelle: penalitesDues > 1 ? "Penalites dues" : "Penalite due",
             valeur: <Compteur valeur={penalitesDues} />,
-            accent: penalitesDues > 0 ? "or" : "vert",
           },
         ]}
       />

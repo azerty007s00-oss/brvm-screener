@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
 import { dateCourte, fcfa, nombre } from "@/lib/settings";
 
 type Point = { date: string; valeur: number };
@@ -22,8 +25,33 @@ function enJours(iso: string): number {
  * L'ordonnee se cale de meme sur des paliers ronds. Une echelle qui commence au
  * plus bas releve et finit au plus haut redresse n'importe quelle pente : elle
  * fait d'une hausse de 3 % une ascension.
+ *
+ * LA BOITE SUIT LA LARGEUR DISPONIBLE, et non un rapport fixe. Avec un viewBox
+ * de 586 par 200, un telephone de 390 px rendait un graphique de 102 px de
+ * haut : la courbe s'y ecrasait, et le trait de 2 px devenait un cheveu. Sur un
+ * ecran de 1 440, le meme trait passait a 3,4 px. Le composant mesure donc sa
+ * place et pose un viewBox a l'echelle 1:1 -- un pixel du dessin vaut un pixel
+ * a l'ecran, quel que soit l'ecran.
  */
 export function CourbePortefeuille({ points }: { points: Point[] }) {
+  const boite = useRef<HTMLDivElement>(null);
+  /*
+   * 586 au premier rendu, celui du serveur, ou aucune largeur n'est connue :
+   * c'est la mesure d'une colonne d'ordinateur, et le dessin reste juste --
+   * seule sa hauteur s'ajustera au montage.
+   */
+  const [largeur, setLargeur] = useState(586);
+
+  useEffect(() => {
+    const el = boite.current;
+    if (!el) return;
+    const suivre = () => setLargeur(Math.max(240, Math.round(el.clientWidth)));
+    suivre();
+    const observateur = new ResizeObserver(suivre);
+    observateur.observe(el);
+    return () => observateur.disconnect();
+  }, []);
+
   if (points.length < 2) {
     return (
       <p className="py-6 text-center text-sm" style={{ color: "var(--ink-2)" }}>
@@ -32,19 +60,10 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
     );
   }
 
-  /*
-   * La largeur du trace, et rien d'autre : la gouttiere des ordonnees est
-   * desormais un padding HTML. L'avoir laissee dans la boite coupait la grappe
-   * de septembre -- soit precisement les releves qu'on regarde.
-   */
-  const L = 586;
-  const H = 200;
-  /*
-   * La droite est une gouttiere, non de la zone tracee : une etiquette
-   * d'ordonnee posee sur la courbe se lit mal et masque le dernier releve,
-   * qui est justement celui qu'on regarde.
-   */
-  const marge = { haut: 8, bas: 8, gauche: 6, droite: 6 };
+  const L = largeur;
+  /* 200 px sur un telephone, 300 des qu'il y a la place : les proportions du document. */
+  const H = largeur < 520 ? 200 : 300;
+  const marge = { haut: 10, bas: 10, gauche: 6, droite: 6 };
 
   const jours = points.map((p) => enJours(p.date));
   const t0 = Math.min(...jours);
@@ -55,8 +74,12 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
   const min = Math.min(...valeurs);
   const max = Math.max(...valeurs);
 
-  const PAS = [100_000, 250_000, 500_000, 1_000_000, 2_000_000];
-  const pas = PAS.find((p) => Math.ceil(max / p) - Math.floor(min / p) <= 6) ?? PAS[PAS.length - 1];
+  /* Au plus six intervalles, quatre sur un telephone : au-dela, la grille bavarde. */
+  const maxIntervalles = H < 250 ? 4 : 6;
+  const PAS = [100_000, 250_000, 500_000, 1_000_000, 2_000_000, 5_000_000];
+  const pas =
+    PAS.find((p) => Math.ceil(max / p) - Math.floor(min / p) <= maxIntervalles) ??
+    PAS[PAS.length - 1];
   const y0 = Math.floor(min / pas) * pas;
   const y1 = Math.max(Math.ceil(max / pas) * pas, y0 + pas);
 
@@ -90,10 +113,18 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
        * n'etait plus lisible. En HTML il garde sa taille, et se place en
        * pourcentage de la hauteur du trace.
        */}
-      <div className="relative" style={{ paddingRight: 52 }}>
+      <div ref={boite} className="relative" style={{ paddingRight: 52 }}>
+        {/*
+         * La hauteur est posee en CSS et le dessin s'y etire : avant que le
+         * composant ait mesure sa place -- au premier rendu, et toujours si le
+         * navigateur n'execute rien -- un rapport fixe laissait deux bandes
+         * vides au-dessus et au-dessous. `vector-effect` garde alors le trait a
+         * 2 px, quelle que soit l'echelle.
+         */}
         <svg
           viewBox={`0 0 ${L} ${H}`}
-          className="w-full"
+          preserveAspectRatio="none"
+          className="block h-[200px] w-full lg:h-[300px]"
           role="img"
           aria-label={`Valeur du compte-titres, ${points.length} releves du ${dateCourte(points[0].date)} au ${dateCourte(dernier.date)} : de ${nombre(min)} a ${nombre(max)} FCFA`}
         >
@@ -106,6 +137,7 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
               y2={y(v)}
               stroke="var(--line)"
               strokeWidth="1"
+              vectorEffect="non-scaling-stroke"
             />
           ))}
 
@@ -117,6 +149,7 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
             strokeWidth="2"
             strokeLinejoin="round"
             strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
           />
 
           {points.map((p, i) => (
@@ -128,6 +161,7 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
               fill={i === points.length - 1 ? "var(--gold)" : "var(--page)"}
               stroke="var(--gold)"
               strokeWidth={i === points.length - 1 ? 2 : 1.5}
+              vectorEffect="non-scaling-stroke"
             />
           ))}
         </svg>
@@ -136,11 +170,7 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
           <span
             key={v}
             className="absolute text-[12px] tabular-nums"
-            style={{
-              right: 0,
-              top: `calc(${(y(v) / H) * 100}% - 0.5em)`,
-              color: "var(--ink-3)",
-            }}
+            style={{ right: 0, top: `calc(${(y(v) / H) * 100}% - 0.5em)`, color: "var(--ink-3)" }}
           >
             {enMillions(v)}
           </span>

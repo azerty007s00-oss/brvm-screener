@@ -155,7 +155,14 @@ Phoenix Capital Management.
   pas dans le code — « `--sunk` » d'un côté et « `--sunk` » de l'autre n'a rien d'alarmant — et ne
   se voit qu'en ouvrant la page, dans le bon thème. `npm run verif:contraste` lit les valeurs des
   jetons dans la feuille de style, mesure les 38 couples posés en style en ligne, en clair et en
-  nuit, et échoue en dessous de 4,5:1. Il en a trouvé trois de plus au premier passage.
+  nuit, et échoue en dessous de 4,5:1. Il en a trouvé trois de plus au premier passage. Il en a laissé passer une
+  septième, trouvée sur le site en ligne : fond en `rgba()` littéral, encre en jeton, et les deux
+  sur des lignes séparées. Il lit désormais l'objet de style entier et compose les couleurs
+  translucides avec le fond de la page.
+- **Le graphique suit la largeur disponible** — avec un `viewBox` de rapport fixe, un téléphone de
+  390 px rendait une boîte de 102 px de haut, où la courbe s'écrasait et où le trait de 2 px
+  devenait un cheveu ; sur un écran de 1 440 le même trait passait à 3,4 px. Le composant mesure sa
+  place et pose un `viewBox` à l'échelle 1:1 — un pixel du dessin vaut un pixel à l'écran.
 
 ## Règles appliquées
 
