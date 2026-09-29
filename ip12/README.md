@@ -77,6 +77,15 @@ Phoenix Capital Management.
   y a eu une longue attente puis une rafale. L'abscisse est désormais le temps, et l'ordonnée se
   cale sur des paliers ronds — une échelle qui part du plus bas relevé redresse n'importe quelle
   pente.
+- **Deux mises en page, une seule application** — à 1 440 px le site était une colonne de téléphone
+  centrée, menu caché derrière un bouton. Dès 1 024 px une barre latérale de 232 px reste ouverte,
+  avec les dix pages groupées sous leurs noms, le bloc de la personne et le repère de version en
+  pied ; en dessous, un en-tête, les onglets de la rubrique et une navigation basse à cinq entrées.
+  Les dix pages se rangent en cinq rubriques — Accueil, Versements, Comptes, Club, Moi — et le
+  filtrage des droits a lieu au serveur : une page qu'un membre ne peut pas ouvrir n'apparaît pas
+  dans sa navigation, qui ne dit même pas qu'elle existe.
+- **Les étiquettes du graphique sont en HTML** — dans le SVG elles subissaient son échelle : le même
+  « 11 px » devenait 19 px sur un écran large et 6 px sur un téléphone, illisible.
 - **Versements partiels** — un mois n'est soldé que lorsque la somme des versements atteint la
   cotisation attendue. En dessous, le mois reste dû et la pénalité de l'art. 9 porte sur la
   cotisation entière, jamais sur le seul reliquat : verser un acompte ne réduit pas la sanction.

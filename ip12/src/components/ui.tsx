@@ -219,23 +219,23 @@ export function CarteEtat({
 }) {
   return (
     <div
-      className="apparait grid border-t border-b"
+      /*
+       * Deux colonnes sur telephone, une seule rangee des l'ordinateur : cinq
+       * chiffres cote a cote se comparent d'un regard, empiles ils se lisent
+       * l'un apres l'autre.
+       */
+      className="apparait grid grid-cols-2 border-t border-b"
       style={{
         borderColor: "var(--line)",
-        gridTemplateColumns: `repeat(${Math.min(chiffres.length, 2)}, minmax(0, 1fr))`,
+        ["--colonnes" as string]: chiffres.length,
         ["--rang" as string]: 1,
       }}
     >
       {chiffres.map((c, i) => (
         <div
           key={c.libelle}
-          className="flex flex-col gap-1.5 py-4"
-          style={{
-            paddingLeft: i % 2 === 0 ? 0 : 16,
-            paddingRight: i % 2 === 0 ? 14 : 0,
-            borderLeft: i % 2 === 0 ? undefined : "1px solid var(--line)",
-            borderTop: i > 1 ? "1px solid var(--line)" : undefined,
-          }}
+          className="cellule-chiffre flex flex-col gap-1.5 py-4 lg:py-5"
+          style={{ ["--i" as string]: i }}
         >
           <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
             {c.libelle}

@@ -318,72 +318,27 @@ details[open] > summary .chevron { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .rouet { animation: none; } }
 
 /*
- * Tiroir de navigation.
+ * Bandeau de chiffres cles.
  *
- * Bati sur un <details> : sans JavaScript il s'ouvre et se ferme quand meme,
- * et chaque navigation rechargeant alors la page, il se referme de lui-meme.
- * Le panneau est en position fixe, hors du flux : l'en-tete colle en haut sans
- * que le tiroir l'entraine.
+ * Les filets separent les cellules voisines, jamais le bord : sur telephone
+ * deux par rangee, sur ordinateur toutes sur une rangee. Ils se calculent ici
+ * parce qu'ils changent avec la largeur, ce qu'un style en ligne ne sait pas
+ * faire.
  */
-.tiroir { position: relative; }
-.tiroir > summary::-webkit-details-marker { display: none; }
-.tiroir > summary { -webkit-tap-highlight-color: transparent; }
+.cellule-chiffre { padding-inline: 16px 14px; }
+.cellule-chiffre:nth-child(odd) { padding-inline-start: 0; }
+.cellule-chiffre:nth-child(even) { padding-inline-end: 0; border-inline-start: 1px solid var(--line); }
+.cellule-chiffre:nth-child(n + 3) { border-block-start: 1px solid var(--line); }
 
-/* Le bouton montre la croix une fois ouvert : un seul geste, deux etats. */
-.tiroir > summary .bouton-fermer { display: none; }
-.tiroir[open] > summary .bouton-menu { display: none; }
-.tiroir[open] > summary .bouton-fermer { display: block; }
-
-.tiroir > .voile {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  border: 0;
-  padding: 0;
-  background: rgba(29, 18, 10, 0.62);
-  backdrop-filter: blur(2px);
-  cursor: default;
-}
-
-.tiroir > .panneau {
-  position: fixed;
-  inset-block: 0;
-  inset-inline-start: 0;
-  z-index: 41;
-  width: min(86vw, 310px);
-  display: flex;
-  flex-direction: column;
-  border-start-end-radius: 22px;
-  border-end-end-radius: 22px;
-  border-inline-end: 1px solid var(--bordure);
-  box-shadow: 24px 0 48px -24px rgba(29, 18, 10, 0.45);
-  /* L'encoche du telephone et la barre de geste ne doivent rien manger. */
-  padding-block: env(safe-area-inset-top) env(safe-area-inset-bottom);
-  overscroll-behavior: contain;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  @keyframes tiroir-entre {
-    from { transform: translateX(-100%); }
-    to   { transform: none; }
+@media (min-width: 1024px) {
+  /* Une seule rangee : le nombre de colonnes vient du composant. */
+  .cellule-chiffre:first-child { grid-column-start: 1; }
+  .grid:has(> .cellule-chiffre) { grid-template-columns: repeat(var(--colonnes, 2), minmax(0, 1fr)); }
+  .cellule-chiffre {
+    padding-inline: 20px;
+    border-block-start: none;
+    border-inline-start: 1px solid var(--line);
   }
-  @keyframes voile-parait {
-    from { opacity: 0; }
-    to   { opacity: 1; }
-  }
-  .tiroir[open] > .panneau {
-    animation: tiroir-entre 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-  }
-  .tiroir[open] > .voile {
-    animation: voile-parait 200ms ease both;
-  }
-}
-
-/*
- * Au-dela du telephone, le tiroir reste un tiroir plutot que de devenir une
- * colonne fixe : dix ecrans se parcourent au pouce, et une colonne permanente
- * prendrait sur la largeur des tableaux de chiffres, qui en manquent deja.
- */
-@media print {
-  .tiroir { display: none !important; }
+  .cellule-chiffre:first-child { border-inline-start: none; }
+  .cellule-chiffre:last-child { padding-inline-end: 0; }
 }

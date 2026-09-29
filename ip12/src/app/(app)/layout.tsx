@@ -1,130 +1,102 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { membreCourant } from "@/lib/auth";
 import { baseConfiguree } from "@/lib/db";
-import { seDeconnecter } from "@/app/actions/auth";
-import { CLUB, ROLES } from "@/lib/settings";
+import { ROLES } from "@/lib/settings";
 import { peut, type Droit } from "@/lib/droits";
 import { Bienvenue } from "@/components/bienvenue";
-import { Navigation } from "@/components/navigation";
+import { Coque, type Rubrique } from "@/components/coque";
 import type { NomIcone } from "@/components/icones";
 import { versionDeployee } from "@/lib/version";
 
 /*
- * Deux rangees, et non plus une barre de dix onglets : on ne voyait pas qu'elle
- * defilait, et l'on cherchait longtemps une page qui etait la.
+ * Cinq rubriques pour dix pages.
  *
- * « Mon suivi » porte ce qu'un membre ouvre chaque mois, et tient sans defiler.
- * « Le club » porte le reste, ouvert a tous : la transparence des comptes est le
- * principe du club (art. 12).
+ * Une barre de dix onglets defilait sans qu'on le voie ; deux rangees mangeaient
+ * la largeur ; un tiroir cachait tout derriere un bouton, y compris sur un ecran
+ * de 1 440 px ou la place ne manquait pas. Le decoupage en rubriques sert les
+ * deux mises en page a la fois : cinq entrees en bas sur telephone, et sur
+ * ordinateur une barre laterale ou les groupes reprennent leur nom.
+ *
+ * « Comptes » et « Club » portent plusieurs pages ; les trois autres n'en ont
+ * qu'une, et menent donc directement a elle.
  */
 type Entree = { href: string; libelle: string; icone: NomIcone; droit?: Droit };
+type Modele = { cle: string; libelle: string; icone: NomIcone; pages: Entree[] };
 
-const SUIVI: Entree[] = [
-  { href: "/", libelle: "Accueil", icone: "maison" },
-  { href: "/versements", libelle: "Versements", icone: "billets" },
-  // L'administration est l'outil quotidien du president : elle tient au premier rang.
-  { href: "/administration", libelle: "Administration", icone: "reglages", droit: "gererReglages" },
-  { href: "/mon-compte", libelle: "Mon compte", icone: "personne" },
+const RUBRIQUES: Modele[] = [
+  { cle: "accueil", libelle: "Accueil", icone: "maison", pages: [{ href: "/", libelle: "Accueil", icone: "maison" }] },
+  {
+    cle: "versements",
+    libelle: "Versements",
+    icone: "billets",
+    pages: [{ href: "/versements", libelle: "Versements", icone: "billets" }],
+  },
+  {
+    cle: "comptes",
+    libelle: "Comptes",
+    icone: "graphique",
+    pages: [
+      { href: "/portefeuille", libelle: "Portefeuille", icone: "graphique" },
+      { href: "/caisse", libelle: "Caisse", icone: "coffre" },
+      { href: "/compte-titres", libelle: "Titres", icone: "echange" },
+      { href: "/penalites", libelle: "Penalites", icone: "alerte" },
+    ],
+  },
+  {
+    cle: "club",
+    libelle: "Club",
+    icone: "personnes",
+    pages: [
+      { href: "/reunions", libelle: "Reunions", icone: "calendrier" },
+      { href: "/membres", libelle: "Membres", icone: "personnes" },
+    ],
+  },
+  {
+    cle: "moi",
+    libelle: "Moi",
+    icone: "personne",
+    pages: [
+      { href: "/mon-compte", libelle: "Mon compte", icone: "personne" },
+      { href: "/administration", libelle: "Administration", icone: "reglages", droit: "gererReglages" },
+    ],
+  },
 ];
 
-const VIE_DU_CLUB: Entree[] = [
-  { href: "/caisse", libelle: "Caisse", icone: "coffre" },
-  { href: "/compte-titres", libelle: "Titres", icone: "echange" },
-  { href: "/portefeuille", libelle: "Portefeuille", icone: "graphique" },
-  { href: "/penalites", libelle: "Penalites", icone: "alerte" },
-  { href: "/reunions", libelle: "Reunions", icone: "calendrier" },
-  { href: "/membres", libelle: "Membres", icone: "personnes" },
-];
 export default async function CoquilleApplication({ children }: { children: React.ReactNode }) {
   if (!baseConfiguree()) redirect("/login");
   const membre = await membreCourant();
   if (!membre) redirect("/login");
 
+  /*
+   * Le filtrage des droits a lieu ici, au serveur : une page qu'un membre ne
+   * peut pas ouvrir n'apparait pas dans sa navigation, plutot que d'y figurer
+   * grisee. La liste envoyee au navigateur ne porte donc que ce a quoi il a
+   * droit -- elle ne dit meme pas que le reste existe.
+   */
+  const rubriques: Rubrique[] = RUBRIQUES.map((r) => ({
+    cle: r.cle,
+    libelle: r.libelle,
+    icone: r.icone,
+    pages: r.pages
+      .filter((p) => !p.droit || peut(membre, p.droit))
+      .map(({ href, libelle, icone }) => ({ href, libelle, icone })),
+  })).filter((r) => r.pages.length > 0);
+
   const version = versionDeployee();
 
   return (
-    <div className="min-h-screen">
-      {/*
-        * Pas de `backdrop-blur` ici : le fond de l'en-tete est opaque, le flou
-        * n'y paraissait pas -- mais un ancetre portant `backdrop-filter` devient
-        * le bloc conteneur de ses descendants en position fixe, et le tiroir de
-        * navigation s'y trouvait enferme, reduit a la hauteur de l'en-tete.
-        */}
-      <header
-        className="sans-impression sticky top-0 z-10 border-b"
-        style={{ background: "var(--page)", borderColor: "var(--line)" }}
-      >
-        <div className="mx-auto flex max-w-5xl items-center gap-2 px-4 py-3">
-          {/*
-            * Le menu ouvre a gauche, comme partout : le pouce d'une main droite
-            * l'atteint mal, mais l'oeil le cherche la, et c'est l'oeil qui
-            * decide ou l'on croit etre.
-            */}
-          {!membre.must_change_password && (
-            <Navigation
-              suivi={SUIVI.filter((l) => !l.droit || peut(membre, l.droit)).map(({ href, libelle, icone }) => ({ href, libelle, icone }))}
-              club={VIE_DU_CLUB.filter((l) => !l.droit || peut(membre, l.droit)).map(({ href, libelle, icone }) => ({ href, libelle, icone }))}
-              membre={{ nom: membre.nom, email: membre.email, role: ROLES[membre.role] }}
-            />
-          )}
-          <Link href="/" className="flex min-w-0 flex-1 items-center gap-2">
-            <span
-              className="grid h-8 w-8 place-items-center rounded-lg text-xs font-bold"
-              style={{ background: "var(--ink)", color: "var(--page)" }}
-            >
-              IP
-            </span>
-            {/*
-              * Une seule ligne pour le titre : le nom entier passait a la ligne
-              * depuis que le menu occupe la gauche, et l'en-tete gonflait sur
-              * tous les ecrans. Le nom complet et l'adresse figurent en entier
-              * dans le tiroir, ou rien ne dispute la largeur.
-              */}
-            <span className="min-w-0 leading-tight">
-              <span className="block text-sm font-semibold" style={{ color: "var(--ink)" }}>
-                {CLUB.sigle}
-              </span>
-              <span className="block truncate text-[11px]" style={{ color: "var(--ink-3)" }}>
-                {ROLES[membre.role]} &middot; {membre.nom}
-              </span>
-            </span>
-          </Link>
-          <form action={seDeconnecter}>
-            <button
-              type="submit"
-              className="rounded-lg px-3 py-1.5 text-xs font-medium"
-              style={{ background: "var(--line-2)", color: "var(--sunk)" }}
-            >
-              Quitter
-            </button>
-          </form>
-        </div>
-
-      </header>
-
+    <Coque
+      rubriques={rubriques}
+      personne={{ nom: membre.nom, email: membre.email, role: ROLES[membre.role] }}
+      version={{ revision: version.revision, titre: version.titre }}
+      alerte={peut(membre, "validerVersement")}
+    >
       {/*
         * Premiere connexion : l'ecran d'accueil prend la place du contenu, sur
         * toutes les routes. C'est une porte, pas une redirection -- aucune page
-        * n'est atteignable par l'adresse directe, et « Quitter » reste offert.
+        * n'est atteignable par l'adresse directe.
         */}
-      <main className="mx-auto max-w-5xl space-y-4 px-4 py-5">
-        {membre.must_change_password ? <Bienvenue membre={membre} /> : children}
-      </main>
-
-      <footer className="sans-impression mx-auto max-w-5xl px-4 pb-8 pt-2 text-center text-[11px]" style={{ color: "var(--discret)" }}>
-        {CLUB.nom} &middot; {CLUB.ville} &middot; compte-titres {CLUB.sgi}
-        {version.revision && (
-          <>
-            <br />
-            <span title={version.titre ?? undefined}>
-              version {version.revision}
-              {version.depot ? ` \u00b7 ${version.depot}` : ""}
-              {version.branche ? ` \u00b7 ${version.branche}` : ""}
-            </span>
-          </>
-        )}
-      </footer>
-    </div>
+      {membre.must_change_password ? <Bienvenue membre={membre} /> : children}
+    </Coque>
   );
 }

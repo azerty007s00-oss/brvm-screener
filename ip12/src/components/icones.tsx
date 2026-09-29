@@ -3,9 +3,14 @@
  * SVG. Aucune police d'icones a telecharger, donc rien a attendre sur une
  * connexion lente, et rien qui disparaisse si un CDN tombe.
  */
-type Props = { taille?: number; couleur?: string };
+/*
+ * L'epaisseur se regle : 2 convenait a des icones de 19 px posees dans des
+ * boutons ; la barre laterale les veut a 17 px et la navigation basse a 22, ou
+ * un trait de 2 empate le dessin.
+ */
+type Props = { taille?: number; couleur?: string; trait?: number };
 
-function Trait({ taille = 19, couleur = "currentColor", children }: Props & { children: React.ReactNode }) {
+function Trait({ taille = 19, couleur = "currentColor", trait = 2, children }: Props & { children: React.ReactNode }) {
   return (
     <svg
       width={taille}
@@ -13,7 +18,7 @@ function Trait({ taille = 19, couleur = "currentColor", children }: Props & { ch
       viewBox="0 0 24 24"
       fill="none"
       stroke={couleur}
-      strokeWidth={2}
+      strokeWidth={trait}
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
