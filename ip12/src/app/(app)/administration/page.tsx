@@ -647,10 +647,20 @@ export default async function PageAdministration() {
             />
             <details className="mt-3">
               <summary
-                className="cursor-pointer list-none rounded px-2 py-1 text-xs"
-                style={{ background: "var(--sunk)", color: "var(--sunk)" }}
+                className="tapable flex h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 text-[13px]"
+                style={{ color: "var(--ink-2)" }}
               >
-                + Une borne differente pour certains membres
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" className="chevron flex-none">
+                  <path
+                    d="M9.5 6 L15.5 12 L9.5 18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Une borne differente pour certains membres
               </summary>
               <p className="mt-2 text-xs" style={{ color: "var(--discret)" }}>
                 Tous ne sont pas a jour au meme mois. Laissez vide pour appliquer la borne commune.

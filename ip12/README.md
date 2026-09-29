@@ -150,6 +150,12 @@ Phoenix Capital Management.
   trace de sa déclaration : il rouvrait le site pour vérifier, ou écrivait au groupe. La copie lui
   tient lieu d'accusé de réception. Sans trésorier actif, le courrier va au président et la copie
   ne le double pas.
+- **Un contrôle mesure le contraste des couples fond/encre** — la même faute est passée trois fois :
+  un fond et une encre pointés sur le même jeton, ou sur deux jetons trop proches. Elle ne se lit
+  pas dans le code — « `--sunk` » d'un côté et « `--sunk` » de l'autre n'a rien d'alarmant — et ne
+  se voit qu'en ouvrant la page, dans le bon thème. `npm run verif:contraste` lit les valeurs des
+  jetons dans la feuille de style, mesure les 38 couples posés en style en ligne, en clair et en
+  nuit, et échoue en dessous de 4,5:1. Il en a trouvé trois de plus au premier passage.
 
 ## Règles appliquées
 

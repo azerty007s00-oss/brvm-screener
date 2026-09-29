@@ -88,7 +88,7 @@ export function Badge({ ton = "neutre", children }: { ton?: Ton; children: React
     rouge: { background: "var(--etat-manque-fond)", color: "var(--etat-manque)" },
     ambre: { background: "var(--etat-attente-fond)", color: "var(--etat-attente)" },
     or: { background: "var(--sunk)", color: "var(--ink-2)" },
-    neutre: { background: "var(--sunk)", color: "var(--line-2)" },
+    neutre: { background: "var(--sunk)", color: "var(--ink-2)" },
   };
   return (
     <span
