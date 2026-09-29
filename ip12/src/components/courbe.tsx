@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { dateCourte, fcfa, nombre } from "@/lib/settings";
+import { pourcent } from "@/lib/perf";
+import { Selecteur } from "@/components/selecteur";
+import { retenus, tracable, type Horizon } from "@/lib/horizons";
 
 type Point = { date: string; valeur: number };
 
@@ -36,6 +39,12 @@ function enJours(iso: string): number {
 export function CourbePortefeuille({ points }: { points: Point[] }) {
   const boite = useRef<HTMLDivElement>(null);
   /*
+   * L'exercice par defaut : c'est la periode dont le club rend compte en
+   * assemblee. « Depuis le debut » ecrase les mois recents contre le bord
+   * droit, et « 3 mois » ne dit rien de l'annee.
+   */
+  const [horizon, setHorizon] = useState<Horizon>("exercice");
+  /*
    * 586 au premier rendu, celui du serveur, ou aucune largeur n'est connue :
    * c'est la mesure d'une colonne d'ordinateur, et le dessin reste juste --
    * seule sa hauteur s'ajustera au montage.
@@ -60,17 +69,39 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
     );
   }
 
+  const fin = points[points.length - 1].date;
+
+  /*
+   * Une periode qui ne porte qu'un releve ne se trace pas. Plutot que de la
+   * cacher -- la largeur des autres varierait d'une page a l'autre -- on la
+   * laisse, desactivee, en disant pourquoi.
+   */
+  const horizons: { cle: Horizon; libelle: string }[] = [
+    { cle: "trimestre", libelle: "3 mois" },
+    { cle: "exercice", libelle: `Exercice ${fin.slice(0, 4)}` },
+    { cle: "origine", libelle: `Depuis ${points[0].date.slice(0, 4)}` },
+  ];
+  const choix = horizons.map((h) => ({
+    ...h,
+    possible: tracable(points, h.cle),
+    raison: "Moins de deux releves sur cette periode.",
+  }));
+  const actif = choix.find((h) => h.cle === horizon)?.possible
+    ? horizon
+    : (choix.find((h) => h.possible)?.cle ?? "origine");
+  const traces = retenus(points, actif);
+
   const L = largeur;
   /* 200 px sur un telephone, 300 des qu'il y a la place : les proportions du document. */
   const H = largeur < 520 ? 200 : 300;
   const marge = { haut: 10, bas: 10, gauche: 6, droite: 6 };
 
-  const jours = points.map((p) => enJours(p.date));
+  const jours = traces.map((p) => enJours(p.date));
   const t0 = Math.min(...jours);
   const t1 = Math.max(...jours);
   const duree = t1 - t0 || 1;
 
-  const valeurs = points.map((p) => p.valeur);
+  const valeurs = traces.map((p) => p.valeur);
   const min = Math.min(...valeurs);
   const max = Math.max(...valeurs);
 
@@ -80,7 +111,8 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
   const pas =
     PAS.find((p) => Math.ceil(max / p) - Math.floor(min / p) <= maxIntervalles) ??
     PAS[PAS.length - 1];
-  const y0 = Math.floor(min / pas) * pas;
+  /* Depuis l'origine, l'echelle part de zero : c'est tout le chemin qu'on montre. */
+  const y0 = actif === "origine" ? 0 : Math.floor(min / pas) * pas;
   const y1 = Math.max(Math.ceil(max / pas) * pas, y0 + pas);
 
   const x = (iso: string) =>
@@ -91,7 +123,7 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
   const paliers: number[] = [];
   for (let v = y0; v <= y1 + 1; v += pas) paliers.push(v);
 
-  const ligne = points
+  const ligne = traces
     .map((p, i) => `${i === 0 ? "M" : "L"} ${x(p.date).toFixed(1)} ${y(p.valeur).toFixed(1)}`)
     .join(" ");
 
@@ -101,10 +133,31 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
       ? "0"
       : `${(v / 1_000_000).toFixed(2).replace(/0+$/, "").replace(/\.$/, "").replace(".", ",")} M`;
 
-  const dernier = points[points.length - 1];
+  const dernier = traces[traces.length - 1];
+  const premier = traces[0];
+  const ecart = dernier.valeur - premier.valeur;
 
   return (
     <figure>
+      <div className="sans-impression mb-4 flex flex-wrap items-center justify-between gap-3">
+        <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
+          Sur la periode :{" "}
+          <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+            {ecart >= 0 ? "+" : "\u2212"}
+            {nombre(Math.abs(ecart))} FCFA
+          </span>{" "}
+          <span className="tabular-nums">
+            ({pourcent(premier.valeur === 0 ? null : ecart / premier.valeur)})
+          </span>
+          , en {traces.length} releves.
+        </p>
+        <Selecteur
+          etiquette="Periode du graphique"
+          options={choix}
+          valeur={actif}
+          surChoix={setHorizon}
+        />
+      </div>
       {/*
        * Les etiquettes sont en HTML, non dans le SVG.
        *
@@ -126,7 +179,7 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
           preserveAspectRatio="none"
           className="block h-[200px] w-full lg:h-[300px]"
           role="img"
-          aria-label={`Valeur du compte-titres, ${points.length} releves du ${dateCourte(points[0].date)} au ${dateCourte(dernier.date)} : de ${nombre(min)} a ${nombre(max)} FCFA`}
+          aria-label={`Valeur du compte-titres, ${traces.length} releves du ${dateCourte(premier.date)} au ${dateCourte(dernier.date)} : de ${nombre(min)} a ${nombre(max)} FCFA`}
         >
           {paliers.map((v) => (
             <line
@@ -152,15 +205,15 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
             vectorEffect="non-scaling-stroke"
           />
 
-          {points.map((p, i) => (
+          {traces.map((p, i) => (
             <circle
               key={p.date}
               cx={x(p.date)}
               cy={y(p.valeur)}
-              r={i === points.length - 1 ? 4 : 2.5}
-              fill={i === points.length - 1 ? "var(--gold)" : "var(--page)"}
+              r={i === traces.length - 1 ? 4 : 2.5}
+              fill={i === traces.length - 1 ? "var(--gold)" : "var(--page)"}
               stroke="var(--gold)"
-              strokeWidth={i === points.length - 1 ? 2 : 1.5}
+              strokeWidth={i === traces.length - 1 ? 2 : 1.5}
               vectorEffect="non-scaling-stroke"
             />
           ))}
@@ -181,7 +234,7 @@ export function CourbePortefeuille({ points }: { points: Point[] }) {
         className="mt-1 flex justify-between text-[12px] tabular-nums"
         style={{ color: "var(--ink-3)", paddingRight: 52 }}
       >
-        <span>{dateCourte(points[0].date)}</span>
+        <span>{dateCourte(premier.date)}</span>
         <span>{dateCourte(dernier.date)}</span>
       </div>
 

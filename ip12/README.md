@@ -163,6 +163,13 @@ Phoenix Capital Management.
   390 px rendait une boîte de 102 px de haut, où la courbe s'écrasait et où le trait de 2 px
   devenait un cheveu ; sur un écran de 1 440 le même trait passait à 3,4 px. Le composant mesure sa
   place et pose un `viewBox` à l'échelle 1:1 — un pixel du dessin vaut un pixel à l'écran.
+- **L'horizon du graphique se choisit** — trois mois, l'exercice en cours, ou depuis l'origine.
+  L'exercice par défaut : c'est la période dont le club rend compte en assemblée ; « depuis le
+  début » écrase les mois récents contre le bord droit. Rien n'est interpolé — une période retient
+  les relevés dont la date tombe après sa borne — et celle qui n'en porte qu'un reste visible mais
+  désactivée, en disant pourquoi. La règle vit dans `src/lib/horizons.ts`, hors du dessin, parce
+  qu'elle a deux pièges qu'un coup d'œil ne voit pas : trois mois en arrière depuis le 31 mai, et
+  un exercice dont le premier relevé tombe le 1er janvier.
 
 ## Règles appliquées
 
@@ -273,6 +280,7 @@ PGPORT_TEST=5433 npm run verif:sql
 | `src/lib/relance.ts` | Qui relancer, et que leur écrire |
 | `src/lib/avis.ts` | Avis adressés au bureau et aux membres absents |
 | `src/lib/etats.ts` | Nom, ordre et résumé des six états d'un mois |
+| `src/lib/horizons.ts` | Quels relevés le graphique trace, selon la période |
 | `src/components/coque.tsx` | Barre latérale, en-tête, onglets, navigation basse |
 | `src/components/panneau.tsx` | Panneau latéral et feuille de saisie |
 | `src/components/menu-ligne.tsx` | Les commandes d'une ligne, et leur confirmation |

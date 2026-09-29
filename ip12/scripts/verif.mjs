@@ -37,6 +37,7 @@ const { tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois } = await 
 const { statutLigne, moisCourt, initialeMois, resumeFrise, LIBELLE_STATUT } = await import(
   "../.verif/etats.mjs"
 );
+const { borne, retenus, tracable } = await import("../.verif/horizons.mjs");
 
 /* ------------------------------------------------------------- performance */
 
@@ -833,8 +834,46 @@ assert.equal(
 );
 
 
+/* ---------------------------------------------- horizons du graphique */
+
+// L'exercice part du 1er janvier de l'annee du dernier releve, et le retient
+// s'il tombe ce jour-la : la borne est inclusive.
+assert.equal(borne("exercice", "2026-09-28"), "2026-01-01");
+assert.equal(borne("origine", "2026-09-28"), null);
+
+// Trois mois se comptent en mois, non en 90 jours.
+assert.equal(borne("trimestre", "2026-09-28"), "2026-06-28");
+// Et par-dessus le changement d'annee.
+assert.equal(borne("trimestre", "2026-02-10"), "2025-11-10");
+// Un mois plus court ne fait pas deborder la date sur le suivant : le 31 mai
+// moins trois mois donne le 28 fevrier, non le 2 mars.
+assert.equal(borne("trimestre", "2026-05-31"), "2026-02-28");
+assert.equal(borne("trimestre", "2024-05-31"), "2024-02-29", "annee bissextile");
+
+{
+  const releves = [
+    { date: "2023-07-17", valeur: 900_000 },
+    { date: "2026-01-01", valeur: 2_100_000 },
+    { date: "2026-06-28", valeur: 2_820_000 },
+    { date: "2026-09-28", valeur: 3_857_845 },
+  ];
+  assert.equal(retenus(releves, "origine").length, 4);
+  // Le releve du 1er janvier appartient a l'exercice.
+  assert.equal(retenus(releves, "exercice").length, 3);
+  // Celui du 28 juin appartient au trimestre : la borne est inclusive.
+  assert.equal(retenus(releves, "trimestre").length, 2);
+  assert.ok(tracable(releves, "trimestre"));
+}
+
+// Une periode qui ne porte qu'un releve ne se trace pas : l'ecran le dit
+// plutot que de dessiner une ligne entre un point et rien.
+assert.equal(
+  tracable([{ date: "2026-01-05", valeur: 1 }, { date: "2026-09-28", valeur: 2 }], "trimestre"),
+  false,
+);
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
-    "individuelles, retards, absences, R3, R5, relance, etats du registre",
+    "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons",
 );

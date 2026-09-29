@@ -450,3 +450,8 @@ textarea:focus-visible {
     break-inside: avoid;
   }
 }
+
+/* Le pouce du selecteur glisse ; il s'arrete net si l'on demande moins d'animation. */
+@media (prefers-reduced-motion: no-preference) {
+  .pouce { transition: transform 300ms var(--ease-doux, ease); }
+}
