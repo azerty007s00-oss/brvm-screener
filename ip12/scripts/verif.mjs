@@ -1038,10 +1038,50 @@ assert.deepEqual(reperesTemps("2026-09-28", "2026-09-28", 1000), []);
   assert.equal(cumul(releves[2]) - cumul(releves[0]), periode.gain);
 }
 
+/* ------------------------------- les marches se recollent sur la periode */
+
+/*
+ * La ligne « depuis le releve precedent » decompose UN intervalle ; celle de la
+ * periode en decompose la suite entiere. Les deux doivent se recoller, sinon le
+ * president verrait des marches qui ne font pas le total qu'on lui annonce --
+ * et il aurait raison de ne plus croire ni l'une ni l'autre.
+ */
+{
+  const releves = [
+    { date: "2026-01-01", valeur: 2_166_323, netPlace: 1_493_915 },
+    { date: "2026-06-30", valeur: 3_270_463, netPlace: 2_177_635 },
+    { date: "2026-09-13", valeur: 3_785_917, netPlace: 2_177_635 },
+    { date: "2026-09-24", valeur: 3_760_885, netPlace: 2_177_635 },
+    { date: "2026-09-28", valeur: 3_857_845, netPlace: 2_177_635 },
+  ];
+  const marches = releves.slice(1).map((_, i) => decomposer([releves[i], releves[i + 1]]));
+  const total = decomposer(releves);
+
+  const somme = (lire) => marches.reduce((t, m) => t + lire(m), 0);
+  assert.equal(somme((m) => m.gain), total.gain, "les gains des marches font le gain de la periode");
+  assert.equal(somme((m) => m.apportsNets), total.apportsNets, "et les apports de meme");
+  assert.equal(somme((m) => m.ecartValeur), total.ecartValeur);
+
+  // Une marche sans apport ne bouge que par le marche : c'est ce qui permet de
+  // distinguer un creux de bourse d'un virement pas encore arrive au releve.
+  const creux = marches[2];
+  assert.equal(creux.apportsNets, 0);
+  assert.equal(creux.gain, 3_760_885 - 3_785_917);
+
+  // Et une marche qui porte un apport arrive laisse le gain tranquille : la
+  // valeur monte du meme montant, l'argent se posant en liquidites.
+  const arrive = decomposer([
+    { date: "2026-10-05", valeur: 3_857_845, netPlace: 2_177_635 },
+    { date: "2026-10-31", valeur: 3_857_845 + 125_000, netPlace: 2_177_635 + 125_000 },
+  ]);
+  assert.equal(arrive.apportsNets, 125_000);
+  assert.equal(arrive.gain, 0);
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
     "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons, "
     + "net place et gain de gestion, reperes de l'abscisse, "
-    + "cumul et gain de periode",
+    + "cumul, gain de periode et marches",
 );

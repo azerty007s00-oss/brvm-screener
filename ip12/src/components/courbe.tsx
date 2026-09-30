@@ -15,9 +15,16 @@ function enJours(iso: string): number {
   return Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 86_400_000;
 }
 
-/** Un montant signe, avec le moins typographique : « +683 720 », « −12 000 ». */
+/**
+ * Un montant signe, avec le moins typographique : « +683 720 », « −12 000 ».
+ *
+ * Zero n'a pas de signe. « Apports nets +0 » se lit comme un apport minuscule ;
+ * « Apports nets 0 » dit ce qu'il veut dire -- rien n'est entre -- et c'est
+ * justement la lecture qui distingue un creux de marche d'un virement.
+ */
 function signe(v: number): string {
-  return `${v >= 0 ? "+" : "−"}${nombre(Math.abs(v))}`;
+  if (v === 0) return "0";
+  return `${v > 0 ? "+" : "−"}${nombre(Math.abs(v))}`;
 }
 
 /**
@@ -312,6 +319,26 @@ export function CourbePortefeuille({
   };
 
   const point = vise === null ? null : traces[vise];
+
+  /*
+   * CE QUI A CHANGE DEPUIS LE RELEVE PRECEDENT.
+   *
+   * La courbe montre un cumul ; la question qu'on se pose devant une marche est
+   * toujours « qu'est-ce qui a change depuis la derniere fois ? ». Sans cette
+   * ligne, il fallait epingler deux releves, noter leurs gains et soustraire --
+   * et se tromper, parce qu'une hausse des liquidites peut venir d'un virement
+   * comme d'une vente d'actions. Les deux termes separes tranchent : des apports
+   * nets a zero et un gain qui baisse, c'est le marche ; des apports qui entrent
+   * et un gain qui tombe d'autant, c'est un releve anterieur a l'arrivee des
+   * fonds -- une date a corriger, non un calcul.
+   *
+   * Le precedent se cherche dans la liste ENTIERE, non dans la periode tracee :
+   * le premier releve de l'exercice a bien un predecesseur, il est seulement
+   * hors du cadre.
+   */
+  const rang = point ? points.findIndex((p) => p.date === point.date) : -1;
+  const marche = rang > 0 ? decomposer([points[rang - 1], points[rang]]) : null;
+  const precedent = rang > 0 ? points[rang - 1] : null;
 
   const reperes = mesure
     ? reperesTemps(premier.date, dernier.date, L - marge.gauche - marge.droite)
@@ -647,10 +674,8 @@ export function CourbePortefeuille({
         </div>
       </div>
 
-      <figcaption
-        className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-[12.5px]"
-        style={{ color: "var(--ink-2)" }}
-      >
+      <figcaption className="mt-3 flex flex-col gap-1 text-[12.5px]" style={{ color: "var(--ink-2)" }}>
+        <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
         <span style={{ color: "var(--ink-3)" }}>
           {point ? `Au releve du ${dateCourte(point.date)}` : nomPeriode}
         </span>
@@ -728,6 +753,23 @@ export function CourbePortefeuille({
             </span>
             , apports compris.
           </span>
+        )}
+        </div>
+
+        {/*
+          * Le pas : meme decomposition que la ligne de periode, sur un seul
+          * intervalle. Les memes deux mots, « apports nets » et « gain de
+          * gestion », parce que c'est la meme mesure -- sur une periode d'un
+          * releve.
+          */}
+        {marche && precedent && (
+          <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+            <span style={{ color: "var(--ink-3)" }}>
+              Depuis le releve du {dateCourte(precedent.date)}
+            </span>
+            <Poste libelle="Apports nets" montant={marche.apportsNets} />
+            <Poste libelle="Gain de gestion" montant={marche.gain} performance />
+          </div>
         )}
       </figcaption>
     </figure>
