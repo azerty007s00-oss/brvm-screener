@@ -58,8 +58,18 @@ export async function avertirLeBureau(
     const motifs: string[] = [];
     if (d.echeanceDuJour) motifs.push("echeance du jour");
     if (d.arrieres.length > 0) motifs.push(`${d.arrieres.length} mois en retard`);
-    if (d.situation.nbPenalitesImpayees > 0) {
-      motifs.push(`${d.situation.nbPenalitesImpayees} penalite(s) impayee(s)`);
+    /*
+     * La dette inscrite, toutes natures : le bureau relit cette liste pour
+     * decider qui relancer, et un membre penalise pour deux absences n'y
+     * figurait pas -- le compte ne regardait que les retards, sous un mot qui
+     * disait le contraire.
+     */
+    if (d.dette.nb > 0) {
+      motifs.push(
+        d.dette.nb === d.dette.nbRetard
+          ? `${d.dette.nb} penalite(s) de retard impayee(s)`
+          : `${d.dette.nb} penalite(s) impayee(s), dont ${d.dette.nbRetard} de retard`,
+      );
     }
     if (d.avanceManquante) motifs.push("avance obligatoire non tenue");
     lignes.push(`  ${d.situation.nom} — ${motifs.join(", ")}`);

@@ -1,6 +1,9 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { avancesExigees, situationsClub, type AvanceExigee, type SituationClub } from "@/lib/queries";
+import {
+  avancesExigees, penalitesDuesDetaillees, situationsClub,
+  type AvanceExigee, type DetteMembre, type SituationClub,
+} from "@/lib/queries";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
 import {
   CLUB, EFFET, REGLES, dateCourte, deMois, debutMois, etatEcheance, fcfa,
@@ -21,6 +24,12 @@ export type Destinataire = {
   arrieres: string[];
   /** Mois courant non encore couvert : echeance du jour, pas encore penalisable. */
   echeanceDuJour: string | null;
+  /**
+   * La dette inscrite au registre, toutes natures. Le courrier l'annonce telle
+   * quelle : le compte ET le montant sortent de la meme table, au lieu de coller
+   * un decompte du registre a un total theorique qui ne voyait pas les absences.
+   */
+  dette: DetteMembre;
   /**
    * Avance minimale imposee au membre et non tenue.
    *
@@ -47,6 +56,7 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
     situationsClub(maintenant),
     avancesExigees(maintenant).catch(() => [] as AvanceExigee[]),
   ]);
+  const dettes = await penalitesDuesDetaillees().catch(() => new Map<string, DetteMembre>());
 
   return situations
     .map((situation) => {
@@ -66,6 +76,9 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
         situation,
         arrieres: situation.moisEnRetard.filter((m) => m !== moisCourant),
         echeanceDuJour,
+        dette: dettes.get(situation.membreId) ?? {
+          nb: 0, montant: 0, nbRetard: 0, montantRetard: 0,
+        },
         avanceManquante: avance && !avance.respectee ? avance : null,
       };
     })
@@ -73,7 +86,7 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
       (d) =>
         d.arrieres.length > 0 ||
         d.echeanceDuJour !== null ||
-        d.situation.nbPenalitesImpayees > 0 ||
+        d.dette.nb > 0 ||
         d.avanceManquante !== null,
     );
 }
@@ -172,8 +185,13 @@ export { joursAvantEcheance };
 export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: Date): string {
   if (d.avanceManquante) return `${CLUB.sigle} — avance obligatoire non constituee`;
   if (d.arrieres.length > 0) return `${CLUB.sigle} — versement en retard (${d.arrieres.length} mois)`;
-  if (d.situation.nbPenalitesImpayees > 0) {
-    return `${CLUB.sigle} — ${d.situation.nbPenalitesImpayees} penalite(s) de retard impayee(s)`;
+  /*
+   * L'objet annonce la dette inscrite, toutes natures, et non le seul decompte
+   * des retards : un membre penalise pour deux absences recevait un objet muet
+   * a leur sujet, puis les decouvrait dans le corps du message.
+   */
+  if (d.dette.nb > 0) {
+    return `${CLUB.sigle} — ${d.dette.nb} penalite(s) impayee(s)`;
   }
   const ou = etatEcheance(maintenant);
   if (ou === "a_venir") {
@@ -185,7 +203,7 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
 }
 
 export function texteRelance(
-  { situation, arrieres, echeanceDuJour, avanceManquante }: Destinataire,
+  { situation, arrieres, echeanceDuJour, avanceManquante, dette }: Destinataire,
   siteUrl: string,
   maintenant: Date,
 ): string {
@@ -283,7 +301,7 @@ export function texteRelance(
    * Les penalites se rappellent meme sans aucun mois en retard : c'est tout
    * l'objet de la resolution qui les a rendues indissociables des cotisations.
    */
-  if (situation.nbPenalitesImpayees > 0) {
+  if (dette.nb > 0) {
     const seuil = REGLES.penalitesImpayeesAvantExclusion;
     const effet = EFFET.penalitesIndissociables;
     const enVigueur = maintenant.toISOString().slice(0, 10) >= effet;
@@ -294,20 +312,36 @@ export function texteRelance(
      * le repeter donnerait deux chiffres identiques a trois lignes d'intervalle,
      * et ferait douter qu'ils parlent de la meme chose.
      */
+    /*
+     * LE COMPTE ET LE MONTANT SORTENT DE LA MEME TABLE.
+     *
+     * Le courrier collait un decompte du registre -- retards seuls -- a
+     * `totalPenalites`, qui est la penalite THEORIQUE des mois impayes. Deux
+     * mesures differentes dans une seule phrase, dont aucune ne voyait les
+     * absences.
+     *
+     * Et quand la dette porte des natures differentes, on les detaille : le
+     * seuil R5 ne compte que les retards, et le membre doit pouvoir rapprocher
+     * le nombre annonce de la regle qui suit.
+     */
+    const autres = dette.nb - dette.nbRetard;
     lignes.push(
-      arrieres.length > 0
-        ? `Ces penalites sont au nombre de ${situation.nbPenalitesImpayees}, toutes impayees.`
-        : `Penalites de retard impayees : ${situation.nbPenalitesImpayees}, pour un total de ` +
-          `${fcfa(situation.totalPenalites)}.`,
+      autres > 0
+        ? `Penalites impayees : ${dette.nb}, pour un total de ${fcfa(dette.montant)} — ` +
+          `dont ${dette.nbRetard} de retard (${fcfa(dette.montantRetard)}) et ` +
+          `${autres} d'absence ou autre (${fcfa(dette.montant - dette.montantRetard)}).`
+        : `Penalites de retard impayees : ${dette.nbRetard}, pour un total de ` +
+          `${fcfa(dette.montantRetard)}.`,
     );
 
     /*
      * La regle ne mord qu'a sa date d'effet. Annoncer une exclusion « encourue de
      * plein droit depuis » une date a venir serait faux, et alarmerait a tort.
      */
-    if (situation.nbPenalitesImpayees >= seuil && enVigueur) {
+    if (dette.nbRetard >= seuil && enVigueur) {
       lignes.push(
-        `Ce nombre atteint le seuil de ${seuil} fixe par l'assemblee : les penalites etant ` +
+        `Vos penalites de retard atteignent le seuil de ${seuil} fixe par l'assemblee : ` +
+          "les penalites etant " +
           `indissociables des cotisations depuis le ${dateCourte(effet)}, l'exclusion est ` +
           "encourue de plein droit (R5), meme cotisations a jour.",
       );
@@ -320,8 +354,14 @@ export function texteRelance(
       );
     } else {
       lignes.push(
-        `A partir de ${seuil} penalites impayees, l'exclusion sera encourue de plein droit ` +
-          `(R5) meme cotisations a jour — regle applicable le ${dateCourte(effet)}.`,
+        /*
+         * « DE RETARD », en toutes lettres. Le seuil ne compte que celles-la, et
+         * la ligne precedente peut annoncer un nombre plus grand quand des
+         * absences s'y ajoutent : sans ce mot, le membre lirait qu'il atteint un
+         * seuil qu'il n'atteint pas.
+         */
+        `A partir de ${seuil} penalites de retard impayees, l'exclusion sera encourue de ` +
+          `plein droit (R5) meme cotisations a jour — regle applicable le ${dateCourte(effet)}.`,
       );
     }
   }

@@ -359,6 +359,57 @@ async function nbPenalitesRetardDuesBrut(): Promise<Map<string, number>> {
   }
 }
 
+/**
+ * La dette de penalites effectivement inscrite au registre, par membre et par
+ * nature.
+ *
+ * POURQUOI CETTE LECTURE EXISTE. La relance annoncait « Penalites de retard
+ * impayees : 1, pour un total de 500 FCFA » en collant deux chiffres de sources
+ * differentes : le compte venait du registre, le montant de `totalPenalites`,
+ * qui est la penalite THEORIQUE calculee a partir des mois impayes. Les deux ne
+ * parlent pas de la meme chose, et aucun des deux ne voyait les absences.
+ *
+ * Ici, le compte et le montant sortent de la meme table, statut « due », toutes
+ * natures confondues, et les montants portent deja les regles individuelles
+ * appliquees au moment du constat. C'est la dette, telle qu'elle est inscrite.
+ */
+export type DetteMembre = {
+  /** Toutes natures : ce que le membre doit au club. */
+  nb: number;
+  montant: number;
+  /** Les seules penalites de retard : c'est sur elles que porte le seuil R5. */
+  nbRetard: number;
+  montantRetard: number;
+};
+
+async function penalitesDuesDetailleesBrut(): Promise<Map<string, DetteMembre>> {
+  try {
+    const sql = db();
+    const rows = await sql`
+      select member_id, kind,
+             sum(quantity)::int as nb,
+             sum(quantity * unit_amount)::bigint as total
+      from penalties where status = ${STATUT_PENALITE.due}
+      group by member_id, kind
+    `;
+    const index = new Map<string, DetteMembre>();
+    for (const r of rows) {
+      const cle = String(r.member_id);
+      const d = index.get(cle) ?? { nb: 0, montant: 0, nbRetard: 0, montantRetard: 0 };
+      d.nb += n(r.nb);
+      d.montant += n(r.total);
+      if (r.kind === KIND_PENALITE.retard) {
+        d.nbRetard += n(r.nb);
+        d.montantRetard += n(r.total);
+      }
+      index.set(cle, d);
+    }
+    return index;
+  } catch {
+    return new Map();
+  }
+}
+
 async function penalitesDuesParMembreBrut(): Promise<Map<string, number>> {
   const sql = db();
   const rows = await sql`
@@ -1012,6 +1063,7 @@ export const declarationsRetard = cache(declarationsRetardBrut);
 export const bornesReprisePenalites = cache(bornesReprisePenalitesBrut);
 export const nbPenalitesRetardDues = cache(nbPenalitesRetardDuesBrut);
 export const penalitesDuesParMembre = cache(penalitesDuesParMembreBrut);
+export const penalitesDuesDetaillees = cache(penalitesDuesDetailleesBrut);
 export const listerReunions = cache(listerReunionsBrut);
 export const absencesParMembre = cache(absencesParMembreBrut);
 export const presencesParReunion = cache(presencesParReunionBrut);
