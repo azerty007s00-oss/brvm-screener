@@ -235,6 +235,11 @@ export function CarteEtat({
     brut?: number;
     unite?: string;
     contexte?: ReactNode;
+    /**
+     * La couleur du chiffre. Reservee a la performance : `couleurSigne()` la
+     * donne. Un montant ordinaire n'en prend pas -- il reste a l'encre.
+     */
+    encre?: string;
     /** Conserve pour les appels existants ; sans effet sur la couleur. */
     accent?: "or" | "vert" | "rouge";
   }[];
@@ -276,7 +281,7 @@ export function CarteEtat({
           <p className="flex items-baseline whitespace-nowrap">
             <span
               className="text-[18px] leading-tight font-medium tabular-nums sm:text-[22px]"
-              style={{ color: "var(--ink)", letterSpacing: "-0.015em" }}
+              style={{ color: c.encre ?? "var(--ink)", letterSpacing: "-0.015em" }}
             >
               {/* 22 ms separent une cellule de la suivante : elles se posent
                   l'une apres l'autre, de gauche a droite. */}

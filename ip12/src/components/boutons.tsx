@@ -9,9 +9,11 @@ import type { ReactNode } from "react";
  * liste. Une page de caisse portait ainsi vingt boutons colores pour vingt
  * ecritures, et le rouge n'y signalait plus rien.
  *
- * Il en reste un principal par ecran, plein encre ; les autres sont un simple
- * contour. La couleur ne dit plus l'action : c'est le mot qui la dit, et la
- * place qu'on lui donne.
+ * Il en reste un principal par ecran, plein bleu nuit ; les autres sont un
+ * simple contour. La couleur ne dit plus QUELLE action c'est -- le mot s'en
+ * charge -- mais laquelle compte sur cet ecran, ce que la place seule disait
+ * mal. Le bleu est celui de la marque, le meme que la tuile du logo : c'est le
+ * club qui demande, pas une alerte.
  */
 
 type Variante = "principal" | "secondaire";
@@ -24,7 +26,7 @@ const mesures = "h-11 px-4 text-[14px] lg:h-8 lg:px-3.5 lg:text-[13px]";
 
 export function styleBouton(variante: Variante = "principal") {
   return variante === "principal"
-    ? { background: "var(--ink)", color: "var(--page)" }
+    ? { background: "var(--accent)", color: "var(--sur-accent)" }
     : { background: "var(--page)", color: "var(--ink)", border: "1px solid var(--line-2)" };
 }
 

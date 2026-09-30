@@ -177,6 +177,29 @@ function styleDeLaBalise(ouvrante) {
   return sortie;
 }
 
+/* ------------------------------------------------ les couples hors du JSX */
+
+/*
+ * Certains couples ne sont pas ecrits dans un objet `style` : ils sortent d'une
+ * fonction (`styleBouton`), d'une feuille de style, ou d'un attribut SVG. Le
+ * parcours de l'arbre ne peut pas les voir -- on les declare donc ici, a la
+ * main, avec la raison de leur presence. Une couleur de marque qui passerait
+ * sous 4,5:1 est exactement le genre de faute qu'on ne voit qu'en ouvrant la
+ * page, et qui a deja coute huit allers-retours.
+ */
+const COUPLES_DECLARES = [
+  ["boutons.tsx styleBouton(principal)", "var(--accent)", "var(--sur-accent)"],
+  ["boutons.tsx styleBouton(secondaire)", "var(--page)", "var(--ink)"],
+  ["glyphe-etat.tsx coche du mois paye", "var(--etat-paye)", "var(--page)"],
+  ["coque.tsx tuile du logo", "var(--brand)", "var(--brand-mark)"],
+  ["performance en hausse", "var(--page)", "var(--gain)"],
+  ["performance en baisse", "var(--page)", "var(--perte)"],
+  ["performance en hausse, sur un creux", "var(--sunk)", "var(--gain)"],
+  ["performance en baisse, sur un creux", "var(--sunk)", "var(--perte)"],
+  ["accent sur la page", "var(--page)", "var(--accent)"],
+  ["accent sur la barre laterale", "var(--side)", "var(--accent)"],
+];
+
 /* -------------------------------------------------------------- le controle */
 
 let mesures = 0;
@@ -240,6 +263,28 @@ for (const chemin of fichiers(join(RACINE, "src"))) {
   };
 
   descendre(arbre, ["var(--page)"]);
+}
+
+for (const [ou, fond, encre] of COUPLES_DECLARES) {
+  for (const [theme, jetons] of [
+    ["clair", clair],
+    ["sombre", sombre],
+  ]) {
+    const f = couleur(fond, jetons, null);
+    const e = couleur(encre, jetons, f);
+    if (!f || !e) {
+      fautes.push(`${ou} — ${fond} ou ${encre} ne se ramene a aucune couleur en ${theme}`);
+      continue;
+    }
+    mesures++;
+    const r = contraste(f, e);
+    if (r < 4.5) {
+      fautes.push(
+        `${ou} — ${fond} sous ${encre}, ${r.toFixed(2)}:1 en ${theme}` +
+          (r < 3 ? " (invisible)" : ""),
+      );
+    }
+  }
 }
 
 if (fautes.length > 0) {

@@ -3,13 +3,13 @@ import { peut } from "@/lib/droits";
 import { listerApports, listerValorisations, netApport, synthese } from "@/lib/queries";
 import { netPlaceParDate } from "@/lib/placement";
 import { enregistrerValorisation, supprimerValorisation } from "@/app/actions/titres";
-import { pourcent } from "@/lib/perf";
+import { couleurSigne, pourcent } from "@/lib/perf";
 import { CLUB, REGLES, dateCourte, fcfa, nombre } from "@/lib/settings";
 import { Champ, ChampCache, FormulaireAction } from "@/components/formulaires";
-import { Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
+import { Carte, CarteEtat, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
 import { MenuLigne } from "@/components/menu-ligne";
-import { CourbePortefeuille } from "@/components/courbe";
+import { TetePortefeuille } from "@/components/tete-portefeuille";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
@@ -32,9 +32,6 @@ export default async function PagePortefeuille() {
 
   const derniere = valos.at(-1) ?? null;
   const precedente = valos.at(-2) ?? null;
-  const variation =
-    derniere && precedente ? (derniere.total - precedente.total) / precedente.total : null;
-  const ecart = derniere && precedente ? derniere.total - precedente.total : null;
   const peutSaisir = peut(membre, "gererCompteTitres");
 
   /*
@@ -51,6 +48,9 @@ export default async function PagePortefeuille() {
     date: v.date_valo,
     valeur: v.total,
     netPlace: netsPlaces[i],
+    /* La composition du releve : elle s'affiche au survol de ce point. */
+    actions: v.actions,
+    liquidites: v.liquidites,
   }));
 
   /*
@@ -76,7 +76,10 @@ export default async function PagePortefeuille() {
     >
       <span className="min-w-0 flex-1 tabular-nums">{dateCourte(v.date_valo)}</span>
       <span className="text-right font-medium tabular-nums">{nombre(v.total)}</span>
-      <span className="w-16 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>
+      <span
+        className="w-16 text-right tabular-nums"
+        style={{ color: couleurSigne(ecartLigne) }}
+      >
         {ecartLigne === null ? "" : pourcent(ecartLigne, 1)}
       </span>
       {peutSaisir && (
@@ -143,77 +146,74 @@ export default async function PagePortefeuille() {
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        <EnTeteEcran
-          titre="Valeur du portefeuille"
-          sous={derniere ? `au ${dateCourte(derniere.date_valo)}` : "— aucun releve saisi"}
-          chiffre={derniere ? undefined : "--"}
-          brut={derniere ? derniere.total : undefined}
-          unite={derniere ? "FCFA" : undefined}
-          detail={
-            ecart !== null && variation !== null && precedente ? (
-              <>
-                <span className="font-medium" style={{ color: "var(--ink)" }}>
-                  {ecart >= 0 ? "+" : "−"}
-                  {nombre(Math.abs(ecart))} FCFA ({pourcent(variation)})
-                </span>{" "}
-                depuis le releve du {dateCourte(precedente.date_valo)}.
-              </>
-            ) : (
-              `Compte-titres tenu chez ${CLUB.sgi}.`
-            )
-          }
-        />
-        <div className="sans-impression">{saisie}</div>
-      </div>
-
-      <CarteEtat
-        chiffres={[
-          {
-            libelle: "Actions",
-            valeur: derniere ? undefined : "--",
-            brut: derniere ? derniere.actions : undefined,
-            unite: derniere ? "FCFA" : undefined,
-            contexte:
-              derniere && derniere.total > 0
-                ? `${((derniere.actions / derniere.total) * 100).toFixed(1).replace(".", ",")} % de la valeur`
-                : undefined,
-          },
-          {
-            libelle: "Liquidites",
-            valeur: derniere ? undefined : "--",
-            brut: derniere ? derniere.liquidites : undefined,
-            unite: derniere ? "FCFA" : undefined,
-            contexte:
-              derniere && derniere.total > 0
-                ? `${((derniere.liquidites / derniere.total) * 100).toFixed(1).replace(".", ",")} %, non investies`
-                : undefined,
-          },
-          {
-            libelle: "Performance annualisee",
-            valeur: s.tri !== null ? pourcent(s.tri) : "--",
-            contexte: s.triPeriode ? `TRI depuis le ${dateCourte(s.triPeriode.debut)}` : undefined,
-          },
-          {
-            libelle: "Exercice en cours",
-            valeur: s.exercice?.rendement != null ? pourcent(s.exercice.rendement) : "--",
-            contexte:
-              s.exercice?.gain != null ? `Dietz modifie · gain ${nombre(s.exercice.gain)}` : undefined,
-          },
-        ]}
-      />
-
-      <Carte
-        titre="Valeur relevee"
-        action={
+      {/*
+        * Le heros, le bandeau et la courbe passent par un meme composant :
+        * au survol du graphique, le chiffre du haut suit le releve vise, et
+        * cela demande un etat partage. Le bandeau, lui, ne bouge pas -- il
+        * traverse en enfants, rendu par le serveur.
+        */}
+      <TetePortefeuille
+        sgi={CLUB.sgi}
+        derniere={
+          derniere
+            ? {
+                date: derniere.date_valo,
+                total: derniere.total,
+                actions: derniere.actions,
+                liquidites: derniere.liquidites,
+              }
+            : null
+        }
+        precedente={precedente ? { date: precedente.date_valo, total: precedente.total } : null}
+        points={tracesCourbe}
+        gainExercice={s.exercice?.gain ?? null}
+        saisie={saisie}
+        actionCarte={
           <span className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
             {valos.length} releve{valos.length > 1 ? "s" : ""}
             {valos[0] ? ` depuis le ${dateCourte(valos[0].date_valo)}` : ""}
           </span>
         }
-      >
-        <CourbePortefeuille points={tracesCourbe} gainExercice={s.exercice?.gain ?? null} />
-      </Carte>
+        enfants={
+          <CarteEtat
+            chiffres={[
+              {
+                libelle: "Actions",
+                valeur: derniere ? undefined : "--",
+                brut: derniere ? derniere.actions : undefined,
+                unite: derniere ? "FCFA" : undefined,
+                contexte:
+                  derniere && derniere.total > 0
+                    ? `${((derniere.actions / derniere.total) * 100).toFixed(1).replace(".", ",")} % de la valeur`
+                    : undefined,
+              },
+              {
+                libelle: "Liquidites",
+                valeur: derniere ? undefined : "--",
+                brut: derniere ? derniere.liquidites : undefined,
+                unite: derniere ? "FCFA" : undefined,
+                contexte:
+                  derniere && derniere.total > 0
+                    ? `${((derniere.liquidites / derniere.total) * 100).toFixed(1).replace(".", ",")} %, non investies`
+                    : undefined,
+              },
+              {
+                libelle: "Performance annualisee",
+                valeur: s.tri !== null ? pourcent(s.tri) : "--",
+                encre: couleurSigne(s.tri),
+                contexte: s.triPeriode ? `TRI depuis le ${dateCourte(s.triPeriode.debut)}` : undefined,
+              },
+              {
+                libelle: "Exercice en cours",
+                valeur: s.exercice?.rendement != null ? pourcent(s.exercice.rendement) : "--",
+                encre: couleurSigne(s.exercice?.rendement),
+                contexte:
+                  s.exercice?.gain != null ? `Dietz modifie · gain ${nombre(s.exercice.gain)}` : undefined,
+              },
+            ]}
+          />
+        }
+      />
 
       {/*
         * `grid-cols-1` et non la colonne implicite : une piste `auto` ne
@@ -257,7 +257,7 @@ export default async function PagePortefeuille() {
                      */
                     style={{
                       flex: `${p.part} 1 0%`,
-                      background: p.membreId === membre.id ? "var(--ink)" : "var(--line-2)",
+                      background: p.membreId === membre.id ? "var(--accent)" : "var(--line-2)",
                       ["--i" as string]: i,
                     }}
                   />
@@ -290,8 +290,12 @@ export default async function PagePortefeuille() {
                       <span className="w-24 text-right font-medium tabular-nums">
                         {nombre(p.valeur)}
                       </span>
-                      <span className="w-24 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>
-                        {p.plusValue >= 0 ? "+" : "−"}
+                      {/* Une plus-value EST une performance : elle prend sa couleur. */}
+                      <span
+                        className="w-24 text-right tabular-nums"
+                        style={{ color: couleurSigne(p.plusValue) }}
+                      >
+                        {p.plusValue >= 0 ? "+" : "\u2212"}
                         {nombre(Math.abs(p.plusValue))}
                       </span>
                       <span className="w-12 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>

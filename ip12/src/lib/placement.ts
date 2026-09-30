@@ -49,7 +49,14 @@ export function netPlaceParDate(dates: string[], flux: FluxPlace[]): number[] {
   });
 }
 
-export type Trace = { date: string; valeur: number; netPlace: number };
+export type Trace = {
+  date: string;
+  valeur: number;
+  netPlace: number;
+  /** La part investie et la part liquide, pour le detail au survol. */
+  actions?: number;
+  liquidites?: number;
+};
 
 export type Decomposition = {
   /** V fin - V debut : ce que le releve a gagne en valeur affichee. */

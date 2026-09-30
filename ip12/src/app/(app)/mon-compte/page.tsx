@@ -5,7 +5,7 @@ import { changerMotDePasse, seDeconnecter } from "@/app/actions/auth";
 import { joindreJustificatif } from "@/app/actions/versements";
 import { ChampJustificatif } from "@/components/justificatif";
 import { justificatifsParLot } from "@/lib/justificatifs";
-import { ROLES, dateCourte, fcfa, moisLong, nombre } from "@/lib/settings";
+import { ROLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction } from "@/components/formulaires";
 import { libelleMode } from "@/lib/valeurs";
 import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
@@ -55,7 +55,8 @@ export default async function PageMonCompte() {
 
       <EnTeteEcran
         titre="Valeur de ma part"
-        chiffre={maPart ? nombre(maPart.valeur) : "--"}
+        chiffre={maPart ? undefined : "--"}
+        brut={maPart ? maPart.valeur : undefined}
         unite={maPart ? "FCFA" : undefined}
         detail={
           maPart

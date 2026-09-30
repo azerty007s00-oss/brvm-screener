@@ -24,7 +24,12 @@
   --color-ink-3: #756b60;
   --color-gold: #a8842a;
   --color-gold-ink: #7c6118;
-  --color-brand: #2a1a10;
+  --color-accent: #1e3a5f;
+  --color-sur-accent: #ffffff;
+  --color-gain: #1b6e45;
+  --color-perte: #b3261e;
+  --color-etat-paye: #2e7d52;
+  --color-brand: #1e3a5f;
   --color-brand-mark: #d4b25a;
   --color-etat-ok: #4f4740;
   --color-etat-ok-fond: #e6e0d6;
@@ -66,7 +71,33 @@
   --ink-3: #756b60;
   --gold: #a8842a;
   --gold-ink: #7c6118;
-  --brand: #2a1a10;
+
+  /*
+   * LE BLEU NUIT EST LA COULEUR DE LA MARQUE, ET RIEN D'AUTRE.
+   *
+   * Le club trouvait le site trop gris. La reponse n'est pas de recolorer les
+   * chiffres -- c'est ce dont on sortait -- mais de donner une couleur a ce qui
+   * designe le club et a ce qu'on lui demande de faire : la tuile du logo, le
+   * bouton principal, l'element courant de la navigation. Le bleu nuit tient
+   * 11,2:1 sur la page, ce qu'aucun bleu de lien ne tient.
+   */
+  --accent: #1e3a5f;
+  --sur-accent: #ffffff;
+
+  /*
+   * LE VERT ET LE ROUGE SONT RESERVES A LA PERFORMANCE.
+   *
+   * Un gain, une plus-value, une variation de valeur : ce sont les seuls
+   * endroits ou la couleur ajoute quelque chose que le signe ne dit pas deja.
+   * Jamais sur un mouvement d'argent -- une depense prevue n'est pas une perte,
+   * et une cotisation encaissee n'est pas un gain.
+   */
+  --gain: #1b6e45;
+  --perte: #b3261e;
+  /* Le mois paye, au registre : un etat, pas une performance. */
+  --etat-paye: #2e7d52;
+
+  --brand: #1e3a5f;
   --brand-mark: #d4b25a;
   --voile: rgb(28 23 19 / 0.28);
 
@@ -77,8 +108,8 @@
   --etat-manque: #a8322c;
   --etat-manque-fond: #f6dedc;
 
-  /* La bande de gain et le segment « vous » : de l'encre diluee, pas une teinte. */
-  --c-bande: rgb(28 23 19 / 0.05);
+  /* La bande de gain : c'est du gain, donc c'est vert -- tres dilue. */
+  --c-bande: rgb(27 110 69 / 0.10);
 
   --raise: 0 1px 2px rgb(28 23 19 / 0.07), 0 0 0 1px rgb(28 23 19 / 0.07);
   --pop: 0 12px 32px -12px rgb(28 23 19 / 0.28), 0 0 0 1px rgb(28 23 19 / 0.08);
@@ -114,6 +145,12 @@
     --ink-3: #8f857a;
     --gold: #cfae55;
     --gold-ink: #d9bb66;
+    /* Sur fond sombre, le bleu nuit s'eclaircit ; la tuile du logo reste or. */
+    --accent: #8fb4e0;
+    --sur-accent: #0f1b2b;
+    --gain: #63c08f;
+    --perte: #f08b80;
+    --etat-paye: #56b584;
     --brand: #d4b25a;
     --brand-mark: #1a120a;
     --voile: rgb(0 0 0 / 0.5);
@@ -123,7 +160,7 @@
     --etat-attente-fond: #33260d;
     --etat-manque: #ec8a80;
     --etat-manque-fond: #3a1714;
-    --c-bande: rgb(239 233 225 / 0.07);
+    --c-bande: rgb(99 192 143 / 0.12);
     --raise: 0 0 0 1px rgb(255 240 220 / 0.1), 0 1px 2px rgb(0 0 0 / 0.4);
     --pop: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 240 220 / 0.1);
   }
@@ -141,6 +178,12 @@
   --ink-3: #8f857a;
   --gold: #cfae55;
   --gold-ink: #d9bb66;
+  /* Sur fond sombre, le bleu nuit s'eclaircit ; la tuile du logo reste or. */
+  --accent: #8fb4e0;
+  --sur-accent: #0f1b2b;
+  --gain: #63c08f;
+  --perte: #f08b80;
+  --etat-paye: #56b584;
   --brand: #d4b25a;
   --brand-mark: #1a120a;
   --voile: rgb(0 0 0 / 0.5);
@@ -150,7 +193,7 @@
   --etat-attente-fond: #33260d;
   --etat-manque: #ec8a80;
   --etat-manque-fond: #3a1714;
-  --c-bande: rgb(239 233 225 / 0.07);
+  --c-bande: rgb(99 192 143 / 0.12);
   --raise: 0 0 0 1px rgb(255 240 220 / 0.1), 0 1px 2px rgb(0 0 0 / 0.4);
   --pop: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 240 220 / 0.1);
 }
@@ -359,6 +402,16 @@ details[open] > summary .chevron { transform: rotate(90deg); }
     transform-box: fill-box;
     transform-origin: center;
     animation: halo 3200ms ease-out 1700ms infinite both;
+  }
+
+  /*
+   * Le survol glisse d'un releve a l'autre plutot que de sauter : le
+   * deplacement dit lequel on quitte et lequel on prend, ce qu'une apparition
+   * seche ne dit pas. 120 ms, lineaire : le reperage doit suivre la main sans
+   * trainer derriere elle.
+   */
+  .vise {
+    transition: transform 120ms linear, opacity 120ms linear;
   }
 
   /* La barre des parts pousse depuis la gauche, un segment apres l'autre. */

@@ -51,7 +51,7 @@ export function GlypheEtat({
     case "paye":
       return (
         <svg viewBox="0 0 20 20" aria-hidden="true" style={s}>
-          <rect x="1" y="1" width="18" height="18" rx="4.5" style={{ fill: "var(--vert)" }} />
+          <rect x="1" y="1" width="18" height="18" rx="4.5" style={{ fill: "var(--etat-paye)" }} />
           <path d="M5.6 10.4 L8.6 13.3 L14.4 6.9" style={coche} />
         </svg>
       );
@@ -67,7 +67,7 @@ export function GlypheEtat({
         <svg viewBox="0 0 20 20" aria-hidden="true" style={s}>
           <path
             d="M5.5 1 H12.2 L19 7.8 V14.5 A4.5 4.5 0 0 1 14.5 19 H5.5 A4.5 4.5 0 0 1 1 14.5 V5.5 A4.5 4.5 0 0 1 5.5 1 Z"
-            style={{ fill: "var(--vert)" }}
+            style={{ fill: "var(--etat-paye)" }}
           />
           <path
             d="M14.7 1 H17 A2 2 0 0 1 19 3 V5.3 Z"

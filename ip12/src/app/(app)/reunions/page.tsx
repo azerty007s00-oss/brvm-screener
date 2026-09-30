@@ -69,7 +69,8 @@ export default async function PageReunions() {
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <EnTeteEcran
           titre="Reunions tenues"
-          chiffre={String(reunions.length)}
+          brut={reunions.length}
+
           detail={
             derniere
               ? `Derniere seance le ${dateCourte(derniere.date_reunion)}${tauxPresence === null ? "" : `, ${Math.round(tauxPresence * 100)} % de presence`}.`

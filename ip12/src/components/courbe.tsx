@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { dateCourte, fcfa, nombre } from "@/lib/settings";
+import { couleurSigne } from "@/lib/perf";
 import { Selecteur } from "@/components/selecteur";
 import { reperesTemps, retenus, tracable, type Horizon } from "@/lib/horizons";
 import { decomposer, gainConcorde, type Trace } from "@/lib/placement";
@@ -50,6 +51,7 @@ function signe(v: number): string {
 export function CourbePortefeuille({
   points,
   gainExercice,
+  surVise,
 }: {
   points: Trace[];
   /**
@@ -57,6 +59,11 @@ export function CourbePortefeuille({
    * modifie). Sert de controle : voir `gainConcorde`.
    */
   gainExercice: number | null;
+  /**
+   * Appele au survol, avec le releve vise -- ou `null` quand on quitte le
+   * graphique. Sert au heros de la page a suivre ce qu'on regarde.
+   */
+  surVise?: (t: Trace | null) => void;
 }) {
   const boite = useRef<HTMLDivElement>(null);
   /*
@@ -79,6 +86,11 @@ export function CourbePortefeuille({
    * seule sa hauteur s'ajustera au montage.
    */
   const [largeur, setLargeur] = useState(586);
+  /*
+   * Le releve sous le doigt ou sous la souris, par son rang dans `traces`.
+   * `null` quand on ne survole rien : la page revient alors a l'etat courant.
+   */
+  const [vise, setVise] = useState<number | null>(null);
   /*
    * Tant que la largeur n'est pas mesuree, l'axe s'en tient a ses deux dates.
    *
@@ -208,6 +220,35 @@ export function CourbePortefeuille({
     ["--retard-bande" as string]: rejeu ? "320ms" : "650ms",
     ["--retard-point" as string]: rejeu ? "880ms" : "1250ms",
   };
+
+  /*
+   * ON S'AIMANTE AU RELEVE LE PLUS PROCHE, on n'interpole pas.
+   *
+   * Entre deux releves il ne s'est rien passe qu'on sache : afficher une valeur
+   * au 12 septembre parce que le doigt y est passe reviendrait a inventer un
+   * chiffre. Le trait se pose donc sur un releve, toujours.
+   */
+  const viser = (e: React.PointerEvent<SVGRectElement>) => {
+    const cadre = e.currentTarget.getBoundingClientRect();
+    if (cadre.width === 0) return;
+    const enUnites = ((e.clientX - cadre.left) * L) / cadre.width;
+    let proche = 0;
+    for (let i = 1; i < traces.length; i++) {
+      if (Math.abs(x(traces[i].date) - enUnites) < Math.abs(x(traces[proche].date) - enUnites)) {
+        proche = i;
+      }
+    }
+    if (proche !== vise) {
+      setVise(proche);
+      surVise?.(traces[proche]);
+    }
+  };
+  const quitter = () => {
+    setVise(null);
+    surVise?.(null);
+  };
+
+  const point = vise === null ? null : traces[vise];
 
   const reperes = mesure
     ? reperesTemps(premier.date, dernier.date, L - marge.gauche - marge.droite)
@@ -384,7 +425,87 @@ export function CourbePortefeuille({
               vectorEffect="non-scaling-stroke"
             />
           ))}
+
+          {/*
+           * LE SURVOL.
+           *
+           * Un rectangle transparent capte la souris et le doigt sur toute la
+           * zone tracee : viser un cercle de 2,5 px demanderait une precision
+           * que personne n'a, et aucune sur un telephone. `touch-action: pan-y`
+           * laisse le defilement vertical passer -- sans lui, la page se
+           * bloquerait des qu'un doigt effleure le graphique.
+           */}
+          <rect
+            x={0}
+            y={0}
+            width={L}
+            height={H}
+            fill="transparent"
+            style={{ cursor: "crosshair", touchAction: "pan-y" }}
+            onPointerMove={viser}
+            onPointerDown={viser}
+            onPointerLeave={quitter}
+            onPointerCancel={quitter}
+          />
+
+          {point && (
+            /*
+             * Le groupe glisse d'un releve a l'autre en 120 ms plutot que de
+             * sauter : le deplacement dit lequel on quitte et lequel on prend.
+             * Il ne capte rien -- le rectangle est au-dessus.
+             */
+            <g className="vise" style={{ transform: `translateX(${x(point.date)}px)` }}>
+              <line
+                x1={0}
+                x2={0}
+                y1={marge.haut - 2}
+                y2={H - marge.bas}
+                stroke="var(--ink-2)"
+                strokeWidth="1"
+                vectorEffect="non-scaling-stroke"
+              />
+              <circle
+                className="vise"
+                cx={0}
+                style={{ transform: `translateY(${y(point.netPlace)}px)` }}
+                r={3.5}
+                fill="var(--page)"
+                stroke="var(--ink-3)"
+                strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+              />
+              <circle
+                className="vise"
+                cx={0}
+                style={{ transform: `translateY(${y(point.valeur)}px)` }}
+                r={4.5}
+                fill="var(--gold)"
+                stroke="var(--page)"
+                strokeWidth="2"
+                vectorEffect="non-scaling-stroke"
+              />
+            </g>
+          )}
         </svg>
+
+        {/*
+         * La date, en HTML : dans le SVG elle subirait l'echelle du dessin. On
+         * la colle au bord quand le releve vise en approche a moins de 40 px,
+         * sinon la moitie du texte sortirait de la carte.
+         */}
+        {point && (
+          <span
+            className="vise absolute top-0 rounded px-1.5 text-[12px] font-medium tabular-nums"
+            style={{
+              color: "var(--ink)",
+              background: "var(--page)",
+              left: `${(Math.min(Math.max(x(point.date), 40), L - 40) / L) * 100}%`,
+              transform: "translateX(-50%)",
+            }}
+          >
+            {dateCourte(point.date)}
+          </span>
+        )}
 
         {paliers.map((v) => (
           <span
@@ -444,8 +565,32 @@ export function CourbePortefeuille({
         className="mt-3 flex flex-wrap items-baseline gap-x-5 gap-y-1 text-[12.5px]"
         style={{ color: "var(--ink-2)" }}
       >
-        <span style={{ color: "var(--ink-3)" }}>{nomPeriode}</span>
-        {part === null ? (
+        <span style={{ color: "var(--ink-3)" }}>
+          {point ? `Au releve du ${dateCourte(point.date)}` : nomPeriode}
+        </span>
+        {point ? (
+          /*
+           * Sous le doigt, on ne montre plus la periode mais CE releve : sa
+           * valeur, sa composition, et le gain de gestion acquis a cette date.
+           * C'est la question qu'on se pose en pointant un creux ou une bosse.
+           */
+          <>
+            <Poste libelle="Valeur" montant={point.valeur} signe={false} />
+            {point.actions !== undefined && point.liquidites !== undefined && (
+              <span>
+                Actions{" "}
+                <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+                  {nombre(point.actions)}
+                </span>{" "}
+                &middot; liquidites{" "}
+                <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+                  {nombre(point.liquidites)}
+                </span>
+              </span>
+            )}
+            <Poste libelle="Gain de gestion" montant={point.valeur - point.netPlace} performance />
+          </>
+        ) : part === null ? (
           <span>
             Plus bas {fcfa(min)} &middot; plus haut {fcfa(max)}
           </span>
@@ -453,7 +598,7 @@ export function CourbePortefeuille({
           <>
             <Poste libelle="Valeur" montant={part.ecartValeur} />
             <Poste libelle="Apports nets" montant={part.apportsNets} />
-            <Poste libelle="Gain de gestion" montant={part.gain} />
+            <Poste libelle="Gain de gestion" montant={part.gain} performance />
           </>
         ) : (
           <span>
@@ -469,13 +614,37 @@ export function CourbePortefeuille({
   );
 }
 
-/** Un poste de la decomposition : son nom, puis son montant a l'encre. */
-function Poste({ libelle, montant }: { libelle: string; montant: number }) {
+/**
+ * Un poste de la decomposition : son nom, puis son montant a l'encre.
+ *
+ * `signe` vaut faux pour une valeur absolue -- la valeur d'un releve n'est pas
+ * une variation, et « +3 857 845 » se lirait comme une hausse de ce montant.
+ */
+function Poste({
+  libelle,
+  montant,
+  signe: avecSigne = true,
+  performance = false,
+}: {
+  libelle: string;
+  montant: number;
+  signe?: boolean;
+  /**
+   * Vrai pour le gain de gestion, et lui seul : c'est le seul des trois postes
+   * qui mesure une performance. « Valeur » et « Apports nets » restent a
+   * l'encre -- un apport est de l'argent verse, pas un gain, et le peindre en
+   * vert dirait le contraire.
+   */
+  performance?: boolean;
+}) {
   return (
     <span>
       {libelle}{" "}
-      <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
-        {signe(montant)}
+      <span
+        className="font-medium tabular-nums"
+        style={{ color: performance ? couleurSigne(montant) : "var(--ink)" }}
+      >
+        {avecSigne ? signe(montant) : nombre(montant)}
       </span>
     </span>
   );
@@ -519,7 +688,7 @@ function Legende() {
             width: 12,
             height: 12,
             background: "var(--c-bande)",
-            border: "1px solid var(--line-2)",
+            border: "1px solid var(--gain)",
             borderRadius: 3,
           }}
         />

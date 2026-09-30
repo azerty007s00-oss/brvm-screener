@@ -42,6 +42,7 @@ import {
   statutLigne,
 } from "@/components/glyphe-etat";
 import { MODES_AFFICHES, STATUT_VERSEMENT, libelleMode } from "@/lib/valeurs";
+import { Chiffre } from "@/components/chiffre";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Versements" };
@@ -187,7 +188,11 @@ export default async function PageVersements({
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <EnTeteEcran
           titre={`Cotisations de ${moisLong(aujourdhui)}`}
-          chiffre={`${payesCeMois} sur ${situations.length}`}
+          chiffre={
+            <>
+              <Chiffre valeur={payesCeMois} format={String} /> sur {situations.length}
+            </>
+          }
           detail={
             enAttente.length > 0
               ? `${enAttente.length} declaration${enAttente.length > 1 ? "s" : ""} en attente de validation.`

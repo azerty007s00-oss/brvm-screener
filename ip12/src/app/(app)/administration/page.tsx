@@ -30,7 +30,6 @@ import {
 } from "@/lib/courriel";
 import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Rubrique, Tuile, Vide } from "@/components/ui";
 import { Icone } from "@/components/icones";
-import { Compteur } from "@/components/mouvement";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
@@ -144,14 +143,16 @@ export default async function PageAdministration() {
 
       <CarteEtat
         chiffres={[
-          { libelle: "Membres", valeur: <Compteur valeur={situations.length} /> },
+          { libelle: "Membres", brut: situations.length },
           {
             libelle: moisDecouverts > 1 ? "Mois decouverts" : "Mois decouvert",
-            valeur: <Compteur valeur={moisDecouverts} />,
+            brut: moisDecouverts,
+
           },
           {
             libelle: penalitesDues > 1 ? "Penalites dues" : "Penalite due",
-            valeur: <Compteur valeur={penalitesDues} />,
+            brut: penalitesDues,
+
           },
         ]}
       />

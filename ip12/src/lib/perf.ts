@@ -201,3 +201,25 @@ export function pourcent(x: number | null, decimales = 1): string {
   const brut = (Math.abs(x) * 100).toFixed(decimales).replace(".", ",");
   return `${x >= 0 ? "+" : "\u2212"}${brut} %`;
 }
+
+/**
+ * La couleur d'un montant de performance : vert s'il monte, rouge s'il baisse,
+ * encre discrete s'il ne bouge pas.
+ *
+ * RESERVEE A LA PERFORMANCE, et nulle part ailleurs. Un gain de gestion, une
+ * plus-value, une variation de valeur, un rendement : ce sont les seuls
+ * endroits ou la couleur ajoute quelque chose que le signe ne dit pas deja.
+ *
+ * Jamais sur un mouvement d'argent. Une depense prevue n'est pas une perte, une
+ * cotisation encaissee n'est pas un gain, et un solde n'est ni l'un ni l'autre.
+ * Le site en sortait justement : recettes en vert et depenses en rouge sur une
+ * page qui n'est faite que de recettes et de depenses, la couleur n'y signalait
+ * plus rien. Elle ne revient que la ou elle signale.
+ *
+ * Le zero reste a l'encre : « 0 % » n'est ni une bonne ni une mauvaise
+ * nouvelle, et le peindre en vert en ferait une.
+ */
+export function couleurSigne(v: number | null | undefined): string {
+  if (v === null || v === undefined || !Number.isFinite(v) || v === 0) return "var(--ink-2)";
+  return v > 0 ? "var(--gain)" : "var(--perte)";
+}

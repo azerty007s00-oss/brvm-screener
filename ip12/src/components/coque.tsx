@@ -136,7 +136,13 @@ function BarreLaterale({
             : { color: "var(--ink-2)" }
         }
       >
-        <I taille={17} trait={1.5} />
+        {/*
+          * SEULE L'ICONE PREND LA COULEUR, pas le libelle. Le texte courant se
+          * distingue deja par son fond, son relief et sa graisse ; le colorer
+          * en plus le rendrait moins lisible que les autres, ce qui serait
+          * l'inverse du but.
+          */}
+        <I taille={17} trait={1.5} couleur={ici ? "var(--accent)" : undefined} />
         <span className="truncate">{p.libelle}</span>
       </Link>
     );
@@ -330,7 +336,7 @@ function OngletsRubrique({ rubriques }: { rubriques: Rubrique[] }) {
             {ici && (
               <span
                 className="absolute right-0 -bottom-px left-0 h-0.5 rounded-sm"
-                style={{ background: "var(--ink)" }}
+                style={{ background: "var(--accent)" }}
               />
             )}
           </Link>
@@ -363,12 +369,12 @@ function NavigationBasse({ rubriques, alerte }: { rubriques: Rubrique[]; alerte:
             href={r.pages[0].href}
             aria-current={ici ? "page" : undefined}
             className="tapable relative flex h-16 flex-col items-center justify-center gap-1"
-            style={{ color: ici ? "var(--ink)" : "var(--ink-3)" }}
+            style={{ color: ici ? "var(--accent)" : "var(--ink-3)" }}
           >
             {ici && (
               <span
                 className="absolute top-0 h-0.5 w-5 rounded-sm"
-                style={{ background: "var(--ink)" }}
+                style={{ background: "var(--accent)" }}
               />
             )}
             <span className="relative">

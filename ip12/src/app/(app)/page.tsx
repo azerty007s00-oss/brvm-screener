@@ -1,19 +1,20 @@
 import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import { situationsClub, synthese } from "@/lib/queries";
-import { dureeEnClair, pourcent } from "@/lib/perf";
+import { couleurSigne, dureeEnClair, pourcent } from "@/lib/perf";
 import { CLUB, REGLES, dateCourte, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
 import { Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
 import { LienBouton } from "@/components/boutons";
 import { Frise, GlypheEtat, LIBELLE_STATUT, STATUTS_LEGENDE, statutLigne } from "@/components/glyphe-etat";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 import type { StatutMois } from "@/lib/penalites";
+import { Chiffre } from "@/components/chiffre";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Accueil" };
 
 /** Deux chiffres cote a cote : « Cotisation due », « Penalites ». */
-function Couple({ chiffres }: { chiffres: { libelle: string; valeur: string }[] }) {
+function Couple({ chiffres }: { chiffres: { libelle: string; brut: number }[] }) {
   return (
     <div className="grid grid-cols-2 gap-4">
       {chiffres.map((c) => (
@@ -21,7 +22,9 @@ function Couple({ chiffres }: { chiffres: { libelle: string; valeur: string }[] 
           <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
             {c.libelle}
           </p>
-          <p className="mt-0.5 text-[17px] font-medium whitespace-nowrap tabular-nums">{c.valeur}</p>
+          <p className="mt-0.5 text-[17px] font-medium whitespace-nowrap tabular-nums">
+            <Chiffre valeur={c.brut} format={fcfa} />
+          </p>
         </div>
       ))}
     </div>
@@ -115,7 +118,8 @@ export default async function TableauDeBord() {
         <EnTeteEcran
           titre="Ma part"
           sous={s.valorisation ? `au ${dateCourte(s.valorisation.date_valo)}` : "— aucun releve saisi"}
-          chiffre={maPart && s.valorisation ? nombre(maPart.valeur) : "--"}
+          chiffre={maPart && s.valorisation ? undefined : "--"}
+          brut={maPart && s.valorisation ? maPart.valeur : undefined}
           unite={maPart && s.valorisation ? "FCFA" : undefined}
           detail={
             maPart
@@ -127,12 +131,14 @@ export default async function TableauDeBord() {
           {[
             {
               libelle: "Portefeuille du club",
-              valeur: s.valorisation ? nombre(s.valorisation.total) : "--",
+              valeur: s.valorisation ? undefined : "--",
+              brut: s.valorisation ? s.valorisation.total : undefined,
               unite: s.valorisation ? "FCFA" : "",
             },
             {
               libelle: "Performance annualisee",
               valeur: s.tri !== null ? pourcent(s.tri) : "--",
+              encre: couleurSigne(s.tri),
               unite: "",
             },
           ].map((c) => (
@@ -195,11 +201,11 @@ export default async function TableauDeBord() {
                       chiffres={[
                         {
                           libelle: "Cotisation due",
-                          valeur: fcfa(celluleDuMois?.manque ?? REGLES.cotisationMensuelle),
+                          brut: celluleDuMois?.manque ?? REGLES.cotisationMensuelle,
                         },
                         {
                           libelle: `Penalites (${Math.round(REGLES.tauxPenalite * 100)} %)`,
-                          valeur: fcfa(maSituation.totalPenalites),
+                          brut: maSituation.totalPenalites,
                         },
                       ]}
                     />
@@ -313,8 +319,8 @@ export default async function TableauDeBord() {
               <div className="mt-5">
                 <Couple
                   chiffres={[
-                    { libelle: "Versements valides", valeur: fcfa(maSituation.verse) },
-                    { libelle: "Penalites dues", valeur: fcfa(maSituation.totalPenalites) },
+                    { libelle: "Versements valides", brut: maSituation.verse },
+                    { libelle: "Penalites dues", brut: maSituation.totalPenalites },
                   ]}
                 />
               </div>
@@ -361,7 +367,7 @@ export default async function TableauDeBord() {
                 { libelle: "Verse par le club", brut: s.totalVerse, unite: "FCFA" },
                 { libelle: "Place en bourse", brut: s.totalApports, unite: "FCFA" },
                 { libelle: "En caisse", brut: s.totalEnCaisse, unite: "FCFA" },
-                { libelle: "Membres", valeur: String(situations.length) },
+                { libelle: "Membres", brut: situations.length },
               ]}
             />
             <div className="mt-5 grid grid-cols-2 gap-4">
@@ -369,7 +375,10 @@ export default async function TableauDeBord() {
                 <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
                   Performance annualisee
                 </p>
-                <p className="mt-0.5 text-[17px] font-medium tabular-nums">
+                <p
+                  className="mt-0.5 text-[17px] font-medium tabular-nums"
+                  style={{ color: couleurSigne(s.tri) }}
+                >
                   {s.tri !== null ? pourcent(s.tri) : "--"}
                 </p>
               </div>
@@ -377,7 +386,10 @@ export default async function TableauDeBord() {
                 <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
                   Exercice en cours
                 </p>
-                <p className="mt-0.5 text-[17px] font-medium tabular-nums">
+                <p
+                  className="mt-0.5 text-[17px] font-medium tabular-nums"
+                  style={{ color: couleurSigne(s.exercice?.rendement) }}
+                >
                   {s.exercice?.rendement != null ? pourcent(s.exercice.rendement) : "--"}
                 </p>
               </div>

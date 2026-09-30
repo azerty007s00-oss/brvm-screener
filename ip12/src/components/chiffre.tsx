@@ -60,7 +60,6 @@ export function Chiffre({
     const noeud = el.current;
     if (!noeud || dejaRoule.current) return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
-    dejaRoule.current = true;
 
     let image = 0;
     const debut = performance.now() + retard;
@@ -70,6 +69,18 @@ export function Chiffre({
       const t = (maintenant - debut) / duree;
       if (t >= 1) {
         noeud.textContent = format(valeur);
+        /*
+         * LA GARDE SE POSE A L'ARRIVEE, NON AU DEPART.
+         *
+         * Posee au depart, elle laissait le montant a zero. React monte deux
+         * fois en developpement -- montage, demontage, remontage : la premiere
+         * passe ecrivait « 0 », son nettoyage annulait l'image suivante, et la
+         * seconde repartait en croyant avoir deja roule. Le heros affichait
+         * donc « 0 » pour de bon. Posee a l'arrivee, une passe interrompue
+         * peut reprendre, et une passe achevee ne recommence jamais -- ce qui
+         * est exactement la regle qu'on voulait.
+         */
+        dejaRoule.current = true;
         return;
       }
       /* Avant le depart, on attend sans rien ecrire : le zero est deja pose. */

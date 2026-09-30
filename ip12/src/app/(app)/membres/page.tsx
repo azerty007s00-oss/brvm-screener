@@ -8,6 +8,7 @@ import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/comp
 import { Badge, Carte, EnTeteEcran, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import { Chiffre } from "@/components/chiffre";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Membres" };
@@ -54,7 +55,12 @@ export default async function PageMembres() {
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <EnTeteEcran
           titre="Effectif"
-          chiffre={`${membres.filter((m) => m.actif).length} sur ${CLUB.membresMax}`}
+          chiffre={
+            <>
+              <Chiffre valeur={membres.filter((m) => m.actif).length} format={String} /> sur{" "}
+              {CLUB.membresMax}
+            </>
+          }
           detail={`Les statuts fixent le club entre ${CLUB.membresMin} et ${CLUB.membresMax} membres.`}
         />
         <div className="sans-impression">{saisie}</div>
