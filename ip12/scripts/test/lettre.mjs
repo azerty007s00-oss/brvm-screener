@@ -1,0 +1,570 @@
+/*
+ * Rejoue le courrier de relance sur des cas construits, et verifie ce qu'il dit.
+ *
+ * POURQUOI CE CONTROLE EXISTE. Les fautes de la relance ne sont pas des fautes
+ * de calcul : le courrier annoncait quinze penalites de retard puis expliquait
+ * ce qui arriverait « a partir de trois » ; il titrait « versement en retard
+ * (1 mois) » a qui en devait deux ; il donnait deux totaux de penalites sans
+ * dire lequel regler. Aucun compilateur ne voit cela, et `verif.mjs` travaille
+ * sur des fonctions pures -- `texteRelance` vit dans un module `server-only`
+ * qui parle a la base.
+ *
+ * Le texte est donc fabrique ici pour de vrai : le source de `relance.ts` est
+ * recopie tel quel, ses acces a la base remplaces par des doublures, puis
+ * compile. Rien n'est duplique -- une phrase modifiee dans `relance.ts` est
+ * relue au controle suivant.
+ *
+ * Lancement : npm run verif:lettre
+ */
+import { strict as assert } from "node:assert";
+import { readFileSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+
+const RACINE = process.cwd();
+const ATELIER = ".lettre";
+let controles = 0;
+const verifier = (condition, quoi) => {
+  controles++;
+  assert.ok(condition, quoi);
+};
+
+/* ------------------------------------------------------- fabrique du texte */
+
+rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
+rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
+mkdirSync(`${RACINE}/${ATELIER}`, { recursive: true });
+
+const source = readFileSync(`${RACINE}/src/lib/relance.ts`, "utf8")
+  .replace('import "server-only";\n', "")
+  .replace(/from "@\/lib\/(db|queries|courriel|constat)"/g, 'from "./doublures.js"')
+  .replace('from "@/lib/settings"', 'from "../src/lib/settings.js"')
+  .replace('from "@/lib/penalites"', 'from "../src/lib/penalites.js"');
+writeFileSync(`${RACINE}/${ATELIER}/relance.ts`, source);
+
+/* Les doublures ne servent qu'a satisfaire les imports : aucune n'est appelee. */
+writeFileSync(`${RACINE}/${ATELIER}/doublures.ts`, `
+export type Cellule = {
+  mois: string; statut: string; montant: number; requis: number; manque: number;
+  dateVersement: string | null;
+};
+export type SituationClub = {
+  membreId: string; nom: string; email: string; role: string; cellules: Cellule[];
+  moisEnRetard: string[]; joursDeRetard: number; nbPenalitesImpayees: number;
+  totalPenalites: number;
+  penalites: { mois: string; montant: number; doublee: boolean; figee: boolean }[];
+};
+export type DetteMembre = { nb: number; montant: number; nbRetard: number; montantRetard: number };
+export type AvanceExigee = {
+  membreId: string; mois: number; montantExige: number; avanceDetenue: number;
+  respectee: boolean; fin: string | null;
+};
+type Requete = (...a: unknown[]) => Promise<never[]>;
+export function db(): Requete { throw new Error("aucune base dans ce controle"); }
+export const situationsClub = async (_a?: unknown): Promise<SituationClub[]> => [];
+export const avancesExigees = async (_a?: unknown): Promise<AvanceExigee[]> => [];
+export const penalitesDuesDetaillees = async () => new Map<string, DetteMembre>();
+export const circuitReglementsPret = async () => true;
+/*
+ * La part qui court sans etre inscrite est posee par le controle, cas par cas :
+ * ce qui se mesure ici est ce que le courrier EN DIT, la lecture du registre
+ * ayant son propre controle, execute sur PostgreSQL.
+ */
+export const penalitesNonInscrites = async (
+  _s?: unknown,
+): Promise<Map<string, { nb: number; montant: number; mois: string[] }> | null> => null;
+export const listerPenalites = async (_f?: unknown): Promise<{
+  membre_id: string; nature: string; date_constat: string; source_key: string | null;
+}[]> => [];
+export const bornesReprisePenalites = async () => new Map<string, string>();
+export type PlanRedressement = {
+  membreId: string; membreNom: string; debut: string | null; fin: string | null;
+  note: string | null;
+};
+export const plansRedressement = async () => new Map<string, PlanRedressement>();
+export type RegleMembre = {
+  id: string; membreId: string; membreNom: string; nature: string;
+  valeur: number | null; debut: string | null; fin: string | null; note: string | null;
+};
+export const reglesParMembre = async () => new Map<string, RegleMembre[]>();
+export const envoyerCourriel = async (_a?: unknown) => ({ ok: true });
+export const transportConfigure = () => "aucun" as string;
+`);
+
+/* `penalites.ts` importe `./settings` sans extension : ESM en exige une. */
+const penalites = `${RACINE}/src/lib/penalites.ts`;
+const penalitesOriginal = readFileSync(penalites, "utf8");
+writeFileSync(penalites, penalitesOriginal.replace('from "./settings"', 'from "./settings.js"'));
+try {
+  execFileSync(
+    "npx",
+    ["tsc", `${ATELIER}/relance.ts`, "--target", "es2022", "--module", "es2022",
+      "--moduleResolution", "bundler", "--outDir", `${ATELIER}-js`, "--rootDir", "."],
+    { cwd: RACINE, stdio: "inherit" },
+  );
+} finally {
+  writeFileSync(penalites, penalitesOriginal);
+}
+writeFileSync(`${RACINE}/${ATELIER}-js/package.json`, '{"type":"module"}');
+const { texteRelance, sujetRelance } = await import(
+  `${RACINE}/${ATELIER}-js/${ATELIER}/relance.js`
+);
+
+/* ------------------------------------------------------------------ les cas */
+
+const cellule = (mois, montant, requis) => ({
+  mois, statut: montant >= requis ? "paye" : montant > 0 ? "partiel" : "retard",
+  montant, requis, manque: Math.max(0, requis - montant), dateVersement: null,
+});
+
+/* Le courrier recu le 30/09/2026 : aout et septembre impayes. */
+const bourama = {
+  situation: {
+    membreId: "b", nom: "KONE Bourama", email: "b@ip12.ci", role: "membre",
+    cellules: [cellule("2026-08-01", 0, 5000), cellule("2026-09-01", 0, 5000)],
+    moisEnRetard: ["2026-08-01", "2026-09-01"],
+    joursDeRetard: 51, nbPenalitesImpayees: 1, totalPenalites: 1000,
+    penalites: [
+      { mois: "2026-08-01", montant: 500, doublee: false, figee: false },
+      { mois: "2026-09-01", montant: 500, doublee: false, figee: false },
+    ],
+  },
+  arrieres: ["2026-08-01"],
+  echeanceDuJour: "2026-09-01",
+  dette: { nb: 15, montant: 7500, nbRetard: 15, montantRetard: 7500 },
+  /* Aout et septembre : l'art. 9 court, le registre ne les porte pas encore. */
+  nonInscrites: { nb: 2, montant: 1000, mois: ["2026-08-01", "2026-09-01"] },
+  plan: null,
+  regles: [],
+  avanceManquante: null,
+};
+const LE_30 = new Date("2026-09-30T08:00:00Z");
+const SITE = "https://ip12-alpha.vercel.app";
+/*
+ * `fcfa` separe les milliers par une espace insecable, pour qu'un montant ne se
+ * coupe jamais en fin de ligne. Les controles comparent donc sur un texte
+ * normalise, faute de quoi ils mesureraient la typographie et non le propos.
+ */
+const lettre = (d, quand = LE_30) =>
+  texteRelance(d, SITE, quand).replace(/\u00a0/g, " ");
+
+/* --------------------------------- l'objet compte les mois reellement dus */
+
+verifier(
+  sujetRelance(bourama, "2026-09-01", LE_30).includes("(2 mois)"),
+  "l'objet doit compter aout ET septembre, non les seuls mois anterieurs",
+);
+
+/* ------------------------------------ le seuil R5 se juge sur le registre */
+
+const texteBourama = lettre(bourama);
+verifier(
+  texteBourama.includes("15 penalites de retard impayees atteignent deja le seuil"),
+  "quinze penalites au registre doivent declencher la phrase du seuil atteint",
+);
+verifier(
+  !texteBourama.includes("A partir de 3 penalites"),
+  "la phrase reservee a qui est sous le seuil ne doit pas suivre un nombre qui le depasse",
+);
+
+const sousLeSeuil = { ...bourama, dette: { nb: 2, montant: 1000, nbRetard: 2, montantRetard: 1000 } };
+verifier(
+  lettre(sousLeSeuil).includes("A partir de 3 penalites de retard impayees"),
+  "sous le seuil, le courrier doit annoncer le seuil a venir",
+);
+
+/* Passee la date d'effet, l'exclusion n'est plus annoncee au futur. */
+const en2027 = lettre(bourama, new Date("2027-02-01T08:00:00Z"));
+verifier(
+  en2027.includes("l'exclusion est") && en2027.includes("encourue de plein droit (R5)"),
+  "apres la date d'effet, l'exclusion doit etre dite acquise",
+);
+
+/* ----------------------------- les deux dettes de penalites, et leur somme */
+
+/*
+ * LES DEUX SONT DUES. Le registre porte les penalites constatees ; l'art. 9 court
+ * sur les mois encore impayes, avant tout constat. Le courrier avait d'abord
+ * annonce les deux chiffres sans un mot sur leur rapport, puis -- correction plus
+ * mauvaise que le defaut -- n'en avait plus annonce qu'un, taisant une dette
+ * reelle. Il les additionne.
+ */
+const sommes = (texte) =>
+  texte.split("\n").filter((l) => /^(Penalites?|S'y ajoute|Total des penalites)/.test(l));
+
+const lettreSansCircuit = () =>
+  texteRelance(bourama, SITE, LE_30, false).replace(/\u00a0/g, " ");
+const troisLignes = sommes(texteBourama);
+verifier(
+  troisLignes.some((l) => /inscrites a votre compte : 15, pour un total de 7 500/.test(l)),
+  "ce que le registre porte doit etre annonce comme tel",
+);
+verifier(
+  troisLignes.some((l) => /S'y ajoute la penalite de l'art\. 9 .* 1 000/.test(l)),
+  "la penalite qui court sans etre constatee doit s'ajouter, non disparaitre",
+);
+/*
+ * Le courrier ne parle pas au membre de l'etat du registre : « pas encore portee
+ * a votre compte » decrivait un retard de l'outil et appelait la question qu'il
+ * ne pouvait pas repondre.
+ */
+verifier(
+  !/pas encore portee/.test(texteBourama) && !/prochain constat/.test(texteBourama),
+  "le courrier ne doit pas exposer au membre le retard du registre",
+);
+verifier(
+  troisLignes.some((l) => /Total des penalites dues a ce jour : 8 500/.test(l)),
+  "le courrier doit donner la somme des deux : 7 500 + 1 000",
+);
+
+/*
+ * Rien au registre : un seul chiffre, et il se dit pour ce qu'il est. Pas de
+ * ligne « Total », qui n'aurait rien a totaliser.
+ */
+const muet = { ...bourama, dette: { nb: 0, montant: 0, nbRetard: 0, montantRetard: 0 } };
+verifier(
+  /Penalite de l'art\. 9 sur 2 mois encore impayes/.test(lettre(muet)),
+  "registre muet : la penalite courue reste annoncee",
+);
+verifier(
+  !/Total des penalites/.test(lettre(muet)),
+  "registre muet : rien a totaliser, donc pas de ligne de total",
+);
+verifier(
+  !/A partir de 3 penalites/.test(lettre(muet)),
+  "rien au registre : l'exclusion n'a pas a etre evoquee pour une penalite qui vient de naitre",
+);
+
+/*
+ * Tout constate : la ligne d'appoint disparait, et avec elle le total. C'est ce
+ * qui empeche de compter deux fois le meme mois une fois le constat passe.
+ */
+const toutInscrit = { ...bourama, nonInscrites: { nb: 0, montant: 0, mois: [] } };
+verifier(
+  !/S'y ajoute/.test(lettre(toutInscrit)),
+  "une fois les mois constates, ils ne s'ajoutent plus : ils sont dans le registre",
+);
+verifier(
+  !/Total des penalites/.test(lettre(toutInscrit)),
+  "un seul chiffre ne se totalise pas",
+);
+
+/* Retards et absences : le detail, l'appoint, puis la somme des trois natures. */
+const avecAbsences = {
+  ...bourama,
+  dette: { nb: 17, montant: 11500, nbRetard: 15, montantRetard: 7500 },
+};
+verifier(
+  /dont 15 de retard \(7 500 FCFA\) et 2 d'absence ou autre \(4 000 FCFA\)/.test(lettre(avecAbsences)),
+  "le detail par nature doit tenir, le seuil R5 ne comptant que les retards",
+);
+verifier(
+  /Total des penalites dues a ce jour : 12 500/.test(lettre(avecAbsences)),
+  "la somme doit porter sur toutes les natures plus l'appoint : 11 500 + 1 000",
+);
+
+/* ------------------------- la liste ne promet pas plus qu'elle ne contient */
+
+verifier(
+  texteBourama.includes("Mois anterieurs encore manquants"),
+  "quand le mois courant est traite a part, la liste doit se dire anterieure",
+);
+const sansMoisCourant = { ...bourama, echeanceDuJour: null };
+verifier(
+  lettre(sansMoisCourant).includes("Versements encore manquants"),
+  "sans mois courant, la liste porte bien tous les versements manquants",
+);
+
+/* ------------------------------------ R2 constate, et nomme le bon retard */
+
+verifier(
+  texteBourama.includes("51 jours"),
+  "R2 doit nommer le retard du plus ancien mois, que la phrase d'ouverture ne donne pas",
+);
+verifier(
+  texteBourama.includes("le votre l'est donc des a present"),
+  "la suspension du vote est acquise quand la phrase parait : elle doit se dire au present",
+);
+const recent = {
+  ...bourama,
+  situation: { ...bourama.situation, joursDeRetard: 20, moisEnRetard: ["2026-09-01"] },
+};
+verifier(!lettre(recent).includes("Rappel R2"), "sous 30 jours, R2 ne doit pas paraitre");
+
+/* ---------------------------------------- le chemin donne mene quelque part */
+
+verifier(
+  texteBourama.includes("dans la barre du bas sur telephone"),
+  "le mode d'emploi doit decrire la navigation actuelle",
+);
+
+/*
+ * Le courrier reclamait des penalites et n'expliquait que la declaration d'une
+ * cotisation -- « indiquez le mois couvert », qu'une penalite n'a pas. Qui
+ * payait ses penalites n'avait rien a toucher.
+ */
+verifier(
+  texteBourama.includes("COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE"),
+  "des que le courrier reclame des penalites, il doit dire comment les declarer",
+);
+verifier(
+  texteBourama.includes("La penalite reste due jusqu'a cette verification"),
+  "le courrier doit prevenir qu'une relance peut encore reclamer ce qui est declare",
+);
+const sansDette = { ...bourama, dette: { nb: 0, montant: 0, nbRetard: 0, montantRetard: 0 } };
+verifier(
+  !lettre(sansDette).includes("COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE"),
+  "sans penalite reclamee, ce chemin n'a pas a encombrer le courrier",
+);
+/*
+ * La migration qui cree la table s'execute a la main : entre la mise en ligne et
+ * ce geste, le courrier ne doit pas envoyer chercher un bouton absent.
+ */
+verifier(
+  !lettreSansCircuit().includes("Declarer un reglement"),
+  "circuit absent : le courrier ne doit pas donner une consigne qui ne mene nulle part",
+);
+verifier(
+  /inscrites a votre compte : 15/.test(lettreSansCircuit()),
+  "circuit absent ou non, la dette s'annonce",
+);
+
+/* ------------------------------------------- les mesures disciplinaires */
+
+/*
+ * AUCUNE DE CES LIGNES N'ETAIT CONTROLEE, et c'est ce qui a laisse passer le
+ * defaut : le plan de redressement, que le bureau peut accorder depuis
+ * Administration et que R5 ne donne qu'une fois sur la duree du club, n'etait
+ * relu par personne. Un membre sous plan recevait la meme relance que tout
+ * autre -- sans un mot sur la mesure qui le protege, ni sur son terme.
+ */
+const sousPlan = {
+  ...bourama,
+  plan: {
+    membreId: "b",
+    membreNom: "KONE Bourama",
+    debut: "2026-09-01",
+    fin: "2027-03-31",
+    note: "5 000 FCFA par mois en sus de la cotisation",
+  },
+};
+const texteSousPlan = lettre(sousPlan);
+
+verifier(
+  /MESURE DISCIPLINAIRE — plan de redressement \(R5\)/.test(texteSousPlan),
+  "le plan accorde doit paraitre dans la relance, et non rester au registre",
+);
+verifier(
+  texteSousPlan.includes("5 000 FCFA par mois en sus de la cotisation"),
+  "les termes convenus doivent etre rappeles : c'est ce que le membre doit tenir",
+);
+verifier(
+  /court jusqu'au 31\/03\/2027/.test(texteSousPlan),
+  "le terme du plan doit etre dit : sans date, le membre le croit sans fin",
+);
+verifier(
+  texteSousPlan.includes("ne s'accorde qu'une fois"),
+  "R5 n'accorde le plan qu'une fois : le courrier doit le dire",
+);
+verifier(
+  texteSousPlan.includes("vote de l'assemblee (art. 20)"),
+  "et dire ce qui suit s'il n'est pas tenu",
+);
+verifier(
+  !/MESURE DISCIPLINAIRE/.test(texteBourama),
+  "sans mesure, aucun bloc disciplinaire n'encombre le courrier",
+);
+verifier(
+  lettre({ ...sousPlan, plan: { ...sousPlan.plan, fin: null } }).includes("sans terme fixe"),
+  "un plan sans terme doit le dire",
+);
+verifier(
+  sujetRelance(sousPlan, "2026-09-01", LE_30).includes("plan de redressement"),
+  "l'objet doit nommer le plan, non un simple retard",
+);
+
+/*
+ * Le courrier annoncait le seuil atteint et l'exclusion de plein droit, puis
+ * expliquait plus bas qu'un plan l'ecarte : deux paragraphes qui se
+ * contredisaient. Le plan porte sur l'ensemble de la dette, penalites comprises.
+ */
+verifier(
+  /Elles entrent dans le plan de redressement/.test(texteSousPlan),
+  "sous plan, les penalites doivent etre dites couvertes par lui",
+);
+verifier(
+  !/ce cumul emportera l'exclusion de plein droit/.test(texteSousPlan),
+  "sous plan, le courrier ne doit pas annoncer l'exclusion que le plan ecarte",
+);
+verifier(
+  /ce cumul emportera l'exclusion de plein droit/.test(texteBourama),
+  "sans plan, l'avertissement du seuil tient",
+);
+
+/* --------------------------------------------- l'avance obligatoire */
+
+const sousAvance = {
+  ...bourama,
+  avanceManquante: { mois: 3, montantExige: 15000, avanceDetenue: 5000, fin: "2027-06-30" },
+};
+const texteAvance = lettre(sousAvance);
+
+verifier(
+  /MESURE DISCIPLINAIRE — avance obligatoire/.test(texteAvance),
+  "l'avance imposee doit paraitre",
+);
+verifier(
+  texteAvance.includes("il manque 10 000 FCFA"),
+  "le courrier doit dire ce qui manque, non le seul montant exige",
+);
+verifier(
+  /court jusqu'au 30\/06\/2027/.test(texteAvance),
+  "l'obligation datee doit porter sa date : un delai qu'on ignore ne se tient pas",
+);
+verifier(
+  sujetRelance(sousAvance, "2026-09-01", LE_30).includes("avance obligatoire non constituee"),
+  "l'avance non tenue prime dans l'objet",
+);
+
+/* Les deux mesures ensemble : aucune n'efface l'autre. */
+const lesDeux = lettre({ ...sousPlan, avanceManquante: sousAvance.avanceManquante });
+verifier(
+  /plan de redressement/.test(lesDeux) && /avance obligatoire/.test(lesDeux),
+  "un membre sous deux mesures doit lire les deux",
+);
+
+/* ------------------------------------------- les regles individuelles */
+
+/*
+ * ELLES PESAIENT SANS SE DIRE. Une cotisation particuliere et des penalites
+ * majorees changent les montants reclames, et le courrier n'en disait rien : le
+ * membre voyait ses penalites doublees sans savoir pourquoi, et pouvait croire a
+ * une erreur du site. Celui qui n'avait rien a se reprocher, lui, ne recevait
+ * aucun courrier : la mesure votee en assemblee ne lui etait jamais rappelee.
+ */
+const REGLES_DEUX = [
+  {
+    id: "r1", membreId: "b", membreNom: "KONE Bourama", nature: "penalite_multiplicateur",
+    valeur: 2, debut: "2026-07-01", fin: "2027-06-30", note: "Sanction de l'assemblee du 28/06",
+  },
+  {
+    id: "r2", membreId: "b", membreNom: "KONE Bourama", nature: "cotisation",
+    valeur: 7500, debut: null, fin: null, note: null,
+  },
+];
+const texteRegles = lettre({ ...bourama, regles: REGLES_DEUX });
+
+verifier(/VOTRE REGIME PARTICULIER/.test(texteRegles), "les regles en vigueur doivent paraitre");
+verifier(
+  /Penalites majorees : vos penalites de retard sont multipliees par 2/.test(texteRegles),
+  "la majoration doit etre dite : sans elle, le montant parait faux",
+);
+verifier(
+  /a compter du 01\/07\/2026, jusqu'au 30\/06\/2027/.test(texteRegles),
+  "la fenetre de la regle doit etre dite : une derogation sans terme est un regime durable",
+);
+verifier(
+  texteRegles.includes("Sanction de l'assemblee du 28/06"),
+  "le motif inscrit au dossier doit etre rappele",
+);
+verifier(
+  /Cotisation particuliere : 7 500 FCFA par mois/.test(texteRegles),
+  "une cotisation particuliere doit etre dite, et non subie",
+);
+verifier(
+  !/VOTRE REGIME PARTICULIER/.test(texteBourama),
+  "sans regle, la section n'encombre pas le courrier",
+);
+
+/*
+ * L'AVANCE, SELON QU'ELLE EST TENUE OU NON.
+ *
+ * Elle n'avait de bloc que lorsqu'elle etait EN DEFAUT. Un membre qui la
+ * respecte, destinataire pour un simple retard de cotisation, ne lisait rien de
+ * l'obligation qui pese sur lui : il pouvait la croire levee, puis la rompre en
+ * retirant son avance. La mesure n'existait pour lui qu'au moment ou il y
+ * manquait -- c'est-a-dire trop tard.
+ */
+const REGLE_AVANCE = {
+  id: "r3", membreId: "b", membreNom: "KONE Bourama", nature: "avance_min",
+  valeur: 3, debut: null, fin: null, note: null,
+};
+
+/* En defaut : le bloc disciplinaire, et pas de doublon dans le regime. */
+const avanceEnDefaut = lettre({
+  ...bourama,
+  regles: [REGLE_AVANCE],
+  avanceManquante: sousAvance.avanceManquante,
+});
+verifier(
+  !/VOTRE REGIME PARTICULIER/.test(avanceEnDefaut),
+  "en defaut, l'avance a son propre bloc : la repeter dans le regime la diluerait",
+);
+verifier(
+  /MESURE DISCIPLINAIRE — avance obligatoire/.test(avanceEnDefaut),
+  "et ce bloc-la doit bien paraitre",
+);
+
+/* Tenue : elle se rappelle, au lieu de disparaitre. */
+const avanceTenue = lettre({ ...bourama, regles: [REGLE_AVANCE] });
+verifier(
+  /Avance minimale : vous devez detenir en permanence 3 mois/.test(avanceTenue),
+  "l'avance tenue doit etre rappelee : sinon le membre la croit levee",
+);
+verifier(
+  /Cette obligation est tenue a ce jour/.test(avanceTenue),
+  "et le courrier doit dire qu'elle l'est, sans reproche",
+);
+verifier(
+  !/MESURE DISCIPLINAIRE/.test(avanceTenue),
+  "une obligation tenue n'est pas une mesure a annoncer comme un manquement",
+);
+
+/* --------------- a jour de tout, mais sous regle : un autre courrier */
+
+const aJourSousRegle = {
+  ...bourama,
+  situation: { ...bourama.situation, moisEnRetard: [], joursDeRetard: 0, cellules: [] },
+  arrieres: [],
+  echeanceDuJour: null,
+  dette: { nb: 0, montant: 0, nbRetard: 0, montantRetard: 0 },
+  nonInscrites: { nb: 0, montant: 0, mois: [] },
+  regles: REGLES_DEUX,
+};
+const texteAJour = lettre(aJourSousRegle);
+
+verifier(
+  sujetRelance(aJourSousRegle, "2026-09-01", LE_30).includes("rappel de votre regime particulier"),
+  "a jour de tout, l'objet ne doit pas annoncer une relance",
+);
+verifier(
+  texteAJour.includes("ce courrier ne vous reclame rien"),
+  "et le courrier doit le dire des la premiere ligne",
+);
+verifier(
+  /VOTRE REGIME PARTICULIER/.test(texteAJour),
+  "c'est bien le regime qui lui est rappele",
+);
+verifier(
+  !/COMMENT ENREGISTRER VOTRE COTISATION/.test(texteAJour),
+  "le mode d'emploi ne sert qu'a qui doit verser",
+);
+verifier(
+  !/en retard|penalite de l'art\. 9 court/.test(texteAJour),
+  "rien ne doit lui etre reproche",
+);
+verifier(
+  /^Courrier du 30\/09\/2026\.$/m.test(texteAJour) && !/^Relance du/m.test(texteAJour),
+  "le pied ne doit pas dire « relance » sur un courrier qui ne reclame rien",
+);
+verifier(
+  /^Relance du 30\/09\/2026\.$/m.test(texteBourama),
+  "et doit bien le dire quand il en est une",
+);
+
+rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
+rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
+console.log(
+  `OK - ${controles} controles du courrier de relance : objet, seuil R5, ` +
+    "dettes de penalites et leur somme, liste des mois, R2, mode d'emploi des cotisations " +
+    "et des penalites, mesures disciplinaires, regime particulier",
+);

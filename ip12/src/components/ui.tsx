@@ -1,0 +1,470 @@
+import type { ReactNode } from "react";
+import { Chiffre } from "@/components/chiffre";
+
+/**
+ * Une section : un titre, et ce qu'il annonce.
+ *
+ * C'etait une carte -- fond propre, bord arrondi, ombre douce -- et la page
+ * finissait en pile de boites posees sur une autre boite. Le nom reste, parce
+ * qu'il est appele partout, mais il ne dessine plus de contenant : un filet
+ * au-dessus, de l'espace autour, et le titre suffisent a separer deux sujets.
+ */
+export function Carte({
+  titre,
+  action,
+  children,
+  className = "",
+}: {
+  titre?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <section
+      className={`revele border-t pt-5 ${className}`}
+      style={{ borderColor: "var(--line)" }}
+    >
+      {(titre || action) && (
+        <header className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          {titre && (
+            <h2 className="text-[15px] font-semibold" style={{ color: "var(--ink)" }}>
+              {titre}
+            </h2>
+          )}
+          {action}
+        </header>
+      )}
+      {children}
+    </section>
+  );
+}
+
+export function Statistique({
+  libelle,
+  valeur,
+  detail,
+  accent,
+}: {
+  libelle: string;
+  valeur: ReactNode;
+  detail?: ReactNode;
+  accent?: "or" | "vert" | "rouge" | "neutre";
+}) {
+  /*
+   * L'accent ne teinte plus le montant.
+   *
+   * Un chiffre rouge parce qu'il est negatif, un chiffre or parce qu'il est
+   * important : a force, la couleur ne signalait plus rien. Le signe dit le
+   * sens, le libelle dit l'importance, et le rouge est rendu a ce qui manque.
+   * Le parametre reste accepte -- il est passe en vingt endroits -- et ne fait
+   * plus rien.
+   */
+  void accent;
+  return (
+    <div className="revele border-t pt-4" style={{ borderColor: "var(--line)" }}>
+      <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
+        {libelle}
+      </p>
+      <p
+        className="mt-1 text-[18px] leading-tight font-medium tabular-nums sm:text-[22px]"
+        style={{ color: "var(--ink)", letterSpacing: "-0.015em" }}
+      >
+        {valeur}
+      </p>
+      {detail && (
+        <p className="mt-1 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+          {detail}
+        </p>
+      )}
+    </div>
+  );
+}
+
+type Ton = "vert" | "rouge" | "ambre" | "neutre" | "or";
+
+/**
+ * UN STATUT EST DU TEXTE, non une pastille.
+ *
+ * « Rejete », « Valide », « En attente », « Due », « Reglee » : chaque ligne en
+ * portait une ou deux, rondes et colorees. Une liste de versements donnait
+ * ainsi quarante pastilles pour quarante lignes, qui pesaient plus a l'oeil que
+ * les montants -- et la couleur y disait tout, ce qu'un ecran mal regle et un
+ * lecteur sur six ne rendent pas.
+ *
+ * Il en reste le mot, a 12,5 px, sans fond ni bord. La teinte ne fait
+ * qu'appuyer : rouge pour ce qui manque ou bloque, ambre pour ce qui attend,
+ * encre discrete pour le reste. Le mot suffit sans elle.
+ */
+export function Badge({ ton = "neutre", children }: { ton?: Ton; children: ReactNode }) {
+  const encre: Record<Ton, string> = {
+    rouge: "var(--etat-manque)",
+    ambre: "var(--etat-attente)",
+    vert: "var(--ink-2)",
+    or: "var(--ink-2)",
+    neutre: "var(--ink-2)",
+  };
+  return (
+    <span className="text-[12.5px] whitespace-nowrap" style={{ color: encre[ton] }}>
+      {children}
+    </span>
+  );
+}
+
+export function Alerte({
+  ton = "ambre",
+  titre,
+  children,
+}: {
+  ton?: "ambre" | "rouge" | "vert";
+  titre?: string;
+  children: ReactNode;
+}) {
+  const fond =
+    ton === "rouge" ? "var(--etat-manque-fond)" : ton === "vert" ? "var(--etat-ok-fond)" : "var(--etat-attente-fond)";
+  const texte =
+    ton === "rouge" ? "var(--etat-manque)" : ton === "vert" ? "var(--etat-ok)" : "var(--etat-attente)";
+  return (
+    <div className="rounded-lg p-3 text-sm" style={{ background: fond, color: texte }}>
+      {titre && <p className="font-semibold">{titre}</p>}
+      <div className={titre ? "mt-1" : ""}>{children}</div>
+    </div>
+  );
+}
+
+export function Vide({ children }: { children: ReactNode }) {
+  return (
+    <p className="py-6 text-center text-sm" style={{ color: "var(--discret)" }}>
+      {children}
+    </p>
+  );
+}
+
+/**
+ * Le haut d'un ecran : ce qu'il montre, et le chiffre pour lequel on l'ouvre.
+ *
+ * C'etait un bandeau brun a coins arrondis, avec le montant en or. Deux fautes
+ * dans la meme image : l'or, qui ne se lit que sur fond sombre et obligeait
+ * donc a peindre le bandeau ; et le bandeau, qui faisait de chaque page une
+ * carte posee sur une autre. Ici le chiffre est a l'encre, pose sur la page --
+ * il n'a besoin d'aucun decor pour etre le plus gros element de l'ecran.
+ */
+export function EnTeteEcran({
+  titre,
+  sous,
+  marque,
+  chiffre,
+  brut,
+  unite,
+  detail,
+}: {
+  titre: string;
+  sous?: ReactNode;
+  marque?: ReactNode;
+  /** Le chiffre que la page existe pour donner, s'il y en a un. */
+  chiffre?: ReactNode;
+  /**
+   * Le meme chiffre, en nombre : il monte alors jusqu'a sa valeur.
+   *
+   * A preferer a `chiffre` quand le montant est un nombre. `chiffre` reste pour
+   * ce qui n'en est pas un -- un taux, un tiret quand rien n'est saisi.
+   */
+  brut?: number;
+  /** Son unite, posee plus petite et plus claire a cote : « FCFA ». */
+  unite?: string;
+  detail?: ReactNode;
+}) {
+  return (
+    <div className="apparait">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[13px]" style={{ color: "var(--ink-2)" }}>
+            {titre}
+            {sous ? <span style={{ color: "var(--ink-3)" }}> {sous}</span> : null}
+          </p>
+        </div>
+        {marque}
+      </div>
+      {(chiffre || brut !== undefined) && (
+        <p className="mt-1.5 flex items-baseline whitespace-nowrap">
+          <span
+            className="text-[44px] leading-none font-medium tabular-nums sm:text-[60px]"
+            style={{ color: "var(--ink)", letterSpacing: "-0.02em" }}
+          >
+            {brut !== undefined ? <Chiffre valeur={brut} /> : chiffre}
+          </span>
+          {unite && (
+            <span
+              className="ml-2.5 text-[16px] sm:ml-3.5 sm:text-[20px]"
+              style={{ color: "var(--ink-3)" }}
+            >
+              {unite}
+            </span>
+          )}
+        </p>
+      )}
+      {detail && (
+        <p className="mt-2 text-[14px] leading-snug" style={{ color: "var(--ink-2)" }}>
+          {detail}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Un montant et son unite : le chiffre a gauche, « FCFA » pose plus petit et
+ * plus clair a sa droite.
+ *
+ * POURQUOI C'EST UN COMPOSANT ET NON TROIS LIGNES RECOPIEES. L'accueil en
+ * portait une copie ecrite a la main, a cote de celle de `CarteEtat`. Deux
+ * commits l'ont chacun a moitie cassee : l'un a deplace le montant de `valeur`
+ * vers `brut`, et la copie, qui ne lisait que `valeur`, a cesse d'afficher quoi
+ * que ce soit -- « Portefeuille du club FCFA », sans chiffre, sur la page
+ * d'accueil du site ; l'autre a ajoute `encre` pour la couleur de performance,
+ * que la copie n'a jamais appliquee. Une seule ecriture, et les deux fautes
+ * deviennent impossibles.
+ */
+export function ValeurChiffree({
+  brut,
+  valeur,
+  unite,
+  encre,
+  retard = 0,
+  taille,
+}: {
+  /** Le montant en nombre : il monte alors jusqu'a lui. */
+  brut?: number;
+  /** Ce qu'on affiche quand il n'y a pas de nombre : un taux, « -- ». */
+  valeur?: ReactNode;
+  unite?: string;
+  /** Reservee a la performance : `couleurSigne()` la donne. */
+  encre?: string;
+  /** Le rang dans son bandeau : 22 ms le separent du precedent. */
+  retard?: number;
+  /** Les classes de taille du chiffre, qui different d'un emploi a l'autre. */
+  taille: string;
+}) {
+  return (
+    <p className="flex items-baseline whitespace-nowrap">
+      <span
+        className={`${taille} font-medium tabular-nums`}
+        style={{ color: encre ?? "var(--ink)", letterSpacing: "-0.015em" }}
+      >
+        {brut !== undefined ? <Chiffre valeur={brut} retard={retard} /> : valeur}
+      </span>
+      {unite && (
+        <span className="ml-1.5 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+          {unite}
+        </span>
+      )}
+    </p>
+  );
+}
+
+/**
+ * Le bandeau de chiffres cles : ce qu'on lit en ouvrant la page.
+ *
+ * C'etait une carte posee a cheval sur le bandeau brun. Sans bandeau brun, elle
+ * n'a plus a chevaucher quoi que ce soit : deux filets, des cellules separees
+ * par un trait, et aucun fond. Le libelle vient sous le chiffre parce que c'est
+ * le chiffre qu'on cherche.
+ *
+ * L'accent n'est plus une couleur. Un montant reste a l'encre : ce qui doit
+ * alerter le fait par son signe et par le mot qui l'accompagne, non par une
+ * teinte que la moitie des ecrans rend mal.
+ */
+export function CarteEtat({
+  chiffres,
+  colonnes,
+}: {
+  chiffres: {
+    libelle: string;
+    valeur?: ReactNode;
+    /** Le montant en nombre : la cellule le fait alors monter jusqu'a lui. */
+    brut?: number;
+    unite?: string;
+    contexte?: ReactNode;
+    /**
+     * La couleur du chiffre. Reservee a la performance : `couleurSigne()` la
+     * donne. Un montant ordinaire n'en prend pas -- il reste a l'encre.
+     */
+    encre?: string;
+    /** Conserve pour les appels existants ; sans effet sur la couleur. */
+    accent?: "or" | "vert" | "rouge";
+  }[];
+  /**
+   * Le nombre de colonnes une fois la place venue. Par defaut, tous les
+   * chiffres sur une seule rangee.
+   *
+   * A poser a 2 quand le bandeau vit dans une demi-colonne : sur l'accueil, la
+   * carte « Performance » y alignait quatre cellules, et « 2 090 000 »,
+   * « 2 177 635 » et « 84 500 FCFA » debordaient de 44 a 53 px, l'un
+   * par-dessus l'autre. Une rangee de quatre demande la pleine largeur.
+   */
+  colonnes?: number;
+}) {
+  const rangeeUnique = colonnes === undefined;
+  return (
+    <div
+      /*
+       * Deux colonnes sur telephone, une seule rangee des l'ordinateur : cinq
+       * chiffres cote a cote se comparent d'un regard, empiles ils se lisent
+       * l'un apres l'autre.
+       */
+      className={`apparait grid grid-cols-2 border-t border-b${rangeeUnique ? " rangee-unique" : ""}`}
+      style={{
+        borderColor: "var(--line)",
+        ["--colonnes" as string]: colonnes ?? chiffres.length,
+        ["--rang" as string]: 1,
+      }}
+    >
+      {chiffres.map((c, i) => (
+        <div
+          key={c.libelle}
+          className="cellule-chiffre flex flex-col gap-1.5 py-4 lg:py-5"
+          style={{ ["--i" as string]: i }}
+        >
+          <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
+            {c.libelle}
+          </p>
+          {/* 22 ms separent une cellule de la suivante : elles se posent
+              l'une apres l'autre, de gauche a droite. */}
+          <ValeurChiffree
+            brut={c.brut}
+            valeur={c.valeur}
+            unite={c.unite}
+            encre={c.encre}
+            retard={i * 22}
+            taille="text-[18px] leading-tight sm:text-[22px]"
+          />
+          {c.contexte && (
+            <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+              {c.contexte}
+            </p>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* Intertitre de section : il decoupe la page en trois intentions. */
+export function Rubrique({ children }: { children: ReactNode }) {
+  return (
+    <h2
+      className="revele mt-5 mb-2 text-[12px] font-medium"
+      style={{ color: "var(--ink-3)" }}
+    >
+      {children}
+    </h2>
+  );
+}
+
+/*
+ * Une tuile : l'icone dit de quoi il s'agit avant la lecture, le resume dit ce
+ * que le geste produit, et le contenu ne se deploie qu'a la demande. Rien ne
+ * quitte la page, donc rien a recharger.
+ */
+export function Tuile({
+  icone,
+  titre,
+  resume,
+  marque,
+  ouvert = false,
+  children,
+}: {
+  icone?: ReactNode;
+  titre: ReactNode;
+  resume?: ReactNode;
+  marque?: ReactNode;
+  ouvert?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <details
+      open={ouvert}
+      className="revele relief group rounded-2xl border"
+      style={{ background: "var(--carte)", borderColor: "var(--bordure)" }}
+    >
+      <summary className="tapable flex cursor-pointer list-none items-start gap-3 rounded-2xl p-3.5">
+        {icone && (
+          <span
+            className="grid h-[38px] w-[38px] flex-none place-items-center rounded-xl"
+            style={{ background: "var(--sunk)", color: "var(--ink-2)" }}
+          >
+            {icone}
+          </span>
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold tracking-tight">{titre}</span>
+          {resume && (
+            <span className="mt-0.5 block text-[11.5px] leading-snug" style={{ color: "var(--discret)" }}>
+              {resume}
+            </span>
+          )}
+        </span>
+        {marque && <span className="flex-none self-center">{marque}</span>}
+        <span className="chevron flex-none self-center" style={{ color: "var(--ink-3)" }}>
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+        </span>
+      </summary>
+      <div className="contenu-depliant border-t px-3.5 py-3.5" style={{ borderColor: "var(--bordure)" }}>
+        {children}
+      </div>
+    </details>
+  );
+}
+
+/*
+ * Un groupe de lignes repliees.
+ *
+ * Un journal ou dix-huit frais bancaires de quelques centaines de francs noient
+ * deux ecritures importantes n'est pas un journal : c'est une liste. Les lignes
+ * de meme nature se rassemblent donc sous une ligne de total, ouvrable d'un
+ * doigt. Rien n'est masque -- le detail est a un geste, et le total est visible
+ * sans le geste.
+ *
+ * Un groupe d'une seule ligne ne se replie pas : demander d'ouvrir pour trouver
+ * ce qu'on voyait deja serait une facon compliquee de cacher.
+ */
+export function GroupeReplie({
+  libelle,
+  nombre,
+  total,
+  detail,
+  children,
+}: {
+  libelle: ReactNode;
+  nombre: number;
+  total: ReactNode;
+  detail?: ReactNode;
+  children: ReactNode;
+}) {
+  if (nombre <= 1) return <>{children}</>;
+  return (
+    <details className="group">
+      <summary className="tapable -mx-2 flex cursor-pointer list-none items-center gap-2 rounded-lg px-2 py-2.5">
+        <span
+          className="chevron flex-none"
+          style={{ color: "var(--ink-3)" }}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-medium">{libelle}</span>
+          <span className="block text-xs" style={{ color: "var(--discret)" }}>
+            {nombre} lignes{detail ? ` · ${detail}` : ""}
+          </span>
+        </span>
+        <span className="flex-none text-sm font-semibold tabular-nums whitespace-nowrap">{total}</span>
+      </summary>
+      <div
+        className="contenu-depliant ml-2 border-l pl-3"
+        style={{ borderColor: "var(--bordure)" }}
+      >
+        {children}
+      </div>
+    </details>
+  );
+}
