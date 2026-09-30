@@ -182,6 +182,15 @@ verifier(
   troisLignes.some((l) => /S'y ajoute la penalite de l'art\. 9 .* 1 000/.test(l)),
   "la penalite qui court sans etre constatee doit s'ajouter, non disparaitre",
 );
+/*
+ * Le courrier ne parle pas au membre de l'etat du registre : « pas encore portee
+ * a votre compte » decrivait un retard de l'outil et appelait la question qu'il
+ * ne pouvait pas repondre.
+ */
+verifier(
+  !/pas encore portee/.test(texteBourama) && !/prochain constat/.test(texteBourama),
+  "le courrier ne doit pas exposer au membre le retard du registre",
+);
 verifier(
   troisLignes.some((l) => /Total des penalites dues a ce jour : 8 500/.test(l)),
   "le courrier doit donner la somme des deux : 7 500 + 1 000",
@@ -193,7 +202,7 @@ verifier(
  */
 const muet = { ...bourama, dette: { nb: 0, montant: 0, nbRetard: 0, montantRetard: 0 } };
 verifier(
-  /Penalite de l'art\. 9 courue sur 2 mois encore impayes/.test(lettre(muet)),
+  /Penalite de l'art\. 9 sur 2 mois encore impayes/.test(lettre(muet)),
   "registre muet : la penalite courue reste annoncee",
 );
 verifier(

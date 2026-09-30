@@ -37,7 +37,24 @@ export async function avertirLeBureau(
 
   const enRetard = destinataires.filter((d) => d.arrieres.length > 0);
   const moisDus = enRetard.reduce((t, d) => t + d.arrieres.length, 0);
-  const penalites = destinataires.reduce((t, d) => t + d.situation.totalPenalites, 0);
+  /*
+   * CE QUE LE CLUB ATTEND VRAIMENT, ET NON LE SEUL CALCUL DU MOIS.
+   *
+   * Ce total additionnait `totalPenalites`, la penalite que l'art. 9 fait courir
+   * sur les mois impayes -- et ignorait donc tout ce que le registre porte par
+   * ailleurs : les penalites d'absence, et celles de mois anciens dont la
+   * cotisation a fini par etre versee sans que la penalite le soit. Le tresorier
+   * lisait « Penalites dues a ce jour : 1 000 FCFA » quand le club en attendait
+   * huit mille cinq cents.
+   *
+   * La dette inscrite, plus ce qui court sans etre encore inscrit : les deux
+   * sont dues, et `nonInscrites` ne retient que les mois absents du registre,
+   * donc rien n'est compte deux fois.
+   */
+  const penalites = destinataires.reduce(
+    (t, d) => t + d.dette.montant + d.nonInscrites.montant,
+    0,
+  );
   const attendus = destinataires.filter((d) => d.echeanceDuJour !== null).length;
 
   const lignes: string[] = [
@@ -70,6 +87,14 @@ export async function avertirLeBureau(
           ? `${d.dette.nb} penalite(s) de retard impayee(s)`
           : `${d.dette.nb} penalite(s) impayee(s), dont ${d.dette.nbRetard} de retard`,
       );
+    }
+    /*
+     * Ce qui court sans etre encore au registre : apres une relance, le constat
+     * l'a normalement deja inscrit, et cette mention ne parait donc que si le
+     * constat a echoue. Elle dit alors au bureau ce qu'il reste a porter.
+     */
+    if (d.nonInscrites.montant > 0) {
+      motifs.push(`${fcfa(d.nonInscrites.montant)} d'art. 9 a porter au registre`);
     }
     if (d.avanceManquante) motifs.push("avance obligatoire non tenue");
     lignes.push(`  ${d.situation.nom} — ${motifs.join(", ")}`);

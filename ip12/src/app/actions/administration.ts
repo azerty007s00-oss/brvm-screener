@@ -13,6 +13,7 @@ import {
   tracerRelances,
 } from "@/lib/relance";
 import { versionDeployee } from "@/lib/version";
+import { porterRetardsAuRegistre, resumeConstat, type IssueConstat } from "@/lib/constat";
 import { listerMembres, reglagesEffectifs } from "@/lib/queries";
 import { CLUB, REGLES, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
 import {
@@ -554,6 +555,26 @@ export async function relancerMaintenant(
   }
 
   const maintenant = new Date();
+
+  /*
+   * Le registre d'abord, comme au passage automatique : la relance manuelle dit
+   * exactement la meme chose que celle du 10, et elle ne peut le dire juste que
+   * sur un registre a jour. Le declencheur signe l'ecriture -- les titulaires du
+   * droit de relancer sont ceux du droit sur les penalites.
+   */
+  let constat: IssueConstat | null = null;
+  try {
+    constat = await porterRetardsAuRegistre(auteur.id);
+    await journaliser(
+      { id: auteur.id, nom: auteur.nom },
+      "constat_penalites_relance",
+      { entite: "penalties" },
+      { ...constat },
+    );
+  } catch {
+    // Un registre en retard n'empeche pas d'ecrire : la relance passe outre.
+  }
+
   const destinataires = await destinatairesDuJour(maintenant);
   if (destinataires.length === 0) {
     return { ok: true, message: "Personne a relancer : tout le monde est a jour." };
@@ -587,9 +608,14 @@ export async function relancerMaintenant(
       ? ` ${dejaTouches} d'entre eux avaient deja recu la relance automatique aujourd'hui : ` +
         "pour ceux-la, c'est un second courrier."
       : "";
+  /* Ce que le constat vient d'inscrire : le tresorier doit le savoir tout de suite. */
+  const porte =
+    constat && (constat.creees > 0 || constat.reajustees > 0)
+      ? ` Registre mis a jour au passage : ${resumeConstat(constat)}`
+      : "";
   return {
     ok: echecs.length === 0,
-    message: `${envoyes.length} relance(s) envoyee(s) sur ${destinataires.length} membre(s) concerne(s).${reste}${doublon}`,
+    message: `${envoyes.length} relance(s) envoyee(s) sur ${destinataires.length} membre(s) concerne(s).${reste}${doublon}${porte}`,
     erreur: echecs.length > 0 ? `${echecs.length} envoi(s) ont echoue.` : undefined,
   };
 }

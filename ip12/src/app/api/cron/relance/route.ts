@@ -9,6 +9,8 @@ import {
   tracerRelances,
 } from "@/lib/relance";
 import { avertirLeBureau } from "@/lib/avis";
+import { porterRetardsAuRegistre, signataireDuConstat } from "@/lib/constat";
+import { journaliser } from "@/lib/journal";
 import { transportConfigure } from "@/lib/courriel";
 
 export const dynamic = "force-dynamic";
@@ -58,6 +60,37 @@ export async function GET(requete: Request) {
 
   const maintenant = new Date();
   const moisCourant = debutMois(maintenant);
+
+  /*
+   * LE REGISTRE SE MET A JOUR AVANT QU'ON RECLAME QUOI QUE CE SOIT.
+   *
+   * La penalite de l'art. 9 est acquise de plein droit des l'echeance passee,
+   * mais elle n'existait au registre qu'apres un clic du bureau sur la page
+   * Penalites. Le seuil de R5 ne comptant que les penalites INSCRITES, un membre
+   * dont les penalites n'etaient jamais constatees ne s'approchait jamais du
+   * seuil d'exclusion, quel que soit son retard : l'oubli d'un clic le
+   * protegeait d'une regle votee par l'assemblee.
+   *
+   * Le constat passe donc ici, avant la liste et avant les courriers. Il est
+   * rejouable sans risque, et son echec n'arrete pas la relance -- un courrier
+   * qui part avec un registre en retard vaut mieux qu'aucun courrier.
+   */
+  let constat = null;
+  try {
+    const signataire = await signataireDuConstat();
+    if (signataire) {
+      const issue = await porterRetardsAuRegistre(signataire.id);
+      await journaliser(
+        signataire,
+        "constat_penalites_relance",
+        { entite: "penalties" },
+        { ...issue },
+      ).catch(() => {});
+      constat = { ...issue, signataire: signataire.nom };
+    }
+  } catch (e) {
+    constat = { erreur: String(e) };
+  }
 
   let destinataires;
   try {
@@ -113,14 +146,20 @@ export async function GET(requete: Request) {
     mois: moisCourant,
     jour: maintenant.getUTCDate(),
     jourDEcheance,
+    constat,
     concernes: destinataires.length,
     // Deja relances aujourd'hui, donc laisses tranquilles.
     ignores,
     enRetard: destinataires.filter((d) => d.arrieres.length > 0).length,
     echeanceDuJour: destinataires.filter((d) => d.echeanceDuJour && d.arrieres.length === 0).length,
-    // Cotisations a jour, mais penalites en souffrance : le profil vise par l'assemblee.
+    /*
+     * Cotisations a jour, mais penalites en souffrance : le profil vise par
+     * l'assemblee. Compte sur le registre et sur ce qui reste a y porter, non
+     * sur `nbPenalitesImpayees` : cette lecture-la est memoisee depuis le
+     * constat ci-dessus et ignore donc ce qu'il vient d'ecrire.
+     */
     penalitesSeules: destinataires.filter(
-      (d) => d.arrieres.length === 0 && d.situation.nbPenalitesImpayees > 0,
+      (d) => d.arrieres.length === 0 && (d.dette.nb > 0 || d.nonInscrites.montant > 0),
     ).length,
     avancesNonTenues: destinataires.filter((d) => d.avanceManquante !== null).length,
     emailsEnvoyes: envoyes.length,

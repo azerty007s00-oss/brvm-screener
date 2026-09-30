@@ -453,12 +453,21 @@ export function texteRelance(
         nonInscrites.nb > 1
           ? `${nonInscrites.nb} mois encore impayes`
           : "un mois encore impaye";
+      /*
+       * « PAS ENCORE PORTEE A VOTRE COMPTE » NE REGARDE PAS LE MEMBRE.
+       *
+       * La phrase decrivait un retard de l'outil -- le registre attendait un
+       * clic -- et invitait la seule question qu'elle ne pouvait pas repondre :
+       * comment ca, pas encore porte ? Depuis que la relance constate avant
+       * d'ecrire, cette ligne ne parait plus que si le constat a echoue, et elle
+       * dit alors ce qui est vrai dans tous les cas : la penalite est due au
+       * titre de l'art. 9. L'etat du registre est affaire du bureau.
+       */
       lignes.push(
         dette.nb > 0
-          ? `S'y ajoute la penalite de l'art. 9 courue sur ${combien}, pas encore ` +
-            `portee a votre compte : ${fcfa(nonInscrites.montant)}.`
-          : `Penalite de l'art. 9 courue sur ${combien} : ${fcfa(nonInscrites.montant)}. ` +
-            "Elle sera portee a votre compte au prochain constat du tresorier.",
+          ? `S'y ajoute la penalite de l'art. 9 sur ${combien} : ` +
+            `${fcfa(nonInscrites.montant)}.`
+          : `Penalite de l'art. 9 sur ${combien} : ${fcfa(nonInscrites.montant)}.`,
       );
       if (dette.nb > 0) {
         lignes.push(

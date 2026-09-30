@@ -124,15 +124,31 @@ rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 mkdirSync(`${RACINE}/${ATELIER}`, { recursive: true });
 
-const source = readFileSync(`${RACINE}/src/app/actions/penalites.ts`, "utf8")
-  .replace('"use server";\n', "")
-  .replace(/from "next\/cache"/g, 'from "./doublures.js"')
-  .replace(/from "@\/lib\/(db|auth|journal|avis|justificatifs|queries)"/g, 'from "./doublures.js"')
-  .replace(/from "@\/lib\/settings"/g, 'from "../src/lib/settings.js"')
-  .replace(/from "@\/lib\/penalites"/g, 'from "../src/lib/penalites.js"')
-  .replace(/from "@\/lib\/valeurs"/g, 'from "../src/lib/valeurs.js"')
-  .replace(/from "\.\/auth"/g, 'from "./doublures.js"');
-writeFileSync(`${RACINE}/${ATELIER}/penalites.ts`, source);
+/** Memes substitutions pour tout module recopie : un seul jeu de regles. */
+const brancher = (texte) =>
+  texte
+    .replace('import "server-only";\n', "")
+    .replace('"use server";\n', "")
+    .replace(/from "next\/cache"/g, 'from "./doublures.js"')
+    .replace(
+      /from "@\/lib\/(db|auth|journal|avis|justificatifs|queries|droits)"/g,
+      'from "./doublures.js"',
+    )
+    .replace(/from "@\/lib\/constat"/g, 'from "./constat.js"')
+    .replace(/from "@\/lib\/settings"/g, 'from "../src/lib/settings.js"')
+    .replace(/from "@\/lib\/penalites"/g, 'from "../src/lib/penalites.js"')
+    .replace(/from "@\/lib\/valeurs"/g, 'from "../src/lib/valeurs.js"')
+    .replace(/from "\.\/auth"/g, 'from "./doublures.js"');
+
+writeFileSync(
+  `${RACINE}/${ATELIER}/penalites.ts`,
+  brancher(readFileSync(`${RACINE}/src/app/actions/penalites.ts`, "utf8")),
+);
+/* Le constat vit dans sa propre bibliotheque depuis qu'il sert aussi la relance. */
+writeFileSync(
+  `${RACINE}/${ATELIER}/constat.ts`,
+  brancher(readFileSync(`${RACINE}/src/lib/constat.ts`, "utf8")),
+);
 
 writeFileSync(`${RACINE}/${ATELIER}/doublures.ts`, `
 export type EtatFormulaire = { ok: boolean; message?: string; erreur?: string };
@@ -157,12 +173,28 @@ export const enregistrerJustificatif = async (..._a: unknown[]) => ({ joint: fal
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 export const absencesParMembre = async (): Promise<any[]> => [];
-export const bornesReprisePenalites = async () => new Map<string, string>();
+/*
+ * La borne de reprise, posee par le controle. Sa DERIVATION (les lignes
+ * 'reprise_penalites:%' du registre) est une requete a part, verifiee par
+ * ailleurs ; ce qui se joue ici est la regle : un mois couvert par la reprise du
+ * tresorier n'est jamais recompte.
+ */
+export const bornes: Map<string, string> = new Map();
+export const bornesReprisePenalites = async () => bornes;
 export const reglagesEffectifs = async () => ({
   cotisationMensuelle: 5000, tauxPenalite: 0.1,
   penaliteAbsence: 2000, absencesParTranche: 3,
 });
-export const situationsClub = async (): Promise<any[]> => [];
+/* Ce que le controle veut faire lire au constat : il le pose avant d'appeler. */
+export const donnees: { situations: any[] } = { situations: [] };
+export const situationsClub = async (): Promise<any[]> => donnees.situations;
+export const listerMembres = async (): Promise<any[]> => [];
+/*
+ * Reduite au droit dont le constat se sert. Le choix du signataire n'est donc
+ * pas ce que ce controle mesure : il verifie ce que le constat ECRIT, sur des
+ * situations posees a la main.
+ */
+export const DROITS = { gererPenalites: ["tresorier", "president"] } as const;
 `);
 
 const penalitesTs = `${RACINE}/src/lib/penalites.ts`;
@@ -171,7 +203,8 @@ writeFileSync(penalitesTs, original.replace('from "./settings"', 'from "./settin
 try {
   execFileSync(
     "npx",
-    ["tsc", `${ATELIER}/penalites.ts`, "--target", "es2022", "--module", "es2022",
+    ["tsc", `${ATELIER}/penalites.ts`, `${ATELIER}/constat.ts`,
+      "--target", "es2022", "--module", "es2022",
       "--moduleResolution", "bundler", "--strict", "--outDir", `${ATELIER}-js`,
       "--rootDir", "."],
     { cwd: RACINE, stdio: "inherit" },
@@ -182,7 +215,10 @@ try {
 writeFileSync(`${RACINE}/${ATELIER}-js/package.json`, '{"type":"module"}');
 globalThis.__sql = requete;
 const actions = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/penalites.js`);
-const { session } = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/doublures.js`);
+const constat = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/constat.js`);
+const { session, donnees, bornes } = await import(
+  `${RACINE}/${ATELIER}-js/${ATELIER}/doublures.js`,
+);
 
 /* ------------------------------------------------------------- les acteurs */
 
@@ -363,11 +399,100 @@ egal(lire(`select coalesce(sum(quantity),0) from penalties
            where member_id='${membre.id}' and status='due' and kind='retard';`), "2",
   "ne doivent rester dues que les 2 de la ligne restee intacte");
 
+/* ============================ 6. le constat, desormais automatique */
+
+/*
+ * POURQUOI CE CONSTAT EST VERIFIE ICI.
+ *
+ * Il n'avait qu'un appelant, le bouton de la page Penalites : le registre
+ * n'avancait que quand le bureau y pensait, alors que l'art. 9 court de plein
+ * droit. Le seuil de R5 ne comptant que les penalites INSCRITES, l'oubli du clic
+ * protegeait d'une regle votee. La relance l'appelle donc avant d'ecrire ses
+ * courriers -- une ecriture automatique dans un livre de comptes, qui doit etre
+ * exacte et rejouable.
+ */
+const seul = uns(`insert into members (full_name, email, role, password_hash, joined_on)
+                  values ('Membre Neuf','n@ip12.ci','membre','x',current_date) returning id;`);
+
+/* Deux mois impayes, a 500 FCFA de penalite chacun. */
+donnees.situations = [
+  {
+    membreId: seul,
+    penalites: [
+      { mois: "2026-08-01", montant: 500, doublee: false, figee: false },
+      { mois: "2026-09-01", montant: 500, doublee: false, figee: false },
+    ],
+  },
+];
+
+let issue = await constat.porterRetardsAuRegistre(tresorier.id);
+egal(issue.creees, 2, "les deux mois doivent etre portes au registre");
+egal(lire(`select coalesce(sum(quantity*unit_amount),0) from penalties
+           where member_id='${seul}' and status='due';`), "1000",
+  "le registre doit porter 1 000 FCFA apres le constat");
+
+/* ------------------------------------------- rejouable, et non repetitif */
+
+issue = await constat.porterRetardsAuRegistre(tresorier.id);
+egal(issue.creees, 0, "un second constat ne doit rien recreer");
+egal(lire(`select count(*) from penalties where member_id='${seul}';`), "2",
+  "le registre ne doit pas doubler a chaque passage de la relance");
+
+/* ------------------------------- R4 : le montant se reajuste, la ligne reste */
+
+donnees.situations[0].penalites[0].montant = 1000;
+issue = await constat.porterRetardsAuRegistre(tresorier.id);
+egal(issue.reajustees, 1, "un montant double par R4 doit etre reajuste");
+egal(lire(`select count(*) from penalties where member_id='${seul}';`), "2",
+  "le reajustement corrige la ligne, il n'en cree pas une seconde");
+egal(lire(`select coalesce(sum(quantity*unit_amount),0) from penalties
+           where member_id='${seul}' and status='due';`), "1500",
+  "le total doit suivre le doublement de R4");
+
+/* ------------------------- une penalite reglee n'est jamais ressuscitee */
+
+const aout = lire(`select id from penalties
+                   where member_id='${seul}' and incurred_on='2026-08-10';`);
+psql(BASE, `update penalties set status='payee', settled_on=current_date where id='${aout}';`);
+donnees.situations[0].penalites[0].montant = 500;
+issue = await constat.porterRetardsAuRegistre(tresorier.id);
+egal(issue.intactes, 1, "une ligne soldee doit etre comptee intacte");
+egal(lire(`select status from penalties where id='${aout}';`), "payee",
+  "le constat ne doit pas remettre en du ce qui a ete regle");
+egal(lire(`select count(*) from penalties where member_id='${seul}';`), "2",
+  "ni recreer a cote une penalite pour le meme mois");
+
+/* --------------------- la borne de reprise du tresorier est respectee */
+
+const reprise = uns(`insert into members (full_name, email, role, password_hash, joined_on)
+                     values ('Membre Reprise','r@ip12.ci','membre','x',current_date) returning id;`);
+psql(BASE, `insert into penalties (member_id, kind, quantity, unit_amount, status,
+              created_by, incurred_on, source_key)
+            values ('${reprise}','retard',10,500,'due','${tresorier.id}',
+                    '2026-06-10','reprise_penalites:${reprise}');`);
+bornes.set(reprise, "2026-06-01");
+donnees.situations = [
+  {
+    membreId: reprise,
+    penalites: [
+      { mois: "2026-05-01", montant: 500, doublee: false, figee: false },
+      { mois: "2026-09-01", montant: 500, doublee: false, figee: false },
+    ],
+  },
+];
+issue = await constat.porterRetardsAuRegistre(tresorier.id);
+egal(issue.couvertes, 1, "un mois anterieur a la borne releve de la reprise, non du constat");
+egal(issue.creees, 1, "le mois posterieur a la borne, lui, doit etre porte");
+egal(lire(`select coalesce(sum(quantity),0) from penalties
+           where member_id='${reprise}' and status='due';`), "11",
+  "10 de reprise plus 1 constate : jamais le mois deja compte dans la reprise");
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 psql("postgres", `drop database if exists ${BASE};`);
 console.log(
   `OK - ${controles} controles du reglement declare, executes sur PostgreSQL : ` +
     "declaration sans effet sur la dette, unicite de l'attente, quantites, " +
-    "scission a la validation, refus, solde total",
+    "scission a la validation, refus, solde total, constat rejouable, R4, " +
+    "lignes soldees intactes, borne de reprise",
 );

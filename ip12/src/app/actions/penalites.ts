@@ -7,14 +7,10 @@ import { exigerDroit, exigerMembre } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { avertirReglementPenalite } from "@/lib/avis";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
-import {
-  absencesParMembre,
-  bornesReprisePenalites,
-  reglagesEffectifs,
-  situationsClub,
-} from "@/lib/queries";
-import { dateCourte, moisLong } from "@/lib/settings";
-import { cleRetard, echeanceDuMois, tranchesAbsence } from "@/lib/penalites";
+import { porterRetardsAuRegistre, resumeConstat } from "@/lib/constat";
+import { absencesParMembre, reglagesEffectifs } from "@/lib/queries";
+import { dateCourte } from "@/lib/settings";
+import { tranchesAbsence } from "@/lib/penalites";
 import {
   KIND_PENALITE, METHODE, STATUT_PENALITE, STATUT_REGLEMENT, libelleMode,
 } from "@/lib/valeurs";
@@ -25,110 +21,22 @@ const METHODES = Object.values(METHODE) as string[];
 
 /** Identifiant stable d'une penalite de retard : rend le constat idempotent. */
 
-/** Motif lisible, qui dit pourquoi la penalite est due et a quel titre. */
-function motifPenalite(p: { mois: string; doublee: boolean; figee: boolean }): string {
-  const base = `Retard de versement — ${moisLong(p.mois)}`;
-  if (p.figee) return `${base} (regle apres l'echeance, penalite acquise, art. 9)`;
-  return p.doublee ? `${base} (doublee, R4)` : base;
-}
-
-/**
- * Constate les penalites de retard : transcrit dans le registre ce que les statuts
- * prevoient pour les mois impayes.
- *
- * Rejouable sans risque. Une penalite deja reglee ou annulee n'est jamais retouchee :
- * seules celles encore dues voient leur montant reajuste, ce qui compte puisque R4
- * double les trois derniers mois des que le retard atteint trois mois.
- */
+/** Constat declenche a la main, hors relance : la logique vit dans `lib/constat`. */
 export async function constaterPenalitesRetard(
   _precedent: EtatFormulaire,
   _donnees: FormData,
 ): Promise<EtatFormulaire> {
   const auteur = await exigerDroit("gererPenalites");
-  const sql = db();
-  const [situations, bornes] = await Promise.all([situationsClub(), bornesReprisePenalites()]);
-
-  let creees = 0;
-  let reajustees = 0;
-  let intactes = 0;
-  let couvertes = 0;
-
-  for (const s of situations) {
-    const borne = bornes.get(s.membreId);
-    for (const p of s.penalites) {
-      // Deja compte dans la reprise du tresorier : ne pas le compter une seconde fois.
-      if (borne && p.mois <= borne) {
-        couvertes++;
-        continue;
-      }
-      const cle = cleRetard(s.membreId, p.mois);
-      const echeance = echeanceDuMois(p.mois);
-
-      /*
-       * On cherche la ligne par sa cle, mais aussi par le couple membre-echeance :
-       * la base porte des penalites ecrites par une version anterieure, dont les
-       * cles suivaient une autre convention (`retard:2026-04`, sans identifiant de
-       * membre, et une ligne `majoration:` distincte pour R4). Ne chercher que ses
-       * propres cles reviendrait a recreer ce qui existe deja sous un autre nom.
-       */
-      const existante = await sql`
-        select id, status, unit_amount, source_key from penalties
-        where source_key = ${cle}
-           or (member_id = ${s.membreId}::uuid
-               and kind = ${KIND_PENALITE.retard}
-               and incurred_on = ${echeance}::date)
-        limit 1
-      `;
-
-      if (existante.length === 0) {
-        await sql`
-          insert into penalties (member_id, kind, quantity, unit_amount, reason,
-                                 incurred_on, status, created_by, source_key, auto)
-          values (${s.membreId}::uuid, ${KIND_PENALITE.retard}, 1, ${p.montant},
-                  ${motifPenalite(p)},
-                  ${echeance}::date, ${STATUT_PENALITE.due}, ${auteur.id}::uuid, ${cle}, true)
-        `;
-        creees++;
-        continue;
-      }
-
-      const courante = existante[0];
-      if (courante.status !== STATUT_PENALITE.due || courante.source_key !== cle) {
-        // Soldee, ou ecrite par une autre version : on n'y touche pas.
-        intactes++;
-      } else if (Number(courante.unit_amount) !== p.montant) {
-        await sql`
-          update penalties
-          set unit_amount = ${p.montant},
-              reason = ${motifPenalite(p)}
-          where id = ${courante.id}::uuid
-        `;
-        reajustees++;
-      }
-    }
-  }
+  const issue = await porterRetardsAuRegistre(auteur.id);
 
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "constat_penalites",
     { entite: "penalties" },
-    { creees, reajustees, intactes, couvertes },
+    { ...issue },
   );
   revalidatePath("/", "layout");
-
-  const sousReprise =
-    couvertes > 0
-      ? ` ${couvertes} mois relevent de la reprise du tresorier et ne sont pas recomptes.`
-      : "";
-
-  if (creees === 0 && reajustees === 0) {
-    return { ok: true, message: `Le registre est deja a jour, rien a constater.${sousReprise}` };
-  }
-  const parts: string[] = [];
-  if (creees > 0) parts.push(`${creees} penalite${creees > 1 ? "s" : ""} constatee${creees > 1 ? "s" : ""}`);
-  if (reajustees > 0) parts.push(`${reajustees} reajustee${reajustees > 1 ? "s" : ""} (R4)`);
-  if (intactes > 0) parts.push(`${intactes} deja reglee${intactes > 1 ? "s" : ""} ou annulee${intactes > 1 ? "s" : ""}, laissee${intactes > 1 ? "s" : ""} intacte${intactes > 1 ? "s" : ""}`);
-  return { ok: true, message: `${parts.join(", ")}.${sousReprise}` };
+  return { ok: true, message: resumeConstat(issue) };
 }
 
 /** Identifiant stable d'une tranche d'absences : rend le constat idempotent. */
