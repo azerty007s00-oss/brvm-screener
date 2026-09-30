@@ -50,6 +50,19 @@ export type SituationMembre = {
   /** Vrai quand c'est le cumul de penalites, non les cotisations, qui l'expose. */
   exclusionParPenalites: boolean;
   penalites: PenaliteCalculee[];
+  /**
+   * La penalite que l'art. 9 fait courir sur les mois impayes.
+   *
+   * CE N'EST PAS LA DETTE DU MEMBRE, ET CELA NE S'AFFICHE PAS. Le registre porte
+   * en plus les penalites d'absence, et celles de mois anciens dont la cotisation
+   * a fini par etre versee sans que la penalite le soit. Ce total les ignore : il
+   * a valu a la relance, au recapitulatif du bureau, a l'accueil et a « Mon
+   * compte » d'annoncer 1 000 FCFA quand le club en attendait 8 500.
+   *
+   * Ce qu'un ecran affiche est la dette inscrite plus ce qui court, par
+   * `penalitesNonInscrites` (lib/constat). Ce champ-ci sert au constat, qui
+   * transcrit mois par mois, et aux controles de calcul.
+   */
   totalPenalites: number;
 };
 

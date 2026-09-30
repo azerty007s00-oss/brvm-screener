@@ -960,10 +960,20 @@ export type Synthese = {
   triPeriode: { debut: string; fin: string; annees: number } | null;
   exercice: ReturnType<typeof dietzModifie> | null;
   nbRetardataires: number;
-  /** Ce que les statuts prevoient, calcule a partir des mois impayes. */
-  totalPenalitesCalculees: number;
-  /** Ce que le bureau a effectivement constate et qui reste du. */
-  totalPenalitesDues: number;
+  /*
+   * DEUX TOTAUX DE PENALITES ONT ETE RETIRES D'ICI.
+   *
+   * `totalPenalitesCalculees` sommait ce que les statuts prevoient sur les mois
+   * impayes ; `totalPenalitesDues` sommait le registre. Aucun des deux n'etait
+   * affiche nulle part -- mais le premier tenait le mauvais chiffre sous un nom
+   * plausible, et c'est ce piege qui a produit trois defauts : la relance, le
+   * recapitulatif du bureau et « Mon compte » ont tous annonce, a un moment, la
+   * penalite du mois pour la dette du membre.
+   *
+   * Ce qu'un ecran doit afficher est la dette inscrite plus ce qui court, lu par
+   * `penalitesNonInscrites` (lib/constat) et la part du membre. Ne pas remettre
+   * ici un total qui ne dit ni l'un ni l'autre.
+   */
   enAttenteValidation: number;
 };
 
@@ -1090,8 +1100,6 @@ async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
     triPeriode,
     exercice,
     nbRetardataires: situations.filter((s) => s.nbMoisRetard > 0).length,
-    totalPenalitesCalculees: situations.reduce((s, m) => s + m.totalPenalites, 0),
-    totalPenalitesDues: [...duesParMembre.values()].reduce((s, v) => s + v, 0),
     enAttenteValidation: enAttente.length,
   };
 }

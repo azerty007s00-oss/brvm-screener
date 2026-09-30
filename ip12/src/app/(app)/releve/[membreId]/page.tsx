@@ -15,6 +15,7 @@ import { BoutonImprimer } from "@/components/impression";
 import { Alerte, Carte } from "@/components/ui";
 import { Frise, LegendeEtats, initialeMois, statutLigne } from "@/components/glyphe-etat";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import { penalitesNonInscrites } from "@/lib/constat";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +79,22 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
   const penalitesDues = penalites.filter((p) => p.statut === STATUT_PENALITE.due);
   const penalitesReglees = penalites.filter((p) => p.statut === STATUT_PENALITE.payee);
   const totalDu = penalitesDues.reduce((t, p) => t + p.montant, 0);
+  /*
+   * CE QUE LE RELEVE OMETTAIT, ET QUE LA RELANCE RECLAME.
+   *
+   * « Dues a ce jour » ne comptait que les lignes du registre. La relance, elle,
+   * annonce la dette inscrite PLUS la penalite que l'art. 9 fait courir sur les
+   * mois impayes et que le constat n'a pas encore portee. Un membre lisait donc
+   * 7 500 FCFA sur une piece signee et 8 500 dans un courriel : de quoi
+   * contester la piece a l'assemblee suivante, et elle est faite pour ne pas
+   * l'etre.
+   *
+   * Les deux paraissent, distinctes : ce qui est inscrit, ce qui court, et la
+   * somme. Rien n'est compte deux fois -- `nonInscrites` ne retient que les mois
+   * absents du registre.
+   */
+  const courues = situation ? await penalitesNonInscrites([situation]) : null;
+  const courant = courues?.get(membreId) ?? { nb: 0, montant: 0, mois: [] };
   const edite = new Date().toISOString().slice(0, 10);
   /* Les 14 derniers mois, comme au registre : meme fenetre, memes formes. */
   const fenetre = situation?.cellules.slice(-14) ?? [];
@@ -179,7 +196,11 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
         <section className="mt-4">
           <h2 className="mb-1 text-sm font-semibold">Penalites (art. 9)</h2>
           <ul className="text-sm">
-            {ligne("Dues a ce jour", fcfa(totalDu))}
+            {ligne("Inscrites, dues a ce jour", fcfa(totalDu))}
+            {courant.montant > 0
+              ? ligne("Courues, pas encore inscrites", fcfa(courant.montant))
+              : null}
+            {courant.montant > 0 ? ligne("Total dû", fcfa(totalDu + courant.montant)) : null}
             {ligne("Deja reglees", fcfa(penalitesReglees.reduce((t, p) => t + p.montant, 0)))}
           </ul>
           {penalitesDues.length > 0 && (
@@ -233,14 +254,28 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
           )}
         </section>
 
-        {situation && situation.nbMoisRetard > 0 && (
+        {/*
+          * La section parait aussi sans mois en retard : un membre a jour de ses
+          * cotisations mais devant des penalites -- d'absence, ou de mois anciens
+          * regles apres l'echeance -- n'avait aucune situation statutaire sur sa
+          * piece, alors que c'est precisement le profil que l'assemblee a vise.
+          */}
+        {situation && (situation.nbMoisRetard > 0 || totalDu + courant.montant > 0) && (
           <section className="mt-4">
             <h2 className="mb-1 text-sm font-semibold">Situation statutaire</h2>
             <ul className="text-xs" style={{ color: "var(--discret)" }}>
-              <li>
-                {situation.nbMoisRetard} mois en retard, dont le plus ancien depuis{" "}
-                {situation.joursDeRetard} jours.
-              </li>
+              {situation.nbMoisRetard > 0 && (
+                <li>
+                  {situation.nbMoisRetard} mois en retard, dont le plus ancien depuis{" "}
+                  {situation.joursDeRetard} jours.
+                </li>
+              )}
+              {totalDu + courant.montant > 0 && (
+                <li>
+                  {fcfa(totalDu + courant.montant)} de penalites dues, indissociables des
+                  cotisations.
+                </li>
+              )}
               {situation.voteSuspendu && (
                 <li>
                   Droit de vote suspendu (R2, au-dela de {REGLES.suspensionVoteApresJours} jours),

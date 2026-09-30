@@ -7,6 +7,7 @@ import { Carte, CarteEtat, EnTeteEcran, ValeurChiffree, Vide } from "@/component
 import { LienBouton } from "@/components/boutons";
 import { Frise, GlypheEtat, LIBELLE_STATUT, STATUTS_LEGENDE, statutLigne } from "@/components/glyphe-etat";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import { penalitesNonInscrites } from "@/lib/constat";
 import type { ReactNode } from "react";
 import type { StatutMois } from "@/lib/penalites";
 import { Chiffre } from "@/components/chiffre";
@@ -82,6 +83,8 @@ export default async function TableauDeBord() {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
     throw e;
   }
+  /* Apres `situations`, dont elle a besoin. Rend `null` si le registre resiste. */
+  const courues = await penalitesNonInscrites(situations);
 
   const maPart = s.parts.find((p) => p.membreId === membre.id);
   const maSituation = situations.find((x) => x.membreId === membre.id);
@@ -91,7 +94,24 @@ export default async function TableauDeBord() {
   const maFenetre = maSituation?.cellules.slice(-14) ?? [];
   const moisCourant = debutMois();
   const celluleDuMois = maSituation?.cellules.find((c) => c.mois === moisCourant);
-  const aFaire = maSituation && (maSituation.nbMoisRetard > 0 || maSituation.totalPenalites > 0);
+  /*
+   * LA DETTE DE PENALITES, LA MEME QUE PARTOUT AILLEURS.
+   *
+   * Cet ecran annoncait `totalPenalites`, la penalite que l'art. 9 fait courir
+   * sur les mois impayes, a quatre endroits. Elle ignore tout ce que le registre
+   * porte par ailleurs : les penalites d'absence, et celles de mois anciens dont
+   * la cotisation a fini par etre versee sans que la penalite le soit. L'accueil
+   * affichait donc 1 000 FCFA quand « Mon compte », le recapitulatif du bureau et
+   * la relance en annoncaient 8 500.
+   *
+   * La dette inscrite plus ce qui court : les deux sont dues, et `nonInscrites`
+   * ne retient que les mois absents du registre, donc rien n'est compte deux fois.
+   */
+  const detteDe = (membreId: string) =>
+    (s.parts.find((p) => p.membreId === membreId)?.dues ?? 0) +
+    (courues?.get(membreId)?.montant ?? 0);
+  const maDette = maSituation ? detteDe(membre.id) : 0;
+  const aFaire = maSituation && (maSituation.nbMoisRetard > 0 || maDette > 0);
 
   const rangStatut = (st: StatutMois) => {
     const i = STATUTS_LEGENDE.indexOf(st);
@@ -224,8 +244,15 @@ export default async function TableauDeBord() {
                           brut: celluleDuMois?.manque ?? REGLES.cotisationMensuelle,
                         },
                         {
-                          libelle: `Penalites (${Math.round(REGLES.tauxPenalite * 100)} %)`,
-                          brut: maSituation.totalPenalites,
+                          /*
+                           * L'etiquette disait « Penalites (10 %) », a cote de la
+                           * cotisation du mois : elle promettait donc la penalite
+                           * du mois, et portait le total de tous les mois en
+                           * retard. Elle porte maintenant la dette entiere, et le
+                           * dit.
+                           */
+                          libelle: "Penalites dues",
+                          brut: maDette,
                         },
                       ]}
                     />
@@ -296,7 +323,7 @@ export default async function TableauDeBord() {
                       {r.nbMoisRetard} mois &middot; {r.joursDeRetard} j
                     </span>
                     <span className="w-24 text-right font-medium tabular-nums">
-                      {nombre(r.totalPenalites)}
+                      {nombre(detteDe(r.membreId))}
                     </span>
                   </li>
                 ))}
@@ -340,7 +367,7 @@ export default async function TableauDeBord() {
                 <Couple
                   chiffres={[
                     { libelle: "Versements valides", brut: maSituation.verse },
-                    { libelle: "Penalites dues", brut: maSituation.totalPenalites },
+                    { libelle: "Penalites dues", brut: maDette },
                   ]}
                 />
               </div>
