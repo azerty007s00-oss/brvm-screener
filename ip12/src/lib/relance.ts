@@ -2,8 +2,9 @@ import "server-only";
 import { db } from "@/lib/db";
 import {
   avancesExigees, circuitReglementsPret, penalitesDuesDetaillees, plansRedressement,
-  situationsClub,
-  type AvanceExigee, type DetteMembre, type PlanRedressement, type SituationClub,
+  reglesParMembre, situationsClub,
+  type AvanceExigee, type DetteMembre, type PlanRedressement, type RegleMembre,
+  type SituationClub,
 } from "@/lib/queries";
 import { phaseSeuilR5 } from "@/lib/penalites";
 import { penalitesNonInscrites } from "@/lib/constat";
@@ -51,6 +52,16 @@ export type Destinataire = {
    */
   nonInscrites: { nb: number; montant: number; mois: string[] };
   /**
+   * Les regles individuelles en vigueur pour ce membre.
+   *
+   * Elles pesent sur les calculs sans que le courrier en dise rien : un membre
+   * voyait ses penalites doublees sans savoir pourquoi, un autre une cotisation
+   * qui n'est pas celle de l'article 6. Et celui qui n'avait rien a se
+   * reprocher n'etait destinataire d'aucun courrier : la mesure votee en
+   * assemblee ne lui etait jamais rappelee.
+   */
+  regles: RegleMembre[];
+  /**
    * Le plan de redressement accorde au membre, s'il en beneficie d'un.
    *
    * R5 le reserve au retard declare et ne l'accorde qu'une fois sur la duree du
@@ -94,6 +105,7 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
    */
   const courues = await penalitesNonInscrites(situations);
   const plans = await plansRedressement().catch(() => new Map<string, PlanRedressement>());
+  const regles = await reglesParMembre().catch(() => new Map<string, RegleMembre[]>());
 
   return situations
     .map((situation) => {
@@ -113,6 +125,7 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
         situation,
         nonInscrites: courues?.get(situation.membreId) ?? { nb: 0, montant: 0, mois: [] },
         plan: plans.get(situation.membreId) ?? null,
+        regles: regles.get(situation.membreId) ?? [],
         arrieres: situation.moisEnRetard.filter((m) => m !== moisCourant),
         echeanceDuJour,
         dette: dettes.get(situation.membreId) ?? {
@@ -133,7 +146,20 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
          * et il ne recevait donc aucun courrier a son sujet.
          */
         d.nonInscrites.montant > 0 ||
-        d.avanceManquante !== null,
+        d.avanceManquante !== null ||
+        /*
+         * UNE REGLE INDIVIDUELLE VAUT COURRIER, MEME A JOUR DE TOUT.
+         *
+         * Un membre sous cotisation particuliere, penalites majorees ou plan de
+         * redressement, et qui ne doit rien, n'etait destinataire d'aucun
+         * courrier : la mesure decidee en assemblee ne lui etait jamais
+         * rappelee, et ses penalites tombaient doublees sans explication.
+         *
+         * Une seule fois par mois, cependant, et non aux trois passages : les
+         * rappels des 7 et 9 s'adressent a qui doit quelque chose. Celui-ci est
+         * un rappel de regime, il part avec le courrier de l'echeance.
+         */
+        (d.regles.length > 0 && etatEcheance(maintenant) !== "a_venir"),
     );
 }
 
@@ -231,6 +257,20 @@ export { joursAvantEcheance };
  * date prime sur un simple rappel d'echeance : c'est elle qu'il faut lire.
  */
 export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: Date): string {
+  /*
+   * Rien a reclamer : l'objet ne doit pas annoncer une relance. Un membre a jour
+   * qui lit « versement en retard » ouvre le site pour verifier, ou ecrit au
+   * groupe -- et la prochaine relance, meritee, se lira comme celle-ci.
+   */
+  const rienDu =
+    d.arrieres.length === 0 &&
+    d.echeanceDuJour === null &&
+    d.dette.nb === 0 &&
+    d.nonInscrites.montant === 0 &&
+    d.avanceManquante === null;
+  if (rienDu && d.regles.length > 0) {
+    return `${CLUB.sigle} — rappel de votre regime particulier`;
+  }
   if (d.avanceManquante) return `${CLUB.sigle} — avance obligatoire non constituee`;
   /*
    * Le plan vient apres l'avance non tenue -- celle-ci est un manquement, celui-la
@@ -272,7 +312,7 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
 
 export function texteRelance(
   {
-    situation, arrieres, echeanceDuJour, avanceManquante, dette, nonInscrites, plan,
+    situation, arrieres, echeanceDuJour, avanceManquante, dette, nonInscrites, plan, regles,
   }: Destinataire,
   siteUrl: string,
   maintenant: Date,
@@ -281,6 +321,28 @@ export function texteRelance(
 ): string {
   // Le blanc qui suit l'appel n'a de sens que s'il precede un paragraphe.
   const lignes: string[] = [`Bonjour ${situation.nom},`];
+
+  /*
+   * RIEN A RECLAMER : LE COURRIER CHANGE DE NATURE.
+   *
+   * Un membre sous regle individuelle recoit desormais un courrier meme a jour
+   * de tout. Lui servir l'ouverture d'une relance serait lui reprocher ce qu'il
+   * n'a pas fait -- et la prochaine, meritee celle-la, ne se distinguerait plus.
+   */
+  const rienDu =
+    arrieres.length === 0 &&
+    echeanceDuJour === null &&
+    dette.nb === 0 &&
+    nonInscrites.montant === 0 &&
+    avanceManquante === null;
+  if (rienDu) {
+    lignes.push(
+      "",
+      "Vous etes a jour de vos versements et de vos penalites : ce courrier ne vous " +
+        "reclame rien. Il rappelle les regles particulieres qui vous sont applicables, " +
+        "pour qu'aucune ne vous surprenne.",
+    );
+  }
 
   if (echeanceDuJour) {
     const reste = joursAvantEcheance(maintenant);
@@ -551,6 +613,50 @@ export function texteRelance(
    * qui le protege ni sur son terme. Il pouvait le croire oublie, ou le croire
    * caduc.
    */
+  /*
+   * LES REGLES QUI PESENT SANS SE DIRE.
+   *
+   * L'avance et le plan ont leur propre bloc, ci-dessous : les repeter ici les
+   * diluerait. Restent celles qui changent un montant sans jamais paraitre --
+   * la cotisation particuliere et les penalites majorees -- et la note que le
+   * bureau a pu attacher. Un membre dont les penalites sont doublees par une
+   * decision d'assemblee les voyait tomber sans explication, et pouvait croire
+   * a une erreur du site.
+   */
+  const aDire = regles.filter(
+    (r) => r.nature === "cotisation" || r.nature === "penalite_multiplicateur" || r.nature === "note",
+  );
+  if (aDire.length > 0) {
+    lignes.push("", "VOTRE REGIME PARTICULIER");
+    for (const r of aDire) {
+      const fenetre = [
+        r.debut ? `a compter du ${dateCourte(r.debut)}` : null,
+        r.fin ? `jusqu'au ${dateCourte(r.fin)}` : null,
+      ]
+        .filter(Boolean)
+        .join(", ");
+      const terme = fenetre ? ` (${fenetre})` : "";
+      if (r.nature === "cotisation" && r.valeur) {
+        lignes.push(
+          `  - Cotisation particuliere : ${fcfa(r.valeur)} par mois${terme}, en lieu et ` +
+            "place du montant de l'article 6.",
+        );
+      } else if (r.nature === "penalite_multiplicateur" && r.valeur) {
+        lignes.push(
+          `  - Penalites majorees : vos penalites de retard sont multipliees par ` +
+            `${r.valeur}${terme}. Le taux de l'art. 9 s'applique, puis cette majoration.`,
+        );
+      } else if (r.nature === "note") {
+        lignes.push(`  - ${r.note ?? "Mention portee a votre dossier"}${terme}.`);
+      }
+      if (r.note && r.nature !== "note") lignes.push(`    ${r.note}`);
+    }
+    lignes.push(
+      "Ces regles ont ete decidees en assemblee et sont inscrites a votre dossier. " +
+        "Le bureau peut vous en rappeler les termes.",
+    );
+  }
+
   if (plan) {
     lignes.push(
       "",
@@ -596,7 +702,8 @@ export function texteRelance(
    * message au groupe, et le tresorier saisit a sa place -- ce que l'outil etait
    * cense supprimer. Cinq lignes suffisent a le rendre autonome.
    */
-  if (siteUrl) {
+  /* Le mode d'emploi ne sert qu'a qui doit verser : a jour, c'est du remplissage. */
+  if (siteUrl && !rienDu) {
     lignes.push(
       "",
       "COMMENT ENREGISTRER VOTRE COTISATION",
@@ -650,7 +757,11 @@ export function texteRelance(
    * sont replies par la messagerie sous « messages precedents masques », et le
    * dernier parait vide -- l'ecueil deja rencontre sur les courriers d'essai.
    */
-  lignes.push("", `Relance du ${dateCourte(maintenant.toISOString().slice(0, 10))}.`);
+  /* « Relance » contredirait « ce courrier ne vous reclame rien ». */
+  lignes.push(
+    "",
+    `${rienDu ? "Courrier" : "Relance"} du ${dateCourte(maintenant.toISOString().slice(0, 10))}.`,
+  );
   lignes.push("", `Le bureau — ${CLUB.nom}`);
   return lignes.join("\n");
 }

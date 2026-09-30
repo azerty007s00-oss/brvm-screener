@@ -812,6 +812,30 @@ async function plansDejaAccordesBrut(): Promise<Set<string>> {
   );
 }
 
+/**
+ * Toutes les regles individuelles en vigueur, par membre.
+ *
+ * POURQUOI LA RELANCE EN A BESOIN. Le club peut convenir d'une cotisation
+ * particuliere, majorer les penalites d'un membre sous sanction, lui imposer une
+ * avance, lui accorder un plan. Ces regles PESENT sur les calculs -- le montant
+ * reclame, le montant des penalites -- sans que le courrier en dise un mot : un
+ * membre voyait ses penalites doublees sans savoir pourquoi, et un autre une
+ * cotisation qui n'est pas celle de l'article 6.
+ *
+ * Pire : un membre sous regle mais a jour de tout n'etait destinataire d'aucun
+ * courrier. Une mesure decidee en assemblee ne lui etait jamais rappelee.
+ */
+async function reglesParMembreBrut(): Promise<Map<string, RegleMembre[]>> {
+  const regles = await reglesIndividuelles().catch(() => [] as RegleMembre[]);
+  const index = new Map<string, RegleMembre[]>();
+  for (const r of regles) {
+    const siennes = index.get(r.membreId) ?? [];
+    siennes.push(r);
+    index.set(r.membreId, siennes);
+  }
+  return index;
+}
+
 /** Les derogations en vigueur, indexees par membre, pretes pour le calcul. */
 async function derogationsParMembreBrut(): Promise<Map<string, ReglesMembre>> {
   const regles = await reglesIndividuelles();
@@ -1270,6 +1294,7 @@ export function listerMembres(inclureInactifs = false): Promise<MembreListe[]> {
   return listerMembresCache(inclureInactifs);
 }
 
+export const reglesParMembre = cache(reglesParMembreBrut);
 export const plansRedressement = cache(plansRedressementBrut);
 export const plansDejaAccordes = cache(plansDejaAccordesBrut);
 

@@ -81,6 +81,11 @@ export type PlanRedressement = {
   note: string | null;
 };
 export const plansRedressement = async () => new Map<string, PlanRedressement>();
+export type RegleMembre = {
+  id: string; membreId: string; membreNom: string; nature: string;
+  valeur: number | null; debut: string | null; fin: string | null; note: string | null;
+};
+export const reglesParMembre = async () => new Map<string, RegleMembre[]>();
 export const envoyerCourriel = async (_a?: unknown) => ({ ok: true });
 export const transportConfigure = () => "aucun" as string;
 `);
@@ -129,6 +134,7 @@ const bourama = {
   /* Aout et septembre : l'art. 9 court, le registre ne les porte pas encore. */
   nonInscrites: { nb: 2, montant: 1000, mois: ["2026-08-01", "2026-09-01"] },
   plan: null,
+  regles: [],
   avanceManquante: null,
 };
 const LE_30 = new Date("2026-09-30T08:00:00Z");
@@ -426,10 +432,113 @@ verifier(
   "un membre sous deux mesures doit lire les deux",
 );
 
+/* ------------------------------------------- les regles individuelles */
+
+/*
+ * ELLES PESAIENT SANS SE DIRE. Une cotisation particuliere et des penalites
+ * majorees changent les montants reclames, et le courrier n'en disait rien : le
+ * membre voyait ses penalites doublees sans savoir pourquoi, et pouvait croire a
+ * une erreur du site. Celui qui n'avait rien a se reprocher, lui, ne recevait
+ * aucun courrier : la mesure votee en assemblee ne lui etait jamais rappelee.
+ */
+const REGLES_DEUX = [
+  {
+    id: "r1", membreId: "b", membreNom: "KONE Bourama", nature: "penalite_multiplicateur",
+    valeur: 2, debut: "2026-07-01", fin: "2027-06-30", note: "Sanction de l'assemblee du 28/06",
+  },
+  {
+    id: "r2", membreId: "b", membreNom: "KONE Bourama", nature: "cotisation",
+    valeur: 7500, debut: null, fin: null, note: null,
+  },
+];
+const texteRegles = lettre({ ...bourama, regles: REGLES_DEUX });
+
+verifier(/VOTRE REGIME PARTICULIER/.test(texteRegles), "les regles en vigueur doivent paraitre");
+verifier(
+  /Penalites majorees : vos penalites de retard sont multipliees par 2/.test(texteRegles),
+  "la majoration doit etre dite : sans elle, le montant parait faux",
+);
+verifier(
+  /a compter du 01\/07\/2026, jusqu'au 30\/06\/2027/.test(texteRegles),
+  "la fenetre de la regle doit etre dite : une derogation sans terme est un regime durable",
+);
+verifier(
+  texteRegles.includes("Sanction de l'assemblee du 28/06"),
+  "le motif inscrit au dossier doit etre rappele",
+);
+verifier(
+  /Cotisation particuliere : 7 500 FCFA par mois/.test(texteRegles),
+  "une cotisation particuliere doit etre dite, et non subie",
+);
+verifier(
+  !/VOTRE REGIME PARTICULIER/.test(texteBourama),
+  "sans regle, la section n'encombre pas le courrier",
+);
+
+/* L'avance et le plan gardent leur bloc : on ne les repete pas ici. */
+const avecAvanceEtRegle = lettre({
+  ...bourama,
+  regles: [{
+    id: "r3", membreId: "b", membreNom: "KONE Bourama", nature: "avance_min",
+    valeur: 3, debut: null, fin: null, note: null,
+  }],
+  avanceManquante: sousAvance.avanceManquante,
+});
+verifier(
+  !/VOTRE REGIME PARTICULIER/.test(avecAvanceEtRegle),
+  "l'avance a son propre bloc : la repeter dans le regime la diluerait",
+);
+verifier(
+  /MESURE DISCIPLINAIRE — avance obligatoire/.test(avecAvanceEtRegle),
+  "et ce bloc-la doit bien paraitre",
+);
+
+/* --------------- a jour de tout, mais sous regle : un autre courrier */
+
+const aJourSousRegle = {
+  ...bourama,
+  situation: { ...bourama.situation, moisEnRetard: [], joursDeRetard: 0, cellules: [] },
+  arrieres: [],
+  echeanceDuJour: null,
+  dette: { nb: 0, montant: 0, nbRetard: 0, montantRetard: 0 },
+  nonInscrites: { nb: 0, montant: 0, mois: [] },
+  regles: REGLES_DEUX,
+};
+const texteAJour = lettre(aJourSousRegle);
+
+verifier(
+  sujetRelance(aJourSousRegle, "2026-09-01", LE_30).includes("rappel de votre regime particulier"),
+  "a jour de tout, l'objet ne doit pas annoncer une relance",
+);
+verifier(
+  texteAJour.includes("ce courrier ne vous reclame rien"),
+  "et le courrier doit le dire des la premiere ligne",
+);
+verifier(
+  /VOTRE REGIME PARTICULIER/.test(texteAJour),
+  "c'est bien le regime qui lui est rappele",
+);
+verifier(
+  !/COMMENT ENREGISTRER VOTRE COTISATION/.test(texteAJour),
+  "le mode d'emploi ne sert qu'a qui doit verser",
+);
+verifier(
+  !/en retard|penalite de l'art\. 9 court/.test(texteAJour),
+  "rien ne doit lui etre reproche",
+);
+verifier(
+  /^Courrier du 30\/09\/2026\.$/m.test(texteAJour) && !/^Relance du/m.test(texteAJour),
+  "le pied ne doit pas dire « relance » sur un courrier qui ne reclame rien",
+);
+verifier(
+  /^Relance du 30\/09\/2026\.$/m.test(texteBourama),
+  "et doit bien le dire quand il en est une",
+);
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 console.log(
   `OK - ${controles} controles du courrier de relance : objet, seuil R5, ` +
     "dettes de penalites et leur somme, liste des mois, R2, mode d'emploi des cotisations " +
-    "et des penalites, mesures disciplinaires",
+    "et des penalites, mesures disciplinaires, regime particulier",
 );
