@@ -762,6 +762,56 @@ async function avancesExigeesBrut(aujourdhui: Date): Promise<AvanceExigee[]> {
     });
 }
 
+/**
+ * Les plans de redressement accordes, en vigueur.
+ *
+ * POURQUOI CETTE LECTURE N'EXISTAIT PAS. Le bureau pouvait inscrire un plan de
+ * redressement depuis Administration -- R5 le reserve au retard declare, et ne
+ * l'accorde qu'une fois sur la duree du club -- et rien ne le relisait jamais :
+ * ni `issueR5`, qui prend pourtant `planDejaUtilise` en parametre, ni la
+ * relance, qui reclamait a un membre sous plan comme a tout autre. Une mesure
+ * inscrite que l'outil ignore vaut une mesure non prise.
+ */
+export type PlanRedressement = {
+  membreId: string;
+  membreNom: string;
+  debut: string | null;
+  /** Terme du plan, s'il en a ete fixe un. */
+  fin: string | null;
+  note: string | null;
+};
+
+async function plansRedressementBrut(): Promise<Map<string, PlanRedressement>> {
+  const regles = await reglesIndividuelles().catch(() => [] as RegleMembre[]);
+  const index = new Map<string, PlanRedressement>();
+  for (const r of regles) {
+    if (r.nature !== REGLE_MEMBRE.planRedressement) continue;
+    /* Le plus recent fait foi : `reglesIndividuelles` les rend deja dans cet ordre. */
+    if (index.has(r.membreId)) continue;
+    index.set(r.membreId, {
+      membreId: r.membreId,
+      membreNom: r.membreNom,
+      debut: r.debut,
+      fin: r.fin,
+      note: r.note,
+    });
+  }
+  return index;
+}
+
+/**
+ * Tout membre ayant DEJA beneficie d'un plan, fenetre passee comprise.
+ *
+ * R5 ne l'accorde qu'une fois sur la duree du club : la question « en a-t-il
+ * deja eu un ? » ne se juge donc pas sur les seules regles en vigueur.
+ */
+async function plansDejaAccordesBrut(): Promise<Set<string>> {
+  const regles = await reglesIndividuelles(true).catch(() => [] as RegleMembre[]);
+  return new Set(
+    regles.filter((r) => r.nature === REGLE_MEMBRE.planRedressement).map((r) => r.membreId),
+  );
+}
+
 /** Les derogations en vigueur, indexees par membre, pretes pour le calcul. */
 async function derogationsParMembreBrut(): Promise<Map<string, ReglesMembre>> {
   const regles = await reglesIndividuelles();
@@ -1219,6 +1269,9 @@ const listerMembresCache = cache(listerMembresBrut);
 export function listerMembres(inclureInactifs = false): Promise<MembreListe[]> {
   return listerMembresCache(inclureInactifs);
 }
+
+export const plansRedressement = cache(plansRedressementBrut);
+export const plansDejaAccordes = cache(plansDejaAccordesBrut);
 
 const reglesIndividuellesCache = cache(reglesIndividuellesBrut);
 export function reglesIndividuelles(toutes = false): Promise<RegleMembre[]> {

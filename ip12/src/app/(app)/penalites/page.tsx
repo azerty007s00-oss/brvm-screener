@@ -6,6 +6,7 @@ import {
   bornesReprisePenalites,
   listerMembres,
   listerPenalites,
+  plansDejaAccordes,
   reglementsPenalite,
   situationsClub,
 } from "@/lib/queries";
@@ -20,7 +21,7 @@ import {
   rejeterReglementPenalite,
   validerReglementPenalite,
 } from "@/app/actions/penalites";
-import { dejaAuRegistre, tranchesAbsence } from "@/lib/penalites";
+import { dejaAuRegistre, issueR5, tranchesAbsence } from "@/lib/penalites";
 import { EFFET, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import {
   KIND_PENALITE, MODES_AFFICHES, STATUT_PENALITE, STATUT_REGLEMENT, libelleMode,
@@ -44,6 +45,13 @@ import {
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Penalites" };
 
+/** Ce que R5 emporte, en trois mots, avant le detail. */
+const LIBELLE_VOIE: Record<string, string> = {
+  exclusion_plein_droit: "Exclusion de plein droit",
+  plan_redressement: "Plan de redressement",
+  vote_art20: "Vote de l'assemblee (art. 20)",
+};
+
 const LIBELLE_NATURE: Record<string, string> = {
   [KIND_PENALITE.retard]: "Retard de versement",
   [KIND_PENALITE.absence]: "Absence en reunion",
@@ -54,9 +62,11 @@ export default async function PagePenalites() {
   const membre = await exigerMembre();
   const gere = peut(membre, "gererPenalites");
 
-  let penalites, membres, situations, absences, avances, bornes, declarations, pieces;
+  let penalites, membres, situations, absences, avances, bornes, declarations, pieces,
+    plansUtilises;
   try {
-    [penalites, membres, situations, absences, avances, bornes, declarations, pieces] =
+    [penalites, membres, situations, absences, avances, bornes, declarations, pieces,
+      plansUtilises] =
       await Promise.all([
         listerPenalites(gere ? undefined : { membreId: membre.id }),
         listerMembres(),
@@ -77,6 +87,8 @@ export default async function PagePenalites() {
         }),
         /* Elle avale deja ses propres erreurs : la page s'affiche sans les vignettes. */
         justificatifsParLot(),
+        /* Qui a deja use de son plan unique : R5 ne l'accorde qu'une fois. */
+        plansDejaAccordes().catch(() => new Set<string>()),
       ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -131,9 +143,28 @@ export default async function PagePenalites() {
    * Les membres que le cumul de penalites expose a l'exclusion. La regle ne mord
    * qu'a sa date d'effet : avant elle, le decompte s'affiche en avertissement.
    */
-  const exposes = situations.filter(
-    (x) => x.nbPenalitesImpayees >= REGLES.penalitesImpayeesAvantExclusion,
-  );
+  /*
+   * ET CE QUE R5 PREVOIT POUR CHACUN, NOMMEMENT.
+   *
+   * La page se contentait de compter : « 2 membres exposes », puis leurs noms.
+   * Or R5 ne conduit pas au meme endroit pour tous -- exclusion de plein droit
+   * si le retard n'a pas ete declare au groupe (R3), plan de redressement s'il
+   * l'a ete, vote de l'art. 20 si le membre a deja use de son plan unique.
+   * `issueR5` decide cela depuis le debut, et n'etait appelee par aucune page :
+   * onze controles la verifiaient, personne ne s'en servait. Le bureau lisait
+   * donc une liste de noms sans savoir ce qu'elle emportait.
+   */
+  const exposes = situations
+    .filter((x) => x.nbPenalitesImpayees >= REGLES.penalitesImpayeesAvantExclusion)
+    .map((x) => ({
+      ...x,
+      issue: issueR5(
+        x.nbMoisRetard,
+        x.retardDeclare,
+        plansUtilises.has(x.membreId),
+        x.nbPenalitesImpayees,
+      ),
+    }));
   const regleEnVigueur =
     new Date().toISOString().slice(0, 10) >= EFFET.penalitesIndissociables;
   const dateEffet = EFFET.penalitesIndissociables
@@ -252,6 +283,11 @@ export default async function PagePenalites() {
             {exposes.map((x) => (
               <li key={x.membreId}>
                 {x.nom} &middot; {x.nbPenalitesImpayees} penalites impayees
+                {x.issue.applicable && (
+                  <span className="block text-xs" style={{ color: "var(--discret)" }}>
+                    {LIBELLE_VOIE[x.issue.voie ?? ""] ?? ""} &mdash; {x.issue.texte}
+                  </span>
+                )}
               </li>
             ))}
           </ul>

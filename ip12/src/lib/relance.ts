@@ -1,8 +1,9 @@
 import "server-only";
 import { db } from "@/lib/db";
 import {
-  avancesExigees, circuitReglementsPret, penalitesDuesDetaillees, situationsClub,
-  type AvanceExigee, type DetteMembre, type SituationClub,
+  avancesExigees, circuitReglementsPret, penalitesDuesDetaillees, plansRedressement,
+  situationsClub,
+  type AvanceExigee, type DetteMembre, type PlanRedressement, type SituationClub,
 } from "@/lib/queries";
 import { phaseSeuilR5 } from "@/lib/penalites";
 import { penalitesNonInscrites } from "@/lib/constat";
@@ -50,6 +51,16 @@ export type Destinataire = {
    */
   nonInscrites: { nb: number; montant: number; mois: string[] };
   /**
+   * Le plan de redressement accorde au membre, s'il en beneficie d'un.
+   *
+   * R5 le reserve au retard declare et ne l'accorde qu'une fois sur la duree du
+   * club. Le bureau pouvait l'inscrire, et la relance l'ignorait : elle
+   * reclamait a un membre sous plan exactement comme a tout autre, sans un mot
+   * sur la mesure ni sur son terme. Une mesure que l'outil ignore vaut une
+   * mesure non prise -- et le membre qui la respecte doit le lire.
+   */
+  plan: PlanRedressement | null;
+  /**
    * Avance minimale imposee au membre et non tenue.
    *
    * Une mesure disciplinaire assortie d'une date ne vaut que si l'interesse en est
@@ -82,6 +93,7 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
    * les trois annoncent la meme somme.
    */
   const courues = await penalitesNonInscrites(situations);
+  const plans = await plansRedressement().catch(() => new Map<string, PlanRedressement>());
 
   return situations
     .map((situation) => {
@@ -100,6 +112,7 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
       return {
         situation,
         nonInscrites: courues?.get(situation.membreId) ?? { nb: 0, montant: 0, mois: [] },
+        plan: plans.get(situation.membreId) ?? null,
         arrieres: situation.moisEnRetard.filter((m) => m !== moisCourant),
         echeanceDuJour,
         dette: dettes.get(situation.membreId) ?? {
@@ -220,6 +233,14 @@ export { joursAvantEcheance };
 export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: Date): string {
   if (d.avanceManquante) return `${CLUB.sigle} — avance obligatoire non constituee`;
   /*
+   * Le plan vient apres l'avance non tenue -- celle-ci est un manquement, celui-la
+   * une mesure que le membre respecte peut-etre -- mais avant le simple retard :
+   * c'est le courrier qu'il faut ouvrir.
+   */
+  if (d.plan && d.arrieres.length > 0) {
+    return `${CLUB.sigle} — plan de redressement : ${d.arrieres.length} mois a regulariser`;
+  }
+  /*
    * LE COMPTE DES MOIS EN RETARD, PAS CELUI DES MOIS ANTERIEURS.
    *
    * L'objet annoncait `arrieres.length`, qui exclut le mois courant : au
@@ -250,7 +271,9 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
 }
 
 export function texteRelance(
-  { situation, arrieres, echeanceDuJour, avanceManquante, dette, nonInscrites }: Destinataire,
+  {
+    situation, arrieres, echeanceDuJour, avanceManquante, dette, nonInscrites, plan,
+  }: Destinataire,
   siteUrl: string,
   maintenant: Date,
   /* Faux tant que la migration n'a pas cree `penalty_settlements`. */
@@ -458,7 +481,24 @@ export function texteRelance(
      * La regle ne mord qu'a sa date d'effet. Annoncer une exclusion « encourue de
      * plein droit depuis » une date a venir serait faux, et alarmerait a tort.
      */
-    if (phase === "atteint_en_vigueur") {
+    /*
+     * LE PLAN COUVRE CETTE DETTE-LA AUSSI.
+     *
+     * Le courrier annoncait le seuil atteint et l'exclusion de plein droit, puis
+     * expliquait vingt lignes plus bas qu'un plan de redressement l'ecarte. Les
+     * deux paragraphes se contredisaient dans le meme courrier. `issueR5` a
+     * toujours dit le contraire : « le plan porte sur l'ensemble de sa dette,
+     * ses penalites impayees en font partie, celles-ci etant indissociables des
+     * cotisations ».
+     */
+    if (plan && phase !== "sous_le_seuil") {
+      lignes.push(
+        `Vos ${dette.nbRetard} penalites de retard impayees atteignent le seuil de ${seuil} ` +
+          "fixe par l'assemblee. Elles entrent dans le plan de redressement detaille " +
+          "plus bas : l'exclusion de plein droit est ecartee tant que vous en tenez " +
+          "les termes.",
+      );
+    } else if (phase === "atteint_en_vigueur") {
       lignes.push(
         `Vos penalites de retard atteignent le seuil de ${seuil} fixe par l'assemblee : ` +
           "les penalites etant " +
@@ -498,6 +538,39 @@ export function texteRelance(
           `${dateCourte(effet)}.`,
       );
     }
+  }
+
+  /*
+   * LES MESURES DISCIPLINAIRES, TOUTES, ET AVANT LE MODE D'EMPLOI.
+   *
+   * Le courrier n'en connaissait qu'une : l'avance obligatoire. Le plan de
+   * redressement, que le bureau peut accorder depuis Administration et que R5
+   * ne donne qu'une fois sur la duree du club, n'etait relu par personne -- ni
+   * ici, ni par `issueR5`, qui le prend pourtant en parametre. Un membre sous
+   * plan recevait donc la meme relance que tout autre, sans un mot sur la mesure
+   * qui le protege ni sur son terme. Il pouvait le croire oublie, ou le croire
+   * caduc.
+   */
+  if (plan) {
+    lignes.push(
+      "",
+      "MESURE DISCIPLINAIRE — plan de redressement (R5).",
+      "L'assemblee vous a accorde un plan de redressement : votre retard declare " +
+        "au groupe (R3) vous en a ouvert le benefice, et l'exclusion de plein droit " +
+        "est ecartee tant que vous en tenez les termes.",
+      plan.note ? `Termes convenus : ${plan.note}` : "Les termes sont ceux convenus en assemblee.",
+      plan.fin
+        ? `Le plan court jusqu'au ${dateCourte(plan.fin)}. Passe ce terme, le regime ` +
+          "commun s'applique de nouveau."
+        : "Le plan est sans terme fixe.",
+      /*
+       * La phrase qui compte. R5 n'accorde le plan qu'une fois : un membre qui
+       * le laisse expirer sans regulariser ne retrouve pas le droit commun, il
+       * tombe sous le vote de l'art. 20.
+       */
+      "Ce plan ne s'accorde qu'une fois sur la duree du club : s'il devait ne pas " +
+        "etre tenu, l'exclusion serait soumise au vote de l'assemblee (art. 20).",
+    );
   }
 
   if (avanceManquante) {

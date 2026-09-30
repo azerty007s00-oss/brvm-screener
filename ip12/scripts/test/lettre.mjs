@@ -76,6 +76,11 @@ export const listerPenalites = async (_f?: unknown): Promise<{
   membre_id: string; nature: string; date_constat: string; source_key: string | null;
 }[]> => [];
 export const bornesReprisePenalites = async () => new Map<string, string>();
+export type PlanRedressement = {
+  membreId: string; membreNom: string; debut: string | null; fin: string | null;
+  note: string | null;
+};
+export const plansRedressement = async () => new Map<string, PlanRedressement>();
 export const envoyerCourriel = async (_a?: unknown) => ({ ok: true });
 export const transportConfigure = () => "aucun" as string;
 `);
@@ -123,6 +128,7 @@ const bourama = {
   dette: { nb: 15, montant: 7500, nbRetard: 15, montantRetard: 7500 },
   /* Aout et septembre : l'art. 9 court, le registre ne les porte pas encore. */
   nonInscrites: { nb: 2, montant: 1000, mois: ["2026-08-01", "2026-09-01"] },
+  plan: null,
   avanceManquante: null,
 };
 const LE_30 = new Date("2026-09-30T08:00:00Z");
@@ -316,10 +322,114 @@ verifier(
   "circuit absent ou non, la dette s'annonce",
 );
 
+/* ------------------------------------------- les mesures disciplinaires */
+
+/*
+ * AUCUNE DE CES LIGNES N'ETAIT CONTROLEE, et c'est ce qui a laisse passer le
+ * defaut : le plan de redressement, que le bureau peut accorder depuis
+ * Administration et que R5 ne donne qu'une fois sur la duree du club, n'etait
+ * relu par personne. Un membre sous plan recevait la meme relance que tout
+ * autre -- sans un mot sur la mesure qui le protege, ni sur son terme.
+ */
+const sousPlan = {
+  ...bourama,
+  plan: {
+    membreId: "b",
+    membreNom: "KONE Bourama",
+    debut: "2026-09-01",
+    fin: "2027-03-31",
+    note: "5 000 FCFA par mois en sus de la cotisation",
+  },
+};
+const texteSousPlan = lettre(sousPlan);
+
+verifier(
+  /MESURE DISCIPLINAIRE — plan de redressement \(R5\)/.test(texteSousPlan),
+  "le plan accorde doit paraitre dans la relance, et non rester au registre",
+);
+verifier(
+  texteSousPlan.includes("5 000 FCFA par mois en sus de la cotisation"),
+  "les termes convenus doivent etre rappeles : c'est ce que le membre doit tenir",
+);
+verifier(
+  /court jusqu'au 31\/03\/2027/.test(texteSousPlan),
+  "le terme du plan doit etre dit : sans date, le membre le croit sans fin",
+);
+verifier(
+  texteSousPlan.includes("ne s'accorde qu'une fois"),
+  "R5 n'accorde le plan qu'une fois : le courrier doit le dire",
+);
+verifier(
+  texteSousPlan.includes("vote de l'assemblee (art. 20)"),
+  "et dire ce qui suit s'il n'est pas tenu",
+);
+verifier(
+  !/MESURE DISCIPLINAIRE/.test(texteBourama),
+  "sans mesure, aucun bloc disciplinaire n'encombre le courrier",
+);
+verifier(
+  lettre({ ...sousPlan, plan: { ...sousPlan.plan, fin: null } }).includes("sans terme fixe"),
+  "un plan sans terme doit le dire",
+);
+verifier(
+  sujetRelance(sousPlan, "2026-09-01", LE_30).includes("plan de redressement"),
+  "l'objet doit nommer le plan, non un simple retard",
+);
+
+/*
+ * Le courrier annoncait le seuil atteint et l'exclusion de plein droit, puis
+ * expliquait plus bas qu'un plan l'ecarte : deux paragraphes qui se
+ * contredisaient. Le plan porte sur l'ensemble de la dette, penalites comprises.
+ */
+verifier(
+  /Elles entrent dans le plan de redressement/.test(texteSousPlan),
+  "sous plan, les penalites doivent etre dites couvertes par lui",
+);
+verifier(
+  !/ce cumul emportera l'exclusion de plein droit/.test(texteSousPlan),
+  "sous plan, le courrier ne doit pas annoncer l'exclusion que le plan ecarte",
+);
+verifier(
+  /ce cumul emportera l'exclusion de plein droit/.test(texteBourama),
+  "sans plan, l'avertissement du seuil tient",
+);
+
+/* --------------------------------------------- l'avance obligatoire */
+
+const sousAvance = {
+  ...bourama,
+  avanceManquante: { mois: 3, montantExige: 15000, avanceDetenue: 5000, fin: "2027-06-30" },
+};
+const texteAvance = lettre(sousAvance);
+
+verifier(
+  /MESURE DISCIPLINAIRE — avance obligatoire/.test(texteAvance),
+  "l'avance imposee doit paraitre",
+);
+verifier(
+  texteAvance.includes("il manque 10 000 FCFA"),
+  "le courrier doit dire ce qui manque, non le seul montant exige",
+);
+verifier(
+  /court jusqu'au 30\/06\/2027/.test(texteAvance),
+  "l'obligation datee doit porter sa date : un delai qu'on ignore ne se tient pas",
+);
+verifier(
+  sujetRelance(sousAvance, "2026-09-01", LE_30).includes("avance obligatoire non constituee"),
+  "l'avance non tenue prime dans l'objet",
+);
+
+/* Les deux mesures ensemble : aucune n'efface l'autre. */
+const lesDeux = lettre({ ...sousPlan, avanceManquante: sousAvance.avanceManquante });
+verifier(
+  /plan de redressement/.test(lesDeux) && /avance obligatoire/.test(lesDeux),
+  "un membre sous deux mesures doit lire les deux",
+);
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 console.log(
   `OK - ${controles} controles du courrier de relance : objet, seuil R5, ` +
     "dettes de penalites et leur somme, liste des mois, R2, mode d'emploi des cotisations " +
-    "et des penalites",
+    "et des penalites, mesures disciplinaires",
 );
