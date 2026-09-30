@@ -2,7 +2,10 @@ import "server-only";
 import { db } from "@/lib/db";
 import { avancesExigees, situationsClub, type AvanceExigee, type SituationClub } from "@/lib/queries";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
-import { CLUB, EFFET, REGLES, dateCourte, deMois, debutMois, fcfa, lienDuSite, moisLong } from "@/lib/settings";
+import {
+  CLUB, EFFET, REGLES, dateCourte, deMois, debutMois, etatEcheance, fcfa,
+  joursAvantEcheance, lienDuSite, moisLong,
+} from "@/lib/settings";
 
 /**
  * Fabrique et envoi des relances.
@@ -160,9 +163,7 @@ export async function tracerRelances(
  * La relance part plusieurs fois avant le 10 : ecrire « du aujourd'hui » le 7
  * serait faux, et user la formule pour le jour ou elle compte vraiment.
  */
-export function joursAvantEcheance(maintenant: Date): number {
-  return REGLES.jourEcheance - maintenant.getUTCDate();
-}
+export { joursAvantEcheance };
 
 /*
  * L'objet nomme le motif le plus grave. Une mesure disciplinaire assortie d'une
@@ -174,10 +175,13 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
   if (d.situation.nbPenalitesImpayees > 0) {
     return `${CLUB.sigle} — ${d.situation.nbPenalitesImpayees} penalite(s) de retard impayee(s)`;
   }
-  const reste = joursAvantEcheance(maintenant);
-  return reste > 0
-    ? `${CLUB.sigle} — versement ${deMois(moisCourant)} attendu le ${REGLES.jourEcheance}`
-    : `${CLUB.sigle} — votre versement ${deMois(moisCourant)} est du aujourd'hui`;
+  const ou = etatEcheance(maintenant);
+  if (ou === "a_venir") {
+    return `${CLUB.sigle} — versement ${deMois(moisCourant)} attendu le ${REGLES.jourEcheance}`;
+  }
+  return ou === "aujourdhui"
+    ? `${CLUB.sigle} — votre versement ${deMois(moisCourant)} est du aujourd'hui`
+    : `${CLUB.sigle} — votre versement ${deMois(moisCourant)} est en retard`;
 }
 
 export function texteRelance(
@@ -190,6 +194,7 @@ export function texteRelance(
 
   if (echeanceDuJour) {
     const reste = joursAvantEcheance(maintenant);
+    const ou = etatEcheance(maintenant);
     /*
      * Le montant annonce est ce qui reste a verser, non la cotisation entiere :
      * ecrire « votre versement de 5 000 est du » a quelqu'un qui en a deja verse
@@ -207,13 +212,25 @@ export function texteRelance(
         : "";
     lignes.push(
       "",
-      (reste > 0
+      /*
+       * TROIS CAS, ET NON DEUX. « Est du aujourd'hui, dernier jour de
+       * l'echeance » s'ecrivait aussi bien le 10 que le 30 : le 30 septembre,
+       * un membre en retard de vingt jours lisait dans le meme courrier qu'il
+       * avait une penalite impayee ET que son versement etait du du jour meme.
+       * La phrase le dedouanait de ce que la ligne suivante lui reprochait.
+       */
+      (ou === "a_venir"
         ? `Votre versement de ${fcfa(du)} pour ` +
           `${moisLong(echeanceDuJour)} est attendu au plus tard le ${REGLES.jourEcheance} ` +
           `(art. 8) : il vous reste ${reste} jour${reste > 1 ? "s" : ""}.`
-        : `Votre versement de ${fcfa(du)} pour ` +
-          `${moisLong(echeanceDuJour)} est du aujourd'hui, dernier jour de l'echeance ` +
-          "statutaire (art. 8).") + rappelAcompte,
+        : ou === "aujourdhui"
+          ? `Votre versement de ${fcfa(du)} pour ` +
+            `${moisLong(echeanceDuJour)} est du aujourd'hui, dernier jour de l'echeance ` +
+            "statutaire (art. 8)."
+          : `Votre versement de ${fcfa(du)} pour ` +
+            `${moisLong(echeanceDuJour)} etait du le ${REGLES.jourEcheance} (art. 8) : ` +
+            `il est en retard de ${-reste} jour${-reste > 1 ? "s" : ""}, et la penalite ` +
+            "de l'art. 9 court.") + rappelAcompte,
     );
   }
 
@@ -337,7 +354,15 @@ export function texteRelance(
       "",
       "COMMENT ENREGISTRER VOTRE VERSEMENT",
       `  1. Ouvrez ${siteUrl} et connectez-vous.`,
-      "  2. Touchez le menu, en haut a gauche, puis « Versements ».",
+      /*
+       * Le tiroir a disparu avec la refonte : la navigation est en bas de
+       * l'ecran sur telephone, dans une colonne a gauche sur ordinateur. Le
+       * courrier decrivait encore le menu d'avant -- et un membre qui suit une
+       * consigne fausse ecrit au groupe, ce que ces cinq lignes servent
+       * justement a eviter.
+       */
+      "  2. Touchez « Versements » : dans la barre du bas sur telephone,",
+      "     dans la colonne de gauche sur ordinateur.",
       "  3. Ouvrez « Declarer un versement » et indiquez le mois couvert,",
       "     le montant, la date et le moyen de paiement.",
       "  4. Joignez la capture de votre transfert : elle epargne une question.",

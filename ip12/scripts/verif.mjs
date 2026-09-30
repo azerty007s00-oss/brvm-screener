@@ -31,7 +31,10 @@ const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois,
 } = await import("../.verif/penalites.mjs");
-const { tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa } = await import(
+const {
+  tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa,
+  joursAvantEcheance, etatEcheance,
+} = await import(
   "../.verif/settings.mjs"
 );
 const { statutLigne, moisCourt, initialeMois, resumeFrise, LIBELLE_STATUT } = await import(
@@ -1078,10 +1081,32 @@ assert.deepEqual(reperesTemps("2026-09-28", "2026-09-28", 1000), []);
   assert.equal(arrive.gain, 0);
 }
 
+/* ------------------------------------------------- l'etat de l'echeance du mois */
+
+/*
+ * TROIS ETATS, ET NON DEUX.
+ *
+ * Le courrier n'en connaissait que deux -- avant le 10, et tout le reste -- et
+ * ecrivait donc « est du aujourd'hui, dernier jour de l'echeance statutaire »
+ * aussi bien le 10 que le 30. Une relance du 30 septembre a un membre en retard
+ * de vingt jours lui annoncait une penalite impayee a la ligne suivante : la
+ * phrase le dedouanait de ce qu'on lui reprochait.
+ */
+assert.equal(etatEcheance(new Date("2026-09-01T08:00:00Z")), "a_venir");
+assert.equal(joursAvantEcheance(new Date("2026-09-01T08:00:00Z")), 9);
+
+assert.equal(etatEcheance(new Date("2026-09-10T08:00:00Z")), "aujourdhui");
+assert.equal(joursAvantEcheance(new Date("2026-09-10T08:00:00Z")), 0);
+
+// Le 11 au matin, l'echeance est passee : c'est un retard, pas « aujourd'hui ».
+assert.equal(etatEcheance(new Date("2026-09-11T08:00:00Z")), "passee");
+assert.equal(joursAvantEcheance(new Date("2026-09-30T08:00:00Z")), -20);
+assert.equal(etatEcheance(new Date("2026-09-30T08:00:00Z")), "passee");
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
     "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons, "
     + "net place et gain de gestion, reperes de l'abscisse, "
-    + "cumul, gain de periode et marches",
+    + "cumul, gain de periode et marches, etat de l'echeance",
 );

@@ -236,6 +236,34 @@ export function moisDuClub(jusqua: string = debutMois()): string[] {
   return out;
 }
 
+/**
+ * Les jours qui restent avant l'echeance du mois : negatif une fois passee.
+ *
+ * Vit ici, et non dans `relance.ts`, pour etre verifiable : ce fichier se
+ * compile sans base ni `server-only`, et la regle qui decide du ton d'un
+ * courrier envoye a dix personnes merite un controle.
+ */
+export function joursAvantEcheance(maintenant: Date): number {
+  return REGLES.jourEcheance - maintenant.getUTCDate();
+}
+
+/**
+ * Ou l'on en est de l'echeance du mois.
+ *
+ * TROIS ETATS, ET NON DEUX. Le code n'en connaissait que deux -- avant le 10,
+ * et tout le reste -- et ecrivait donc « est du aujourd'hui, dernier jour de
+ * l'echeance statutaire » aussi bien le 10 que le 30. Le 30 septembre, un
+ * membre en retard de vingt jours, penalise pour ce retard, lisait dans le
+ * meme courrier qu'il avait une penalite impayee ET que son versement etait du
+ * du jour meme. La phrase le dedouanait de ce que la ligne suivante lui
+ * reprochait.
+ */
+export function etatEcheance(maintenant: Date): "a_venir" | "aujourdhui" | "passee" {
+  const reste = joursAvantEcheance(maintenant);
+  if (reste > 0) return "a_venir";
+  return reste === 0 ? "aujourdhui" : "passee";
+}
+
 /** Un mois est exigible des que son echeance (le 10) est passee. */
 export function estExigible(isoMois: string, aujourdhui: Date = new Date()): boolean {
   const echeance = new Date(`${isoMois.slice(0, 8)}${String(REGLES.jourEcheance).padStart(2, "0")}T23:59:59Z`);
