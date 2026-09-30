@@ -3,10 +3,11 @@ import { exigerMembre } from "@/lib/auth";
 import { situationsClub, synthese } from "@/lib/queries";
 import { couleurSigne, dureeEnClair, pourcent } from "@/lib/perf";
 import { CLUB, REGLES, dateCourte, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
-import { Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
+import { Carte, CarteEtat, EnTeteEcran, ValeurChiffree, Vide } from "@/components/ui";
 import { LienBouton } from "@/components/boutons";
 import { Frise, GlypheEtat, LIBELLE_STATUT, STATUTS_LEGENDE, statutLigne } from "@/components/glyphe-etat";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import type { ReactNode } from "react";
 import type { StatutMois } from "@/lib/penalites";
 import { Chiffre } from "@/components/chiffre";
 
@@ -112,6 +113,32 @@ export default async function TableauDeBord() {
     .map((x) => `${x.nb} ${LIBELLE_STATUT[x.statut].toLowerCase()}`)
     .join(", ");
 
+  /*
+   * Les deux chiffres poses a droite du heros. Le type est ecrit a la main : la
+   * premiere entree porte un montant, la seconde un taux et sa couleur, et sans
+   * annotation TypeScript en ferait une union ou chaque champ manque a l'une des
+   * deux -- exactement le genre de silence qui a laisse passer la cellule vide.
+   */
+  const cles: {
+    libelle: string;
+    valeur?: ReactNode;
+    brut?: number;
+    unite?: string;
+    encre?: string;
+  }[] = [
+    {
+      libelle: "Portefeuille du club",
+      valeur: s.valorisation ? undefined : "--",
+      brut: s.valorisation ? s.valorisation.total : undefined,
+      unite: s.valorisation ? "FCFA" : undefined,
+    },
+    {
+      libelle: "Performance annualisee",
+      valeur: s.tri !== null ? pourcent(s.tri) : "--",
+      encre: couleurSigne(s.tri),
+    },
+  ];
+
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5">
@@ -127,35 +154,28 @@ export default async function TableauDeBord() {
               : "Votre part se calcule des votre premier versement valide."
           }
         />
+        {/*
+          * Ces deux chiffres passent par `ValeurChiffree`, comme ceux des
+          * bandeaux : la copie ecrite a la main qui vivait ici n'affichait ni
+          * les montants poses dans `brut` -- l'accueil annoncait « Portefeuille
+          * du club FCFA », sans chiffre -- ni la couleur de performance.
+          */}
         <div className="flex gap-10 lg:gap-14">
-          {[
-            {
-              libelle: "Portefeuille du club",
-              valeur: s.valorisation ? undefined : "--",
-              brut: s.valorisation ? s.valorisation.total : undefined,
-              unite: s.valorisation ? "FCFA" : "",
-            },
-            {
-              libelle: "Performance annualisee",
-              valeur: s.tri !== null ? pourcent(s.tri) : "--",
-              encre: couleurSigne(s.tri),
-              unite: "",
-            },
-          ].map((c) => (
+          {cles.map((c, i) => (
             <div key={c.libelle}>
               <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
                 {c.libelle}
               </p>
-              <p className="mt-1 flex items-baseline whitespace-nowrap">
-                <span className="text-[18px] font-medium tabular-nums lg:text-[22px]">
-                  {c.valeur}
-                </span>
-                {c.unite && (
-                  <span className="ml-1.5 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-                    {c.unite}
-                  </span>
-                )}
-              </p>
+              <div className="mt-1">
+                <ValeurChiffree
+                  brut={c.brut}
+                  valeur={c.valeur}
+                  unite={c.unite}
+                  encre={c.encre}
+                  retard={i * 22}
+                  taille="text-[18px] lg:text-[22px]"
+                />
+              </div>
             </div>
           ))}
         </div>

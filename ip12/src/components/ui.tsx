@@ -213,6 +213,56 @@ export function EnTeteEcran({
 }
 
 /**
+ * Un montant et son unite : le chiffre a gauche, « FCFA » pose plus petit et
+ * plus clair a sa droite.
+ *
+ * POURQUOI C'EST UN COMPOSANT ET NON TROIS LIGNES RECOPIEES. L'accueil en
+ * portait une copie ecrite a la main, a cote de celle de `CarteEtat`. Deux
+ * commits l'ont chacun a moitie cassee : l'un a deplace le montant de `valeur`
+ * vers `brut`, et la copie, qui ne lisait que `valeur`, a cesse d'afficher quoi
+ * que ce soit -- « Portefeuille du club FCFA », sans chiffre, sur la page
+ * d'accueil du site ; l'autre a ajoute `encre` pour la couleur de performance,
+ * que la copie n'a jamais appliquee. Une seule ecriture, et les deux fautes
+ * deviennent impossibles.
+ */
+export function ValeurChiffree({
+  brut,
+  valeur,
+  unite,
+  encre,
+  retard = 0,
+  taille,
+}: {
+  /** Le montant en nombre : il monte alors jusqu'a lui. */
+  brut?: number;
+  /** Ce qu'on affiche quand il n'y a pas de nombre : un taux, « -- ». */
+  valeur?: ReactNode;
+  unite?: string;
+  /** Reservee a la performance : `couleurSigne()` la donne. */
+  encre?: string;
+  /** Le rang dans son bandeau : 22 ms le separent du precedent. */
+  retard?: number;
+  /** Les classes de taille du chiffre, qui different d'un emploi a l'autre. */
+  taille: string;
+}) {
+  return (
+    <p className="flex items-baseline whitespace-nowrap">
+      <span
+        className={`${taille} font-medium tabular-nums`}
+        style={{ color: encre ?? "var(--ink)", letterSpacing: "-0.015em" }}
+      >
+        {brut !== undefined ? <Chiffre valeur={brut} retard={retard} /> : valeur}
+      </span>
+      {unite && (
+        <span className="ml-1.5 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
+          {unite}
+        </span>
+      )}
+    </p>
+  );
+}
+
+/**
  * Le bandeau de chiffres cles : ce qu'on lit en ouvrant la page.
  *
  * C'etait une carte posee a cheval sur le bandeau brun. Sans bandeau brun, elle
@@ -278,21 +328,16 @@ export function CarteEtat({
           <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
             {c.libelle}
           </p>
-          <p className="flex items-baseline whitespace-nowrap">
-            <span
-              className="text-[18px] leading-tight font-medium tabular-nums sm:text-[22px]"
-              style={{ color: c.encre ?? "var(--ink)", letterSpacing: "-0.015em" }}
-            >
-              {/* 22 ms separent une cellule de la suivante : elles se posent
-                  l'une apres l'autre, de gauche a droite. */}
-              {c.brut !== undefined ? <Chiffre valeur={c.brut} retard={i * 22} /> : c.valeur}
-            </span>
-            {c.unite && (
-              <span className="ml-1.5 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-                {c.unite}
-              </span>
-            )}
-          </p>
+          {/* 22 ms separent une cellule de la suivante : elles se posent
+              l'une apres l'autre, de gauche a droite. */}
+          <ValeurChiffree
+            brut={c.brut}
+            valeur={c.valeur}
+            unite={c.unite}
+            encre={c.encre}
+            retard={i * 22}
+            taille="text-[18px] leading-tight sm:text-[22px]"
+          />
           {c.contexte && (
             <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
               {c.contexte}

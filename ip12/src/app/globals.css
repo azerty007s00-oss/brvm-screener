@@ -486,7 +486,18 @@ details[open] > summary .chevron { transform: rotate(90deg); }
 .cellule-chiffre:nth-child(even) { padding-inline-end: 0; border-inline-start: 1px solid var(--line); }
 .cellule-chiffre:nth-child(n + 3) { border-block-start: 1px solid var(--line); }
 
-@media (min-width: 1024px) {
+/*
+ * LA RANGEE UNIQUE N'ARRIVE QU'A 1 280 px, NON A 1 024.
+ *
+ * Entre les deux, la barre laterale existe deja -- elle prend 232 px -- mais
+ * l'ecran est encore etroit : le contenu n'a que 792 px a 1 024. Quatre
+ * cellules y donnent 158 px de texte chacune, et « 1 107 095 FCFA » en demande
+ * 170 : il debordait de 12 px et touchait le filet voisin. Rogner deux pixels
+ * sur le chiffre ramenait le debordement a 2 px -- un ajustement qui tient par
+ * chance, et qui cederait au premier montant a huit chiffres, que le club
+ * atteindra. Deux rangees de deux tiennent, elles, quel que soit le montant.
+ */
+@media (min-width: 1280px) {
   /*
    * UNE SEULE RANGEE, ET SEULEMENT QUAND LE BANDEAU LA DEMANDE.
    *
