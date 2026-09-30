@@ -475,22 +475,48 @@ verifier(
   "sans regle, la section n'encombre pas le courrier",
 );
 
-/* L'avance et le plan gardent leur bloc : on ne les repete pas ici. */
-const avecAvanceEtRegle = lettre({
+/*
+ * L'AVANCE, SELON QU'ELLE EST TENUE OU NON.
+ *
+ * Elle n'avait de bloc que lorsqu'elle etait EN DEFAUT. Un membre qui la
+ * respecte, destinataire pour un simple retard de cotisation, ne lisait rien de
+ * l'obligation qui pese sur lui : il pouvait la croire levee, puis la rompre en
+ * retirant son avance. La mesure n'existait pour lui qu'au moment ou il y
+ * manquait -- c'est-a-dire trop tard.
+ */
+const REGLE_AVANCE = {
+  id: "r3", membreId: "b", membreNom: "KONE Bourama", nature: "avance_min",
+  valeur: 3, debut: null, fin: null, note: null,
+};
+
+/* En defaut : le bloc disciplinaire, et pas de doublon dans le regime. */
+const avanceEnDefaut = lettre({
   ...bourama,
-  regles: [{
-    id: "r3", membreId: "b", membreNom: "KONE Bourama", nature: "avance_min",
-    valeur: 3, debut: null, fin: null, note: null,
-  }],
+  regles: [REGLE_AVANCE],
   avanceManquante: sousAvance.avanceManquante,
 });
 verifier(
-  !/VOTRE REGIME PARTICULIER/.test(avecAvanceEtRegle),
-  "l'avance a son propre bloc : la repeter dans le regime la diluerait",
+  !/VOTRE REGIME PARTICULIER/.test(avanceEnDefaut),
+  "en defaut, l'avance a son propre bloc : la repeter dans le regime la diluerait",
 );
 verifier(
-  /MESURE DISCIPLINAIRE — avance obligatoire/.test(avecAvanceEtRegle),
+  /MESURE DISCIPLINAIRE — avance obligatoire/.test(avanceEnDefaut),
   "et ce bloc-la doit bien paraitre",
+);
+
+/* Tenue : elle se rappelle, au lieu de disparaitre. */
+const avanceTenue = lettre({ ...bourama, regles: [REGLE_AVANCE] });
+verifier(
+  /Avance minimale : vous devez detenir en permanence 3 mois/.test(avanceTenue),
+  "l'avance tenue doit etre rappelee : sinon le membre la croit levee",
+);
+verifier(
+  /Cette obligation est tenue a ce jour/.test(avanceTenue),
+  "et le courrier doit dire qu'elle l'est, sans reproche",
+);
+verifier(
+  !/MESURE DISCIPLINAIRE/.test(avanceTenue),
+  "une obligation tenue n'est pas une mesure a annoncer comme un manquement",
 );
 
 /* --------------- a jour de tout, mais sous regle : un autre courrier */

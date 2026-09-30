@@ -623,9 +623,27 @@ export function texteRelance(
    * decision d'assemblee les voyait tomber sans explication, et pouvait croire
    * a une erreur du site.
    */
-  const aDire = regles.filter(
-    (r) => r.nature === "cotisation" || r.nature === "penalite_multiplicateur" || r.nature === "note",
-  );
+  const aDire = regles.filter((r) => {
+    if (r.nature === "cotisation" || r.nature === "penalite_multiplicateur" || r.nature === "note") {
+      return true;
+    }
+    /*
+     * L'AVANCE TENUE SE DIT AUSSI.
+     *
+     * Elle n'avait de bloc que lorsqu'elle etait EN DEFAUT : `avanceManquante`
+     * n'est pose que si l'obligation n'est pas tenue. Un membre qui la respecte,
+     * destinataire pour un simple retard de cotisation, ne lisait donc rien de
+     * l'obligation qui pese sur lui -- et pouvait la croire levee, puis la
+     * rompre en retirant son avance. La mesure n'existait pour lui qu'au moment
+     * ou il y manquait.
+     *
+     * Quand elle est en defaut, le bloc « MESURE DISCIPLINAIRE » la detaille
+     * plus bas : on ne la repete pas ici.
+     */
+    if (r.nature === "avance_min") return avanceManquante === null;
+    /* Le plan a toujours son bloc, tenu ou non : il n'a rien a faire ici. */
+    return false;
+  });
   if (aDire.length > 0) {
     lignes.push("", "VOTRE REGIME PARTICULIER");
     for (const r of aDire) {
@@ -645,6 +663,12 @@ export function texteRelance(
         lignes.push(
           `  - Penalites majorees : vos penalites de retard sont multipliees par ` +
             `${r.valeur}${terme}. Le taux de l'art. 9 s'applique, puis cette majoration.`,
+        );
+      } else if (r.nature === "avance_min" && r.valeur) {
+        lignes.push(
+          `  - Avance minimale : vous devez detenir en permanence ${r.valeur} mois de ` +
+            `cotisation d'avance${terme}. Cette obligation est tenue a ce jour ; la rompre ` +
+            "exposerait a l'exclusion (R5).",
         );
       } else if (r.nature === "note") {
         lignes.push(`  - ${r.note ?? "Mention portee a votre dossier"}${terme}.`);
