@@ -190,6 +190,19 @@ export const donnees: { situations: any[] } = { situations: [] };
 export const situationsClub = async (): Promise<any[]> => donnees.situations;
 export const listerMembres = async (): Promise<any[]> => [];
 /*
+ * Le registre, lu pour de vrai. Seules les quatre colonnes dont le rapprochement
+ * se sert sont projetees ici ; la requete de production, plus large, a ses noms
+ * verifies par le controle des requetes.
+ */
+export const listerPenalites = async (_f?: unknown): Promise<any[]> => {
+  const sql = db();
+  return (await sql\`
+    select member_id as membre_id, kind as nature,
+           to_char(incurred_on, 'YYYY-MM-DD') as date_constat, source_key
+    from penalties
+  \`) as any[];
+};
+/*
  * Reduite au droit dont le constat se sert. Le choix du signataire n'est donc
  * pas ce que ce controle mesure : il verifie ce que le constat ECRIT, sur des
  * situations posees a la main.
@@ -487,6 +500,55 @@ egal(lire(`select coalesce(sum(quantity),0) from penalties
            where member_id='${reprise}' and status='due';`), "11",
   "10 de reprise plus 1 constate : jamais le mois deja compte dans la reprise");
 
+/* ============ 7. ce qui court sans etre inscrit, vu par les trois ecrans */
+
+/*
+ * Le courrier de relance, le recapitulatif du bureau et la page « Mon compte »
+ * annoncent la meme somme : la dette inscrite plus ce qui court. Ils lisent tous
+ * `penalitesNonInscrites`, et c'est cette lecture qui doit tomber juste -- trois
+ * calculs separes avaient deja donne trois chiffres differents.
+ */
+const vierge = uns(`insert into members (full_name, email, role, password_hash, joined_on)
+                    values ('Membre Vierge','v@ip12.ci','membre','x',current_date) returning id;`);
+bornes.clear();
+const situationVierge = [
+  {
+    membreId: vierge,
+    penalites: [
+      { mois: "2026-08-01", montant: 500, doublee: false, figee: false },
+      { mois: "2026-09-01", montant: 500, doublee: false, figee: false },
+    ],
+  },
+];
+
+let courues = await constat.penalitesNonInscrites(situationVierge);
+egal(courues.get(vierge).montant, 1000,
+  "registre vide : les deux mois courent et ne sont pas inscrits");
+egal(courues.get(vierge).nb, 2, "deux mois, donc deux penalites qui courent");
+
+/* Apres le constat, plus rien ne court : tout est au registre. */
+donnees.situations = situationVierge;
+await constat.porterRetardsAuRegistre(tresorier.id);
+courues = await constat.penalitesNonInscrites(situationVierge);
+egal(courues.get(vierge).montant, 0,
+  "apres le constat, rien ne court plus : sinon le courrier compterait deux fois");
+
+/*
+ * C'EST LA LE GARDE-FOU DU DOUBLE COMPTE. La dette inscrite vaut desormais
+ * 1 000 ; si `penalitesNonInscrites` rendait encore 1 000, le courrier
+ * annoncerait un total de 2 000 pour une dette de 1 000.
+ */
+egal(lire(`select coalesce(sum(quantity*unit_amount),0) from penalties
+           where member_id='${vierge}' and status='due';`), "1000",
+  "le registre porte exactement ce qui courait");
+
+/* Une penalite reglee ne se remet pas a courir. */
+psql(BASE, `update penalties set status='payee', settled_on=current_date
+            where member_id='${vierge}';`);
+courues = await constat.penalitesNonInscrites(situationVierge);
+egal(courues.get(vierge).montant, 0,
+  "une penalite reglee reste inscrite : elle ne doit pas se remettre a courir");
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 psql("postgres", `drop database if exists ${BASE};`);
@@ -494,5 +556,5 @@ console.log(
   `OK - ${controles} controles du reglement declare, executes sur PostgreSQL : ` +
     "declaration sans effet sur la dette, unicite de l'attente, quantites, " +
     "scission a la validation, refus, solde total, constat rejouable, R4, " +
-    "lignes soldees intactes, borne de reprise",
+    "lignes soldees intactes, borne de reprise, ce qui court sans etre inscrit",
 );

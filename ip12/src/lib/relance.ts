@@ -1,11 +1,11 @@
 import "server-only";
 import { db } from "@/lib/db";
 import {
-  avancesExigees, bornesReprisePenalites, circuitReglementsPret, listerPenalites,
-  penalitesDuesDetaillees, situationsClub,
+  avancesExigees, circuitReglementsPret, penalitesDuesDetaillees, situationsClub,
   type AvanceExigee, type DetteMembre, type SituationClub,
 } from "@/lib/queries";
-import { dejaAuRegistre, phaseSeuilR5 } from "@/lib/penalites";
+import { phaseSeuilR5 } from "@/lib/penalites";
+import { penalitesNonInscrites } from "@/lib/constat";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
 import {
   CLUB, EFFET, REGLES, dateCourte, deMois, debutMois, etatEcheance, fcfa,
@@ -77,23 +77,11 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
   ]);
   const dettes = await penalitesDuesDetaillees().catch(() => new Map<string, DetteMembre>());
   /*
-   * Le registre tel qu'il est, pour distinguer ce qui y figure de ce qui court
-   * encore. En cas d'echec, on suppose tout inscrit : mieux vaut taire une
-   * penalite que d'en reclamer deux fois la meme.
+   * Ce qui court sans etre encore inscrit, calcule par `lib/constat` : la meme
+   * lecture sert le recapitulatif du bureau et la page « Mon compte », pour que
+   * les trois annoncent la meme somme.
    */
-  const [registre, bornes] = await Promise.all([
-    listerPenalites()
-      .then((lignes) =>
-        lignes.map((p) => ({
-          membreId: p.membre_id,
-          nature: p.nature,
-          dateConstat: p.date_constat,
-          cle: p.source_key,
-        })),
-      )
-      .catch(() => null),
-    bornesReprisePenalites().catch(() => new Map<string, string>()),
-  ]);
+  const courues = await penalitesNonInscrites(situations);
 
   return situations
     .map((situation) => {
@@ -109,19 +97,9 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
           ? moisCourant
           : null;
       const avance = avances.find((a) => a.membreId === situation.membreId);
-      const courues = registre
-        ? situation.penalites.filter(
-            (p) =>
-              !dejaAuRegistre(situation.membreId, p.mois, registre, bornes.get(situation.membreId)),
-          )
-        : [];
       return {
         situation,
-        nonInscrites: {
-          nb: courues.length,
-          montant: courues.reduce((t, p) => t + p.montant, 0),
-          mois: courues.map((p) => p.mois),
-        },
+        nonInscrites: courues?.get(situation.membreId) ?? { nb: 0, montant: 0, mois: [] },
         arrieres: situation.moisEnRetard.filter((m) => m !== moisCourant),
         echeanceDuJour,
         dette: dettes.get(situation.membreId) ?? {

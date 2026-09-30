@@ -5,6 +5,7 @@ import { changerMotDePasse, seDeconnecter } from "@/app/actions/auth";
 import { joindreJustificatif } from "@/app/actions/versements";
 import { ChampJustificatif } from "@/components/justificatif";
 import { justificatifsParLot } from "@/lib/justificatifs";
+import { penalitesNonInscrites } from "@/lib/constat";
 import { ROLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction } from "@/components/formulaires";
 import { libelleMode } from "@/lib/valeurs";
@@ -30,9 +31,25 @@ export default async function PageMonCompte() {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
     throw e;
   }
+  /* Apres `situations`, dont elle a besoin. Elle rend `null` si le registre resiste. */
+  const courues = await penalitesNonInscrites(situations);
 
   const maSituation = situations.find((x) => x.membreId === membre.id);
   const maPart = s.parts.find((p) => p.membreId === membre.id);
+
+  /*
+   * MA DETTE DE PENALITES, LA MEME QUE CELLE DU COURRIER.
+   *
+   * Cette page en affichait deux, contradictoires : « capital diminue de 7 500
+   * FCFA de penalites dues » au bandeau -- le registre -- et « penalites dues
+   * 1 000 FCFA » sous les versements -- le calcul du mois. Et la relance en
+   * annoncait une troisieme, la somme des deux. Un membre croit son compte avant
+   * de croire un courriel : c'est le chiffre du site qui devait etre juste.
+   *
+   * Les deux sont dues, et la somme est celle que le tresorier reclame.
+   */
+  const monCourant = courues?.get(membre.id) ?? { nb: 0, montant: 0, mois: [] };
+  const maDette = (maPart?.dues ?? 0) + monCourant.montant;
 
   // Un lot peut couvrir plusieurs mois : on ne propose la piece qu'une fois par lot.
   const lotsSansPiece = [...new Map(
@@ -131,11 +148,24 @@ export default async function PageMonCompte() {
       </Carte>
 
       <Carte titre={`Mes versements (${mesVersements.length})`}>
-        {maSituation && maSituation.nbMoisRetard > 0 && (
+        {/*
+          * L'ALERTE PARAIT AUSSI SANS MOIS EN RETARD.
+          *
+          * Elle etait conditionnee au seul retard de cotisation : un membre a jour
+          * de ses versements mais devant des penalites -- d'absence, ou de mois
+          * anciens regles en retard -- ne lisait rien ici, alors que la relance
+          * les lui reclamait. C'est precisement le profil que l'assemblee a visé.
+          */}
+        {maSituation && (maSituation.nbMoisRetard > 0 || maDette > 0) && (
           <div className="mb-3">
             <Alerte ton={maSituation.exclusionEncourue ? "rouge" : "ambre"}>
-              {maSituation.nbMoisRetard} mois en retard &middot; penalites dues{" "}
-              {fcfa(maSituation.totalPenalites)}.
+              {maSituation.nbMoisRetard > 0 && (
+                <>
+                  {maSituation.nbMoisRetard} mois en retard
+                  {maDette > 0 ? " · " : "."}
+                </>
+              )}
+              {maDette > 0 && <>penalites dues {fcfa(maDette)}.</>}
             </Alerte>
           </div>
         )}

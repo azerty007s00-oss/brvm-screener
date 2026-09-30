@@ -1,9 +1,11 @@
 import "server-only";
 import { db } from "@/lib/db";
-import { bornesReprisePenalites, listerMembres, situationsClub } from "@/lib/queries";
+import {
+  bornesReprisePenalites, listerMembres, listerPenalites, situationsClub,
+} from "@/lib/queries";
 import { DROITS } from "@/lib/droits";
 import type { Role } from "@/lib/settings";
-import { cleRetard, echeanceDuMois } from "@/lib/penalites";
+import { cleRetard, dejaAuRegistre, echeanceDuMois } from "@/lib/penalites";
 import { moisLong } from "@/lib/settings";
 import { KIND_PENALITE, STATUT_PENALITE } from "@/lib/valeurs";
 
@@ -116,6 +118,57 @@ export async function porterRetardsAuRegistre(auteurId: string): Promise<IssueCo
   }
 
   return issue;
+}
+
+/**
+ * Ce que l'art. 9 fait courir et que le registre ne porte pas encore, par membre.
+ *
+ * UNE SEULE FOIS, POUR TROIS LECTEURS. Le courrier de relance, le recapitulatif
+ * au bureau et la page « Mon compte » doivent annoncer la meme somme : la dette
+ * inscrite plus ce qui court. Trois calculs auraient fini par donner trois
+ * chiffres, et c'est exactement le defaut qu'on vient de corriger deux fois.
+ *
+ * La relance constate avant d'ecrire, si bien que cette part est normalement
+ * vide au moment ou elle parle. Elle ne l'est pas le reste du mois : un mois
+ * devient impaye le 11, et le constat suivant ne passe que le 7. C'est cette
+ * fenetre que cette lecture couvre.
+ *
+ * Rend `null` si le registre n'a pas pu etre lu. L'appelant traite alors ce
+ * qui court comme nul : mieux vaut taire une penalite que la reclamer deux fois.
+ */
+export async function penalitesNonInscrites(
+  situations: { membreId: string; penalites: { mois: string; montant: number }[] }[],
+): Promise<Map<string, { nb: number; montant: number; mois: string[] }> | null> {
+  let registre: { membreId: string; nature: string; dateConstat: string; cle: string | null }[];
+  let bornes: Map<string, string>;
+  try {
+    const [lignes, reprises] = await Promise.all([
+      listerPenalites(),
+      bornesReprisePenalites().catch(() => new Map<string, string>()),
+    ]);
+    registre = lignes.map((p) => ({
+      membreId: p.membre_id,
+      nature: p.nature,
+      dateConstat: p.date_constat,
+      cle: p.source_key,
+    }));
+    bornes = reprises;
+  } catch {
+    return null;
+  }
+
+  const index = new Map<string, { nb: number; montant: number; mois: string[] }>();
+  for (const s of situations) {
+    const courues = s.penalites.filter(
+      (p) => !dejaAuRegistre(s.membreId, p.mois, registre, bornes.get(s.membreId)),
+    );
+    index.set(s.membreId, {
+      nb: courues.length,
+      montant: courues.reduce((t, p) => t + p.montant, 0),
+      mois: courues.map((p) => p.mois),
+    });
+  }
+  return index;
 }
 
 /** Ce que le constat a fait, en une phrase. */

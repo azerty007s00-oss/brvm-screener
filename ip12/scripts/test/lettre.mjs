@@ -36,7 +36,7 @@ mkdirSync(`${RACINE}/${ATELIER}`, { recursive: true });
 
 const source = readFileSync(`${RACINE}/src/lib/relance.ts`, "utf8")
   .replace('import "server-only";\n', "")
-  .replace(/from "@\/lib\/(db|queries|courriel)"/g, 'from "./doublures.js"')
+  .replace(/from "@\/lib\/(db|queries|courriel|constat)"/g, 'from "./doublures.js"')
   .replace('from "@/lib/settings"', 'from "../src/lib/settings.js"')
   .replace('from "@/lib/penalites"', 'from "../src/lib/penalites.js"');
 writeFileSync(`${RACINE}/${ATELIER}/relance.ts`, source);
@@ -64,6 +64,14 @@ export const situationsClub = async (_a?: unknown): Promise<SituationClub[]> => 
 export const avancesExigees = async (_a?: unknown): Promise<AvanceExigee[]> => [];
 export const penalitesDuesDetaillees = async () => new Map<string, DetteMembre>();
 export const circuitReglementsPret = async () => true;
+/*
+ * La part qui court sans etre inscrite est posee par le controle, cas par cas :
+ * ce qui se mesure ici est ce que le courrier EN DIT, la lecture du registre
+ * ayant son propre controle, execute sur PostgreSQL.
+ */
+export const penalitesNonInscrites = async (
+  _s?: unknown,
+): Promise<Map<string, { nb: number; montant: number; mois: string[] }> | null> => null;
 export const listerPenalites = async (_f?: unknown): Promise<{
   membre_id: string; nature: string; date_constat: string; source_key: string | null;
 }[]> => [];
