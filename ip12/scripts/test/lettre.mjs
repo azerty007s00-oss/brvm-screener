@@ -51,6 +51,7 @@ export type SituationClub = {
   membreId: string; nom: string; email: string; role: string; cellules: Cellule[];
   moisEnRetard: string[]; joursDeRetard: number; nbPenalitesImpayees: number;
   totalPenalites: number;
+  penalites: { mois: string; montant: number; doublee: boolean; figee: boolean }[];
 };
 export type DetteMembre = { nb: number; montant: number; nbRetard: number; montantRetard: number };
 export type AvanceExigee = {
@@ -63,6 +64,10 @@ export const situationsClub = async (_a?: unknown): Promise<SituationClub[]> => 
 export const avancesExigees = async (_a?: unknown): Promise<AvanceExigee[]> => [];
 export const penalitesDuesDetaillees = async () => new Map<string, DetteMembre>();
 export const circuitReglementsPret = async () => true;
+export const listerPenalites = async (_f?: unknown): Promise<{
+  membre_id: string; nature: string; date_constat: string; source_key: string | null;
+}[]> => [];
+export const bornesReprisePenalites = async () => new Map<string, string>();
 export const envoyerCourriel = async (_a?: unknown) => ({ ok: true });
 export const transportConfigure = () => "aucun" as string;
 `);
@@ -100,15 +105,27 @@ const bourama = {
     cellules: [cellule("2026-08-01", 0, 5000), cellule("2026-09-01", 0, 5000)],
     moisEnRetard: ["2026-08-01", "2026-09-01"],
     joursDeRetard: 51, nbPenalitesImpayees: 1, totalPenalites: 1000,
+    penalites: [
+      { mois: "2026-08-01", montant: 500, doublee: false, figee: false },
+      { mois: "2026-09-01", montant: 500, doublee: false, figee: false },
+    ],
   },
   arrieres: ["2026-08-01"],
   echeanceDuJour: "2026-09-01",
   dette: { nb: 15, montant: 7500, nbRetard: 15, montantRetard: 7500 },
+  /* Aout et septembre : l'art. 9 court, le registre ne les porte pas encore. */
+  nonInscrites: { nb: 2, montant: 1000, mois: ["2026-08-01", "2026-09-01"] },
   avanceManquante: null,
 };
 const LE_30 = new Date("2026-09-30T08:00:00Z");
 const SITE = "https://ip12-alpha.vercel.app";
-const lettre = (d, quand = LE_30) => texteRelance(d, SITE, quand);
+/*
+ * `fcfa` separe les milliers par une espace insecable, pour qu'un montant ne se
+ * coupe jamais en fin de ligne. Les controles comparent donc sur un texte
+ * normalise, faute de quoi ils mesureraient la typographie et non le propos.
+ */
+const lettre = (d, quand = LE_30) =>
+  texteRelance(d, SITE, quand).replace(/\u00a0/g, " ");
 
 /* --------------------------------- l'objet compte les mois reellement dus */
 
@@ -142,23 +159,79 @@ verifier(
   "apres la date d'effet, l'exclusion doit etre dite acquise",
 );
 
-/* ------------------------------------- un seul total de penalites, jamais deux */
+/* ----------------------------- les deux dettes de penalites, et leur somme */
 
-for (const [nom, cas] of [
-  ["registre garni", bourama],
-  ["registre muet", { ...bourama, dette: { nb: 0, montant: 0, nbRetard: 0, montantRetard: 0 } }],
-  ["retards et absences",
-   { ...bourama, dette: { nb: 17, montant: 11500, nbRetard: 15, montantRetard: 7500 } }],
-]) {
-  const texte = lettre(cas);
-  const totaux = texte
-    .split("\n")
-    .filter((l) => /^Penalites? (de retard )?(impayees|dues|en cours)|^Penalite de l'art\. 9/.test(l));
-  verifier(
-    totaux.length === 1,
-    `${nom} : le courrier doit annoncer un seul total de penalites, il en annonce ${totaux.length}`,
-  );
-}
+/*
+ * LES DEUX SONT DUES. Le registre porte les penalites constatees ; l'art. 9 court
+ * sur les mois encore impayes, avant tout constat. Le courrier avait d'abord
+ * annonce les deux chiffres sans un mot sur leur rapport, puis -- correction plus
+ * mauvaise que le defaut -- n'en avait plus annonce qu'un, taisant une dette
+ * reelle. Il les additionne.
+ */
+const sommes = (texte) =>
+  texte.split("\n").filter((l) => /^(Penalites?|S'y ajoute|Total des penalites)/.test(l));
+
+const lettreSansCircuit = () =>
+  texteRelance(bourama, SITE, LE_30, false).replace(/\u00a0/g, " ");
+const troisLignes = sommes(texteBourama);
+verifier(
+  troisLignes.some((l) => /inscrites a votre compte : 15, pour un total de 7 500/.test(l)),
+  "ce que le registre porte doit etre annonce comme tel",
+);
+verifier(
+  troisLignes.some((l) => /S'y ajoute la penalite de l'art\. 9 .* 1 000/.test(l)),
+  "la penalite qui court sans etre constatee doit s'ajouter, non disparaitre",
+);
+verifier(
+  troisLignes.some((l) => /Total des penalites dues a ce jour : 8 500/.test(l)),
+  "le courrier doit donner la somme des deux : 7 500 + 1 000",
+);
+
+/*
+ * Rien au registre : un seul chiffre, et il se dit pour ce qu'il est. Pas de
+ * ligne « Total », qui n'aurait rien a totaliser.
+ */
+const muet = { ...bourama, dette: { nb: 0, montant: 0, nbRetard: 0, montantRetard: 0 } };
+verifier(
+  /Penalite de l'art\. 9 courue sur 2 mois encore impayes/.test(lettre(muet)),
+  "registre muet : la penalite courue reste annoncee",
+);
+verifier(
+  !/Total des penalites/.test(lettre(muet)),
+  "registre muet : rien a totaliser, donc pas de ligne de total",
+);
+verifier(
+  !/A partir de 3 penalites/.test(lettre(muet)),
+  "rien au registre : l'exclusion n'a pas a etre evoquee pour une penalite qui vient de naitre",
+);
+
+/*
+ * Tout constate : la ligne d'appoint disparait, et avec elle le total. C'est ce
+ * qui empeche de compter deux fois le meme mois une fois le constat passe.
+ */
+const toutInscrit = { ...bourama, nonInscrites: { nb: 0, montant: 0, mois: [] } };
+verifier(
+  !/S'y ajoute/.test(lettre(toutInscrit)),
+  "une fois les mois constates, ils ne s'ajoutent plus : ils sont dans le registre",
+);
+verifier(
+  !/Total des penalites/.test(lettre(toutInscrit)),
+  "un seul chiffre ne se totalise pas",
+);
+
+/* Retards et absences : le detail, l'appoint, puis la somme des trois natures. */
+const avecAbsences = {
+  ...bourama,
+  dette: { nb: 17, montant: 11500, nbRetard: 15, montantRetard: 7500 },
+};
+verifier(
+  /dont 15 de retard \(7 500 FCFA\) et 2 d'absence ou autre \(4 000 FCFA\)/.test(lettre(avecAbsences)),
+  "le detail par nature doit tenir, le seuil R5 ne comptant que les retards",
+);
+verifier(
+  /Total des penalites dues a ce jour : 12 500/.test(lettre(avecAbsences)),
+  "la somme doit porter sur toutes les natures plus l'appoint : 11 500 + 1 000",
+);
 
 /* ------------------------- la liste ne promet pas plus qu'elle ne contient */
 
@@ -218,11 +291,11 @@ verifier(
  * ce geste, le courrier ne doit pas envoyer chercher un bouton absent.
  */
 verifier(
-  !texteRelance(bourama, SITE, LE_30, false).includes("Declarer un reglement"),
+  !lettreSansCircuit().includes("Declarer un reglement"),
   "circuit absent : le courrier ne doit pas donner une consigne qui ne mene nulle part",
 );
 verifier(
-  texteRelance(bourama, SITE, LE_30, false).includes("Penalites de retard impayees : 15"),
+  /inscrites a votre compte : 15/.test(lettreSansCircuit()),
   "circuit absent ou non, la dette s'annonce",
 );
 
@@ -230,6 +303,6 @@ rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 console.log(
   `OK - ${controles} controles du courrier de relance : objet, seuil R5, ` +
-    "total unique des penalites, liste des mois, R2, mode d'emploi des cotisations " +
+    "dettes de penalites et leur somme, liste des mois, R2, mode d'emploi des cotisations " +
     "et des penalites",
 );

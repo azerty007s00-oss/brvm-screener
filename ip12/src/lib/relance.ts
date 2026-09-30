@@ -1,10 +1,11 @@
 import "server-only";
 import { db } from "@/lib/db";
 import {
-  avancesExigees, circuitReglementsPret, penalitesDuesDetaillees, situationsClub,
+  avancesExigees, bornesReprisePenalites, circuitReglementsPret, listerPenalites,
+  penalitesDuesDetaillees, situationsClub,
   type AvanceExigee, type DetteMembre, type SituationClub,
 } from "@/lib/queries";
-import { phaseSeuilR5 } from "@/lib/penalites";
+import { dejaAuRegistre, phaseSeuilR5 } from "@/lib/penalites";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
 import {
   CLUB, EFFET, REGLES, dateCourte, deMois, debutMois, etatEcheance, fcfa,
@@ -32,6 +33,23 @@ export type Destinataire = {
    */
   dette: DetteMembre;
   /**
+   * La penalite que l'art. 9 fait courir sur les mois impayes et que le registre
+   * ne porte PAS encore.
+   *
+   * LES DEUX SONT DUES, ET ELLES NE SE RECOUVRENT PAS. Le registre porte ce que
+   * le tresorier a constate -- souvent des mois anciens, dont la cotisation a
+   * fini par etre versee sans que la penalite le soit. L'art. 9, lui, court des
+   * l'echeance passee, avant tout constat. Un membre doit donc les deux, et le
+   * courrier les additionne.
+   *
+   * Mais il ne peut pas annoncer le calcul theorique en bloc : des que le
+   * tresorier constate, les memes mois entrent au registre, et les deux chiffres
+   * porteraient alors sur la meme realite. Seuls comptent ici les mois que le
+   * registre ne porte pas -- exactement le rapprochement que la page Penalites
+   * fait pour savoir ce qu'il reste a constater.
+   */
+  nonInscrites: { nb: number; montant: number; mois: string[] };
+  /**
    * Avance minimale imposee au membre et non tenue.
    *
    * Une mesure disciplinaire assortie d'une date ne vaut que si l'interesse en est
@@ -58,6 +76,24 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
     avancesExigees(maintenant).catch(() => [] as AvanceExigee[]),
   ]);
   const dettes = await penalitesDuesDetaillees().catch(() => new Map<string, DetteMembre>());
+  /*
+   * Le registre tel qu'il est, pour distinguer ce qui y figure de ce qui court
+   * encore. En cas d'echec, on suppose tout inscrit : mieux vaut taire une
+   * penalite que d'en reclamer deux fois la meme.
+   */
+  const [registre, bornes] = await Promise.all([
+    listerPenalites()
+      .then((lignes) =>
+        lignes.map((p) => ({
+          membreId: p.membre_id,
+          nature: p.nature,
+          dateConstat: p.date_constat,
+          cle: p.source_key,
+        })),
+      )
+      .catch(() => null),
+    bornesReprisePenalites().catch(() => new Map<string, string>()),
+  ]);
 
   return situations
     .map((situation) => {
@@ -73,8 +109,19 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
           ? moisCourant
           : null;
       const avance = avances.find((a) => a.membreId === situation.membreId);
+      const courues = registre
+        ? situation.penalites.filter(
+            (p) =>
+              !dejaAuRegistre(situation.membreId, p.mois, registre, bornes.get(situation.membreId)),
+          )
+        : [];
       return {
         situation,
+        nonInscrites: {
+          nb: courues.length,
+          montant: courues.reduce((t, p) => t + p.montant, 0),
+          mois: courues.map((p) => p.mois),
+        },
         arrieres: situation.moisEnRetard.filter((m) => m !== moisCourant),
         echeanceDuJour,
         dette: dettes.get(situation.membreId) ?? {
@@ -88,6 +135,13 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
         d.arrieres.length > 0 ||
         d.echeanceDuJour !== null ||
         d.dette.nb > 0 ||
+        /*
+         * Une penalite courue suffit. Un membre qui a fini par verser ses mois
+         * en retard doit encore la penalite de l'art. 9, acquise a l'echeance :
+         * plus d'arriere, rien au registre tant que le constat n'a pas eu lieu,
+         * et il ne recevait donc aucun courrier a son sujet.
+         */
+        d.nonInscrites.montant > 0 ||
         d.avanceManquante !== null,
     );
 }
@@ -218,7 +272,7 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
 }
 
 export function texteRelance(
-  { situation, arrieres, echeanceDuJour, avanceManquante, dette }: Destinataire,
+  { situation, arrieres, echeanceDuJour, avanceManquante, dette, nonInscrites }: Destinataire,
   siteUrl: string,
   maintenant: Date,
   /* Faux tant que la migration n'a pas cree `penalty_settlements`. */
@@ -295,28 +349,6 @@ export function texteRelance(
         .join("\n"),
     );
 
-    /*
-     * UN SEUL MONTANT DE PENALITES DANS LE COURRIER.
-     *
-     * Cette ligne annoncait `totalPenalites` -- la penalite THEORIQUE que
-     * l'art. 9 fait courir sur les mois impayes -- et le paragraphe du registre
-     * en annoncait une autre quelques lignes plus bas. Un membre lisait
-     * « Penalites dues a ce jour : 1 000 FCFA », puis « Penalites de retard
-     * impayees : 15, pour un total de 7 500 FCFA », sans aucun moyen de savoir
-     * laquelle regler, ni si la premiere etait comprise dans la seconde.
-     *
-     * Des qu'une dette est inscrite, c'est elle qui fait foi : c'est elle que le
-     * tresorier reclame, et elle porte deja les regles individuelles. Le calcul
-     * theorique ne s'annonce donc que lorsque le registre est encore muet -- et
-     * il se dit alors pour ce qu'il est : en cours, pas encore constate.
-     */
-    if (dette.nb === 0 && situation.totalPenalites > 0) {
-      lignes.push(
-        "",
-        `Penalite de l'art. 9 en cours sur ces mois : ${fcfa(situation.totalPenalites)}. ` +
-          "Elle sera inscrite a votre compte au prochain constat du tresorier.",
-      );
-    }
 
     if (arrieres.length >= REGLES.declarationObligatoireApresMois) {
       lignes.push(
@@ -359,7 +391,7 @@ export function texteRelance(
    * Les penalites se rappellent meme sans aucun mois en retard : c'est tout
    * l'objet de la resolution qui les a rendues indissociables des cotisations.
    */
-  if (dette.nb > 0) {
+  if (dette.nb > 0 || nonInscrites.montant > 0) {
     const seuil = REGLES.penalitesImpayeesAvantExclusion;
     const effet = EFFET.penalitesIndissociables;
     /*
@@ -390,14 +422,50 @@ export function texteRelance(
      * le nombre annonce de la regle qui suit.
      */
     const autres = dette.nb - dette.nbRetard;
-    lignes.push(
-      autres > 0
-        ? `Penalites impayees : ${dette.nb}, pour un total de ${fcfa(dette.montant)} — ` +
-          `dont ${dette.nbRetard} de retard (${fcfa(dette.montantRetard)}) et ` +
-          `${autres} d'absence ou autre (${fcfa(dette.montant - dette.montantRetard)}).`
-        : `Penalites de retard impayees : ${dette.nbRetard}, pour un total de ` +
-          `${fcfa(dette.montantRetard)}.`,
-    );
+    if (dette.nb > 0) {
+      lignes.push(
+        autres > 0
+          ? `Penalites impayees inscrites a votre compte : ${dette.nb}, pour un total de ` +
+            `${fcfa(dette.montant)} — dont ${dette.nbRetard} de retard ` +
+            `(${fcfa(dette.montantRetard)}) et ${autres} d'absence ou autre ` +
+            `(${fcfa(dette.montant - dette.montantRetard)}).`
+          : `Penalites de retard impayees, inscrites a votre compte : ${dette.nbRetard}, ` +
+            `pour un total de ${fcfa(dette.montantRetard)}.`,
+      );
+    }
+
+    /*
+     * LES DEUX SONT DUES, ET LE COURRIER LES ADDITIONNE.
+     *
+     * Il annoncait « Penalites dues a ce jour (art. 9) : 1 000 FCFA », puis, deux
+     * paragraphes plus loin, « Penalites de retard impayees : 15, pour un total
+     * de 7 500 FCFA » -- deux chiffres separes par un rappel de R2, sans un mot
+     * sur leur rapport. Les taire l'un ou l'autre serait pire : le registre porte
+     * les penalites constatees, l'art. 9 court sur les mois encore impayes, et le
+     * membre doit la somme.
+     *
+     * `nonInscrites` ne retient que les mois absents du registre : des que le
+     * tresorier constate, cette ligne fond, et le total reste juste sans jamais
+     * compter deux fois le meme mois.
+     */
+    if (nonInscrites.montant > 0) {
+      const combien =
+        nonInscrites.nb > 1
+          ? `${nonInscrites.nb} mois encore impayes`
+          : "un mois encore impaye";
+      lignes.push(
+        dette.nb > 0
+          ? `S'y ajoute la penalite de l'art. 9 courue sur ${combien}, pas encore ` +
+            `portee a votre compte : ${fcfa(nonInscrites.montant)}.`
+          : `Penalite de l'art. 9 courue sur ${combien} : ${fcfa(nonInscrites.montant)}. ` +
+            "Elle sera portee a votre compte au prochain constat du tresorier.",
+      );
+      if (dette.nb > 0) {
+        lignes.push(
+          `Total des penalites dues a ce jour : ${fcfa(dette.montant + nonInscrites.montant)}.`,
+        );
+      }
+    }
 
     /*
      * La regle ne mord qu'a sa date d'effet. Annoncer une exclusion « encourue de
@@ -423,7 +491,14 @@ export function texteRelance(
           "ce cumul emportera l'exclusion de plein droit (R5), meme si vos cotisations sont " +
           "a jour. Vous avez jusque-la pour regulariser.",
       );
-    } else {
+    } else if (dette.nb > 0) {
+      /*
+       * L'avertissement ne vaut que si quelque chose est deja inscrit.
+       *
+       * Le paragraphe s'ouvre desormais aussi pour une penalite qui court sans
+       * etre encore constatee : annoncer l'exclusion a qui doit cinq cents francs
+       * depuis vingt jours, et rien au registre, alarmerait sans motif.
+       */
       lignes.push(
         /*
          * « DE RETARD », en toutes lettres. Le seuil ne compte que celles-la, et
