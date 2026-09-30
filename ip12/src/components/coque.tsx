@@ -63,6 +63,20 @@ function pageActive(rubriques: Rubrique[], chemin: string): Page | undefined {
     .sort((a, b) => b.href.length - a.href.length)[0];
 }
 
+const CHEMIN_MARQUE = (
+  <>
+    <path
+      d="M7 17.5 L11.4 13 L14.4 15.4 L19 9.6"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    />
+    <circle cx="19" cy="9.6" r="1.7" fill="currentColor" />
+  </>
+);
+
 function Marque({ compact = false }: { compact?: boolean }) {
   return (
     <span className="flex items-center gap-2.5">
@@ -76,15 +90,7 @@ function Marque({ compact = false }: { compact?: boolean }) {
         }}
       >
         <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
-          <path
-            d="M7 17.5 L11.4 13 L14.4 15.4 L19 9.6"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <circle cx="19" cy="9.6" r="1.7" fill="currentColor" />
+          {CHEMIN_MARQUE}
         </svg>
       </span>
       {!compact && (
@@ -97,6 +103,45 @@ function Marque({ compact = false }: { compact?: boolean }) {
           </span>
         </span>
       )}
+    </span>
+  );
+}
+
+/**
+ * La marque sur la colonne bleu nuit.
+ *
+ * DEUX COMPOSANTS, ET NON UN AVEC UN TERNAIRE. La marque sert a deux endroits
+ * desormais opposes -- l'en-tete du telephone sur fond clair, la colonne sur
+ * fond bleu nuit -- et les memes encres aux deux places rendaient l'une des
+ * deux illisible, c'est-a-dire le nom du club.
+ *
+ * Un seul composant portant `barre ? A : B` aurait marche, et rendu le controle
+ * de contraste aveugle : il ne sait pas quelle branche s'applique, mesure les
+ * quatre croisements possibles et signale des couples qui n'existent jamais.
+ * Deux composants, un jeu de jetons chacun, tous mesures.
+ *
+ * Le fond est redeclare ici bien qu'il soit deja celui de l'aside : sans lui, le
+ * controle mesurerait ces encres claires contre le fond de la page.
+ */
+function MarqueBarre() {
+  return (
+    <span className="flex items-center gap-2.5" style={{ background: "var(--side)" }}>
+      <span
+        className="grid h-[26px] w-[26px] flex-none place-items-center rounded-[7px]"
+        style={{ background: "var(--side-marque)", color: "var(--side-sur-marque)" }}
+      >
+        <svg viewBox="0 0 26 26" width="18" height="18" aria-hidden="true">
+          {CHEMIN_MARQUE}
+        </svg>
+      </span>
+      <span className="leading-tight">
+        <span className="block text-[14px] font-semibold" style={{ color: "var(--side-ink)" }}>
+          IP12
+        </span>
+        <span className="block text-[12px]" style={{ color: "var(--side-ink-2)" }}>
+          Investment Pioneers
+        </span>
+      </span>
     </span>
   );
 }
@@ -132,8 +177,13 @@ function BarreLaterale({
         className="flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px]"
         style={
           ici
-            ? { background: "var(--page)", color: "var(--ink)", fontWeight: 500, boxShadow: "var(--raise)" }
-            : { color: "var(--ink-2)" }
+            ? {
+                background: "var(--side-actif)",
+                color: "var(--side-ink)",
+                fontWeight: 500,
+                boxShadow: "var(--side-raise)",
+              }
+            : { color: "var(--side-ink-2)" }
         }
       >
         {/*
@@ -142,7 +192,7 @@ function BarreLaterale({
           * en plus le rendrait moins lisible que les autres, ce qui serait
           * l'inverse du but.
           */}
-        <I taille={17} trait={1.5} couleur={ici ? "var(--accent)" : undefined} />
+        <I taille={17} trait={1.5} couleur={ici ? "var(--side-accent)" : undefined} />
         <span className="truncate">{p.libelle}</span>
       </Link>
     );
@@ -151,10 +201,10 @@ function BarreLaterale({
   return (
     <aside
       className="sans-impression sticky top-0 hidden h-dvh w-[232px] flex-none flex-col px-3 pt-[18px] pb-4 lg:flex"
-      style={{ background: "var(--side)", borderRight: "1px solid var(--line)" }}
+      style={{ background: "var(--side)", borderRight: "1px solid var(--side-line)" }}
     >
       <Link href="/" className="flex h-10 items-center px-2">
-        <Marque />
+        <MarqueBarre />
       </Link>
 
       <nav className="mt-[22px] flex flex-col gap-0.5">
@@ -163,7 +213,7 @@ function BarreLaterale({
           <div key={r.cle}>
             <p
               className="mt-[18px] mb-1.5 px-2.5 text-[12px] font-medium"
-              style={{ color: "var(--ink-3)" }}
+              style={{ color: "var(--side-ink-3)" }}
             >
               {r.libelle}
             </p>
@@ -178,15 +228,15 @@ function BarreLaterale({
         {administration && (
           <nav className="flex flex-col gap-0.5">{lien(administration, administration.icone)}</nav>
         )}
-        <div style={{ borderTop: "1px solid var(--line)" }} />
+        <div style={{ borderTop: "1px solid var(--side-line)" }} />
         <div className="flex items-center gap-2.5">
           <Link href="/mon-compte" className="flex min-w-0 flex-1 items-center gap-2.5">
             <span
               className="grid h-[30px] w-[30px] flex-none place-items-center rounded-full text-[11.5px] font-semibold"
               style={{
-                background: "var(--sunk)",
-                border: "1px solid var(--line-2)",
-                color: "var(--ink-2)",
+                background: "var(--side-actif)",
+                border: "1px solid var(--side-line-2)",
+                color: "var(--side-ink-2)",
               }}
             >
               {initiales(personne.nom)}
@@ -194,11 +244,11 @@ function BarreLaterale({
             <span className="min-w-0 leading-tight">
               <span
                 className="block truncate text-[13px] font-medium"
-                style={{ color: "var(--ink)" }}
+                style={{ color: "var(--side-ink)" }}
               >
                 {personne.nom}
               </span>
-              <span className="block text-[12px]" style={{ color: "var(--ink-2)" }}>
+              <span className="block text-[12px]" style={{ color: "var(--side-ink-2)" }}>
                 {personne.role}
               </span>
             </span>
@@ -221,13 +271,13 @@ function BarreLaterale({
               aria-label="Quitter la session"
               title="Quitter la session"
               className="tapable grid h-9 w-9 place-items-center rounded-lg"
-              style={{ color: "var(--ink-2)" }}
+              style={{ color: "var(--side-ink-2)" }}
             >
               <Icone.sortie taille={17} trait={1.5} />
             </button>
           </form>
         </div>
-        <p className="text-[11px] leading-relaxed" style={{ color: "var(--ink-3)" }}>
+        <p className="text-[11px] leading-relaxed" style={{ color: "var(--side-ink-3)" }}>
           Investment Pioneers &middot; Abidjan
           {version.revision && (
             <>

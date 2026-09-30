@@ -62,7 +62,14 @@
 :root {
   color-scheme: light;
   --page: #fdfcfa;
-  --side: #f4f1ec;
+  /*
+   * `--repos` : une surface calme derriere une carte, hors session. C'etait
+   * `--side` jusqu'a ce que la colonne passe au bleu nuit -- un meme jeton
+   * servait deux roles, et changer l'un cassait l'autre : la page de connexion
+   * s'est retrouvee avec ses encres grises sur fond bleu, 1,81:1.
+   */
+  --repos: #f4f1ec;
+  --side: #1b3557;
   --sunk: #efebe5;
   --line: #e8e2d9;
   --line-2: #d6cec2;
@@ -99,6 +106,33 @@
 
   --brand: #1e3a5f;
   --brand-mark: #d4b25a;
+
+  /*
+   * LA BARRE LATERALE PORTE SA PROPRE PALETTE.
+   *
+   * Le bleu nuit de la marque ne colorait qu'une tuile de 26 px. Sur la colonne
+   * de navigation, il tient une surface : le club se reconnait en ouvrant le
+   * site, et le contenu -- chiffres, tableaux, courbes -- reste sur fond clair,
+   * ou il se lit. C'est la seule grande surface coloree du site, et elle ne porte
+   * aucune donnee.
+   *
+   * DES JETONS NOMMES, ET NON UNE REDEFINITION DES JETONS DE LA PAGE. Redefinir
+   * `--ink` dans l'aside aurait marche dans le navigateur, et laisse le controle
+   * de contraste mesurer les couleurs de la page : il aurait annonce 8 couples
+   * conformes en en mesurant d'autres. Ici chaque couple est ecrit, donc mesure.
+   */
+  --side-ink: #ffffff;
+  --side-ink-2: #c3d4e8;
+  --side-ink-3: #9db4d0;
+  --side-line: #2d5480;
+  --side-line-2: #4a729e;
+  /* La pastille de l'element courant : un bleu plus clair, non un blanc criard. */
+  --side-actif: #274b73;
+  /* L'icone courante prend l'or de la marque, seule touche chaude de la colonne. */
+  --side-accent: #ddbf6e;
+  --side-marque: #ddbf6e;
+  --side-sur-marque: #1b3557;
+  --side-raise: 0 1px 2px rgb(0 0 0 / 0.25), 0 0 0 1px rgb(255 255 255 / 0.1);
   --voile: rgb(28 23 19 / 0.28);
 
   --etat-ok: #4f4740;
@@ -136,7 +170,8 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --page: #13110e;
-    --side: #0e0c0a;
+    --repos: #0e0c0a;
+    --side: #101a28;
     --sunk: #1c1915;
     --line: #26231e;
     --line-2: #3a352f;
@@ -153,6 +188,21 @@
     --etat-paye: #56b584;
     --brand: #d4b25a;
     --brand-mark: #1a120a;
+    /*
+     * En sombre, la colonne garde son identite bleue, en plus profond : une
+     * colonne grise a cote d'une page presque noire ne se distinguait que par un
+     * filet.
+     */
+    --side-ink: #eef2f8;
+    --side-ink-2: #a7bad2;
+    --side-ink-3: #8397b2;
+    --side-line: #2a3b52;
+    --side-line-2: #3e5372;
+    --side-actif: #1d2b3f;
+    --side-accent: #d4b25a;
+    --side-marque: #d4b25a;
+    --side-sur-marque: #1a120a;
+    --side-raise: 0 0 0 1px rgb(220 235 255 / 0.1), 0 1px 2px rgb(0 0 0 / 0.4);
     --voile: rgb(0 0 0 / 0.5);
     --etat-ok: #d5ccc0;
     --etat-ok-fond: #2b2722;
@@ -169,7 +219,8 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --page: #13110e;
-  --side: #0e0c0a;
+  --repos: #0e0c0a;
+  --side: #101a28;
   --sunk: #1c1915;
   --line: #26231e;
   --line-2: #3a352f;
@@ -186,6 +237,17 @@
   --etat-paye: #56b584;
   --brand: #d4b25a;
   --brand-mark: #1a120a;
+  /* Meme colonne bleu nuit qu'en sombre automatique : un seul theme, deux portes. */
+  --side-ink: #eef2f8;
+  --side-ink-2: #a7bad2;
+  --side-ink-3: #8397b2;
+  --side-line: #2a3b52;
+  --side-line-2: #3e5372;
+  --side-actif: #1d2b3f;
+  --side-accent: #d4b25a;
+  --side-marque: #d4b25a;
+  --side-sur-marque: #1a120a;
+  --side-raise: 0 0 0 1px rgb(220 235 255 / 0.1), 0 1px 2px rgb(0 0 0 / 0.4);
   --voile: rgb(0 0 0 / 0.5);
   --etat-ok: #d5ccc0;
   --etat-ok-fond: #2b2722;

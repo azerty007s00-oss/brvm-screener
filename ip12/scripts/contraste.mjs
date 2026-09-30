@@ -197,7 +197,13 @@ const COUPLES_DECLARES = [
   ["performance en hausse, sur un creux", "var(--sunk)", "var(--gain)"],
   ["performance en baisse, sur un creux", "var(--sunk)", "var(--perte)"],
   ["accent sur la page", "var(--page)", "var(--accent)"],
-  ["accent sur la barre laterale", "var(--side)", "var(--accent)"],
+  /*
+   * La colonne porte desormais sa propre palette : c'est `--side-accent` qui y
+   * marque l'element courant, non l'accent de la page. L'ancien couple mesurait
+   * un bleu nuit sur un bleu nuit.
+   */
+  ["icone courante sur la barre laterale", "var(--side)", "var(--side-accent)"],
+  ["icone courante sur la pastille de la barre", "var(--side-actif)", "var(--side-accent)"],
 ];
 
 /* -------------------------------------------------------------- le controle */

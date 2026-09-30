@@ -14,7 +14,8 @@ export default async function PageConnexion() {
   return (
     <main
       className="flex min-h-dvh flex-col items-center justify-center px-5 py-10"
-      style={{ background: "var(--side)" }}
+      /* `--side` designe la colonne bleu nuit ; cette page garde sa surface calme. */
+      style={{ background: "var(--repos)" }}
     >
       <div className="mb-7 flex flex-col items-center text-center">
         <span
