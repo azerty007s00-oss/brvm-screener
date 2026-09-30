@@ -57,7 +57,7 @@ export default async function PageMembres() {
           titre="Effectif"
           chiffre={
             <>
-              <Chiffre valeur={membres.filter((m) => m.actif).length} format={String} /> sur{" "}
+              <Chiffre valeur={membres.filter((m) => m.actif).length} format="entier" /> sur{" "}
               {CLUB.membresMax}
             </>
           }

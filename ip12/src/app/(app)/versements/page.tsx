@@ -190,7 +190,7 @@ export default async function PageVersements({
           titre={`Cotisations de ${moisLong(aujourdhui)}`}
           chiffre={
             <>
-              <Chiffre valeur={payesCeMois} format={String} /> sur {situations.length}
+              <Chiffre valeur={payesCeMois} format="entier" /> sur {situations.length}
             </>
           }
           detail={

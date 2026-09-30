@@ -23,7 +23,7 @@ function Couple({ chiffres }: { chiffres: { libelle: string; brut: number }[] })
             {c.libelle}
           </p>
           <p className="mt-0.5 text-[17px] font-medium whitespace-nowrap tabular-nums">
-            <Chiffre valeur={c.brut} format={fcfa} />
+            <Chiffre valeur={c.brut} format="fcfa" />
           </p>
         </div>
       ))}

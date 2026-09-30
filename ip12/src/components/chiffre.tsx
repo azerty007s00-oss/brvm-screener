@@ -1,7 +1,29 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef } from "react";
-import { nombre } from "@/lib/settings";
+import { fcfa, nombre } from "@/lib/settings";
+
+/*
+ * LE FORMAT SE NOMME, IL NE SE PASSE PAS.
+ *
+ * La premiere version prenait la fonction de mise en forme en prop. Cela
+ * compile, et cela tombe a l'execution : une page rendue au serveur ne peut pas
+ * passer une FONCTION a un composant client -- il n'y a rien a serialiser au
+ * bout du fil. « Functions cannot be passed directly to Client Components »,
+ * et une erreur 500 sur l'Accueil, Membres et Versements, les trois pages les
+ * plus ouvertes du site.
+ *
+ * Le nom, lui, traverse : c'est une chaine. La table vit du cote client, ou les
+ * fonctions ont le droit d'exister.
+ */
+const FORMATS = {
+  nombre,
+  fcfa,
+  /** Un decompte : « 8 », « 12 ». Pas de separateur de milliers a esperer. */
+  entier: (n: number) => String(Math.round(n)),
+} as const;
+
+export type FormatChiffre = keyof typeof FORMATS;
 
 /**
  * Un montant qui monte jusqu'a sa valeur.
@@ -40,14 +62,16 @@ export function Chiffre({
   valeur,
   duree = 640,
   retard = 0,
-  format = nombre,
+  format = "nombre",
 }: {
   valeur: number;
   duree?: number;
   /** Le rang du chiffre dans son bandeau : 22 ms le separent du precedent. */
   retard?: number;
-  format?: (n: number) => string;
+  /** Le NOM du format, non la fonction : voir `FORMATS` ci-dessus. */
+  format?: FormatChiffre;
 }) {
+  const mettreEnForme = FORMATS[format];
   const el = useRef<HTMLSpanElement>(null);
   /*
    * On ne roule qu'une fois, a l'arrivee sur la page. Un montant qui repart de
@@ -63,12 +87,12 @@ export function Chiffre({
 
     let image = 0;
     const debut = performance.now() + retard;
-    noeud.textContent = format(0);
+    noeud.textContent = mettreEnForme(0);
 
     const pas = (maintenant: number) => {
       const t = (maintenant - debut) / duree;
       if (t >= 1) {
-        noeud.textContent = format(valeur);
+        noeud.textContent = mettreEnForme(valeur);
         /*
          * LA GARDE SE POSE A L'ARRIVEE, NON AU DEPART.
          *
@@ -84,17 +108,17 @@ export function Chiffre({
         return;
       }
       /* Avant le depart, on attend sans rien ecrire : le zero est deja pose. */
-      if (t >= 0) noeud.textContent = format(valeur * (1 - (1 - t) ** 3));
+      if (t >= 0) noeud.textContent = mettreEnForme(valeur * (1 - (1 - t) ** 3));
       image = requestAnimationFrame(pas);
     };
 
     image = requestAnimationFrame(pas);
     return () => cancelAnimationFrame(image);
-  }, [valeur, duree, retard, format]);
+  }, [valeur, duree, retard, mettreEnForme]);
 
   return (
     <span ref={el} className="tabular-nums">
-      {format(valeur)}
+      {mettreEnForme(valeur)}
     </span>
   );
 }
