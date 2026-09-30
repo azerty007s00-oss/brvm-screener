@@ -66,6 +66,14 @@ export function CourbePortefeuille({
    */
   const [horizon, setHorizon] = useState<Horizon>("exercice");
   /*
+   * Combien de fois la periode a change depuis l'ouverture de la page.
+   *
+   * Sert a deux choses : remonter le trace (la cle du chemin change, donc
+   * l'animation repart) et raccourcir le second passage -- au changement de
+   * periode on sait deja ce qu'on regarde, et l'attente se remarquerait.
+   */
+  const [passages, setPassages] = useState(0);
+  /*
    * 586 au premier rendu, celui du serveur, ou aucune largeur n'est connue :
    * c'est la mesure d'une colonne d'ordinateur, et le dessin reste juste --
    * seule sa hauteur s'ajustera au montage.
@@ -191,6 +199,16 @@ export function CourbePortefeuille({
   const dernier = traces[traces.length - 1];
   const premier = traces[0];
 
+  /* Premier trace : on laisse le temps de voir. Rejeu : on va droit au but. */
+  const rejeu = passages > 0;
+  const tempo = {
+    ["--duree-trace" as string]: rejeu ? "900ms" : "1150ms",
+    ["--retard-trace" as string]: rejeu ? "0ms" : "180ms",
+    ["--duree-bande" as string]: rejeu ? "600ms" : "800ms",
+    ["--retard-bande" as string]: rejeu ? "320ms" : "650ms",
+    ["--retard-point" as string]: rejeu ? "880ms" : "1250ms",
+  };
+
   const reperes = mesure
     ? reperesTemps(premier.date, dernier.date, L - marge.gauche - marge.droite)
     : [{ iso: premier.date, libelle: dateCourte(premier.date) }];
@@ -224,7 +242,10 @@ export function CourbePortefeuille({
           etiquette="Periode du graphique"
           options={choix}
           valeur={actif}
-          surChoix={setHorizon}
+          surChoix={(h) => {
+            setHorizon(h);
+            setPassages((n) => n + 1);
+          }}
         />
       </div>
       {/*
@@ -284,7 +305,14 @@ export function CourbePortefeuille({
           ))}
 
           {/* Ce qui separe les deux courbes est le gain de gestion. */}
-          <path d={bande} fill="var(--c-bande)" stroke="none" />
+          <path
+            key={`bande-${actif}`}
+            className="bande"
+            style={tempo}
+            d={bande}
+            fill="var(--c-bande)"
+            stroke="none"
+          />
 
           {/*
            * Le net place : en tirets, parce que ce n'est pas une mesure de
@@ -292,6 +320,9 @@ export function CourbePortefeuille({
            * l'on relie faute de connaitre sa marche entre deux releves.
            */}
           <path
+            key={`place-${actif}`}
+            className="bande"
+            style={tempo}
             d={lignePlace}
             fill="none"
             stroke="var(--ink-3)"
@@ -301,8 +332,19 @@ export function CourbePortefeuille({
             vectorEffect="non-scaling-stroke"
           />
 
-          {/* Des segments droits : entre deux releves, on ne sait rien. */}
+          {/*
+           * Des segments droits : entre deux releves, on ne sait rien.
+           *
+           * `pathLength="1"` normalise la longueur : le tirete vaut 1 et son
+           * decalage glisse de 1 a 0, quelle que soit la longueur reelle du
+           * chemin -- qui change avec la periode et avec la largeur de l'ecran.
+           * La cle remonte le trace a chaque changement de periode.
+           */}
           <path
+            key={`valeur-${actif}`}
+            className="trace"
+            style={tempo}
+            pathLength={1}
             d={ligneValeur}
             fill="none"
             stroke="var(--gold)"
@@ -312,9 +354,27 @@ export function CourbePortefeuille({
             vectorEffect="non-scaling-stroke"
           />
 
+          {/*
+           * Le halo du dernier releve : il bat pour dire « c'est ici qu'on en
+           * est ». Il vient sous le point, et disparait entierement quand le
+           * systeme demande moins d'animation -- une pulsation sans fin est
+           * precisement ce qu'on demande alors d'eteindre.
+           */}
+          <circle
+            key={`halo-${actif}`}
+            className="halo"
+            cx={x(dernier.date)}
+            cy={y(dernier.valeur)}
+            r={4}
+            fill="var(--gold)"
+            opacity={0}
+          />
+
           {traces.map((p, i) => (
             <circle
-              key={p.date}
+              key={`${actif}-${p.date}`}
+              className="point"
+              style={tempo}
               cx={x(p.date)}
               cy={y(p.valeur)}
               r={i === traces.length - 1 ? 4 : 2.5}

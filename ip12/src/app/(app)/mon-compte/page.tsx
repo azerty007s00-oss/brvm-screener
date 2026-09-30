@@ -68,7 +68,7 @@ export default async function PageMonCompte() {
         chiffres={[
           {
             libelle: "J'ai verse",
-            valeur: nombre(maPart?.verse ?? 0),
+            brut: maPart?.verse ?? 0,
             unite: "FCFA",
             contexte:
               maPart && maPart.avance > 0 ? `dont ${fcfa(maPart.avance)} d'avance, en depot` : undefined,

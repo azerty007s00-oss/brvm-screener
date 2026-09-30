@@ -147,7 +147,8 @@ export default async function PagePortefeuille() {
         <EnTeteEcran
           titre="Valeur du portefeuille"
           sous={derniere ? `au ${dateCourte(derniere.date_valo)}` : "— aucun releve saisi"}
-          chiffre={derniere ? nombre(derniere.total) : "--"}
+          chiffre={derniere ? undefined : "--"}
+          brut={derniere ? derniere.total : undefined}
           unite={derniere ? "FCFA" : undefined}
           detail={
             ecart !== null && variation !== null && precedente ? (
@@ -170,7 +171,8 @@ export default async function PagePortefeuille() {
         chiffres={[
           {
             libelle: "Actions",
-            valeur: derniere ? nombre(derniere.actions) : "--",
+            valeur: derniere ? undefined : "--",
+            brut: derniere ? derniere.actions : undefined,
             unite: derniere ? "FCFA" : undefined,
             contexte:
               derniere && derniere.total > 0
@@ -179,7 +181,8 @@ export default async function PagePortefeuille() {
           },
           {
             libelle: "Liquidites",
-            valeur: derniere ? nombre(derniere.liquidites) : "--",
+            valeur: derniere ? undefined : "--",
+            brut: derniere ? derniere.liquidites : undefined,
             unite: derniere ? "FCFA" : undefined,
             contexte:
               derniere && derniere.total > 0
@@ -238,10 +241,15 @@ export default async function PagePortefeuille() {
                * filet -- aucune couleur n'est necessaire pour s'y reconnaitre.
                */}
               <div className="flex gap-0.5" aria-hidden="true">
-                {s.parts.map((p) => (
+                {s.parts.map((p, i) => (
                   <span
                     key={p.membreId}
-                    className="h-2 rounded-sm"
+                    /*
+                     * Chaque segment pousse depuis la gauche, l'un apres
+                     * l'autre : on voit la barre se composer part par part,
+                     * ce qu'une barre posee d'un coup ne montre pas.
+                     */
+                    className="segment-part h-2 rounded-sm"
                     /*
                      * La part passe par flex-grow, non par une largeur en
                      * pourcentage : dix segments a 100 % plus neuf ecarts de
@@ -250,6 +258,7 @@ export default async function PagePortefeuille() {
                     style={{
                       flex: `${p.part} 1 0%`,
                       background: p.membreId === membre.id ? "var(--ink)" : "var(--line-2)",
+                      ["--i" as string]: i,
                     }}
                   />
                 ))}

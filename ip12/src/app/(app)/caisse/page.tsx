@@ -7,7 +7,7 @@ import {
   rejeterMouvement,
   validerMouvement,
 } from "@/app/actions/caisse";
-import { dateCourte, fcfa, nombre } from "@/lib/settings";
+import { dateCourte, fcfa } from "@/lib/settings";
 import {
   CATEGORIES_DEPENSE,
   CATEGORIES_RECETTE,
@@ -160,7 +160,7 @@ export default async function PageCaisse() {
         <EnTeteEcran
           titre="Solde en caisse"
           sous={`arrete au ${dateCourte(new Date().toISOString().slice(0, 10))}`}
-          chiffre={nombre(s.totalEnCaisse)}
+          brut={s.totalEnCaisse}
           unite="FCFA"
           detail="Hors cotisations placees en bourse. Comparez-le a votre releve : ce qui manque se voit la."
         />
@@ -169,11 +169,11 @@ export default async function PageCaisse() {
 
       <CarteEtat
         chiffres={[
-          { libelle: "Recettes", valeur: nombre(s.recettes), unite: "FCFA" },
-          { libelle: "Depenses", valeur: nombre(s.depenses), unite: "FCFA" },
+          { libelle: "Recettes", brut: s.recettes, unite: "FCFA" },
+          { libelle: "Depenses", brut: s.depenses, unite: "FCFA" },
           {
             libelle: "Penalites encaissees",
-            valeur: nombre(s.penalitesEncaissees),
+            brut: s.penalitesEncaissees,
             unite: "FCFA",
             contexte: "comptees dans le solde",
           },

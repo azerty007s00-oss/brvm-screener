@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Chiffre } from "@/components/chiffre";
 
 /**
  * Une section : un titre, et ce qu'il annonce.
@@ -153,6 +154,7 @@ export function EnTeteEcran({
   sous,
   marque,
   chiffre,
+  brut,
   unite,
   detail,
 }: {
@@ -161,6 +163,13 @@ export function EnTeteEcran({
   marque?: ReactNode;
   /** Le chiffre que la page existe pour donner, s'il y en a un. */
   chiffre?: ReactNode;
+  /**
+   * Le meme chiffre, en nombre : il monte alors jusqu'a sa valeur.
+   *
+   * A preferer a `chiffre` quand le montant est un nombre. `chiffre` reste pour
+   * ce qui n'en est pas un -- un taux, un tiret quand rien n'est saisi.
+   */
+  brut?: number;
   /** Son unite, posee plus petite et plus claire a cote : « FCFA ». */
   unite?: string;
   detail?: ReactNode;
@@ -176,13 +185,13 @@ export function EnTeteEcran({
         </div>
         {marque}
       </div>
-      {chiffre && (
+      {(chiffre || brut !== undefined) && (
         <p className="mt-1.5 flex items-baseline whitespace-nowrap">
           <span
             className="text-[44px] leading-none font-medium tabular-nums sm:text-[60px]"
             style={{ color: "var(--ink)", letterSpacing: "-0.02em" }}
           >
-            {chiffre}
+            {brut !== undefined ? <Chiffre valeur={brut} /> : chiffre}
           </span>
           {unite && (
             <span
@@ -221,7 +230,9 @@ export function CarteEtat({
 }: {
   chiffres: {
     libelle: string;
-    valeur: ReactNode;
+    valeur?: ReactNode;
+    /** Le montant en nombre : la cellule le fait alors monter jusqu'a lui. */
+    brut?: number;
     unite?: string;
     contexte?: ReactNode;
     /** Conserve pour les appels existants ; sans effet sur la couleur. */
@@ -267,7 +278,9 @@ export function CarteEtat({
               className="text-[18px] leading-tight font-medium tabular-nums sm:text-[22px]"
               style={{ color: "var(--ink)", letterSpacing: "-0.015em" }}
             >
-              {c.valeur}
+              {/* 22 ms separent une cellule de la suivante : elles se posent
+                  l'une apres l'autre, de gauche a droite. */}
+              {c.brut !== undefined ? <Chiffre valeur={c.brut} retard={i * 22} /> : c.valeur}
             </span>
             {c.unite && (
               <span className="ml-1.5 text-[12.5px]" style={{ color: "var(--ink-3)" }}>

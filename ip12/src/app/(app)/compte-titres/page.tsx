@@ -2,7 +2,7 @@ import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { listerApports, listerMouvementsCaisse, synthese } from "@/lib/queries";
 import { enregistrerApport, supprimerApport } from "@/app/actions/titres";
-import { CLUB, dateCourte, fcfa, nombre } from "@/lib/settings";
+import { CLUB, dateCourte, fcfa } from "@/lib/settings";
 import { SENS_TRANSFERT } from "@/lib/valeurs";
 import {
   Champ,
@@ -173,7 +173,7 @@ export default async function PageCompteTitres() {
         <EnTeteEcran
           titre="Net place en bourse"
           sous={`chez ${CLUB.sgi}`}
-          chiffre={nombre(s.totalApports)}
+          brut={s.totalApports}
           unite="FCFA"
           detail="Apports vers la societe de gestion, diminues des retraits revenus en caisse."
         />
@@ -182,11 +182,11 @@ export default async function PageCompteTitres() {
 
       <CarteEtat
         chiffres={[
-          { libelle: "Apports", valeur: nombre(entrees.reduce((t, a) => t + a.montant, 0)), unite: "FCFA" },
-          { libelle: "Retraits", valeur: nombre(sorties.reduce((t, a) => t + a.montant, 0)), unite: "FCFA" },
+          { libelle: "Apports", brut: entrees.reduce((t, a) => t + a.montant, 0), unite: "FCFA" },
+          { libelle: "Retraits", brut: sorties.reduce((t, a) => t + a.montant, 0), unite: "FCFA" },
           {
             libelle: "Frais supportes",
-            valeur: nombre(fraisTotaux),
+            brut: fraisTotaux,
             unite: "FCFA",
             contexte: "Depot, SGI et banque",
           },

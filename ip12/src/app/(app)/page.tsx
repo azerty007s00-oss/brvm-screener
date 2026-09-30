@@ -358,9 +358,9 @@ export default async function TableauDeBord() {
             <CarteEtat
               colonnes={2}
               chiffres={[
-                { libelle: "Verse par le club", valeur: nombre(s.totalVerse), unite: "FCFA" },
-                { libelle: "Place en bourse", valeur: nombre(s.totalApports), unite: "FCFA" },
-                { libelle: "En caisse", valeur: nombre(s.totalEnCaisse), unite: "FCFA" },
+                { libelle: "Verse par le club", brut: s.totalVerse, unite: "FCFA" },
+                { libelle: "Place en bourse", brut: s.totalApports, unite: "FCFA" },
+                { libelle: "En caisse", brut: s.totalEnCaisse, unite: "FCFA" },
                 { libelle: "Membres", valeur: String(situations.length) },
               ]}
             />

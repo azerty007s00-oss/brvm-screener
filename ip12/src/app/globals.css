@@ -259,8 +259,8 @@ body {
 @media (prefers-reduced-motion: no-preference) {
   /* Bloc visible d'emblee : decalage en cascade, plafonne a six rangs. */
   .apparait {
-    animation: apparait 340ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
-    animation-delay: calc(var(--rang, 0) * 55ms);
+    animation: apparait 560ms var(--ease-doux) both;
+    animation-delay: calc(var(--rang, 0) * 35ms);
   }
 
   /*
@@ -270,7 +270,7 @@ body {
    */
   @supports (animation-timeline: view()) {
     .revele {
-      animation: apparait 420ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+      animation: apparait 560ms var(--ease-doux) both;
       animation-timeline: view();
       animation-range: entry 0% cover 20%;
     }
@@ -278,7 +278,7 @@ body {
 
   /* Retour au doigt : la surface s'enfonce le temps de l'appui. */
   .tapable {
-    transition: transform 130ms ease, box-shadow 130ms ease, background-color 130ms ease;
+    transition: transform 120ms linear, box-shadow 120ms linear, background-color 120ms linear;
   }
   .tapable:active { transform: scale(0.985); }
 
@@ -293,7 +293,7 @@ body {
 }
 
 /* Le chevron d'un depliant pivote, y compris sans animation (sans transition). */
-.chevron { transition: transform 180ms cubic-bezier(0.22, 0.61, 0.36, 1); }
+.chevron { transition: transform 160ms ease; }
 details[open] > summary .chevron { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .chevron { transition: none; } }
 
@@ -306,6 +306,80 @@ details[open] > summary .chevron { transform: rotate(90deg); }
 .ligne-registre > summary::marker { content: ""; }
 @media (prefers-reduced-motion: no-preference) {
   .ligne-registre[open] > summary + div { animation: deplie 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+}
+
+/*
+ * LE GRAPHIQUE SE TRACE.
+ *
+ * Une courbe posee d'un coup est une image ; une courbe qui se trace est une
+ * histoire, et c'est bien une histoire qu'on lit ici -- trois ans de
+ * versements, et ce que la gestion en a fait. Le mouvement suit la lecture :
+ * la courbe de gauche a droite, puis la bande qui la separe du net place,
+ * puis les points, puis le halo du dernier releve, celui d'aujourd'hui.
+ *
+ * `pathLength="1"` normalise la longueur du trace : le tireté vaut 1, et l'on
+ * fait glisser son decalage de 1 a 0 quelle que soit la longueur reelle du
+ * chemin, qui change avec la periode et avec la largeur de l'ecran.
+ *
+ * Les durees du second passage sont plus courtes : au changement de periode on
+ * sait deja ce qu'on regarde, et l'attente se remarquerait.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes trace {
+    from { stroke-dashoffset: 1; }
+    to   { stroke-dashoffset: 0; }
+  }
+  @keyframes fondu {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes halo {
+    0%   { opacity: 0.3; transform: scale(1); }
+    70%  { opacity: 0; transform: scale(2.8); }
+    100% { opacity: 0; transform: scale(2.8); }
+  }
+
+  .trace {
+    stroke-dasharray: 1;
+    animation: trace var(--duree-trace, 1150ms) var(--ease-trace) var(--retard-trace, 180ms) both;
+  }
+  .bande {
+    animation: fondu var(--duree-bande, 800ms) ease-out var(--retard-bande, 650ms) both;
+  }
+  .point {
+    animation: fondu 320ms ease-out var(--retard-point, 1250ms) both;
+  }
+
+  /*
+   * `transform-box: fill-box` : sans lui, l'echelle du halo se calcule sur la
+   * boite du SVG entier et le cercle part en diagonale au lieu de s'ouvrir sur
+   * place.
+   */
+  .halo {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: halo 3200ms ease-out 1700ms infinite both;
+  }
+
+  /* La barre des parts pousse depuis la gauche, un segment apres l'autre. */
+  .segment-part {
+    transform-origin: left center;
+    animation: pousse 700ms var(--ease-doux) both;
+    animation-delay: calc(620ms + var(--i, 0) * 35ms);
+  }
+  @keyframes pousse {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+}
+
+/*
+ * Moins d'animation : rien ne bouge, et surtout rien ne manque. La courbe est
+ * deja tracee, la bande et les points sont la, le halo n'existe pas -- une
+ * pulsation sans fin est precisement ce qu'on demande d'eteindre.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .halo { display: none; }
 }
 
 /* Ombre douce des cartes en relief, plutot qu'un trait a plat. */
@@ -323,7 +397,8 @@ details[open] > summary .chevron { transform: rotate(90deg); }
 :root[data-theme="dark"] .relief-fort { box-shadow: none; }
 
 @media print {
-  .apparait, .revele { animation: none !important; }
+  .apparait, .revele, .trace, .bande, .point, .segment-part { animation: none !important; }
+  .halo { display: none !important; }
   .relief, .relief-fort { box-shadow: none !important; }
 }
 

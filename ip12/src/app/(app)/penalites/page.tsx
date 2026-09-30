@@ -17,7 +17,7 @@ import {
   reglerPenalite,
 } from "@/app/actions/penalites";
 import { dejaAuRegistre, tranchesAbsence } from "@/lib/penalites";
-import { EFFET, REGLES, dateCourte, fcfa, moisLong, nombre } from "@/lib/settings";
+import { EFFET, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { KIND_PENALITE, STATUT_PENALITE } from "@/lib/valeurs";
 import {
   Champ,
@@ -176,7 +176,7 @@ export default async function PagePenalites() {
         <EnTeteEcran
           titre="Penalites dues"
           sous="a ce jour"
-          chiffre={nombre(total(STATUT_PENALITE.due))}
+          brut={total(STATUT_PENALITE.due)}
           unite="FCFA"
           detail="Art. 9 : la penalite reste acquise au club, meme apres regularisation du mois."
         />
@@ -185,8 +185,8 @@ export default async function PagePenalites() {
 
       <CarteEtat
         chiffres={[
-          { libelle: "Reglees", valeur: nombre(total(STATUT_PENALITE.payee)), unite: "FCFA" },
-          { libelle: "Annulees", valeur: nombre(total(STATUT_PENALITE.annulee)), unite: "FCFA" },
+          { libelle: "Reglees", brut: total(STATUT_PENALITE.payee), unite: "FCFA" },
+          { libelle: "Annulees", brut: total(STATUT_PENALITE.annulee), unite: "FCFA" },
         ]}
       />
 
