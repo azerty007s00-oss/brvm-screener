@@ -278,6 +278,31 @@ export function calculerPenalites(
 }
 
 /**
+ * Ou se situe un membre vis-a-vis du seuil de penalites de R5.
+ *
+ * UN SEUL COMPTE DECIDE. Le courrier annoncait le nombre lu au registre, puis
+ * choisissait sa phrase sur un autre compte, lu autrement : un membre portant
+ * quinze penalites de retard lisait « a partir de 3 penalites de retard
+ * impayees, l'exclusion sera encourue », comme s'il en etait loin. Le seuil et
+ * le nombre annonce doivent sortir de la meme grandeur, et la fonction ne prend
+ * donc qu'un nombre.
+ *
+ * Trois etats, parce que la regle ne mord qu'a sa date d'effet : une sanction ne
+ * retroagit pas sur des retards anterieurs a la decision qui l'institue.
+ */
+export type PhaseSeuilR5 = "sous_le_seuil" | "atteint_avant_effet" | "atteint_en_vigueur";
+
+export function phaseSeuilR5(
+  nbPenalitesRetard: number,
+  aujourdhui: Date = new Date(),
+): PhaseSeuilR5 {
+  if (nbPenalitesRetard < REGLES.penalitesImpayeesAvantExclusion) return "sous_le_seuil";
+  return aujourdhui.toISOString().slice(0, 10) >= EFFET.penalitesIndissociables
+    ? "atteint_en_vigueur"
+    : "atteint_avant_effet";
+}
+
+/**
  * R5 : au 3e mois de retard, l'issue depend du respect de R3.
  * Retard non declare -> exclusion de plein droit ; declare -> plan de redressement.
  */

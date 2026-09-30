@@ -29,7 +29,7 @@ const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent 
 );
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
-  dejaAuRegistre, cleRetard, echeanceDuMois,
+  dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
 } = await import("../.verif/penalites.mjs");
 const {
   tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa,
@@ -1103,10 +1103,47 @@ assert.equal(etatEcheance(new Date("2026-09-11T08:00:00Z")), "passee");
 assert.equal(joursAvantEcheance(new Date("2026-09-30T08:00:00Z")), -20);
 assert.equal(etatEcheance(new Date("2026-09-30T08:00:00Z")), "passee");
 
+/*
+ * LE SEUIL R5 SE JUGE SUR LE NOMBRE QU'ON ANNONCE.
+ *
+ * Le courrier lisait le nombre de penalites sur le registre -- somme des
+ * quantites, quinze pour un membre -- puis choisissait sa phrase sur un autre
+ * compte, le nombre de LIGNES, qui valait un. Resultat : « Penalites de retard
+ * impayees : 15 » suivi de « a partir de 3 penalites de retard impayees,
+ * l'exclusion sera encourue », la phrase reservee a qui est sous le seuil.
+ *
+ * La decision ne prend plus qu'un nombre : celui qui vient d'etre ecrit.
+ */
+const avantSeuilR5 = new Date("2026-09-30T08:00:00Z");
+const apresSeuilR5 = new Date("2027-02-01T08:00:00Z");
+
+assert.equal(phaseSeuilR5(0, avantSeuilR5), "sous_le_seuil");
+assert.equal(phaseSeuilR5(2, avantSeuilR5), "sous_le_seuil");
+
+// Le cas du courrier de KONE Bourama : quinze penalites, seuil de trois.
+assert.equal(phaseSeuilR5(15, avantSeuilR5), "atteint_avant_effet");
+assert.equal(phaseSeuilR5(3, avantSeuilR5), "atteint_avant_effet");
+
+/*
+ * La regle ne mord qu'a sa date d'effet : avant le 10/01/2027 le seuil est
+ * atteint mais l'exclusion n'est pas encore encourue, apres elle l'est.
+ */
+assert.equal(phaseSeuilR5(3, apresSeuilR5), "atteint_en_vigueur");
+assert.equal(phaseSeuilR5(15, apresSeuilR5), "atteint_en_vigueur");
+assert.equal(phaseSeuilR5(2, apresSeuilR5), "sous_le_seuil");
+
+/*
+ * Et le seuil ainsi juge doit concorder avec l'issue R5 : meme nombre, meme
+ * verdict. Un membre a jour de ses cotisations mais portant quinze penalites
+ * est exclu de plein droit une fois la regle en vigueur.
+ */
+assert.equal(issueR5(0, false, false, 15, apresSeuilR5).voie, "exclusion_plein_droit");
+assert.equal(issueR5(0, false, false, 15, avantSeuilR5).applicable, false);
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
     "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons, "
     + "net place et gain de gestion, reperes de l'abscisse, "
-    + "cumul, gain de periode et marches, etat de l'echeance",
+    + "cumul, gain de periode et marches, etat de l'echeance, seuil R5",
 );

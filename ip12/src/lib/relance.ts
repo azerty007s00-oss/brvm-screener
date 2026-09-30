@@ -4,6 +4,7 @@ import {
   avancesExigees, penalitesDuesDetaillees, situationsClub,
   type AvanceExigee, type DetteMembre, type SituationClub,
 } from "@/lib/queries";
+import { phaseSeuilR5 } from "@/lib/penalites";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
 import {
   CLUB, EFFET, REGLES, dateCourte, deMois, debutMois, etatEcheance, fcfa,
@@ -184,7 +185,19 @@ export { joursAvantEcheance };
  */
 export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: Date): string {
   if (d.avanceManquante) return `${CLUB.sigle} — avance obligatoire non constituee`;
-  if (d.arrieres.length > 0) return `${CLUB.sigle} — versement en retard (${d.arrieres.length} mois)`;
+  /*
+   * LE COMPTE DES MOIS EN RETARD, PAS CELUI DES MOIS ANTERIEURS.
+   *
+   * L'objet annoncait `arrieres.length`, qui exclut le mois courant : au
+   * 30 septembre, un membre devant aout ET septembre lisait « versement en
+   * retard (1 mois) » sur un courrier qui lui en reclamait deux. `moisEnRetard`
+   * est le compte juste -- il ne retient que les mois dont l'echeance est
+   * passee, un mois encore a venir n'y entre pas.
+   */
+  if (d.arrieres.length > 0) {
+    const n = d.situation.moisEnRetard.length;
+    return `${CLUB.sigle} — versement en retard (${n} mois)`;
+  }
   /*
    * L'objet annonce la dette inscrite, toutes natures, et non le seul decompte
    * des retards : un membre penalise pour deux absences recevait un objet muet
@@ -255,7 +268,14 @@ export function texteRelance(
   if (arrieres.length > 0) {
     lignes.push(
       "",
-      "Versements encore manquants :",
+      /*
+       * « Encore manquants » promettait la liste entiere, et n'en portait que la
+       * part anterieure : le mois courant est traite au paragraphe du dessus,
+       * `arrieres` l'exclut. Un membre a qui il manque aout ET septembre lisait
+       * un seul mois sous un titre qui disait les contenir tous, et pouvait
+       * croire septembre solde.
+       */
+      echeanceDuJour ? "Mois anterieurs encore manquants :" : "Versements encore manquants :",
       /*
        * Le detail du mois entame : dire « septembre » a qui a deja verse 2 000
        * le laisserait croire a une erreur du site. Le montant qui manque leve
@@ -269,9 +289,30 @@ export function texteRelance(
             : `  - ${moisLong(m)}`;
         })
         .join("\n"),
-      "",
-      `Penalites dues a ce jour (art. 9) : ${fcfa(situation.totalPenalites)}.`,
     );
+
+    /*
+     * UN SEUL MONTANT DE PENALITES DANS LE COURRIER.
+     *
+     * Cette ligne annoncait `totalPenalites` -- la penalite THEORIQUE que
+     * l'art. 9 fait courir sur les mois impayes -- et le paragraphe du registre
+     * en annoncait une autre quelques lignes plus bas. Un membre lisait
+     * « Penalites dues a ce jour : 1 000 FCFA », puis « Penalites de retard
+     * impayees : 15, pour un total de 7 500 FCFA », sans aucun moyen de savoir
+     * laquelle regler, ni si la premiere etait comprise dans la seconde.
+     *
+     * Des qu'une dette est inscrite, c'est elle qui fait foi : c'est elle que le
+     * tresorier reclame, et elle porte deja les regles individuelles. Le calcul
+     * theorique ne s'annonce donc que lorsque le registre est encore muet -- et
+     * il se dit alors pour ce qu'il est : en cours, pas encore constate.
+     */
+    if (dette.nb === 0 && situation.totalPenalites > 0) {
+      lignes.push(
+        "",
+        `Penalite de l'art. 9 en cours sur ces mois : ${fcfa(situation.totalPenalites)}. ` +
+          "Elle sera inscrite a votre compte au prochain constat du tresorier.",
+      );
+    }
 
     if (arrieres.length >= REGLES.declarationObligatoireApresMois) {
       lignes.push(
@@ -288,11 +329,24 @@ export function texteRelance(
           "(de 30 % a 60 % du versement du).",
       );
     }
+    /*
+     * LA SUSPENSION EST ACQUISE, ET LA PHRASE DOIT LE DIRE.
+     *
+     * Le test ne se declenche qu'une fois les trente jours passes, mais la
+     * phrase restait au conditionnel implicite : « passe 30 jours, votre droit
+     * de vote est suspendu » se lit comme un avertissement, alors que c'est un
+     * constat. Nommer le nombre de jours leve du meme coup la seconde
+     * ambiguite : le paragraphe d'ouverture parle du retard du mois courant
+     * (vingt jours), celui-ci du plus ancien mois impaye (cinquante et un), et
+     * deux chiffres de retard sans explication dans un meme courrier faisaient
+     * douter des deux.
+     */
     if (situation.joursDeRetard >= REGLES.suspensionVoteApresJours) {
       lignes.push(
         "",
-        `Rappel R2 : passe ${REGLES.suspensionVoteApresJours} jours de retard, votre droit de vote ` +
-          "est suspendu jusqu'a regularisation complete.",
+        `Rappel R2 : votre plus ancien mois impaye date de ${situation.joursDeRetard} jours. ` +
+          `Au-dela de ${REGLES.suspensionVoteApresJours} jours de retard, le droit de vote est ` +
+          "suspendu : le votre l'est donc des a present, jusqu'a regularisation complete.",
       );
     }
   }
@@ -304,7 +358,14 @@ export function texteRelance(
   if (dette.nb > 0) {
     const seuil = REGLES.penalitesImpayeesAvantExclusion;
     const effet = EFFET.penalitesIndissociables;
-    const enVigueur = maintenant.toISOString().slice(0, 10) >= effet;
+    /*
+     * Le seuil se juge sur le nombre que la ligne du dessus vient d'annoncer, et
+     * sur lui seul. Il se lisait auparavant sur `situation.nbPenalitesImpayees`,
+     * une autre grandeur : le courrier annoncait quinze penalites de retard,
+     * puis enchainait sur « a partir de 3 ..., l'exclusion sera encourue »,
+     * c'est-a-dire la phrase reservee a qui est sous le seuil.
+     */
+    const phase = phaseSeuilR5(dette.nbRetard, maintenant);
 
     lignes.push("");
     /*
@@ -338,19 +399,25 @@ export function texteRelance(
      * La regle ne mord qu'a sa date d'effet. Annoncer une exclusion « encourue de
      * plein droit depuis » une date a venir serait faux, et alarmerait a tort.
      */
-    if (dette.nbRetard >= seuil && enVigueur) {
+    if (phase === "atteint_en_vigueur") {
       lignes.push(
         `Vos penalites de retard atteignent le seuil de ${seuil} fixe par l'assemblee : ` +
           "les penalites etant " +
           `indissociables des cotisations depuis le ${dateCourte(effet)}, l'exclusion est ` +
-          "encourue de plein droit (R5), meme cotisations a jour.",
+          "encourue de plein droit (R5), meme si vos cotisations sont a jour.",
       );
-    } else if (situation.nbPenalitesImpayees >= seuil) {
+    } else if (phase === "atteint_avant_effet") {
       lignes.push(
-        `Ce nombre atteint deja le seuil de ${seuil} fixe par l'assemblee. A compter du ` +
+        /*
+         * « Ce nombre » ne designait rien de sur quand la ligne precedente en
+         * porte trois -- le total, les retards, les absences -- et que le seuil
+         * ne compte que les retards. On le nomme.
+         */
+        `Vos ${dette.nbRetard} penalites de retard impayees atteignent deja le seuil de ` +
+          `${seuil} fixe par l'assemblee. A compter du ` +
           `${dateCourte(effet)}, les penalites deviendront indissociables des cotisations et ` +
-          "ce cumul emportera l'exclusion de plein droit (R5), meme cotisations a jour. " +
-          "Vous avez jusque-la pour regulariser.",
+          "ce cumul emportera l'exclusion de plein droit (R5), meme si vos cotisations sont " +
+          "a jour. Vous avez jusque-la pour regulariser.",
       );
     } else {
       lignes.push(
@@ -361,7 +428,8 @@ export function texteRelance(
          * seuil qu'il n'atteint pas.
          */
         `A partir de ${seuil} penalites de retard impayees, l'exclusion sera encourue de ` +
-          `plein droit (R5) meme cotisations a jour — regle applicable le ${dateCourte(effet)}.`,
+          "plein droit (R5) meme si vos cotisations sont a jour — regle applicable le " +
+          `${dateCourte(effet)}.`,
       );
     }
   }

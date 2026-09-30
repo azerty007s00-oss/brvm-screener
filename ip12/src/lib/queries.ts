@@ -341,22 +341,28 @@ async function bornesReprisePenalitesBrut(): Promise<Map<string, string>> {
  * Nombre de penalites de retard encore dues, par membre.
  *
  * Un compte, non un montant : la resolution parle de « 3 mois de penalites
- * impayees », et chaque ligne de retard porte sur un mois. Les penalites
+ * impayees », et chaque penalite de retard porte sur un mois. Les penalites
  * d'absence en sont exclues -- la resolution vise les penalites de retard.
+ *
+ * DERIVEE DE `penalitesDuesDetaillees`, ET NON D'UNE REQUETE A ELLE.
+ *
+ * Elle comptait les LIGNES du registre (`count(*)`) la ou la dette detaillee en
+ * additionne les QUANTITES. Or une ligne peut en porter plusieurs : la reprise
+ * d'arriere ecrit « 15 mois arretes a decembre » en une seule ligne de quantite
+ * 15, et la saisie manuelle laisse le tresorier grouper de meme. Le club avait
+ * donc deux reponses a une seule question -- 1 et 15 -- et le courrier de
+ * relance les employait toutes les deux : il annoncait quinze penalites de
+ * retard, puis expliquait ce qui arriverait « a partir de trois », comme si le
+ * membre en etait loin. La liste des exclusions et le tableau du bureau
+ * lisaient la meme sous-estimation.
+ *
+ * Deux lectures d'une meme grandeur finissent toujours par diverger. Il n'en
+ * reste qu'une, et ce compte n'est plus qu'une vue dessus. Les deux passent par
+ * `cache()` : la lecture ne coute rien de plus.
  */
 async function nbPenalitesRetardDuesBrut(): Promise<Map<string, number>> {
-  try {
-    const sql = db();
-    const rows = await sql`
-      select member_id, count(*)::int as nb
-      from penalties
-      where status = ${STATUT_PENALITE.due} and kind = ${KIND_PENALITE.retard}
-      group by member_id
-    `;
-    return new Map(rows.map((r) => [String(r.member_id), n(r.nb)]));
-  } catch {
-    return new Map();
-  }
+  const dettes = await penalitesDuesDetaillees();
+  return new Map([...dettes].map(([membre, d]) => [membre, d.nbRetard]));
 }
 
 /**
