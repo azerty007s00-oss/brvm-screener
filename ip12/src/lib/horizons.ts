@@ -90,6 +90,14 @@ export function reperesTemps(
   largeur: number,
   ecartMini = 60,
   reserve = 110,
+  /*
+   * LA PREMIERE ETIQUETTE EST PLUS LARGE QUE LES AUTRES : elle porte l'annee,
+   * « janv. 2026 » contre « mars ». Elle est aussi calee a gauche au lieu
+   * d'etre centree, donc elle s'etend vers la droite sur toute sa largeur. Sur
+   * un telephone, « mars » tombait a 71 px et passait dessous. On exige donc
+   * davantage de place apres elle qu'entre deux mois ordinaires.
+   */
+  ecartApresPremier = 100,
 ): Repere[] {
   const t0 = enJours(debut);
   const t1 = enJours(fin);
@@ -133,7 +141,8 @@ export function reperesTemps(
   for (const c of candidats) {
     const px = ((enJours(c.iso) - t0) / duree) * largeur;
     if (px > largeur - reserve) break;
-    if (px - dernierX < ecartMini) continue;
+    const exige = gardes.length === 1 ? ecartApresPremier : ecartMini;
+    if (px - dernierX < exige) continue;
     gardes.push(c);
     dernierX = px;
   }

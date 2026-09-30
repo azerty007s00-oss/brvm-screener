@@ -985,6 +985,11 @@ assert.equal(nombre(3857845).includes(" "), false, "pas d'espace fine : elle m
   const r = reperesTemps("2026-06-30", "2026-09-28", 260);
   // Le premier repere porte l'annee, les suivants non.
   assert.equal(r[0].libelle, "juin 2026");
+  // Et il exige plus de place que les autres : il est deux fois plus large,
+  // et cale a gauche au lieu d'etre centre.
+  const j = (i) => Date.parse(i + "T00:00:00Z") / 86400000;
+  const pos = (i) => ((j(i) - j("2026-06-30")) / (j("2026-09-28") - j("2026-06-30"))) * 260;
+  if (r.length > 1) assert.ok(pos(r[1].iso) - pos(r[0].iso) >= 100);
   const largeurUtile = 260;
   const jours = (i) => Date.parse(i + "T00:00:00Z") / 86400000;
   const px = r.map((x) => ((jours(x.iso) - jours("2026-06-30")) / (jours("2026-09-28") - jours("2026-06-30"))) * largeurUtile);
@@ -994,9 +999,49 @@ assert.equal(nombre(3857845).includes(" "), false, "pas d'espace fine : elle m
 // Une periode sans duree ne porte aucun repere plutot qu'une division par zero.
 assert.deepEqual(reperesTemps("2026-09-28", "2026-09-28", 1000), []);
 
+/* ------------------------------ les deux gains ne sont pas le meme chiffre */
+
+/*
+ * DEUX MESURES PORTENT LE NOM « gain de gestion », ET ELLES DIFFERENT.
+ *
+ * Le cumul depuis l'ouverture a une date : valeur - net place a cette date.
+ * Le gain de la periode choisie : (V fin - V debut) - (net fin - net debut).
+ *
+ * Les afficher tous deux sous le seul mot « gain de gestion » faisait lire une
+ * perte la ou il y avait un gain : au 30/06/2026, 1 092 828 au doigt puis
+ * 1 007 802 une fois le doigt leve. Ce controle fige l'ecart pour que personne
+ * ne les reunisse plus tard en croyant simplifier.
+ */
+{
+  const releves = [
+    { date: "2026-01-01", valeur: 2_166_323, netPlace: 1_493_915 },
+    { date: "2026-06-30", valeur: 3_270_463, netPlace: 2_177_635 },
+    { date: "2026-09-28", valeur: 3_857_845, netPlace: 2_177_635 },
+  ];
+  const cumul = (r) => r.valeur - r.netPlace;
+
+  assert.equal(cumul(releves[1]), 1_092_828, "cumul depuis l'ouverture au 30/06");
+  assert.equal(cumul(releves[2]), 1_680_210, "cumul depuis l'ouverture au 28/09");
+
+  const periode = decomposer(releves);
+  assert.equal(periode.gain, 1_007_802, "gain sur l'exercice");
+
+  // Les deux different, et le cumul n'est jamais le gain de periode des que la
+  // periode ne part pas de l'ouverture.
+  assert.notEqual(cumul(releves[2]), periode.gain);
+
+  // Le cumul monte entre les deux dates : il n'y a pas eu de perte cet ete.
+  assert.ok(cumul(releves[2]) > cumul(releves[1]));
+
+  // Et le gain de periode arrive bien au total annonce quand on va au bout.
+  assert.equal(decomposer(releves.slice(0, 2)).gain, 420_420);
+  assert.equal(cumul(releves[2]) - cumul(releves[0]), periode.gain);
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
     "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons, "
-    + "net place et gain de gestion, reperes de l'abscisse",
+    + "net place et gain de gestion, reperes de l'abscisse, "
+    + "cumul et gain de periode",
 );

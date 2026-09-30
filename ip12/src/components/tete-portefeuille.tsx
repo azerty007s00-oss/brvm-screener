@@ -48,9 +48,13 @@ export function TetePortefeuille({
 
   /*
    * Sous le doigt, la sous-ligne dit la composition du releve vise et le gain
-   * de gestion ACQUIS A CETTE DATE -- valeur moins net place. C'est la question
-   * qu'on se pose en pointant un creux : « qu'est-ce qu'on avait ce jour-la, et
-   * qu'est-ce qui venait de nous ? »
+   * de gestion cumule a cette date -- valeur moins net place.
+   *
+   * « DEPUIS L'OUVERTURE » est dit en toutes lettres : la ligne sous le
+   * graphique porte, elle, le gain de la periode choisie, et les deux se
+   * lisaient « gain de gestion » sans plus de precision. Au 30/06/2026 on
+   * passait ainsi de 1 092 828 a 1 007 802 en levant le doigt, comme si l'ete
+   * avait coute 85 026 FCFA au club.
    */
   const detailVise = vise ? (
     <>
@@ -63,7 +67,7 @@ export function TetePortefeuille({
         {vise.valeur - vise.netPlace >= 0 ? "+" : "−"}
         {nombre(Math.abs(vise.valeur - vise.netPlace))} FCFA
       </span>{" "}
-      de gain de gestion a cette date.
+      de gain de gestion depuis l&apos;ouverture.
     </>
   ) : null;
 

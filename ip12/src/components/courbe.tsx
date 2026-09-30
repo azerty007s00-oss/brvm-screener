@@ -92,6 +92,16 @@ export function CourbePortefeuille({
    */
   const [vise, setVise] = useState<number | null>(null);
   /*
+   * AU DOIGT, LA SELECTION RESTE ; A LA SOURIS, ELLE SUIT.
+   *
+   * Un doigt pose sur le graphique cache precisement ce qu'il designe, et tout
+   * disparaissait des qu'on le levait : on ne pouvait pas lire ce qu'on venait
+   * de choisir. Le tactile epingle donc le releve -- on tape ailleurs pour en
+   * choisir un autre, on retape le meme pour le laisser. La souris, elle, n'a
+   * pas ce probleme : elle suit et s'efface en sortant.
+   */
+  const [epingle, setEpingle] = useState(false);
+  /*
    * Tant que la largeur n'est pas mesuree, l'axe s'en tient a ses deux dates.
    *
    * La regle d'espacement des reperes se calcule en pixels : calculee pour les
@@ -228,9 +238,29 @@ export function CourbePortefeuille({
    * au 12 septembre parce que le doigt y est passe reviendrait a inventer un
    * chiffre. Le trait se pose donc sur un releve, toujours.
    */
+  const choisir = (i: number | null) => {
+    setVise(i);
+    surVise?.(i === null ? null : traces[i]);
+  };
+
   const viser = (e: React.PointerEvent<SVGRectElement>) => {
     const cadre = e.currentTarget.getBoundingClientRect();
     if (cadre.width === 0) return;
+    /*
+     * LE POINTEUR NE DONNE PAS LE FOCUS.
+     *
+     * Le rectangle est atteignable au clavier, donc focalisable -- et Chromium
+     * considere qu'un element focalisable qui n'est pas un champ de formulaire
+     * merite son anneau de focus meme au doigt. Un cadre d'or entourait donc
+     * tout le graphique au premier effleurement. On empeche l'action par
+     * defaut du `pointerdown`, qui est precisement de donner le focus : il ne
+     * s'obtient plus qu'a la tabulation, ou il a lieu d'etre. Le defilement
+     * vertical, lui, est decide par `touch-action` avant cet evenement.
+     */
+    if (e.type === "pointerdown") e.preventDefault();
+    const tactile = e.pointerType !== "mouse";
+    /* Un glissement de souris sans bouton ne doit pas defaire un point epingle. */
+    if (e.type === "pointermove" && tactile && e.buttons === 0) return;
     const enUnites = ((e.clientX - cadre.left) * L) / cadre.width;
     let proche = 0;
     for (let i = 1; i < traces.length; i++) {
@@ -238,14 +268,47 @@ export function CourbePortefeuille({
         proche = i;
       }
     }
-    if (proche !== vise) {
-      setVise(proche);
-      surVise?.(traces[proche]);
+    if (tactile) {
+      setEpingle(true);
+      /* Retaper le releve deja choisi le libere : c'est le geste qu'on tente. */
+      if (e.type === "pointerdown" && proche === vise) {
+        setEpingle(false);
+        choisir(null);
+        return;
+      }
     }
+    if (proche !== vise) choisir(proche);
   };
+
+  /* La souris qui sort efface ; le doigt qui se leve ne touche a rien. */
   const quitter = () => {
-    setVise(null);
-    surVise?.(null);
+    if (epingle) return;
+    choisir(null);
+  };
+
+  /*
+   * AU CLAVIER AUSSI. Le graphique est le seul endroit du site ou une donnee ne
+   * s'atteignait qu'au pointeur. Les fleches parcourent les releves, Debut et
+   * Fin sautent aux bouts, Echap libere.
+   */
+  const surTouche = (e: React.KeyboardEvent<SVGRectElement>) => {
+    const pas: Record<string, number> = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 };
+    if (e.key === "Escape") {
+      setEpingle(false);
+      choisir(null);
+      return;
+    }
+    if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      setEpingle(true);
+      choisir(e.key === "Home" ? 0 : traces.length - 1);
+      return;
+    }
+    if (!(e.key in pas)) return;
+    e.preventDefault();
+    setEpingle(true);
+    const depart = vise === null ? (pas[e.key] > 0 ? -1 : traces.length) : vise;
+    choisir(Math.min(traces.length - 1, Math.max(0, depart + pas[e.key])));
   };
 
   const point = vise === null ? null : traces[vise];
@@ -441,11 +504,18 @@ export function CourbePortefeuille({
             width={L}
             height={H}
             fill="transparent"
-            style={{ cursor: "crosshair", touchAction: "pan-y" }}
+            tabIndex={0}
+            role="application"
+            aria-label="Parcourir les releves : fleches, Debut, Fin, Echap"
+            style={{ cursor: "crosshair", touchAction: "pan-y", outlineOffset: -2 }}
             onPointerMove={viser}
             onPointerDown={viser}
             onPointerLeave={quitter}
             onPointerCancel={quitter}
+            onKeyDown={surTouche}
+            onBlur={() => {
+              if (!epingle) choisir(null);
+            }}
           />
 
           {point && (
@@ -472,6 +542,22 @@ export function CourbePortefeuille({
                 fill="var(--page)"
                 stroke="var(--ink-3)"
                 strokeWidth="1.5"
+                vectorEffect="non-scaling-stroke"
+              />
+              {/*
+               * Un anneau autour du releve choisi : quand la selection reste
+               * apres que le doigt s'est leve, il faut voir LEQUEL est choisi,
+               * et non seulement lire des chiffres sous le graphique.
+               */}
+              <circle
+                className="vise"
+                cx={0}
+                style={{ transform: `translateY(${y(point.valeur)}px)` }}
+                r={8}
+                fill="none"
+                stroke="var(--gold)"
+                strokeWidth="1"
+                opacity={0.55}
                 vectorEffect="non-scaling-stroke"
               />
               <circle
@@ -568,6 +654,23 @@ export function CourbePortefeuille({
         <span style={{ color: "var(--ink-3)" }}>
           {point ? `Au releve du ${dateCourte(point.date)}` : nomPeriode}
         </span>
+        {point && epingle && (
+          /*
+           * Une sortie visible : sans elle, le seul moyen de revenir a la
+           * periode serait de retrouver le meme releve et de le retaper.
+           */
+          <button
+            type="button"
+            className="tapable -my-1 rounded px-2 py-1 text-[12.5px] underline underline-offset-2"
+            style={{ color: "var(--ink-3)" }}
+            onClick={() => {
+              setEpingle(false);
+              choisir(null);
+            }}
+          >
+            Revenir a la periode
+          </button>
+        )}
         {point ? (
           /*
            * Sous le doigt, on ne montre plus la periode mais CE releve : sa
@@ -588,7 +691,24 @@ export function CourbePortefeuille({
                 </span>
               </span>
             )}
-            <Poste libelle="Gain de gestion" montant={point.valeur - point.netPlace} performance />
+            {/*
+             * « DEPUIS L'OUVERTURE », et non « sur la periode ».
+             *
+             * Les deux lignes portaient le meme mot pour deux mesures
+             * differentes : ici le gain cumule a cette date, plus bas le gain
+             * de la periode choisie. Au 30/06/2026 on lisait donc 1 092 828 au
+             * doigt, puis 1 007 802 une fois le doigt leve -- comme si le club
+             * avait perdu 85 026 FCFA pendant l'ete, alors qu'il en a gagne
+             * 587 382. L'arithmetique etait juste ; c'est le mot qui mentait.
+             *
+             * Celui-ci est aussi la hauteur de la bande, a cet endroit precis :
+             * ce qu'on lit est ce qu'on voit.
+             */}
+            <Poste
+              libelle="Gain de gestion depuis l'ouverture"
+              montant={point.valeur - point.netPlace}
+              performance
+            />
           </>
         ) : part === null ? (
           <span>
