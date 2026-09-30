@@ -315,6 +315,81 @@ export async function listerPenalites(filtre?: {
 }
 
 /**
+ * Les declarations de reglement de penalite, du membre vers le tresorier.
+ *
+ * La penalite reste `due` tant que la declaration n'est pas validee : rien
+ * n'entre en caisse sur parole, et le seuil de R5 ne bouge pas. La declaration
+ * n'est qu'un avis -- « j'ai paye, verifiez » -- porte a l'ecran du tresorier au
+ * lieu d'un message sur le groupe.
+ */
+export type ReglementPenalite = {
+  id: string;
+  penalite_id: string;
+  membre_id: string;
+  membre_nom: string;
+  /** Combien de penalites de la ligne le membre declare avoir reglees. */
+  quantite: number;
+  /** Ce que cela represente, au montant unitaire de la ligne. */
+  montant: number;
+  /** La ligne visee, pour que le tresorier sache sur quoi il se prononce. */
+  nature: string;
+  quantite_ligne: number;
+  montant_unitaire: number;
+  motif_ligne: string | null;
+  date_constat: string;
+  date_paiement: string;
+  mode: string;
+  reference: string | null;
+  note: string | null;
+  lot: string;
+  statut: string;
+  declare_par: string;
+  examine_par: string | null;
+  motif_refus: string | null;
+  cree_le: string;
+};
+
+async function reglementsPenaliteBrut(filtre?: {
+  membreId?: string;
+  statut?: string;
+}): Promise<ReglementPenalite[]> {
+  const sql = db();
+  const membreId = filtre?.membreId ?? null;
+  const statut = filtre?.statut ?? null;
+  const rows = await sql`
+    select r.id, r.penalty_id as penalite_id, r.member_id as membre_id,
+           m.full_name as membre_nom, r.quantity as quantite,
+           p.kind as nature, p.quantity as quantite_ligne,
+           p.unit_amount as montant_unitaire, p.reason as motif_ligne,
+           to_char(p.incurred_on, 'YYYY-MM-DD') as date_constat,
+           to_char(r.paid_on, 'YYYY-MM-DD') as date_paiement,
+           r.method as mode, r.reference, r.note, r.batch_id as lot,
+           r.status as statut, r.review_note as motif_refus,
+           to_char(r.created_at, 'YYYY-MM-DD') as cree_le,
+           d.full_name as declare_par, v.full_name as examine_par
+    from penalty_settlements r
+    join penalties p on p.id = r.penalty_id
+    join members m on m.id = r.member_id
+    left join members d on d.id = r.declared_by
+    left join members v on v.id = r.reviewed_by
+    where (${membreId}::uuid is null or r.member_id = ${membreId}::uuid)
+      and (${statut}::text is null or r.status = ${statut}::text)
+    order by r.created_at desc
+  `;
+  return rows.map((r) => {
+    const quantite = n(r.quantite);
+    const unitaire = n(r.montant_unitaire);
+    return {
+      ...(r as unknown as ReglementPenalite),
+      quantite,
+      montant_unitaire: unitaire,
+      quantite_ligne: n(r.quantite_ligne),
+      montant: quantite * unitaire,
+    };
+  });
+}
+
+/**
  * Borne de reprise par membre : jusqu'a quel mois le tresorier a deja compte.
  *
  * La cle de source distingue la reprise du constat automatique, et la date portee
@@ -1070,6 +1145,32 @@ export const bornesReprisePenalites = cache(bornesReprisePenalitesBrut);
 export const nbPenalitesRetardDues = cache(nbPenalitesRetardDuesBrut);
 export const penalitesDuesParMembre = cache(penalitesDuesParMembreBrut);
 export const penalitesDuesDetaillees = cache(penalitesDuesDetailleesBrut);
+/*
+ * Non memoisee : elle prend un filtre, et deux appels de filtres differents dans
+ * un meme rendu ne doivent pas se rendre la reponse l'un de l'autre.
+ */
+export const reglementsPenalite = reglementsPenaliteBrut;
+
+/**
+ * Le circuit de declaration des reglements est-il en place ?
+ *
+ * La migration qui cree `penalty_settlements` s'execute a la main dans Neon.
+ * Entre la mise en ligne du code et ce geste, la table n'existe pas -- et la
+ * relance ne doit pas envoyer dix membres chercher un bouton qui n'est pas
+ * encore la. Une consigne fausse ramene le membre sur le groupe WhatsApp, ce que
+ * ce mode d'emploi sert justement a eviter.
+ */
+async function circuitReglementsPretBrut(): Promise<boolean> {
+  try {
+    const sql = db();
+    await sql`select 1 from penalty_settlements limit 1`;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const circuitReglementsPret = cache(circuitReglementsPretBrut);
 export const listerReunions = cache(listerReunionsBrut);
 export const absencesParMembre = cache(absencesParMembreBrut);
 export const presencesParReunion = cache(presencesParReunionBrut);

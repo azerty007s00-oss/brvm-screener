@@ -19,10 +19,26 @@ export const STATUT_PENALITE = {
   annulee: "annulee",
 } as const;
 
-/** La base accepte aussi 'penalite' : un reglement de penalite passe par la meme table. */
+/**
+ * `contributions.kind`. La contrainte de la base accepte aussi 'penalite', et
+ * l'application n'en ecrit jamais : le reglement d'une penalite se declare dans
+ * `penalty_settlements`, et se solde sur la ligne de `penalties`.
+ *
+ * NE PAS ROUVRIR CETTE PORTE. Aucune lecture de `contributions` ne filtre sur
+ * `kind` -- ni la situation du club, ni le calcul des parts, ni le controle des
+ * mois deja soldes. Une ligne de penalite ecrite ici serait comptee comme une
+ * cotisation du mois porte par `period` : part de l'art. 12 gonflee, mois marque
+ * paye sans qu'un franc de cotisation soit entre.
+ */
 export const KIND_VERSEMENT = {
   cotisation: "cotisation",
-  penalite: "penalite",
+} as const;
+
+/** penalty_settlements.status : la declaration du membre attend le tresorier. */
+export const STATUT_REGLEMENT = {
+  enAttente: "en_attente",
+  validee: "validee",
+  rejetee: "rejetee",
 } as const;
 
 /** 'absence' sanctionne le defaut de presence en reunion (table attendances). */

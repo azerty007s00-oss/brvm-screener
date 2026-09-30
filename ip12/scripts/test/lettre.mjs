@@ -62,6 +62,7 @@ export function db(): Requete { throw new Error("aucune base dans ce controle");
 export const situationsClub = async (_a?: unknown): Promise<SituationClub[]> => [];
 export const avancesExigees = async (_a?: unknown): Promise<AvanceExigee[]> => [];
 export const penalitesDuesDetaillees = async () => new Map<string, DetteMembre>();
+export const circuitReglementsPret = async () => true;
 export const envoyerCourriel = async (_a?: unknown) => ({ ok: true });
 export const transportConfigure = () => "aucun" as string;
 `);
@@ -194,9 +195,41 @@ verifier(
   "le mode d'emploi doit decrire la navigation actuelle",
 );
 
+/*
+ * Le courrier reclamait des penalites et n'expliquait que la declaration d'une
+ * cotisation -- « indiquez le mois couvert », qu'une penalite n'a pas. Qui
+ * payait ses penalites n'avait rien a toucher.
+ */
+verifier(
+  texteBourama.includes("COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE"),
+  "des que le courrier reclame des penalites, il doit dire comment les declarer",
+);
+verifier(
+  texteBourama.includes("La penalite reste due jusqu'a cette verification"),
+  "le courrier doit prevenir qu'une relance peut encore reclamer ce qui est declare",
+);
+const sansDette = { ...bourama, dette: { nb: 0, montant: 0, nbRetard: 0, montantRetard: 0 } };
+verifier(
+  !lettre(sansDette).includes("COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE"),
+  "sans penalite reclamee, ce chemin n'a pas a encombrer le courrier",
+);
+/*
+ * La migration qui cree la table s'execute a la main : entre la mise en ligne et
+ * ce geste, le courrier ne doit pas envoyer chercher un bouton absent.
+ */
+verifier(
+  !texteRelance(bourama, SITE, LE_30, false).includes("Declarer un reglement"),
+  "circuit absent : le courrier ne doit pas donner une consigne qui ne mene nulle part",
+);
+verifier(
+  texteRelance(bourama, SITE, LE_30, false).includes("Penalites de retard impayees : 15"),
+  "circuit absent ou non, la dette s'annonce",
+);
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 console.log(
   `OK - ${controles} controles du courrier de relance : objet, seuil R5, ` +
-    "total unique des penalites, liste des mois, R2, mode d'emploi",
+    "total unique des penalites, liste des mois, R2, mode d'emploi des cotisations " +
+    "et des penalites",
 );

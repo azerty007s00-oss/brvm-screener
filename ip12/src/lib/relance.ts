@@ -1,7 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import {
-  avancesExigees, penalitesDuesDetaillees, situationsClub,
+  avancesExigees, circuitReglementsPret, penalitesDuesDetaillees, situationsClub,
   type AvanceExigee, type DetteMembre, type SituationClub,
 } from "@/lib/queries";
 import { phaseSeuilR5 } from "@/lib/penalites";
@@ -103,11 +103,13 @@ export async function envoyerRelances(
 
   const moisCourant = debutMois(maintenant);
   const siteUrl = lienDuSite();
+  /* Lu une fois pour tout le lot : la table ne nait pas au milieu d'un envoi. */
+  const circuit = await circuitReglementsPret();
   for (const d of destinataires) {
     const { ok } = await envoyerCourriel({
       destinataire: d.situation.email,
       sujet: sujetRelance(d, moisCourant, maintenant),
-      texte: texteRelance(d, siteUrl, maintenant),
+      texte: texteRelance(d, siteUrl, maintenant, circuit),
     });
     (ok ? envoyes : echecs).push(d.situation.email);
   }
@@ -219,6 +221,8 @@ export function texteRelance(
   { situation, arrieres, echeanceDuJour, avanceManquante, dette }: Destinataire,
   siteUrl: string,
   maintenant: Date,
+  /* Faux tant que la migration n'a pas cree `penalty_settlements`. */
+  circuitReglements = true,
 ): string {
   // Le blanc qui suit l'appel n'a de sens que s'il precede un paragraphe.
   const lignes: string[] = [`Bonjour ${situation.nom},`];
@@ -460,7 +464,7 @@ export function texteRelance(
   if (siteUrl) {
     lignes.push(
       "",
-      "COMMENT ENREGISTRER VOTRE VERSEMENT",
+      "COMMENT ENREGISTRER VOTRE COTISATION",
       `  1. Ouvrez ${siteUrl} et connectez-vous.`,
       /*
        * Le tiroir a disparu avec la refonte : la navigation est en bas de
@@ -481,6 +485,30 @@ export function texteRelance(
       "que vous avez declare. Tant que la validation n'a pas eu lieu, votre",
       "declaration reste visible de tous, marquee « en attente » : rien ne se perd.",
     );
+
+    /*
+     * LE CHEMIN DES PENALITES, PUISQUE LE COURRIER EN RECLAME.
+     *
+     * Les cinq etapes ci-dessus ne valent que pour une cotisation : elles
+     * demandent « le mois couvert », qu'une penalite n'a pas. Un membre a qui ce
+     * courrier reclamait sept mille francs de penalites n'avait donc rien a
+     * toucher -- il ecrivait au groupe, et le tresorier saisissait a sa place,
+     * ce que ces lignes servent justement a eviter.
+     */
+    if (dette.nb > 0 && circuitReglements) {
+      lignes.push(
+        "",
+        "COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE",
+        "  Le chemin n'est pas le meme : une penalite ne couvre aucun mois.",
+        "  1. Touchez « Penalites », puis « Declarer un reglement ».",
+        "  2. Choisissez la penalite reglee, la date et le moyen de paiement,",
+        "     et joignez la capture de votre transfert.",
+        "  3. Le tresorier verifie l'encaissement et solde la ligne.",
+        "",
+        "La penalite reste due jusqu'a cette verification : si une relance vous",
+        "parvient entre-temps et la reclame encore, ce n'est pas une erreur.",
+      );
+    }
   }
   /*
    * La date distingue les passages du mois. Trois courriers au texte identique

@@ -6,6 +6,7 @@ import {
   bornesReprisePenalites,
   listerMembres,
   listerPenalites,
+  reglementsPenalite,
   situationsClub,
 } from "@/lib/queries";
 import {
@@ -14,17 +15,24 @@ import {
   rouvrirPenalite,
   constaterPenalitesAbsence,
   constaterPenalitesRetard,
+  declarerReglementPenalite,
   reglerPenalite,
+  rejeterReglementPenalite,
+  validerReglementPenalite,
 } from "@/app/actions/penalites";
 import { dejaAuRegistre, tranchesAbsence } from "@/lib/penalites";
 import { EFFET, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
-import { KIND_PENALITE, STATUT_PENALITE } from "@/lib/valeurs";
+import {
+  KIND_PENALITE, MODES_AFFICHES, STATUT_PENALITE, STATUT_REGLEMENT, libelleMode,
+} from "@/lib/valeurs";
 import {
   Champ,
   ChampCache,
   FormulaireAction,
   Selection,
 } from "@/components/formulaires";
+import { ChampJustificatif } from "@/components/justificatif";
+import { justificatifsParLot } from "@/lib/justificatifs";
 import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
 import { ChampMenu, MenuLigne } from "@/components/menu-ligne";
@@ -46,9 +54,9 @@ export default async function PagePenalites() {
   const membre = await exigerMembre();
   const gere = peut(membre, "gererPenalites");
 
-  let penalites, membres, situations, absences, avances, bornes;
+  let penalites, membres, situations, absences, avances, bornes, declarations, pieces;
   try {
-    [penalites, membres, situations, absences, avances, bornes] =
+    [penalites, membres, situations, absences, avances, bornes, declarations, pieces] =
       await Promise.all([
         listerPenalites(gere ? undefined : { membreId: membre.id }),
         listerMembres(),
@@ -56,6 +64,19 @@ export default async function PagePenalites() {
         absencesParMembre().catch(() => []),
         avancesExigees().catch(() => []),
         bornesReprisePenalites().catch(() => new Map<string, string>()),
+        /*
+         * LA TABLE PEUT NE PAS EXISTER ENCORE : la migration s'execute a la main
+         * dans Neon. Son absence ne doit pas emporter toute la page -- le
+         * registre, lui, est la -- mais elle doit se distinguer d'une liste
+         * vide : proposer « Declarer un reglement » sur une table absente
+         * mettrait le membre devant une erreur brute de la base.
+         */
+        reglementsPenalite(gere ? undefined : { membreId: membre.id }).catch((e) => {
+          if (estTableAbsente(e)) return null;
+          throw e;
+        }),
+        /* Elle avale deja ses propres erreurs : la page s'affiche sans les vignettes. */
+        justificatifsParLot(),
       ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -119,6 +140,27 @@ export default async function PagePenalites() {
     .split("-")
     .reverse()
     .join("/");
+
+  /*
+   * Ce que le membre peut declarer : ses propres lignes encore dues, moins celles
+   * qui portent deja une declaration en attente -- il ne sert a rien d'en poser
+   * deux, et la base les refuserait.
+   */
+  const circuitPret = declarations !== null;
+  const reglements = declarations ?? [];
+  const enAttenteParLigne = new Set(
+    reglements
+      .filter((r) => r.statut === STATUT_REGLEMENT.enAttente)
+      .map((r) => r.penalite_id),
+  );
+  const mesLignesDues = penalites.filter(
+    (p) =>
+      p.membre_id === membre.id &&
+      p.statut === STATUT_PENALITE.due &&
+      !enAttenteParLigne.has(p.id),
+  );
+  const mesDeclarations = reglements.filter((r) => r.membre_id === membre.id);
+  const aExaminer = reglements.filter((r) => r.statut === STATUT_REGLEMENT.enAttente);
 
   const saisie = gere ? (
     <Panneau
@@ -366,6 +408,206 @@ export default async function PagePenalites() {
               )}
             </>
           )}
+        </Carte>
+      )}
+
+      {/*
+       * DECLARER LE REGLEMENT D'UNE PENALITE.
+       *
+       * La relance reclame des penalites, et le mode d'emploi qui la suit ne
+       * savait expliquer que la declaration d'une cotisation -- « le mois
+       * couvert », qu'une penalite n'a pas. Le membre qui payait par mobile
+       * money n'avait donc rien a toucher : il ecrivait au groupe, et le
+       * tresorier saisissait a sa place.
+       *
+       * La penalite ne bouge pas pour autant : elle reste due jusqu'a la
+       * validation, et la phrase le dit, sans quoi la relance du lendemain
+       * passerait pour une erreur du site.
+       */}
+      {circuitPret && mesLignesDues.length > 0 && (
+        <div className="sans-impression">
+          <Panneau
+            libelle="Declarer un reglement"
+            titre="Declarer le reglement d'une penalite"
+            introduction="Votre declaration part au tresorier, qui verifie l'encaissement. La penalite reste due jusqu'a sa validation : la relance continuera de la reclamer d'ici la, et ce n'est pas une erreur."
+          >
+            <FormulaireAction action={declarerReglementPenalite} libelle="Declarer">
+              <Selection
+                nom="penaliteId"
+                libelle="Penalite reglee"
+                options={mesLignesDues.map((p) => ({
+                  valeur: p.id,
+                  libelle:
+                    `${LIBELLE_NATURE[p.nature] ?? p.nature} du ${dateCourte(p.date_constat)} — ` +
+                    `${fcfa(p.montant)}${p.quantite > 1 ? ` (${p.quantite} × ${fcfa(p.montant_unitaire)})` : ""}`,
+                }))}
+              />
+              <Champ
+                nom="quantite"
+                libelle="Nombre regle (facultatif)"
+                type="number"
+                min={1}
+                requis={false}
+                aide="Vide : la ligne entiere. Une ligne peut porter plusieurs penalites, et se regler par parties."
+              />
+              <Champ
+                nom="datePaiement"
+                libelle="Date du paiement"
+                type="date"
+                valeur={new Date().toISOString().slice(0, 10)}
+              />
+              <Selection nom="mode" libelle="Mode" options={MODES_AFFICHES} />
+              <Champ nom="reference" libelle="Reference du paiement (facultatif)" requis={false} />
+              <Champ nom="note" libelle="Note (facultatif)" requis={false} />
+              <ChampJustificatif />
+            </FormulaireAction>
+          </Panneau>
+        </div>
+      )}
+
+      {gere && circuitPret && (
+        <Carte titre={`Reglements declares, a verifier (${aExaminer.length})`}>
+          {aExaminer.length === 0 ? (
+            <Vide>Aucun reglement declare en attente.</Vide>
+          ) : (
+            <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
+              {aExaminer.map((r) => (
+                <li key={r.id} className="py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">
+                        {r.membre_nom} &middot; {fcfa(r.montant)}
+                        {r.quantite > 1 && (
+                          <span className="font-normal" style={{ color: "var(--discret)" }}>
+                            {" "}
+                            ({r.quantite} × {fcfa(r.montant_unitaire)})
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs" style={{ color: "var(--discret)" }}>
+                        {LIBELLE_NATURE[r.nature] ?? r.nature} constatee le{" "}
+                        {dateCourte(r.date_constat)} &middot; paye le{" "}
+                        {dateCourte(r.date_paiement)} &middot; {libelleMode(r.mode)}
+                        {r.reference ? ` · ref. ${r.reference}` : ""}
+                      </p>
+                      {r.quantite < r.quantite_ligne && (
+                        <p className="text-xs" style={{ color: "var(--etat-attente)" }}>
+                          Reglement partiel : {r.quantite} sur {r.quantite_ligne}. Le reste
+                          restera dû.
+                        </p>
+                      )}
+                      {r.note && (
+                        <p className="mt-1 text-xs italic" style={{ color: "var(--discret)" }}>
+                          {r.note}
+                        </p>
+                      )}
+                      <div className="mt-1">
+                        {(pieces.get(r.lot) ?? []).length > 0 ? (
+                          <span className="flex flex-wrap gap-2">
+                            {(pieces.get(r.lot) ?? []).map((j) => (
+                              <a
+                                key={j.id}
+                                href={`/api/justificatif/${j.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center rounded px-2 py-0.5 text-xs underline"
+                                style={{
+                                  background: "var(--etat-ok-fond)",
+                                  color: "var(--etat-ok)",
+                                }}
+                              >
+                                {j.mime === "application/pdf" ? "Bordereau PDF" : "Voir le recu"}
+                              </a>
+                            ))}
+                          </span>
+                        ) : (
+                          <span className="text-xs" style={{ color: "var(--etat-attente)" }}>
+                            Aucun justificatif joint — a verifier avant de valider.
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-start gap-2">
+                      <FormulaireAction
+                        action={validerReglementPenalite}
+                        libelle="Valider"
+                        compact
+                        confirmation="Valider ce reglement ? La penalite sera soldee."
+                      >
+                        <ChampCache nom="id" valeur={r.id} />
+                      </FormulaireAction>
+                      <FormulaireAction
+                        action={rejeterReglementPenalite}
+                        libelle="Refuser"
+                        variante="danger"
+                        compact
+                        confirmation="Refuser ce reglement ? La penalite restera due."
+                      >
+                        <ChampCache nom="id" valeur={r.id} />
+                        <input
+                          name="motif"
+                          placeholder="Motif"
+                          required
+                          className="mb-1 w-28 rounded border px-2 py-1 text-xs"
+                          style={{
+                            background: "var(--fond)",
+                            borderColor: "var(--bordure)",
+                            color: "var(--texte)",
+                          }}
+                        />
+                      </FormulaireAction>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Carte>
+      )}
+
+      {!gere && mesDeclarations.length > 0 && (
+        <Carte titre={`Mes reglements declares (${mesDeclarations.length})`}>
+          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {mesDeclarations.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium">
+                    {fcfa(r.montant)}
+                    {r.quantite > 1 && (
+                      <span className="font-normal" style={{ color: "var(--discret)" }}>
+                        {" "}
+                        ({r.quantite} × {fcfa(r.montant_unitaire)})
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--discret)" }}>
+                    {LIBELLE_NATURE[r.nature] ?? r.nature} &middot; declare le{" "}
+                    {dateCourte(r.cree_le)} &middot; paye le {dateCourte(r.date_paiement)}
+                  </p>
+                  {r.motif_refus && (
+                    <p className="mt-0.5 text-xs italic" style={{ color: "var(--perte)" }}>
+                      {r.motif_refus}
+                    </p>
+                  )}
+                </div>
+                <Badge
+                  ton={
+                    r.statut === STATUT_REGLEMENT.validee
+                      ? "vert"
+                      : r.statut === STATUT_REGLEMENT.rejetee
+                        ? "rouge"
+                        : "ambre"
+                  }
+                >
+                  {r.statut === STATUT_REGLEMENT.validee
+                    ? "Valide"
+                    : r.statut === STATUT_REGLEMENT.rejetee
+                      ? "Refuse"
+                      : "En attente"}
+                </Badge>
+              </li>
+            ))}
+          </ul>
         </Carte>
       )}
 

@@ -108,21 +108,34 @@ export async function avertirLeBureau(
  * A defaut de tresorier actif, le courrier va au premier titulaire du droit de
  * valider -- le president -- et la copie ne le double pas.
  */
-export async function avertirDeclaration(params: {
-  auteurId: string;
-  membreNom: string;
-  mois: string[];
-  montant: number;
-  avecJustificatif: boolean;
-}): Promise<number> {
+/**
+ * A qui adresser un avis qui attend une validation, et qui mettre en copie.
+ *
+ * COMMUN AUX DEUX AVIS. Le versement declare et le reglement de penalite
+ * declare suivent la meme regle -- le tresorier decide, le president suit, le
+ * declarant garde une copie qui lui tient d'accuse de reception -- et deux
+ * ecritures de cette regle auraient fini par differer sur le seul point qui
+ * compte : ne mettre personne en copie de son propre courrier.
+ *
+ * A defaut de tresorier joignable, l'avis va au premier titulaire du droit, et
+ * la copie ne le double pas.
+ */
+async function aQuiValider(
+  auteurId: string,
+  droit: "validerVersement" | "gererPenalites",
+): Promise<{
+  principal: { email: string; role: Role };
+  copie: { email: string; libelle: string }[];
+  enCopie: string | null;
+} | null> {
   const membres = await listerMembres().catch(() => []);
   const joignables = membres.filter((m) => m.actif && m.email);
-  const valideurs = DROITS.validerVersement as readonly Role[];
+  const valideurs = DROITS[droit] as readonly Role[];
 
   const principal =
     joignables.find((m) => m.role === "tresorier") ??
     joignables.find((m) => valideurs.includes(m.role));
-  if (!principal) return 0;
+  if (!principal) return null;
 
   /*
    * Une meme personne peut cumuler les qualites -- le tresorier qui declare
@@ -130,7 +143,7 @@ export async function avertirDeclaration(params: {
    * d'une adresse n'en fait pas une autre. On compare en minuscules, pour ne
    * mettre personne en copie de son propre courrier.
    */
-  const declarant = joignables.find((m) => String(m.id) === params.auteurId);
+  const declarant = joignables.find((m) => String(m.id) === auteurId);
   const president = joignables.find((m) => m.role === "president");
   const vues = new Set([principal.email.toLowerCase()]);
   const copie: { email: string; libelle: string }[] = [];
@@ -146,10 +159,26 @@ export async function avertirDeclaration(params: {
   }
 
   const libelles = copie.map((c) => c.libelle);
-  const enCopie =
-    libelles.length === 0
-      ? null
-      : `En copie : ${libelles.length === 1 ? libelles[0] : libelles.join(" et ")}.`;
+  return {
+    principal,
+    copie,
+    enCopie:
+      libelles.length === 0
+        ? null
+        : `En copie : ${libelles.length === 1 ? libelles[0] : libelles.join(" et ")}.`,
+  };
+}
+
+export async function avertirDeclaration(params: {
+  auteurId: string;
+  membreNom: string;
+  mois: string[];
+  montant: number;
+  avecJustificatif: boolean;
+}): Promise<number> {
+  const destinataires = await aQuiValider(params.auteurId, "validerVersement");
+  if (!destinataires) return 0;
+  const { principal, copie, enCopie } = destinataires;
 
   const lignes = [
     "Bonjour,",
@@ -177,6 +206,52 @@ export async function avertirDeclaration(params: {
     texte: lignes.join("\n"),
   });
   // Ce que l'appelant compte, ce sont les personnes atteintes, non les envois.
+  return ok ? 1 + copie.length : 0;
+}
+
+/**
+ * Le membre declare avoir regle une penalite : le tresorier doit le savoir.
+ *
+ * L'avis dit expressement que la penalite reste due tant qu'il ne s'est pas
+ * prononce. Sans cette phrase, une declaration lue en diagonale ferait croire
+ * l'affaire close -- et la relance du 10, qui continue de reclamer la somme,
+ * passerait pour une erreur du site.
+ */
+export async function avertirReglementPenalite(params: {
+  auteurId: string;
+  membreNom: string;
+  quantite: number;
+  montant: number;
+  avecJustificatif: boolean;
+}): Promise<number> {
+  const destinataires = await aQuiValider(params.auteurId, "gererPenalites");
+  if (!destinataires) return 0;
+  const { principal, copie, enCopie } = destinataires;
+
+  const lignes = [
+    "Bonjour,",
+    "",
+    `${params.membreNom} declare avoir regle ${params.quantite} penalite(s), ` +
+      `soit ${fcfa(params.montant)}.`,
+    params.avecJustificatif
+      ? "Un justificatif est joint."
+      : "Aucun justificatif n'est joint pour l'instant.",
+    "",
+    `A verifier par le ${ROLES[principal.role].toLowerCase()}.` + (enCopie ? ` ${enCopie}` : ""),
+    "La penalite reste due jusqu'a la validation : rien n'entre en caisse sur",
+    "parole, et la relance continue de la reclamer tant que la ligne n'est pas",
+    "soldee.",
+  ];
+  const siteUrl = lienDuSite();
+  if (siteUrl) lignes.push("", `Verifier : ${siteUrl}/penalites`);
+  lignes.push("", `Le suivi du club — ${CLUB.nom}`);
+
+  const { ok } = await envoyerCourriel({
+    destinataire: principal.email,
+    copie: copie.map((c) => c.email),
+    sujet: `${CLUB.sigle} — reglement de penalite declare par ${params.membreNom}, a verifier`,
+    texte: lignes.join("\n"),
+  });
   return ok ? 1 + copie.length : 0;
 }
 
