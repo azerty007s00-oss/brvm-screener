@@ -103,13 +103,27 @@ ALIAS = {
     "crown siem ci": "SEMC",
     "oragroup tg": "ORGT", "oragroup": "ORGT",
     "sicor ci": "SICC", "sicor": "SICC",
+    # TotalEnergies a renomme ses filiales "TotalEnergies Marketing" en 2024 :
+    # sans le pays, le libelle ne permet pas de trancher entre CI et SN.
+    "totalenergies marketing ci": "TTLC",
+    "totalenergies marketing sn": "TTLS",
+    "totalenergies marketing senegal": "TTLS",
+    "lnb bn": "LNBB", "loterie nationale du benin": "LNBB",
+    "nei ceda ci": "NEIC", "nei-ceda cote d'ivoire": "NEIC",
+    "nei ceda cote d'ivoire": "NEIC",
+    "servair abidjan cote d ivoire": "SIVC",
+    "boa ml": "BOAM", "bank of africa - mali": "BOAM",
+    "bank of africa ml": "BOAM",
+    "boa bn": "BOAB", "bank of africa bn": "BOAB",
+    "oragroup": "ORGT",
 }
 
 # Societes du calendrier absentes de data/daily : on les enregistre sans
 # ticker plutot que de les perdre, pour que le fichier reste un releve fidele.
 HORS_UNIVERS = {"boa niger", "boa ng", "bank of africa ng", "bank of africa niger",
                 "sucrivoire ci", "sucrivoire", "tractafric motors ci",
-                "tractrafic motors ci", "ecobank group"}
+                "tractrafic motors ci", "ecobank group", "biic bn",
+                "totalenergies marketing"}
 
 MOTIF_DATE = re.compile(r"\b(\d{2})/(\d{2})/(\d{4})\b")
 MOTIF_EXERCICE = re.compile(r"exercice\s*:?\s*(\d{4})", re.I)

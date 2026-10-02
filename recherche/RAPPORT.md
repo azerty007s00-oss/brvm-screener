@@ -162,27 +162,28 @@ La détection elle-même était peu fiable : la date retenue était un candidat 
 ### Avec les vraies dates
 
 Le calendrier officiel des mises en paiement est maintenant dans le dépôt
-(`data/dividendes_paiements.csv`, 113 lignes, 2021-04 → 2024-06, 37 titres). Excès de rendement
-vs marché, **hors dividende** — un cours qui décroche donnerait un excès nettement négatif :
+(`data/dividendes_paiements.csv`, 211 lignes, 2021-04 → 2026-09, 38 titres, exercices 2020 à
+2025). Excès de rendement vs marché, **hors dividende** — un cours qui décroche donnerait un excès
+nettement négatif :
 
 | Fenêtre | n | Excès hors dividende | t-stat |
 |---|---|---|---|
-| J-0 / J+1 | 99 | −0,21 % | −1,19 |
-| J-0 / J+5 | 99 | +0,20 % | +0,52 |
-| J-5 / J+5 | 97 | +0,02 % | +0,04 |
-| J-10 / J+10 | 97 | −1,49 % | −1,71 |
-| J-20 / J+20 | 93 | **−3,77 %** | **−2,85** |
+| J-0 / J+1 | 184 | −0,03 % | −0,20 |
+| J-0 / J+5 | 184 | +0,15 % | +0,46 |
+| J-5 / J+5 | 182 | +0,35 % | +0,77 |
+| J-10 / J+10 | 182 | −0,89 % | −1,29 |
+| J-20 / J+20 | 177 | **−3,24 %** | **−2,49** |
 
 Deux enseignements.
 
 **Aucun edge exploitable.** À l'échelle de quelques séances autour du paiement, le cours ne bouge
-pas (t = 0,04 à J±5). Il n'y a ni anticipation avant, ni dérive après. C'est cohérent : la date de
+pas (t = 0,77 à J±5, t = −0,20 le jour même). Il n'y a ni anticipation avant, ni dérive après. C'est cohérent : la date de
 mise en paiement n'est **pas** la date de détachement. Le droit au dividende est fixé plus tôt, donc
 acheter la veille du décaissement ne donne droit à rien — il n'y a pas de machine à cash à
 construire ici.
 
-**Le détachement existe mais il est diffus.** À ±20 séances, le titre sous-performe de 3,77 %
-(t = −2,85), soit environ la moitié du rendement du dividende. Autrement dit le marché absorbe le
+**Le détachement existe mais il est diffus.** À ±20 séances, le titre sous-performe de 3,24 %
+(t = −2,49), soit environ 40 % du rendement du dividende. Autrement dit le marché absorbe le
 détachement progressivement plutôt qu'en une séance — ce qui est typique d'un marché à fixing et à
 faible liquidité. Cela ne change rien au calcul de rendement total : cette sous-performance est
 déjà contenue dans la série de prix, à laquelle on ajoute le dividende encaissé.
@@ -203,26 +204,28 @@ Les cours sont bruts. Créditer le dividende en plus est correct.
 
 ### Ce que les vraies dates changent aux conclusions : rien
 
-L'étude créditait auparavant tous les dividendes au 1er juillet par convention. Avec 68 dates
-exactes substituées :
+L'étude créditait auparavant tous les dividendes au 1er juillet par convention. Avec **140 dates
+exactes sur 151** désormais substituées :
 
 | Stratégie | Convention juillet | Dates réelles |
 |---|---|---|
-| Équipondéré | +42,3 % | +42,4 % |
-| top25 value+lowvol | +44,4 % | +44,5 % |
+| Équipondéré | +42,3 % | +42,3 % |
+| top25 value+lowvol | +44,4 % | +44,7 % |
 | top20 value+lowvol | +44,6 % | +44,4 % |
 
-Écart maximal 0,2 point. La convention ne biaisait pas le résultat.
+Écart maximal 0,3 point. La convention ne biaisait pas le résultat, et les conclusions reposent
+maintenant sur des dates réelles et non sur une approximation.
 
 ### Ce qu'il manque encore
 
-Le calendrier s'arrête en **juin 2024**, alors que les cours vont jusqu'en septembre 2026 : les
-deux dernières années, les plus pertinentes, ne sont pas couvertes. Et surtout, tester réellement
-la capture du dividende exigerait les **dates de détachement**, qui ne figurent pas au calendrier
-des paiements.
+Le calendrier couvre désormais toute la fenêtre de cours (2021-04 → 2026-09). Ce qui manque
+encore est d'une autre nature : tester réellement la capture du dividende exigerait les **dates de
+détachement**, qui ne figurent pas au calendrier des paiements. Sans elles, cette piste reste
+fermée — et rien dans ce qui précède ne suggère qu'elle serait fructueuse.
 
-Trois sociétés du calendrier n'ont pas pu être rattachées à un ticker (Tractafric Motors CI) ou ne
-sont pas dans `data/daily/` (BOA Niger, Sucrivoire CI).
+Quelques lignes n'ont pas pu être rattachées à un ticker : Tractafric Motors CI (raison sociale non
+identifiée avec certitude), un libellé « TotalEnergies Marketing » sans pays (CI ou SN indécidable),
+et trois sociétés absentes de `data/daily/` (BOA Niger, Sucrivoire CI, BIIC Bénin).
 
 ## 5. Ce qui est réellement implémentable avec 1 à 5 M FCFA
 
