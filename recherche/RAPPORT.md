@@ -270,7 +270,7 @@ Coût **annuel récurrent** pour un portefeuille de 2 M FCFA, 25 lignes, rebalan
 | **BNI Finances** | 1 000 000 | **gratuit** | 1 % | 7 000 F | 0,35 % |
 | **Africaine de Gestion (AGI)** | n.c. | **néant** | 1 % | 7 000 F | 0,35 % |
 | Attijari Securities | 1 000 000 | 2 000 F | 1 % | 9 000 F | 0,45 % |
-| Phoenix Capital | 2 000 000 | 2 500 F | 1 % | 9 500 F | 0,47 % |
+| Phoenix Capital Management (PCM) | 2 000 000 | 2 500 F HT | 1 % HT | 9 500 F | 0,47 % |
 | BICI Bourse | n.c. | 5 000 F | 0,4–1 % | 12 000 F | 0,60 % |
 | EDC Investment | 1 000 000 | 5 000 F | 0,4–1 % | 12 000 F | 0,60 % |
 | BSIC Capital | 500 000 | 10 000 F | 0,8 % | 16 000 F | 0,80 % |
@@ -322,11 +322,20 @@ Si ta SGI pratique un autre plancher :
 
 Classé par rapport gain/certitude, le plus sûr d'abord :
 
-1. **Choisir la SGI sur le forfait de tenue de compte, pas sur le courtage.** De 0 F à 15 625 F
-   par an : **0,83 point de CAGR** d'écart sur 2 M FCFA, certain, sans risque. BNI Finances (tenue
-   gratuite), AGI (néant) et Atlantique Finance (0 F et 0,65 % de courtage) sont en tête, sous
-   réserve de leur dépôt minimum. Mais ne choisis pas sur le seul tarif : une SGI injoignable quand
-   un dividende n'arrive pas coûtera plus cher que l'écart de commission.
+1. **Si le compte n'est pas encore ouvert, choisir la SGI sur le forfait de tenue de compte, pas
+   sur le courtage.** De 0 F à 15 625 F par an : 0,83 point de CAGR d'écart sur 2 M FCFA. BNI
+   Finances (tenue gratuite), AGI (néant) et Atlantique Finance (0 F et 0,65 % de courtage) sont en
+   tête, sous réserve de leur dépôt minimum.
+
+   **Si le compte existe déjà, ne changer que si l'écart dépasse environ 0,4 point par an.** En
+   dessous, le gain ne paie pas le dossier d'ouverture ni la perte d'une relation qui fonctionne.
+   Concrètement, un compte dans les six premières lignes du tableau de la section 5 n'est pas à
+   déplacer : le meilleur ne rapporterait que 0,17 à 0,21 point de plus. Les trois dernières lignes
+   (10 000 F et au-delà de tenue de compte), en revanche, coûtent assez cher sur un petit
+   portefeuille pour justifier le changement.
+
+   Et dans tous les cas, le tarif n'est pas le seul critère : une SGI injoignable quand un dividende
+   n'arrive pas coûtera plus cher que l'écart de commission.
 2. **Panier équipondéré de 20 à 25 lignes, rebalancé une fois par an**, dividendes réinvestis.
    Médiane +42,3 % sur la période, écart-type 1,8 % selon le calendrier, max drawdown ~5 %.
 3. **Tilt vers top25 value + faible volatilité** (rendement bénéficiaire et volatilité 60 j).
