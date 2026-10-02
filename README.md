@@ -52,6 +52,7 @@ streamlit run app.py
 | `recherche/etude_facteurs.py` | Étude de rentabilité sur les données réelles (facteurs, robustesse, dimensionnement) |
 | `recherche/RAPPORT.md` | Conclusions chiffrées et limites de l'étude |
 | `strategie/panier.py` | Panier à faible rotation : univers, classement, ordres de rebalancement |
+| `collecte_calendrier.py` | Collecte le calendrier BRVM des mises en paiement de dividendes |
 
 ## Stratégie à faible rotation
 
