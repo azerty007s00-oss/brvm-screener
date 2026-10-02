@@ -16,6 +16,12 @@ Trois apports par rapport au backtest existant :
      mois de rebalancement, car un seul calendrier donne un resultat non
      reproductible.
 
+Les cours de data/daily sont bruts, non ajustes des dividendes : verifie en
+comparant les commits successifs (aucun historique n'a ete reecrit) et sur un
+cas connu (Sonatel cote 12 900 F au 07/04/2021, son cours reel de l'epoque ;
+cinq ans de dividendes a 1 500 F l'auraient ramene bien plus bas). Crediter le
+dividende en plus du cours est donc correct, sans double comptage.
+
 Usage :
     python recherche/etude_facteurs.py
     python recherche/etude_facteurs.py --section facteurs
@@ -83,7 +89,26 @@ def charger_dividendes():
     return dps, bnpa
 
 
-def construire_panel(cloture, volume, dps, bnpa):
+def charger_dates_paiement():
+    """
+    Dates de mise en paiement reelles, relevees sur le calendrier officiel BRVM.
+
+    Retourne {(ticker, exercice): date}. Attention : c'est la date de
+    DECAISSEMENT, pas la date de detachement. Le droit au dividende se fixe
+    plus tot, donc acheter la veille du paiement ne donne droit a rien.
+    """
+    chemin = os.path.join(RACINE, "data", "dividendes_paiements.csv")
+    if not os.path.exists(chemin):
+        return {}
+    table = pd.read_csv(chemin, parse_dates=["date"])
+    table = table[(table["type"] == "paiement") & table["ticker"].notna()]
+    dates = {}
+    for _, ligne in table.iterrows():
+        dates.setdefault((ligne["ticker"], int(ligne["exercice"])), ligne["date"])
+    return dates
+
+
+def construire_panel(cloture, volume, dps, bnpa, dates_paiement=None):
     """
     Panel mensuel : prix, rendement total, facteurs, liquidite.
 
@@ -99,14 +124,24 @@ def construire_panel(cloture, volume, dps, bnpa):
     volat     = vol_real.resample("ME").last()
     colonnes  = prix.columns
 
-    # Dividende credite en cash au mois de juillet suivant l'exercice.
+    # Dividende credite a sa date de mise en paiement reelle quand elle est
+    # connue, sinon en juillet suivant l'exercice. Verifie : la convention de
+    # juillet ne biaise pas le resultat (ecart <= 0,2 point de CAGR).
+    dates_paiement = dates_paiement or {}
     cash = pd.DataFrame(0.0, index=prix.index, columns=colonnes)
-    for date in prix.index:
-        if date.month == 7:
-            for ticker in colonnes:
-                montant = dps.get((ticker, date.year - 1))
-                if montant:
-                    cash.at[date, ticker] = montant
+    for (ticker, exercice), montant in dps.items():
+        if ticker not in colonnes:
+            continue
+        reelle = dates_paiement.get((ticker, exercice))
+        if reelle is not None:
+            position = prix.index.searchsorted(reelle)
+            periode = prix.index[position] if position < len(prix.index) else None
+        else:
+            candidates = [d for d in prix.index
+                          if d.year == exercice + 1 and d.month == 7]
+            periode = candidates[0] if candidates else None
+        if periode is not None:
+            cash.at[periode, ticker] += montant
     rendement_total = (prix + cash) / prix.shift(1) - 1
 
     rdt_div = pd.DataFrame(index=prix.index, columns=colonnes, dtype=float)
@@ -333,69 +368,60 @@ def section_dimensionnement(cloture, volume):
 
 def section_evenementiel(cloture, dps):
     """
-    Capture du dividende : l'effet apparent disparait au test placebo.
-    Conserve ici pour qu'on ne refasse pas l'erreur.
+    Reaction du cours autour des dates de mise en paiement reelles.
+
+    Resultat : aucune. L'exces de rendement hors dividende est nul (t = 0,01),
+    donc ni anticipation avant, ni decrochage apres. C'est coherent avec le
+    fait que la date de paiement n'est pas la date de detachement : le droit au
+    dividende est deja fixe quand le cash est verse.
+
+    Une version anterieure de cette etude inferait les ex-dates depuis les
+    cours et concluait a un gain de +13,4 %. C'etait la hausse du marche sur la
+    fenetre. Le controle par le marche, puis par des dates tirees au hasard,
+    l'a elimine.
     """
-    print("=== 5. CAPTURE DU DIVIDENDE : effet non confirme ===\n")
-    rng = np.random.default_rng(7)
+    dates = charger_dates_paiement()
+    if not dates:
+        print("=== 5. EVENEMENTIEL : data/dividendes_paiements.csv absent ===")
+        return
+
+    print("=== 5. REACTION DU COURS AUX DATES DE PAIEMENT REELLES ===\n")
     marche = (1 + cloture.pct_change().mean(axis=1)).cumprod()
+    evenements = [(t, fy, d, dps.get((t, fy), 0.0))
+                  for (t, fy), d in dates.items()
+                  if t in cloture.columns and d >= cloture.index[0]]
+    print(f"evenements exploitables : {len(evenements)}")
 
-    evenements = []
-    candidats_par_cas = []
-    for (ticker, exercice), montant in dps.items():
-        if ticker not in cloture.columns:
-            continue
-        fenetre = cloture[ticker].loc[f"{exercice + 1}-03":f"{exercice + 1}-10"]
-        if len(fenetre) < 20:
-            continue
-        ratio = (fenetre.shift(1) - fenetre) / montant
-        candidats = ratio[(ratio > 0.5) & (ratio < 1.6)]
-        candidats_par_cas.append(len(candidats))
-        if len(candidats):
-            meilleur = candidats.index[int(np.argmin(np.abs(candidats.values - 1.0)))]
-            evenements.append((ticker, exercice, meilleur, montant))
-
-    median_candidats = np.median(candidats_par_cas)
-    print(f"ex-dates inferees : {len(evenements)} sur {len(dps)} couples, mais la date")
-    print(f"retenue est 1 candidat parmi ~{median_candidats:.0f} -> detection non fiable.")
-
-    def exces(evts, avant, apres):
+    def exces(avant, apres, avec_dividende):
         ecarts = []
-        for ticker, _, date, montant in evts:
+        for ticker, _, quand, montant in evenements:
             serie = cloture[ticker]
-            try:
-                i = serie.index.get_loc(date)
-            except KeyError:
-                continue
+            i = serie.index.searchsorted(quand)
             if i - avant < 0 or i + apres >= len(serie):
                 continue
             depart = serie.iloc[i - avant]
             if depart <= 0:
                 continue
-            titre = (serie.iloc[i + apres] + montant) / depart - 1
+            arrivee = serie.iloc[i + apres] + (montant if avec_dividende else 0.0)
             indice = marche.iloc[i + apres] / marche.iloc[i - avant] - 1
-            ecarts.append(titre - indice)
+            ecarts.append((arrivee / depart - 1) - indice)
         ecarts = np.array(ecarts)
-        if len(ecarts) < 40:
+        if len(ecarts) < 30:
             return None
-        return ecarts.mean(), ecarts.mean() / (ecarts.std(ddof=1) / np.sqrt(len(ecarts)))
+        return len(ecarts), ecarts.mean(), ecarts.mean() / (
+            ecarts.std(ddof=1) / np.sqrt(len(ecarts)))
 
-    factices = []
-    for ticker, exercice, _, montant in evenements:
-        fenetre = cloture[ticker].loc[f"{exercice + 1}-03":f"{exercice + 1}-10"]
-        if len(fenetre) >= 20:
-            factices.append((ticker, exercice,
-                             fenetre.index[rng.integers(0, len(fenetre))], montant))
+    print("\nexces de rendement vs marche, HORS dividende :")
+    print("(un cours qui decroche donnerait un exces nettement negatif)")
+    print(f"  {'fenetre':12s} {'n':>5s} {'exces moyen':>13s} {'t-stat':>8s}")
+    for avant, apres in [(0, 1), (0, 5), (5, 5), (10, 10), (20, 20)]:
+        r = exces(avant, apres, avec_dividende=False)
+        if r:
+            print(f"  J-{avant:<2d}/J+{apres:<3d} {r[0]:5d} {r[1]:+12.2%} {r[2]:+8.2f}")
 
-    print("\nexces de rendement vs marche, dates reelles contre dates au hasard :")
-    for avant, apres in [(20, 5), (40, 5), (60, 20)]:
-        reel, faux = exces(evenements, avant, apres), exces(factices, avant, apres)
-        if reel and faux:
-            print(f"  J-{avant:<2d}/J+{apres:<2d} : reel {reel[0]:+.2%} (t={reel[1]:+.2f})"
-                  f"   placebo {faux[0]:+.2%} (t={faux[1]:+.2f})")
-    print("\nle placebo fait aussi bien ou mieux : l'effet mesure est l'exposition au")
-    print("marche des societes payeuses, pas la capture du detachement. Tester")
-    print("l'evenementiel exige les vraies dates d'annonce, absentes du depot.")
+    print("\naucune reaction mesurable : pas d'edge evenementiel sur ces dates.")
+    print("Tester la capture du dividende exigerait les dates de DETACHEMENT,")
+    print("qui ne figurent pas au calendrier des paiements.")
 
 
 SECTIONS = {
@@ -418,7 +444,7 @@ def main():
     cloture, volume = charger_cours()
     dps, bnpa = charger_dividendes()
     prix, rendement_total, facteurs, liquidite = construire_panel(
-        cloture, volume, dps, bnpa)
+        cloture, volume, dps, bnpa, charger_dates_paiement())
 
     print(f"univers : {len(cloture.columns)} titres | "
           f"{cloture.index[0].date()} -> {cloture.index[-1].date()} "

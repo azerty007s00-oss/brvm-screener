@@ -300,6 +300,27 @@ def panier_cible(
     return panier, exclus
 
 
+def mois_de_paiement() -> dict[str, list[int]]:
+    """
+    Mois ou chaque titre a historiquement mis ses dividendes en paiement.
+
+    Lu sur le calendrier officiel releve dans data/dividendes_paiements.csv.
+    Sert a la tresorerie : savoir quand le cash tombe. Ce n'est pas la date de
+    detachement, donc cela ne dit pas jusqu'a quand il faut detenir le titre
+    pour y avoir droit.
+    """
+    chemin = os.path.join(RACINE, "data", "dividendes_paiements.csv")
+    if not os.path.exists(chemin):
+        return {}
+    table = pd.read_csv(chemin, parse_dates=["date"])
+    table = table[(table["type"] == "paiement") & table["ticker"].notna()]
+    calendrier: dict[str, list[int]] = {}
+    for ticker, groupe in table.groupby("ticker"):
+        mois = sorted(set(groupe["date"].dt.month))
+        calendrier[str(ticker)] = mois
+    return calendrier
+
+
 def dividendes_attendus(panier: pd.DataFrame, dps: dict,
                         a_la_date: date | None = None) -> pd.DataFrame:
     """
@@ -311,6 +332,7 @@ def dividendes_attendus(panier: pd.DataFrame, dps: dict,
     """
     a_la_date = a_la_date or date.today()
     exercice = exercice_publie(a_la_date)
+    calendrier = mois_de_paiement()
     lignes = []
     for ticker, ligne in panier.iterrows():
         montant, source = None, None
@@ -325,6 +347,7 @@ def dividendes_attendus(panier: pd.DataFrame, dps: dict,
             "exercice":  source,
             "encaisse":  None if montant is None else montant * ligne["quantite"],
             "rendement": None if montant is None else montant / ligne["prix"],
+            "mois_paiement": calendrier.get(ticker, []),
         })
     return pd.DataFrame(lignes).set_index("ticker")
 
@@ -433,6 +456,20 @@ def afficher(capital, panier, exclus, dividendes, table_ordres, cout, courtage_s
               f"({total / investi:.2%} de l'investi) "
               f"sur {len(connus)}/{len(dividendes)} lignes renseignees")
         print("projection sur le dernier montant connu, pas une annonce.")
+
+        repartition: dict[int, float] = {}
+        for ticker, ligne in connus.iterrows():
+            mois = ligne["mois_paiement"]
+            if not mois:
+                continue
+            for m in mois:
+                repartition[m] = repartition.get(m, 0.0) + ligne["encaisse"] / len(mois)
+        if repartition:
+            noms = {1: "jan", 2: "fev", 3: "mar", 4: "avr", 5: "mai", 6: "juin",
+                    7: "juil", 8: "aout", 9: "sep", 10: "oct", 11: "nov", 12: "dec"}
+            calendrier_txt = "  ".join(
+                f"{noms[m]} {fcfa(v)}" for m, v in sorted(repartition.items()))
+            print(f"repartition par mois de mise en paiement :\n  {calendrier_txt}")
 
     if table_ordres is not None and not table_ordres.empty:
         print(f"\n--- Ordres de rebalancement ---")

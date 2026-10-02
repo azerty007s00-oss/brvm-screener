@@ -141,31 +141,88 @@ la qualité du signal.
 
 ---
 
-## 4. La poche événementielle : effet non confirmé
+## 4. La poche événementielle : pas d'edge, et une erreur de ma part corrigée
 
-Les dates d'annonce et de détachement sont absentes du dépôt. Je les ai inférées depuis les
-cours : le jour où la baisse en FCFA approche le dividende connu. 145 des 151 couples
-ticker-exercice ont reçu une date.
+### Première tentative, et pourquoi elle était fausse
 
-Résultat brut, achat 60 séances avant / vente 20 après : **+13,4 % moyen, 75 % de gagnants,
-t = 6,4** net de frais. Tentant — et faux. Deux contrôles le démontrent :
+Faute de dates réelles, j'ai d'abord **inféré** les détachements depuis les cours : le jour où la
+baisse en FCFA approchait le dividende connu. Résultat brut, achat 60 séances avant / vente
+20 après : **+13,4 % moyen, 75 % de gagnants, t = 6,4** net de frais.
 
-| Fenêtre | Excès vs marché, dates réelles | **Dates tirées au hasard (placebo)** |
+C'était faux, pour deux raisons que j'ai trouvées en contrôlant :
+
+- **Les +13,4 % étaient la hausse du marché sur trois mois**, pas un effet dividende. Corrigé du
+  marché, il restait +4,66 %.
+- **Même ce résidu ne survivait pas au placebo** : des dates tirées au hasard dans la même saison
+  donnaient +6,57 %, soit *mieux* que les vraies. Ce qui était mesuré, c'est que les sociétés
+  payeuses ont surperformé sur n'importe quelle fenêtre de cette période.
+
+La détection elle-même était peu fiable : la date retenue était un candidat parmi ~7.
+
+### Avec les vraies dates
+
+Le calendrier officiel des mises en paiement est maintenant dans le dépôt
+(`data/dividendes_paiements.csv`, 113 lignes, 2021-04 → 2024-06, 37 titres). Excès de rendement
+vs marché, **hors dividende** — un cours qui décroche donnerait un excès nettement négatif :
+
+| Fenêtre | n | Excès hors dividende | t-stat |
+|---|---|---|---|
+| J-0 / J+1 | 99 | −0,21 % | −1,19 |
+| J-0 / J+5 | 99 | +0,20 % | +0,52 |
+| J-5 / J+5 | 97 | +0,02 % | +0,04 |
+| J-10 / J+10 | 97 | −1,49 % | −1,71 |
+| J-20 / J+20 | 93 | **−3,77 %** | **−2,85** |
+
+Deux enseignements.
+
+**Aucun edge exploitable.** À l'échelle de quelques séances autour du paiement, le cours ne bouge
+pas (t = 0,04 à J±5). Il n'y a ni anticipation avant, ni dérive après. C'est cohérent : la date de
+mise en paiement n'est **pas** la date de détachement. Le droit au dividende est fixé plus tôt, donc
+acheter la veille du décaissement ne donne droit à rien — il n'y a pas de machine à cash à
+construire ici.
+
+**Le détachement existe mais il est diffus.** À ±20 séances, le titre sous-performe de 3,77 %
+(t = −2,85), soit environ la moitié du rendement du dividende. Autrement dit le marché absorbe le
+détachement progressivement plutôt qu'en une séance — ce qui est typique d'un marché à fixing et à
+faible liquidité. Cela ne change rien au calcul de rendement total : cette sous-performance est
+déjà contenue dans la série de prix, à laquelle on ajoute le dividende encaissé.
+
+### Vérification : les cours ne sont pas ajustés des dividendes
+
+L'absence de décrochage net autour du paiement pose la question inverse : et si `data/daily/`
+contenait des cours déjà ajustés ? Dans ce cas, ajouter le dividende les compterait deux fois et
+tous les chiffres de ce rapport seraient gonflés de ~7 points par an. Deux contrôles l'écartent :
+
+- **Aucun historique n'a été réécrit.** Sur les 49 fichiers, les cotations antérieures au
+  01/07/2026 sont identiques entre le premier commit et aujourd'hui, alors que des dividendes ont
+  été payés entre-temps. Un ajustement rétroactif les aurait toutes modifiées.
+- **Sonatel cote 12 900 F au 07/04/2021**, son cours réel de l'époque. Cinq ans de dividendes à
+  1 500 F l'auraient ramené vers 6 000-8 000 F si la série était ajustée.
+
+Les cours sont bruts. Créditer le dividende en plus est correct.
+
+### Ce que les vraies dates changent aux conclusions : rien
+
+L'étude créditait auparavant tous les dividendes au 1er juillet par convention. Avec 68 dates
+exactes substituées :
+
+| Stratégie | Convention juillet | Dates réelles |
 |---|---|---|
-| J−20 / J+5 | +4,66 % *(t=5,03)* | **+6,57 %** *(t=7,58)* |
-| J−40 / J+5 | +5,88 % *(t=4,96)* | **+6,54 %** *(t=5,07)* |
-| J−60 / J+20 | +6,92 % *(t=3,50)* | **+7,19 %** *(t=3,77)* |
+| Équipondéré | +42,3 % | +42,4 % |
+| top25 value+lowvol | +44,4 % | +44,5 % |
+| top20 value+lowvol | +44,6 % | +44,4 % |
 
-**Le placebo fait aussi bien ou mieux que les vraies dates.** Ce qui était mesuré n'est pas la
-capture du détachement : c'est le fait que les sociétés payeuses de dividende ont surperformé le
-marché sur n'importe quelle fenêtre de cette période. Les +13,4 % bruts, eux, étaient simplement
-la hausse du marché sur trois mois.
+Écart maximal 0,2 point. La convention ne biaisait pas le résultat.
 
-Second problème : la détection des ex-dates est peu fiable — la date retenue est **un candidat
-parmi ~7** qui passent le filtre. Conclusion : **la poche événementielle n'est pas testable sans
-les vraies dates d'annonce.** C'est la donnée à récupérer en priorité.
+### Ce qu'il manque encore
 
----
+Le calendrier s'arrête en **juin 2024**, alors que les cours vont jusqu'en septembre 2026 : les
+deux dernières années, les plus pertinentes, ne sont pas couvertes. Et surtout, tester réellement
+la capture du dividende exigerait les **dates de détachement**, qui ne figurent pas au calendrier
+des paiements.
+
+Trois sociétés du calendrier n'ont pas pu être rattachées à un ticker (Tractafric Motors CI) ou ne
+sont pas dans `data/daily/` (BOA Niger, Sucrivoire CI).
 
 ## 5. Ce qui est réellement implémentable avec 1 à 5 M FCFA
 
@@ -214,7 +271,7 @@ Classé par rapport gain/certitude, le plus sûr d'abord :
    60 j). Médiane +44,6 %, plancher inchangé. Gain réel mais modeste, et dans le bruit.
 4. **Ne jamais rebalancer plus d'une fois par semestre.** C'est le paramètre le plus coûteux.
 5. **Retirer SEMC et SICC de l'univers** et ajouter une détection de suspension.
-6. **Récupérer les vraies dates d'annonce** avant de retenter l'événementiel.
+6. **Récupérer les dates de détachement** si l'on veut encore tester l'événementiel. Les dates de mise en paiement, elles, sont acquises et servent à la trésorerie.
 
 Et ce qu'il faut arrêter : les stops à 8 %, la revue bi-mensuelle, la détention plafonnée à
 90 jours, et la sélection à moins de 20 lignes. Ces quatre paramètres ont coûté de l'argent sur

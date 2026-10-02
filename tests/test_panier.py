@@ -319,3 +319,39 @@ def test_charger_portefeuille_agrege_les_lignes_du_meme_ticker(tmp_path):
         {"ticker": "BBB", "quantity": 5},
     ]), encoding="utf-8")
     assert charger_portefeuille(str(chemin)) == {"AAA": 10, "BBB": 5}
+
+
+# ─── Calendrier de mise en paiement ───────────────────────────────────────────
+
+def test_mois_de_paiement_lit_le_calendrier_reel():
+    """Lit data/dividendes_paiements.csv : juin et juillet dominent."""
+    from strategie.panier import mois_de_paiement
+    calendrier = mois_de_paiement()
+    assert calendrier, "le calendrier ne doit pas être vide"
+    assert all(1 <= m <= 12 for mois in calendrier.values() for m in mois)
+    # SNTS paie historiquement en avril
+    assert 4 in calendrier.get("SNTS", [])
+
+
+def test_dividendes_attendus_expose_les_mois_de_paiement():
+    panier = pd.DataFrame({"prix": [45_000.0], "quantite": [1]}, index=["SNTS"])
+    panier.index.name = "ticker"
+    table = dividendes_attendus(panier, {("SNTS", 2024): 1_500.0},
+                                a_la_date=date(2026, 8, 1))
+    assert 4 in table.at["SNTS", "mois_paiement"]
+
+
+def test_calendrier_ne_retient_que_les_paiements():
+    """Les lignes 'annonce' et 'rectificatif' ne sont pas des mises en paiement."""
+    import pandas as _pd
+    from strategie.panier import RACINE, mois_de_paiement
+    brut = _pd.read_csv(os.path.join(RACINE, "data", "dividendes_paiements.csv"),
+                        parse_dates=["date"])
+    annonces = brut[brut["type"] == "annonce"]
+    assert not annonces.empty, "le jeu de test doit contenir au moins une annonce"
+    calendrier = mois_de_paiement()
+    for _, ligne in annonces.iterrows():
+        mois = calendrier.get(str(ligne["ticker"]), [])
+        paiements = brut[(brut["ticker"] == ligne["ticker"])
+                         & (brut["type"] == "paiement")]
+        assert set(mois) == set(paiements["date"].dt.month)
