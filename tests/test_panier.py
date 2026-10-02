@@ -62,18 +62,26 @@ def _marche(prix: dict[str, float], n: int = 300, volume: float = 1_000.0,
 
 # ─── Barème de frais ──────────────────────────────────────────────────────────
 
-def test_frais_par_sens_inclut_taxe_et_commissions():
-    # BRVM 0,3 % + DC/BR 0,1 % + courtage 1 % = 1,4 %, puis TAF 18 %
-    assert frais_par_sens(0.010) == pytest.approx(0.014 * 1.18)
+def test_frais_par_sens_au_plafond_de_courtage():
+    """
+    1,4 % par sens au plafond de courtage de 1 %, taxes comprises : c'est le
+    chiffre que donne la grille des SGI, pas 1,65 % comme supposé d'abord.
+    """
+    assert frais_par_sens(0.010) == pytest.approx(0.014)
 
 
 def test_frais_par_sens_decroit_avec_le_courtage():
     assert frais_par_sens(0.005) < frais_par_sens(COURTAGE_SGI_DEFAUT)
 
 
-def test_aller_retour_proche_de_3_3_pct_au_plafond():
+def test_aller_retour_proche_de_2_8_pct_au_plafond():
     """Le chiffre qui invalide toute stratégie à rotation rapide."""
-    assert 2 * frais_par_sens(0.010) == pytest.approx(0.033, abs=0.0015)
+    assert 2 * frais_par_sens(0.010) == pytest.approx(0.028, abs=0.0005)
+
+
+def test_courtage_negocie_a_0_65_pct():
+    """Atlantique Finance, le meilleur taux de la grille."""
+    assert frais_par_sens(0.0065) == pytest.approx(0.0105)
 
 
 # ─── Exercice publié (pas d'anticipation d'information) ───────────────────────

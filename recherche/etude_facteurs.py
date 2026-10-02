@@ -45,10 +45,16 @@ INDICES = {"BRVMC", "BRVM30", "BRVM-IN", "BRVM-TEL", "BRVM-EN"}
 # SEMC (Crown SIEM CI) et SICC (SICOR) sont suspendus depuis le 16/09/2026.
 SUSPENDUS = {"SEMC", "SICC"}
 
-# Bareme reel, par sens : BRVM 0,3 % + DC/BR 0,1 % + courtage SGI <= 1 %
-# + taxe sur activites financieres. Arrondi a 1,65 % par sens.
-FRAIS_ALLER_RETOUR = 0.033
-DROITS_DE_GARDE    = 0.0025   # Hudson & Cie 0,25 %/an ; SOGEBOURSE 2 %/an
+# Bareme reel, releve sur la grille comparative des SGI : 1,4 % par sens au
+# plafond de courtage de 1 %, taxes comprises, soit 2,8 % aller-retour.
+FRAIS_ALLER_RETOUR = 0.028
+
+# Les frais de tenue de compte sont FORFAITAIRES (0 a 15 625 F par an selon la
+# SGI) et non proportionnels. Exprimes ici en fraction d'un portefeuille de
+# 2 M FCFA, le capital de reference de l'etude : 10 000 F mediane = 0,50 %/an.
+# Ce poste frappe toutes les strategies a l'identique et ne change aucun
+# classement ; il deplace seulement le niveau general.
+DROITS_DE_GARDE    = 0.005
 
 # Les fondamentaux (BNPA, dividende) ne couvrent l'univers qu'a partir de cette
 # date. Avant, tout portefeuille factoriel serait en cash et le resultat faux.
@@ -297,11 +303,13 @@ def section_robustesse(prix, rendement_total, facteurs, liquidite):
 
     print(f"=== 3. ROBUSTESSE ({prix.index[0].date()} -> {prix.index[-1].date()}, "
           f"{len(prix)} mois) ===")
-    print(f"frais {FRAIS_ALLER_RETOUR:.1%} aller-retour + garde {DROITS_DE_GARDE:.2%}/an\n")
+    print(f"frais {FRAIS_ALLER_RETOUR:.1%} aller-retour + tenue de compte "
+          f"{DROITS_DE_GARDE:.2%}/an (10 000 F sur 2 M FCFA)\n")
 
     vl = ["EARNYLD", "LOWVOL"]
     configs = [
         ("equipondere (tout l'univers)", None, None),
+        ("top25 value+lowvol",            25,  vl),
         ("top20 value+lowvol",            20,  vl),
         ("top12 value+lowvol",            12,  vl),
         ("top8  value+lowvol",             8,  vl),
@@ -321,7 +329,7 @@ def section_robustesse(prix, rendement_total, facteurs, liquidite):
 
     print("\nCAGR median selon la frequence de rebalancement :")
     print(f"{'strategie':32s}  annuel  semestr.  trimestr.  mensuel")
-    for nom, topn, fl in [configs[0], configs[1], configs[3]]:
+    for nom, topn, fl in [configs[0], configs[1], configs[4]]:
         cases = []
         for freq in (12, 6, 3, 1):
             resultats = [metriques(simuler(prix, rendement_total, facteurs, liquidite,
@@ -329,8 +337,9 @@ def section_robustesse(prix, rendement_total, facteurs, liquidite):
                          for d in range(freq)]
             cases.append(f"{np.median(resultats):+7.1%}")
         print(f"{nom:32s} " + "  ".join(cases))
-    print("\nla frequence est le parametre dominant : toute selection cree de la")
-    print("rotation, et la rotation coute 3,3 %. L'equipondere y est insensible.")
+    print(f"\nla frequence est le parametre dominant : toute selection cree de la")
+    print(f"rotation, et la rotation coute {FRAIS_ALLER_RETOUR:.1%}. "
+          f"L'equipondere y est insensible.")
 
 
 def section_dimensionnement(cloture, volume):

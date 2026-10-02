@@ -22,22 +22,30 @@ l'univers est de :
 Sur la BRVM le dividende *est* le moteur du rendement. Toute optimisation menée sur une P&L
 amputée de 7 points par an optimise la mauvaise fonction.
 
-### 1.2 Le barème de frais utilisé est 2,5× trop faible
+### 1.2 Le barème de frais utilisé est deux fois trop faible
 
-`backtest.py` applique 0,65 % par sens, soit 1,3 % aller-retour. Le barème réel :
+`backtest.py` applique 0,65 % par sens, soit 1,3 % aller-retour. Le barème réel, relevé sur la
+grille comparative des SGI :
 
-| Poste | Taux |
+| Poste | Montant |
 |---|---|
-| Commission BRVM | 0,2 – 0,3 % par sens |
-| Commission DC/BR (règlement-livraison) | 0,1 % par sens |
-| Courtage SGI | plafonné à 1 % par sens, homologué CREPMF |
-| Taxe sur activités financières | s'ajoute aux commissions |
-| **Total aller-retour** | **≈ 3,3 %** |
-| Droits de garde annuels | 0,25 %/an (Hudson & Cie) à **2 %/an** (SOGEBOURSE, 0,5 %/trimestre) |
+| Courtage SGI | plafonné à **1 %** par sens, appliqué par 28 SGI sur 35 |
+| Commission de marché (BRVM + dépositaire central) et TAF | ≈ 0,4 % par sens |
+| **Total par ordre** | **≈ 1,4 %**, soit **2,8 % aller-retour** |
+| Minimum de perception par ordre | ≈ 1 000 F |
+| Frais de tenue de compte | **forfaitaires**, de 0 à 15 625 F **par an** |
 
-Conséquence directe : **le choix de la SGI pèse plus lourd que n'importe quel signal.** Passer de
-2 %/an à 0,25 %/an de droits de garde rapporte 1,75 point de CAGR, garanti, sans risque. Aucun
-indicateur technique du dépôt ne produit un gain de cette taille avec cette certitude.
+Deux choses à retenir, et je me suis trompé sur les deux dans une version antérieure de ce rapport.
+
+**Les 1,4 % sont déjà le total toutes taxes comprises.** J'avais appliqué la TAF par-dessus et
+retenu 1,65 % par sens. C'est faux : la grille est explicite — « sur un achat de 1 000 000 FCFA,
+une quinzaine de milliers de francs ». Le chiffre juste est 2,8 % aller-retour, pas 3,3 %.
+
+**Les frais de tenue de compte sont un forfait, pas un pourcentage.** J'avais écrit qu'ils allaient
+de 0,25 %/an à 2 %/an et qu'en choisir une bonne rapportait 1,75 point de CAGR. C'est faux : ce sont
+des montants fixes, de 0 F à 15 625 F par an. Leur poids relatif s'effondre donc quand le capital
+grandit — 15 625 F valent 1,56 %/an sur 1 M FCFA, 0,78 % sur 2 M, 0,16 % sur 10 M. Le classement
+réel des SGI est en section 5.
 
 ### 1.3 Le marché que l'outil essaie de timer a fait +40 % par an
 
@@ -110,36 +118,34 @@ stratégie mais de la chance.
 
 | Stratégie | min | **médiane** | max | écart-type |
 |---|---|---|---|---|
-| Équipondéré, tout l'univers | +38,1 % | **+42,3 %** | +44,3 % | **1,8 %** |
-| top20 value+lowvol | +37,4 % | **+44,6 %** | +47,0 % | 3,3 % |
-| top12 value+lowvol | +36,3 % | +41,0 % | +47,3 % | 3,7 % |
-| top8 value+lowvol | +27,5 % | +37,9 % | +47,3 % | 5,8 % |
-| top5 value+lowvol | +24,6 % | +34,8 % | +45,7 % | 6,5 % |
+| Équipondéré, tout l'univers | +38,3 % | +42,1 % | +44,2 % | **1,7 %** |
+| **top25 value+lowvol** | **+38,8 %** | **+44,6 %** | +48,2 % | 2,5 % |
+| top20 value+lowvol | +37,1 % | +44,4 % | +47,2 % | 3,0 % |
+| top12 value+lowvol | +36,5 % | +40,2 % | +47,6 % | 3,9 % |
+| top8 value+lowvol | +28,0 % | +38,5 % | +47,0 % | 5,6 % |
+| top5 value+lowvol | +24,1 % | +34,8 % | +46,4 % | 6,4 % |
 
 C'est le tableau le plus important du rapport. **Plus le portefeuille est concentré, plus le
-résultat dépend du hasard du calendrier.** Un top8 peut afficher +47,3 % ou +27,5 % selon le mois
+résultat dépend du hasard du calendrier.** Un top8 peut afficher +47,0 % ou +28,0 % selon le mois
 où l'on rebalance : annoncer le premier chiffre comme une performance de stratégie serait
-malhonnête. L'équipondéré large est le seul dont le résultat ne bouge pas (±1,8 %).
+malhonnête.
 
-**top20 est le seul tilt défendable** : médiane 2,3 points au-dessus de l'équipondéré, et surtout
-un plancher équivalent (+37,4 % contre +38,1 %). Il améliore le médian sans dégrader le pire cas.
-Les concentrations plus fortes effondrent le plancher. La règle qui en découle : **au moins 20
-lignes.**
+**top25 est la seule configuration qui domine l'équipondéré sans contrepartie** : meilleure médiane
+(+44,6 % contre +42,1 %) *et* meilleur plancher (+38,8 % contre +38,3 %). En dessous de 20 lignes,
+le plancher s'effondre. La règle qui en découle : **au moins 20 lignes, 25 de préférence.**
 
 ### CAGR médian selon la fréquence de rebalancement
 
 | Stratégie | annuel | semestriel | trimestriel | mensuel |
 |---|---|---|---|---|
-| Équipondéré | +42,3 % | +43,4 % | +43,0 % | +42,0 % |
-| top20 value+lowvol | **+44,6 %** | +41,4 % | +37,5 % | +33,9 % |
-| top8 value+lowvol | +37,9 % | +36,8 % | +34,3 % | +30,1 % |
+| Équipondéré | +42,1 % | +43,2 % | +43,1 % | +42,2 % |
+| top25 value+lowvol | **+44,6 %** | +44,4 % | +41,2 % | +39,5 % |
+| top8 value+lowvol | +38,5 % | +37,2 % | +36,1 % | +31,6 % |
 
-**La fréquence est le paramètre dominant.** L'équipondéré y est insensible (il ne tourne pas).
-Dès qu'on sélectionne, chaque accélération du rythme coûte : top20 perd 10,7 points en passant
-d'annuel à mensuel. À 3,3 % d'aller-retour, la rotation est l'ennemi principal, très au-dessus de
-la qualité du signal.
-
----
+**La fréquence est le paramètre dominant.** L'équipondéré y est insensible : il ne tourne pas.
+Dès qu'on sélectionne, accélérer le rythme coûte — top25 perd 5,1 points en passant d'annuel à
+mensuel, top8 en perd 6,9. À 2,8 % d'aller-retour, la rotation reste l'ennemi principal, au-dessus
+de la qualité du signal.
 
 ## 4. La poche événementielle : pas d'edge, et une erreur de ma part corrigée
 
@@ -253,46 +259,79 @@ Le cash résiduel (arrondi au nombre entier d'actions) passe de 11-14 % à 1 M F
 5 M FCFA. À 1 M, ces 11 % de cash non investi coûtent environ 4,5 points de CAGR : **monter le
 capital de 1 à 2-3 M est un gain mécanique plus important que n'importe quel signal.**
 
+### Quelle SGI : le comparatif chiffré
+
+Coût **annuel récurrent** pour un portefeuille de 2 M FCFA, 25 lignes, rebalancement annuel
+(rotation estimée à 25 %), tenue de compte comprise :
+
+| SGI | Dépôt minimum | Tenue de compte /an | Courtage | Coût annuel | % du capital |
+|---|---|---|---|---|---|
+| **Atlantique Finance** | 2 000 000 | 0 F | **0,65 %** | 6 000 F | **0,30 %** |
+| **BNI Finances** | 1 000 000 | **gratuit** | 1 % | 7 000 F | 0,35 % |
+| **Africaine de Gestion (AGI)** | n.c. | **néant** | 1 % | 7 000 F | 0,35 % |
+| Attijari Securities | 1 000 000 | 2 000 F | 1 % | 9 000 F | 0,45 % |
+| Phoenix Capital | 2 000 000 | 2 500 F | 1 % | 9 500 F | 0,47 % |
+| BICI Bourse | n.c. | 5 000 F | 0,4–1 % | 12 000 F | 0,60 % |
+| EDC Investment | 1 000 000 | 5 000 F | 0,4–1 % | 12 000 F | 0,60 % |
+| BSIC Capital | 500 000 | 10 000 F | 0,8 % | 16 000 F | 0,80 % |
+| MAC African SGI | n.c. | 10 000 F | 0,85 % | 16 250 F | 0,81 % |
+| Coris Bourse | **50 000** | 10 000 F | 1 % | 17 000 F | 0,85 % |
+| NSIA Capital | 200 000 | 10 000 F | 1 % | 17 000 F | 0,85 % |
+| Bridge Securities | 250 000 | 10 000 F | 1 % | 17 000 F | 0,85 % |
+| One Africa Markets | n.c. | 15 625 F | 0,80 % | 21 625 F | 1,08 % |
+| Kerales Finance | n.c. | 15 625 F | 1 % | 22 625 F | 1,13 % |
+
+**L'écart entre la moins chère et la plus chère est de 0,83 point par an** sur 2 M FCFA — pas les
+1,75 point que j'annonçais à partir de droits de garde en pourcentage qui n'existent pas sur ce
+marché. C'est moins spectaculaire, mais c'est toujours plus que ce que rapporte le tilt factoriel,
+et c'est certain plutôt que probable.
+
+**Correction d'une recommandation erronée.** J'avais cité Hudson & Cie comme la SGI à viser pour ses
+faibles droits de garde. La grille montre un **dépôt minimum de 50 000 000 FCFA** : elle est hors
+de portée pour 1 à 5 M. Ne la retiens pas.
+
+Deux remarques que la grille impose :
+
+- **Le forfait de tenue de compte domine sur un petit portefeuille.** Un écart de courtage de
+  0,2 point sur quelques ordres par an pèse moins que 15 625 F de frais fixes. À 1 M FCFA ce
+  forfait vaut 1,56 %/an, davantage que tout le reste réuni.
+- **Le moins cher n'est pas le meilleur critère.** La grille elle-même le dit, et c'est juste : une
+  SGI injoignable quand un dividende n'arrive pas coûte plus qu'un dixième de point de commission.
+  Les avis d'autres investisseurs sont le seul endroit où cela se lit.
+
 ### Le minimum de perception par ordre : question tranchée
 
 J'avais signalé ce paramètre comme celui qui pouvait annuler la diversification. Les barèmes
-homologués publiés citent un **minimum d'environ 1 000 FCFA par ordre**. Avec 1,65 % par sens, le
-minimum ne s'applique qu'en dessous de **60 500 F par ligne** :
+publiés citent un **minimum d'environ 1 000 FCFA par ordre** (confirmé chez Atlantique Finance et
+Sogebourse). À 1,4 % par sens, il ne s'applique qu'en dessous de **71 400 F par ligne** :
 
 | Capital | 12 lignes | 15 lignes | 20 lignes | 25 lignes |
 |---|---|---|---|---|
-| 1 M | 1,65 % | 1,65 % | **2,00 %** | **2,50 %** |
-| 2 M | 1,65 % | 1,65 % | 1,65 % | 1,65 % |
-| 3 M et plus | 1,65 % | 1,65 % | 1,65 % | 1,65 % |
+| 1 M | 1,40 % | 1,40 % | **2,00 %** | **2,50 %** |
+| 2 M | 1,40 % | 1,40 % | 1,40 % | 1,42 % |
+| 3 M et plus | 1,40 % | 1,40 % | 1,40 % | 1,40 % |
 
-**À partir de 2 M FCFA le minimum ne mord jamais** : diversifier ne coûte rien de plus. À 1 M, tenir
-25 lignes au lieu de 12 coûte 0,85 point de capital — **une seule fois, à l'entrée**. En face,
-25 lignes rapportent 3,4 points de CAGR **par an** de plus que 12 (section 3). L'arbitrage n'est pas
-serré : on garde 25 lignes.
+**À partir de 2 M FCFA, diversifier ne coûte pratiquement rien de plus.** À 1 M, tenir 25 lignes au
+lieu de 12 coûte 1,1 point de capital — **une seule fois, à l'entrée** — contre 6,1 points de CAGR
+**par an** gagnés (top25 +44,6 % contre top12 +40,2 %). L'arbitrage n'est pas serré.
 
-Deux réserves. Le taux de 1,65 % par sens retient l'hypothèse haute (TAF appliquée aux commissions
-de 1,4 %) ; certaines présentations donnent 1,4 % comme total toutes taxes comprises, auquel cas
-tout ce qui précède est encore plus favorable. Et 1 000 F est un ordre de grandeur relevé sur des
-barèmes publics : si ta SGI pratique 5 000 F, le seuil monte à 303 000 F par ligne et il faut
-refaire le calcul — `python strategie/panier.py --capital 2000000 --minimum-ordre 5000` le fait.
-
-Reste donc à confirmer par écrit auprès de la SGI : le minimum exact, et si la TAF est comprise ou
-s'ajoute.
-
----
+Si ta SGI pratique un autre plancher :
+`python strategie/panier.py --capital 2000000 --minimum-ordre 5000`.
 
 ## 6. Ce que les données disent de faire
 
 Classé par rapport gain/certitude, le plus sûr d'abord :
 
-1. **Choisir la SGI sur les droits de garde, pas sur le courtage.** 0,25 %/an contre 2 %/an :
-   +1,75 point de CAGR, certain, sans risque. Le levier le plus rentable du dossier. Attention au
-   minimum trimestriel de conservation (1 250 F/trimestre chez certaines SGI, soit 5 000 F/an) :
-   sur un portefeuille de 1 M FCFA, un taux affiché de 0,25 % ne coûte pas 2 500 F mais 5 000 F.
+1. **Choisir la SGI sur le forfait de tenue de compte, pas sur le courtage.** De 0 F à 15 625 F
+   par an : **0,83 point de CAGR** d'écart sur 2 M FCFA, certain, sans risque. BNI Finances (tenue
+   gratuite), AGI (néant) et Atlantique Finance (0 F et 0,65 % de courtage) sont en tête, sous
+   réserve de leur dépôt minimum. Mais ne choisis pas sur le seul tarif : une SGI injoignable quand
+   un dividende n'arrive pas coûtera plus cher que l'écart de commission.
 2. **Panier équipondéré de 20 à 25 lignes, rebalancé une fois par an**, dividendes réinvestis.
    Médiane +42,3 % sur la période, écart-type 1,8 % selon le calendrier, max drawdown ~5 %.
-3. **Tilt optionnel vers top20 value + faible volatilité** (rendement bénéficiaire et volatilité
-   60 j). Médiane +44,6 %, plancher inchangé. Gain réel mais modeste, et dans le bruit.
+3. **Tilt vers top25 value + faible volatilité** (rendement bénéficiaire et volatilité 60 j).
+   Médiane +44,6 % contre +42,1 %, et plancher légèrement meilleur que l'équipondéré : c'est la
+   seule configuration qui améliore les deux à la fois. Gain réel mais modeste.
 4. **Ne jamais rebalancer plus d'une fois par semestre.** C'est le paramètre le plus coûteux.
 5. **Retirer SEMC et SICC de l'univers** et ajouter une détection de suspension.
 6. **Récupérer les dates de détachement** si l'on veut encore tester l'événementiel. Les dates de mise en paiement, elles, sont acquises et servent à la trésorerie.
@@ -320,8 +359,12 @@ Ce rapport mesure un passé exceptionnel. Il ne prédit rien.
   fiches porte `"confiance": "moyenne"`. Les 7,33 %/an sont une estimation.
 - **Fondamentaux courts.** L'historique commence à l'exercice 2021, d'où la fenêtre factorielle
   réduite à 47 mois et seulement 4 rebalancements annuels indépendants. C'est peu pour conclure.
-- **Frais estimés.** 3,3 % aller-retour est reconstitué depuis les barèmes publics ; le barème
-  exact de la SGI et le minimum par ordre restent à confirmer.
+- **Frais : deux corrections déjà faites.** J'ai d'abord retenu 3,3 % aller-retour (TAF appliquée
+  par-dessus des commissions de 1,4 %) puis des droits de garde en pourcentage de 0,25 à 2 %/an.
+  Les deux étaient faux : le total est 2,8 % aller-retour, et la tenue de compte est un forfait de
+  0 à 15 625 F par an. Les chiffres de ce rapport intègrent la correction. Leçon : une estimation
+  de frais reconstituée depuis des sources secondaires peut se tromper d'un facteur deux, et il
+  faut la confronter à la grille tarifaire réelle avant de conclure.
 - **Le tilt top20 est dans le bruit.** +2,3 points de médiane pour un écart-type de 3,3 % : ce
   n'est pas une preuve, c'est une indication.
 
@@ -351,7 +394,8 @@ elle coûte environ 3 points de CAGR par an en prime tant que la hausse dure.
 - [BRVM — Quels sont les frais applicables ?](https://www.brvm.org/fr/node/312)
 - [BRVM — Tarification](https://www.brvm.org/fr/textes-reglementaires/tarification)
 - [Richbourse — Ouvrir un compte titres à la BRVM : frais](https://www.richbourse.com/common/apprendre/ouvrir-compte-titres)
-- [Comparatif des SGI de la BRVM 2026](https://fluxbourse.com/articles/quelle-sgi-choisir-brvm-2026)
+- [Richbourse — Ouvrir un compte titres : quelle SGI, quels frais](https://www.richbourse.com/common/apprendre/ouvrir-compte-titres) (grille comparative des 40 SGI, relevée le 02/10/2026)
+- [Richbourse — Tarifs des SGI](https://www.richbourse.com/common/apprendre/tarif-sgi)
 - [Sikafinance — Liste des SGI de la BRVM](https://www.sikafinance.com/sgi_de_la_brvm)
 - [Movis CI officiellement radié de la cote de la BRVM](https://www.african-markets.com/fr/bourse/brvm/movis-ci-officiellement-radie-de-la-cote-de-la-brvm)
 - [Suspensions à la BRVM — le sabre à moitié tiré](https://www.lejecos.com/SUSPENSIONS-A-LA-BRVM-Le-sabre-a-moitie-tire_a31522.html)

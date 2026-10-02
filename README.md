@@ -59,7 +59,7 @@ streamlit run app.py
 L'approche technique du screener (revue bi-mensuelle, stop à 8 %, détention plafonnée
 à 90 jours) n'a pas été rentable sur 2021-2026. L'étude dans `recherche/` en donne les
 causes mesurées : le dividende était absent du backtest (7,33 %/an omis), les frais y
-valaient 1,3 % aller-retour contre 3,3 % réels, et sur un marché où 95 % des titres
+valaient 1,3 % aller-retour contre 2,8 % réels, et sur un marché où 95 % des titres
 montaient, chaque filtre retirait de la valeur.
 
 `strategie/panier.py` applique ce que les données valident :
@@ -71,7 +71,7 @@ python strategie/panier.py --capital 2000000 --portefeuille portfolio.json
 
 - **25 lignes équipondérées**, classées sur rendement bénéficiaire + faible volatilité
 - **liquidité en filtre, jamais en critère de tri** — trier dessus coûte ~7 points de CAGR
-- **rebalancement annuel** — le même panier perd 10,7 points en passant au mensuel
+- **rebalancement annuel** — le même panier perd 5,1 points en passant au mensuel
 - détection automatique des titres dont la cotation s'est arrêtée (SEMC et SICC
   depuis le 16/09/2026), signalés comme non liquidables
 

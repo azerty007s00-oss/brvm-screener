@@ -47,17 +47,28 @@ RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 INDICES = {"BRVMC", "BRVM30", "BRVM-IN", "BRVM-TEL", "BRVM-EN"}
 
 # --- Bareme de frais -------------------------------------------------------
-# Par sens, reconstitue depuis les baremes publics BRVM / CREPMF.
-FRAIS_BRVM_PAR_SENS   = 0.003   # commission de retrocession BRVM
-FRAIS_DCBR_PAR_SENS   = 0.001   # reglement-livraison DC/BR
+# Par sens. La grille comparative des SGI (Richbourse, relevee le 02/10/2026)
+# donne le total : "comptez autour de 1,4 % du montant de l'ordre, tous frais
+# confondus ; sur un achat de 1 000 000 FCFA, une quinzaine de milliers de
+# francs". Avec 1 % de courtage, cela laisse 0,4 % pour la commission de
+# marche (BRVM + depositaire central) et la taxe sur les activites
+# financieres reunies.
+FRAIS_MARCHE_PAR_SENS = 0.004   # BRVM + DC/BR + TAF, hors courtage SGI
 COURTAGE_SGI_DEFAUT   = 0.010   # plafond homologue AMF-UMOA, applique par 28 SGI sur 35
-TAXE_SUR_COMMISSIONS  = 0.18    # taxe sur activites financieres
 
 # Minimum de perception par ordre. Les baremes homologues publies en citent
 # autour de 1 000 F. C'est le parametre qui decide du nombre de lignes tenable :
 # en dessous d'un certain montant par ligne, le minimum remplace le pourcentage
 # et le cout d'entree augmente a mesure qu'on diversifie.
 MINIMUM_PAR_ORDRE     = 1_000.0
+
+# Frais de tenue de compte, annuels et FORFAITAIRES : de 0 F (BNI Finances,
+# AGI, Atlantique Finance) a 15 625 F (One Africa Markets, Kerales Finance).
+# Ce n'est pas un pourcentage, donc le poids relatif s'effondre quand le
+# capital grandit : 15 625 F valent 1,56 %/an sur 1 M FCFA et 0,16 % sur 10 M.
+# Sur un petit portefeuille, ce forfait pese plus lourd que l'ecart de
+# courtage entre deux SGI.
+FRAIS_TENUE_COMPTE    = 10_000.0   # mediane de la grille ; a remplacer par le reel
 
 # --- Parametres de construction --------------------------------------------
 LIQUIDITE_MIN_FCFA    = 2_000_000   # valeur echangee moyenne sur 60 seances
@@ -75,14 +86,12 @@ def frais_par_sens(courtage_sgi: float = COURTAGE_SGI_DEFAUT) -> float:
     """
     Frais d'un ordre en fraction du montant, hors minimum de perception.
 
-    Les sources publiques divergent : les commissions nues font 1,4 %
-    (BRVM 0,3 + DC/BR 0,1 + courtage 1,0) et certaines presentations annoncent
-    ce 1,4 % comme total toutes taxes. On retient ici l'hypothese haute, TAF
-    appliquee aux commissions, soit 1,65 % par sens. Si la SGI confirme que la
-    TAF est deja comprise, passer --taf 0 ramene a 1,4 %.
+    Au plafond de courtage de 1 %, cela donne 1,4 % par sens, soit 2,8 %
+    aller-retour. Une version anterieure de ce module retenait 1,65 % par
+    sens, en appliquant la TAF par-dessus des commissions de 1,4 % : la grille
+    des SGI montre que le 1,4 % est deja le total toutes taxes comprises.
     """
-    commissions = FRAIS_BRVM_PAR_SENS + FRAIS_DCBR_PAR_SENS + courtage_sgi
-    return commissions * (1 + TAXE_SUR_COMMISSIONS)
+    return courtage_sgi + FRAIS_MARCHE_PAR_SENS
 
 
 def frais_ordre(montant: float,
