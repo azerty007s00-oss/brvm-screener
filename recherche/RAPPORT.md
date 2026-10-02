@@ -253,12 +253,31 @@ Le cash résiduel (arrondi au nombre entier d'actions) passe de 11-14 % à 1 M F
 5 M FCFA. À 1 M, ces 11 % de cash non investi coûtent environ 4,5 points de CAGR : **monter le
 capital de 1 à 2-3 M est un gain mécanique plus important que n'importe quel signal.**
 
-### L'inconnue qui peut tout annuler
+### Le minimum de perception par ordre : question tranchée
 
-**Le minimum de frais par ordre.** À 20 lignes et 2 M FCFA, chaque ligne vaut 100 000 F. Un
-plancher de 5 000 F par ordre représente **5 %** — il annulerait à lui seul la diversification et
-imposerait de descendre à 8-10 lignes. Ce chiffre n'est pas public et décide de l'architecture du
-portefeuille. **À demander par écrit à la SGI avant toute décision.**
+J'avais signalé ce paramètre comme celui qui pouvait annuler la diversification. Les barèmes
+homologués publiés citent un **minimum d'environ 1 000 FCFA par ordre**. Avec 1,65 % par sens, le
+minimum ne s'applique qu'en dessous de **60 500 F par ligne** :
+
+| Capital | 12 lignes | 15 lignes | 20 lignes | 25 lignes |
+|---|---|---|---|---|
+| 1 M | 1,65 % | 1,65 % | **2,00 %** | **2,50 %** |
+| 2 M | 1,65 % | 1,65 % | 1,65 % | 1,65 % |
+| 3 M et plus | 1,65 % | 1,65 % | 1,65 % | 1,65 % |
+
+**À partir de 2 M FCFA le minimum ne mord jamais** : diversifier ne coûte rien de plus. À 1 M, tenir
+25 lignes au lieu de 12 coûte 0,85 point de capital — **une seule fois, à l'entrée**. En face,
+25 lignes rapportent 3,4 points de CAGR **par an** de plus que 12 (section 3). L'arbitrage n'est pas
+serré : on garde 25 lignes.
+
+Deux réserves. Le taux de 1,65 % par sens retient l'hypothèse haute (TAF appliquée aux commissions
+de 1,4 %) ; certaines présentations donnent 1,4 % comme total toutes taxes comprises, auquel cas
+tout ce qui précède est encore plus favorable. Et 1 000 F est un ordre de grandeur relevé sur des
+barèmes publics : si ta SGI pratique 5 000 F, le seuil monte à 303 000 F par ligne et il faut
+refaire le calcul — `python strategie/panier.py --capital 2000000 --minimum-ordre 5000` le fait.
+
+Reste donc à confirmer par écrit auprès de la SGI : le minimum exact, et si la TAF est comprise ou
+s'ajoute.
 
 ---
 
@@ -267,7 +286,9 @@ portefeuille. **À demander par écrit à la SGI avant toute décision.**
 Classé par rapport gain/certitude, le plus sûr d'abord :
 
 1. **Choisir la SGI sur les droits de garde, pas sur le courtage.** 0,25 %/an contre 2 %/an :
-   +1,75 point de CAGR, certain, sans risque. Le levier le plus rentable du dossier.
+   +1,75 point de CAGR, certain, sans risque. Le levier le plus rentable du dossier. Attention au
+   minimum trimestriel de conservation (1 250 F/trimestre chez certaines SGI, soit 5 000 F/an) :
+   sur un portefeuille de 1 M FCFA, un taux affiché de 0,25 % ne coûte pas 2 500 F mais 5 000 F.
 2. **Panier équipondéré de 20 à 25 lignes, rebalancé une fois par an**, dividendes réinvestis.
    Médiane +42,3 % sur la période, écart-type 1,8 % selon le calendrier, max drawdown ~5 %.
 3. **Tilt optionnel vers top20 value + faible volatilité** (rendement bénéficiaire et volatilité

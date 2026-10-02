@@ -355,3 +355,46 @@ def test_calendrier_ne_retient_que_les_paiements():
         paiements = brut[(brut["ticker"] == ligne["ticker"])
                          & (brut["type"] == "paiement")]
         assert set(mois) == set(paiements["date"].dt.month)
+
+
+# ─── Minimum de perception par ordre ──────────────────────────────────────────
+
+def test_frais_ordre_applique_le_pourcentage_sur_un_gros_ordre():
+    from strategie.panier import frais_ordre
+    # 200 000 F x 1,65 % = 3 300 F, bien au-dessus du minimum
+    assert frais_ordre(200_000, 0.010, 1_000) == pytest.approx(200_000 * frais_par_sens(0.010))
+
+
+def test_frais_ordre_applique_le_minimum_sur_un_petit_ordre():
+    from strategie.panier import frais_ordre
+    # 20 000 F x 1,65 % = 330 F, en dessous du minimum
+    assert frais_ordre(20_000, 0.010, 1_000) == 1_000
+
+
+def test_seuil_minimum_mordant():
+    """En dessous de ce montant par ligne, diversifier coûte plus cher."""
+    from strategie.panier import seuil_minimum_mordant, frais_ordre
+    seuil = seuil_minimum_mordant(0.010, 1_000)
+    assert seuil == pytest.approx(1_000 / frais_par_sens(0.010))
+    # juste au-dessus : le pourcentage ; juste en dessous : le minimum
+    assert frais_ordre(seuil * 1.01, 0.010, 1_000) > 1_000
+    assert frais_ordre(seuil * 0.99, 0.010, 1_000) == 1_000
+
+
+def test_seuil_monte_avec_le_minimum():
+    from strategie.panier import seuil_minimum_mordant
+    assert seuil_minimum_mordant(0.010, 5_000) > seuil_minimum_mordant(0.010, 1_000)
+
+
+def test_ordres_respecte_le_minimum_de_perception():
+    cloture, _ = _marche({"AAA": 100.0})
+    panier = pd.DataFrame({"prix": [100.0], "quantite": [50]}, index=["AAA"])
+    panier.index.name = "ticker"
+    # 5 000 F d'ordre : 1,65 % = 82 F, le minimum doit l'emporter
+    _, cout = ordres({}, panier, cloture, courtage_sgi=0.010, minimum_ordre=1_000)
+    assert cout == pytest.approx(1_000)
+
+
+def test_minimum_nul_revient_au_pourcentage_pur():
+    from strategie.panier import frais_ordre
+    assert frais_ordre(5_000, 0.010, 0) == pytest.approx(5_000 * frais_par_sens(0.010))

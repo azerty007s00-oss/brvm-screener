@@ -50,8 +50,14 @@ INDICES = {"BRVMC", "BRVM30", "BRVM-IN", "BRVM-TEL", "BRVM-EN"}
 # Par sens, reconstitue depuis les baremes publics BRVM / CREPMF.
 FRAIS_BRVM_PAR_SENS   = 0.003   # commission de retrocession BRVM
 FRAIS_DCBR_PAR_SENS   = 0.001   # reglement-livraison DC/BR
-COURTAGE_SGI_DEFAUT   = 0.010   # plafond homologue CREPMF ; negociable a la baisse
+COURTAGE_SGI_DEFAUT   = 0.010   # plafond homologue AMF-UMOA, applique par 28 SGI sur 35
 TAXE_SUR_COMMISSIONS  = 0.18    # taxe sur activites financieres
+
+# Minimum de perception par ordre. Les baremes homologues publies en citent
+# autour de 1 000 F. C'est le parametre qui decide du nombre de lignes tenable :
+# en dessous d'un certain montant par ligne, le minimum remplace le pourcentage
+# et le cout d'entree augmente a mesure qu'on diversifie.
+MINIMUM_PAR_ORDRE     = 1_000.0
 
 # --- Parametres de construction --------------------------------------------
 LIQUIDITE_MIN_FCFA    = 2_000_000   # valeur echangee moyenne sur 60 seances
@@ -66,9 +72,37 @@ SEUIL_RETARD_SUSPENSION = 10
 
 
 def frais_par_sens(courtage_sgi: float = COURTAGE_SGI_DEFAUT) -> float:
-    """Frais totaux d'un ordre, en fraction du montant negocie."""
+    """
+    Frais d'un ordre en fraction du montant, hors minimum de perception.
+
+    Les sources publiques divergent : les commissions nues font 1,4 %
+    (BRVM 0,3 + DC/BR 0,1 + courtage 1,0) et certaines presentations annoncent
+    ce 1,4 % comme total toutes taxes. On retient ici l'hypothese haute, TAF
+    appliquee aux commissions, soit 1,65 % par sens. Si la SGI confirme que la
+    TAF est deja comprise, passer --taf 0 ramene a 1,4 %.
+    """
     commissions = FRAIS_BRVM_PAR_SENS + FRAIS_DCBR_PAR_SENS + courtage_sgi
     return commissions * (1 + TAXE_SUR_COMMISSIONS)
+
+
+def frais_ordre(montant: float,
+                courtage_sgi: float = COURTAGE_SGI_DEFAUT,
+                minimum: float = MINIMUM_PAR_ORDRE) -> float:
+    """Frais reels d'un ordre : le pourcentage, ou le minimum s'il est superieur."""
+    return max(minimum, montant * frais_par_sens(courtage_sgi))
+
+
+def seuil_minimum_mordant(courtage_sgi: float = COURTAGE_SGI_DEFAUT,
+                          minimum: float = MINIMUM_PAR_ORDRE) -> float:
+    """
+    Montant par ligne en dessous duquel le minimum de perception s'applique.
+
+    Au-dessus, diversifier ne coute rien de plus : le cout d'entree reste
+    proportionnel au capital quel que soit le nombre de lignes. En dessous,
+    chaque ligne supplementaire coute le minimum en entier.
+    """
+    taux = frais_par_sens(courtage_sgi)
+    return minimum / taux if taux > 0 else float("inf")
 
 
 # --- Donnees ---------------------------------------------------------------
@@ -371,6 +405,7 @@ def ordres(
         panier: pd.DataFrame,
         cloture: pd.DataFrame,
         courtage_sgi: float = COURTAGE_SGI_DEFAUT,
+        minimum_ordre: float = MINIMUM_PAR_ORDRE,
 ) -> tuple[pd.DataFrame, float]:
     """
     Ordres pour passer des positions actuelles au panier cible, et leur cout.
@@ -379,7 +414,6 @@ def ordres(
     S'il est suspendu, ce cours est fige et l'ordre ne pourra pas etre
     execute : la colonne 'negociable' le signale.
     """
-    taux = frais_par_sens(courtage_sgi)
     suspendus = detecter_suspensions(cloture)
     # ffill, et non la derniere ligne : un titre suspendu n'y cote plus, et sans
     # report il disparaitrait de la table au lieu d'etre signale non liquidable.
@@ -403,7 +437,7 @@ def ordres(
             "quantite":   abs(delta),
             "prix":       prix,
             "montant":    montant,
-            "frais":      montant * taux,
+            "frais":      frais_ordre(montant, courtage_sgi, minimum_ordre),
             "negociable": ticker not in suspendus,
         })
     table = pd.DataFrame(lignes)
@@ -419,7 +453,8 @@ def fcfa(valeur) -> str:
     return f"{valeur:,.0f}".replace(",", " ")
 
 
-def afficher(capital, panier, exclus, dividendes, table_ordres, cout, courtage_sgi):
+def afficher(capital, panier, exclus, dividendes, table_ordres, cout, courtage_sgi,
+             minimum_ordre=MINIMUM_PAR_ORDRE):
     taux = frais_par_sens(courtage_sgi)
     print(f"Panier cible pour {fcfa(capital)} FCFA "
           f"(courtage SGI {courtage_sgi:.2%} -> {taux:.2%} par sens, "
@@ -442,12 +477,26 @@ def afficher(capital, panier, exclus, dividendes, table_ordres, cout, courtage_s
               f"{ligne['score']:>7.2f}{ligne['rdt_benef']:>9s}{ligne['vol']:>6s}")
 
     investi = panier["montant"].sum()
-    frais_initiaux = investi * taux
+    frais_initiaux = sum(frais_ordre(m, courtage_sgi, minimum_ordre)
+                         for m in panier["montant"])
     print(f"\n{len(panier)} lignes | investi {fcfa(investi)} F "
           f"({investi / capital:.1%}) | cash residuel "
           f"{fcfa(capital - investi)} F ({1 - investi / capital:.1%})")
-    print(f"frais d'entree estimes : {fcfa(frais_initiaux)} F "
-          f"({frais_initiaux / capital:.2%} du capital)")
+    print(f"frais d'entree : {fcfa(frais_initiaux)} F "
+          f"({frais_initiaux / capital:.2%} du capital, "
+          f"minimum {fcfa(minimum_ordre)} F par ordre)")
+
+    seuil = seuil_minimum_mordant(courtage_sgi, minimum_ordre)
+    sous_le_seuil = panier[panier["montant"] < seuil]
+    if not sous_le_seuil.empty:
+        surcout = frais_initiaux - investi * taux
+        print(f"  {len(sous_le_seuil)} ligne(s) sous {fcfa(seuil)} F : le minimum "
+              f"s'applique au lieu du pourcentage,")
+        print(f"  surcout {fcfa(surcout)} F ({surcout / capital:.2%} du capital, "
+              f"une seule fois a l'entree).")
+        print(f"  Le garder reste preferable : passer de 25 a 12 lignes economise "
+              f"environ 1 point une fois")
+        print(f"  et coute 3,4 points de CAGR par an (cf. RAPPORT.md section 3).")
 
     connus = dividendes[dividendes["dps"].notna()]
     if not connus.empty:
@@ -500,6 +549,9 @@ def main():
     analyseur.add_argument("--courtage", type=float, default=COURTAGE_SGI_DEFAUT,
                            help="taux de courtage de la SGI, en fraction "
                                 f"(defaut {COURTAGE_SGI_DEFAUT}, plafond CREPMF)")
+    analyseur.add_argument("--minimum-ordre", type=float, default=MINIMUM_PAR_ORDRE,
+                           help="minimum de perception par ordre en FCFA "
+                                f"(defaut {MINIMUM_PAR_ORDRE:.0f}, a confirmer aupres de la SGI)")
     analyseur.add_argument("--liquidite-min", type=float, default=LIQUIDITE_MIN_FCFA,
                            help="liquidite minimale en FCFA/jour pour entrer dans l'univers")
     analyseur.add_argument("--sans-tilt", action="store_true",
@@ -524,11 +576,12 @@ def main():
     table_ordres, cout = None, 0.0
     if arguments.portefeuille and not panier.empty:
         positions = charger_portefeuille(arguments.portefeuille)
-        table_ordres, cout = ordres(positions, panier, cloture, arguments.courtage)
+        table_ordres, cout = ordres(positions, panier, cloture,
+                                    arguments.courtage, arguments.minimum_ordre)
 
     print(f"donnees arretees au {cloture.index[-1].date()}\n")
     afficher(arguments.capital, panier, exclus, dividendes,
-             table_ordres, cout, arguments.courtage)
+             table_ordres, cout, arguments.courtage, arguments.minimum_ordre)
 
 
 if __name__ == "__main__":
