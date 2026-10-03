@@ -468,6 +468,58 @@ des années, et la croissance des bénéfices est réelle. Cela dit que le scén
 une hypothèse d'école sur ce marché, qu'il s'y est produit une fois en dix ans, et qu'aucun chiffre
 de ce rapport ne l'a jamais rencontré.
 
+### Peut-on repérer les replis pour renforcer ? Non, et attendre coûte
+
+Question naturelle quand on détient un panier : plutôt que de vendre, garder une réserve et la
+déployer dans les baisses. Testé, et la réponse est non sur cette période.
+
+**D'abord, il y a très peu de replis à étudier.** Six seulement dépassent 3 % en cinq ans et demi :
+
+| Début | Creux | Ampleur | Durée jusqu'au retour |
+|---|---|---|---|
+| 2022-05 | 2022-12 | **−12,2 %** | 723 jours |
+| 2024-11 | 2025-01 | −5,4 % | 80 jours |
+| 2025-04 | 2025-04 | −3,2 % | 29 jours |
+| 2025-11 | 2025-11 | −5,5 % | 17 jours |
+| 2026-03 | 2026-05 | −5,8 % | 64 jours |
+| 2026-09 | 2026-09 | −10,0 % | en cours |
+
+Le marché passe **61 % du temps à moins de 3 % de son sommet**, et le pire repli de la période fait
+−12,2 %. C'est structurellement peu profond : limites de variation à ±7,5 % par séance, faible
+liquidité, actionnariat local peu vendeur.
+
+**Ensuite, le signal le plus évident ne résiste pas à l'examen.** L'écart du marché à sa moyenne
+200 séances semble prometteur : au-dessus de +30 %, 96 % des *jours* sont suivis d'un repli de plus
+de 5 % dans les trois mois, contre 37 % en moyenne. Mais ces jours ne sont pas indépendants —
+au niveau des **épisodes distincts**, il n'y en a que 5 au seuil de 30 %, dont deux séparés de deux
+jours. Le 96 % compte la même poignée d'événements des dizaines de fois. Il n'a aucun sens
+statistique.
+
+**Enfin et surtout, agir sur ce signal perd de l'argent.** DCA de 50 €/mois, en gardant une part en
+réserve déployée dès que le marché recule du seuil indiqué (hors dividendes, pour que la
+comparaison soit à méthode constante) :
+
+| Règle | Valeur finale | TRI |
+|---|---|---|
+| **Tout investi chaque mois** | **8 362 €** | **+34,3 %** |
+| 20 % en réserve, déployée à −8 % | 7 969 € | +32,5 % |
+| 20 % en réserve, déployée à −3 % | 7 898 € | +32,1 % |
+| 30 % en réserve, déployée à −5 % | 7 700 € | +31,2 % |
+| 50 % en réserve, déployée à −5 % | 7 351 € | +29,4 % |
+
+**Les douze variantes testées perdent**, et plus la réserve est grosse, plus elle coûte. La raison
+est mécanique : les replis sont courts et peu profonds, le marché monte de 40 % par an entre-temps,
+donc le temps passé en cash coûte plus que le rabais obtenu.
+
+**Ce qui aide vraiment un buy-and-hold n'est pas une prévision : c'est le versement régulier
+lui-même.** Un DCA achète automatiquement plus de titres quand les cours baissent, sans rien avoir
+à anticiper. Le mécanisme est déjà dans la méthode.
+
+Une réserve d'honnêteté, la même que partout ailleurs dans ce rapport : ce résultat est mesuré sur
+un marché qui monte. Pendant la baisse de 2016-2021, garder du cash aurait massivement payé. Ce que
+je démontre, c'est qu'attendre les creux ne sert à rien *dans une phase de hausse* — pas que la
+réserve soit inutile en général.
+
 ### Ce que je ne peux pas te dire
 
 **Je n'ai pas testé si la valorisation prédit les rendements sur la BRVM, et je ne peux pas le
