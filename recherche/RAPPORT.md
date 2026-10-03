@@ -345,13 +345,97 @@ Classé par rapport gain/certitude, le plus sûr d'abord :
 5. **Retirer SEMC et SICC de l'univers** et ajouter une détection de suspension.
 6. **Récupérer les dates de détachement** si l'on veut encore tester l'événementiel. Les dates de mise en paiement, elles, sont acquises et servent à la trésorerie.
 
+7. **Étaler l'entrée sur plusieurs mois** plutôt qu'investir d'un bloc. Le marché se paie
+   aujourd'hui 14,7 fois ses bénéfices contre 7,9 en moyenne sur 2021-2024 : voir section 7.
+
 Et ce qu'il faut arrêter : les stops à 8 %, la revue bi-mensuelle, la détention plafonnée à
 90 jours, et la sélection à moins de 20 lignes. Ces quatre paramètres ont coûté de l'argent sur
 toute la période mesurée.
 
 ---
 
-## 7. Limites — à lire avant d'engager de l'argent
+## 7. Le marché est-il devenu cher ? Oui, et ça change les attentes
+
+Tout ce qui précède porte sur **comment** construire et faire tourner un portefeuille. Rien n'y
+porte sur **à quel prix** on y entre. Ce sont deux décisions distinctes, et je n'avais traité que la
+première. Voici la seconde.
+
+### La valorisation a presque doublé
+
+PER médian de fin d'exercice (cours au 31/12 de l'année N divisé par le BNPA de l'exercice N) :
+
+| Exercice | PER médian | Rendement du dividende médian |
+|---|---|---|
+| 2021 | 8,3 | 7,4 % |
+| 2022 | 7,8 | 7,9 % |
+| 2023 | 8,0 | 8,9 % |
+| 2024 | 7,6 | 8,4 % |
+| 2025 | 9,9 | 6,4 % |
+| **Aujourd'hui** *(cours 30/09/2026, BNPA 2025)* | **14,7** | **4,0 %** |
+
+**Le marché s'est revalorisé d'un facteur 1,86**, et le rendement du dividende a été divisé par deux.
+Tu es payé deux fois moins pour attendre qu'il y a trois ans.
+
+### La hausse n'est pas payée par les bénéfices
+
+| Période | Bénéfices agrégés | Cours (médiane) | Dont revalorisation |
+|---|---|---|---|
+| 2021 → 2023 | +6,0 %/an | −1,6 %/an | **−7,2 %/an** |
+| 2023 → 2025 | +11,6 %/an | +35,2 %/an | **+21,2 %/an** |
+| 2025 → sept. 2026 | *inconnus* | +48,2 % en 9 mois | — |
+
+Les sociétés ont fait croître leurs bénéfices d'environ **10 % par an** — c'est solide et c'est réel.
+Les cours ont monté de **35 % par an** sur la période récente. **Les deux tiers de la hausse sont une
+revalorisation, pas une création de valeur.** Et un multiple ne peut pas doubler indéfiniment.
+
+### Ce qu'on peut raisonnablement attendre maintenant
+
+À croissance des bénéfices maintenue (+10,5 %/an) et dividende réinvesti, sur 5 ans :
+
+| Si le multiple… | PER final | CAGR 5 ans | Capital |
+|---|---|---|---|
+| double encore (euphorie) | 22,0 | +22,1 % | ×2,7 |
+| tient à son niveau actuel | 14,7 | **+13,6 %** | ×1,9 |
+| se dégonfle partiellement | 12,0 | +9,7 % | ×1,6 |
+| revient à la moyenne 2021-2024 | 7,9 | **+2,5 %** | ×1,1 |
+| sur-réagit à la baisse | 6,0 | −1,7 % | ×0,9 |
+
+Et si le multiple se normalisait brutalement plutôt que progressivement : **−18 % pour un retour à
+12, −32 % pour un retour à 10, −46 % pour un retour à 7,9.**
+
+### Les trois conséquences
+
+**1. Le +42 % de CAGR mesuré dans ce rapport n'est pas une prévision.** Il décrit un passé dont une
+grande partie vient d'une revalorisation qui ne peut pas se répéter. Le scénario central raisonnable
+est plutôt **+13 à +14 % par an**, soit un tiers de ce que montre le backtest. C'est encore très
+bon, mais il faut partir avec la bonne attente.
+
+**2. Cela ne ressuscite pas la gestion active.** Toutes les alternatives testées dans ce rapport
+perdent face au panier large, y compris pendant la phase molle 2022-2024. Être cher ne rend pas le
+market timing technique rentable pour autant — la hausse peut durer des années, et sortir pour
+rentrer plus tard coûte 2,8 % à chaque aller-retour plus le risque de rater la suite.
+
+**3. Cela change la mise en place, pas la méthode.** Étaler les achats sur plusieurs mois plutôt
+qu'entrer d'un bloc, garder le tilt value + faible volatilité (qui tient mieux quand le marché
+stagne : +10,0 % contre +6,1 % sur 2022-2024), et surveiller le rendement du dividende du
+portefeuille comme jauge — à 4 % on paie cher, à 8 % on est payé pour attendre.
+
+### Ce que je ne peux pas te dire
+
+**Je n'ai pas testé si la valorisation prédit les rendements sur la BRVM, et je ne peux pas le
+faire** : 5,5 ans de données contiennent environ un seul cycle de valorisation, ce qui ne permet
+aucune conclusion statistique. Ce qui précède est de l'arithmétique de valorisation, pas un
+backtest. C'est un raisonnement solide mais d'une nature différente du reste du rapport, et il faut
+le lire comme tel.
+
+Deux réserves de données s'y ajoutent : le PER actuel repose sur 29 sociétés seulement (celles dont
+le BNPA 2025 est renseigné), et il rapporte des cours de septembre 2026 à des bénéfices 2025. Si les
+bénéfices 2026 progressent de 10 %, le PER réel est plutôt autour de 13 — toujours près du double de
+sa moyenne historique.
+
+---
+
+## 8. Limites — à lire avant d'engager de l'argent
 
 Ce rapport mesure un passé exceptionnel. Il ne prédit rien.
 
@@ -398,7 +482,7 @@ elle coûte environ 3 points de CAGR par an en prime tant que la hausse dure.
 
 ---
 
-## 8. Sources
+## 9. Sources
 
 - [BRVM — Quels sont les frais applicables ?](https://www.brvm.org/fr/node/312)
 - [BRVM — Tarification](https://www.brvm.org/fr/textes-reglementaires/tarification)
