@@ -28,6 +28,7 @@ entier et +37,4 % a 20 lignes).
 
 Usage :
     python strategie/panier.py --capital 2000000
+    python strategie/panier.py --versement-eur 50 --portefeuille portfolio.json
     python strategie/panier.py --capital 2000000 --lignes 20 --courtage 0.008
     python strategie/panier.py --capital 2000000 --portefeuille portfolio.json
     python strategie/panier.py --capital 2000000 --sans-tilt
@@ -69,6 +70,17 @@ MINIMUM_PAR_ORDRE     = 1_000.0
 # Sur un petit portefeuille, ce forfait pese plus lourd que l'ecart de
 # courtage entre deux SGI.
 FRAIS_TENUE_COMPTE    = 10_000.0   # mediane de la grille ; a remplacer par le reel
+
+# Poids maximal d'une ligne, applique a l'achat. Un versement mensuel vise une
+# seule ligne a la fois : sans plafond, la concentration derive vite. Mesure sur
+# 2021-2026, la regle "renforcer ce qui a le plus baisse" finit sans plafond
+# avec 16 lignes et 31,9 % sur un seul titre. 8 % vaut deux fois le poids cible
+# d'un panier de 25 lignes : assez souple pour laisser respirer, assez ferme
+# pour qu'aucune ligne ne domine.
+PLAFOND_PAR_LIGNE     = 0.08
+
+# Fenetre du plus haut servant a la regle "creux".
+FENETRE_PLUS_HAUT     = 252
 
 # --- Parametres de construction --------------------------------------------
 LIQUIDITE_MIN_FCFA    = 2_000_000   # valeur echangee moyenne sur 60 seances
@@ -454,6 +466,152 @@ def ordres(
     return table, cout
 
 
+# --- Versement mensuel -----------------------------------------------------
+
+REGLES_VERSEMENT = {
+    "equilibre": "la ligne la plus eloignee de son poids cible",
+    "creux":     "la ligne la plus eloignee de son plus haut sur un an",
+}
+
+
+def ligne_a_renforcer(
+        positions: dict[str, int],
+        cloture: pd.DataFrame,
+        montant: float,
+        univers: list[str] | None = None,
+        plafond: float = PLAFOND_PAR_LIGNE,
+        regle: str = "equilibre",
+        courtage_sgi: float = COURTAGE_SGI_DEFAUT,
+        minimum: float = MINIMUM_PAR_ORDRE,
+        objectif: float | None = None,
+) -> dict:
+    """
+    Quelle ligne acheter avec le versement du mois, et combien.
+
+    Un versement ne paie qu'un seul ordre : a 50 EUR, soit 32 798 F, le minimum
+    de perception de 1 000 F represente deja 3 % ; en fractionner deux le
+    doublerait. On vise donc une seule ligne, celle que la regle designe parmi
+    celles qui resteront sous le plafond apres l'achat.
+
+    regle="equilibre" renforce la ligne la plus sous-ponderee. regle="creux"
+    renforce celle qui s'est le plus eloignee de son plus haut sur un an.
+    Cette seconde regle a donne +41,1 % de TRI contre +34,3 % sur 2021-2026,
+    mais sans plafond et en finissant a 31,9 % sur un seul titre : une fois la
+    diversification imposee a 6 %, elle fait moins bien qu'un choix au hasard
+    sur les douze dates de depart testees. Elle reste disponible, elle n'est
+    pas recommandee.
+
+    objectif est le patrimoine vise a terme. Le plafond s'y applique tant que le
+    portefeuille est plus petit, ce qui evite qu'un portefeuille en constitution
+    ne se limite aux titres a faible nominal.
+    """
+    if regle not in REGLES_VERSEMENT:
+        raise ValueError(f"regle inconnue : {regle!r}, attendu {set(REGLES_VERSEMENT)}")
+
+    dernier = cloture.ffill().iloc[-1]
+    suspendus = detecter_suspensions(cloture)
+    univers = univers if univers is not None else list(cloture.columns)
+
+    detenu = {t: positions.get(t, 0) * float(dernier[t])
+              for t in univers
+              if t in dernier.index and np.isfinite(dernier.get(t, np.nan))}
+    patrimoine = sum(detenu.values()) + montant
+
+    negociables, exclus = [], {}
+    for ticker in sorted(univers):
+        prix = float(dernier.get(ticker, float("nan")))
+        if not np.isfinite(prix) or prix <= 0:
+            exclus[ticker] = "pas de cours"
+        elif ticker in suspendus:
+            exclus[ticker] = f"cotation arretee depuis le {suspendus[ticker].date()}"
+        elif prix > montant - minimum:
+            exclus[ticker] = f"1 action = {prix:,.0f} F, hors budget du versement".replace(",", " ")
+        elif patrimoine > 0 and detenu.get(ticker, 0.0) / patrimoine >= plafond:
+            poids = detenu.get(ticker, 0.0) / patrimoine
+            exclus[ticker] = f"deja {poids:.1%} du portefeuille, plafond {plafond:.0%}"
+        else:
+            negociables.append(ticker)
+
+    if not negociables:
+        return {"ticker": None, "exclus": exclus, "patrimoine": patrimoine}
+
+    if regle == "creux":
+        plus_haut = cloture.rolling(FENETRE_PLUS_HAUT, min_periods=60).max().iloc[-1]
+        def rang(t):
+            h = plus_haut.get(t, float("nan"))
+            return float(dernier[t]) / h if np.isfinite(h) and h > 0 else float("inf")
+    else:
+        def rang(t):
+            return detenu.get(t, 0.0)
+
+    cible = min(negociables, key=rang)
+    prix = float(dernier[cible])
+
+    # Le plafond limite la quantite, mais n'interdit jamais la premiere action :
+    # un portefeuille en constitution ne peut pas etre diversifie, et refuser
+    # tout titre dont une action pese plus que le plafond reviendrait a n'acheter
+    # que les nominaux les plus bas. La reference est le patrimoine vise quand il
+    # est connu, sinon le patrimoine courant.
+    reference = max(patrimoine, objectif or 0.0)
+    quantite = int((montant - minimum) // prix)
+    if reference > 0:
+        place = int(max(0.0, (plafond * reference - detenu.get(cible, 0.0)) / prix))
+        quantite = min(quantite, max(1, place))
+    frais = frais_ordre(quantite * prix, courtage_sgi, minimum)
+    while quantite > 0 and quantite * prix + frais > montant:
+        quantite -= 1
+        frais = frais_ordre(quantite * prix, courtage_sgi, minimum)
+    if quantite < 1:
+        return {"ticker": None, "exclus": exclus, "patrimoine": patrimoine}
+
+    engage = quantite * prix
+    return {
+        "ticker":        cible,
+        "prix":          prix,
+        "quantite":      quantite,
+        "montant":       engage,
+        "frais":         frais,
+        "reste":         montant - engage - frais,
+        # Les poids sont rapportes a la reference du plafond, et non au seul
+        # patrimoine courant : sur un portefeuille en constitution le second
+        # donnerait des pourcentages spectaculaires et sans signification.
+        "poids_avant":   detenu.get(cible, 0.0) / reference if reference else 0.0,
+        "poids_apres":   (detenu.get(cible, 0.0) + engage) / reference if reference else 0.0,
+        "reference":     reference,
+        "en_constitution": objectif is not None and patrimoine < objectif,
+        "patrimoine":    patrimoine,
+        "exclus":        exclus,
+        "regle":         regle,
+    }
+
+
+def afficher_versement(montant, choix, plafond, minimum):
+    print(f"Versement de {fcfa(montant)} FCFA "
+          f"({montant / 655.957:,.0f} EUR a parite fixe)\n".replace(",", " "))
+    if choix["ticker"] is None:
+        print("Aucune ligne achetable avec ce versement.")
+        print("Toutes sont hors budget, suspendues, ou deja au plafond.")
+    else:
+        print(f"  ACHETER  {choix['ticker']}   {choix['quantite']} action(s) "
+              f"a {fcfa(choix['prix'])} F  =  {fcfa(choix['montant'])} F")
+        print(f"  frais    {fcfa(choix['frais'])} F "
+              f"({choix['frais'] / montant:.2%} du versement)")
+        print(f"  reste    {fcfa(choix['reste'])} F, a reporter sur le prochain versement")
+        base = ("du patrimoine vise" if choix["en_constitution"]
+                else "du portefeuille")
+        print(f"\n  poids de la ligne : {choix['poids_avant']:.1%} -> "
+              f"{choix['poids_apres']:.1%} {base}  (plafond {plafond:.0%})")
+        if choix["en_constitution"]:
+            print(f"  portefeuille en constitution : {fcfa(choix['patrimoine'])} F sur "
+                  f"{fcfa(choix['reference'])} F vises")
+        print(f"  regle appliquee   : {REGLES_VERSEMENT[choix['regle']]}")
+    au_plafond = {t: m for t, m in choix["exclus"].items() if "plafond" in m}
+    if au_plafond:
+        print(f"\n  lignes ecartees car au plafond ({len(au_plafond)}) :")
+        for ticker, motif in sorted(au_plafond.items()):
+            print(f"    {ticker:8s} {motif}")
+
+
 # --- Restitution -----------------------------------------------------------
 
 def fcfa(valeur) -> str:
@@ -551,8 +709,20 @@ def afficher(capital, panier, exclus, dividendes, table_ordres, cout, courtage_s
 def main():
     analyseur = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    analyseur.add_argument("--capital", type=float, required=True,
-                           help="capital a investir, en FCFA")
+    analyseur.add_argument("--capital", type=float, default=None,
+                           help="capital a investir en FCFA : construit le panier cible")
+    analyseur.add_argument("--versement", type=float, default=None,
+                           help="versement du mois en FCFA : indique la ligne a renforcer")
+    analyseur.add_argument("--versement-eur", type=float, default=None,
+                           help="idem, exprime en euros (parite fixe 1 EUR = 655,957 FCFA)")
+    analyseur.add_argument("--plafond", type=float, default=PLAFOND_PAR_LIGNE,
+                           help="poids maximal d'une ligne, en fraction "
+                                f"(defaut {PLAFOND_PAR_LIGNE:.2f})")
+    analyseur.add_argument("--objectif", type=float, default=None,
+                           help="patrimoine vise a terme en FCFA ; le plafond s'y applique "
+                                "tant que le portefeuille est plus petit")
+    analyseur.add_argument("--regle", choices=sorted(REGLES_VERSEMENT), default="equilibre",
+                           help="regle de choix de la ligne renforcee (defaut equilibre)")
     analyseur.add_argument("--lignes", type=int, default=NB_LIGNES_DEFAUT,
                            help=f"nombre de lignes visees (defaut {NB_LIGNES_DEFAUT})")
     analyseur.add_argument("--courtage", type=float, default=COURTAGE_SGI_DEFAUT,
@@ -572,6 +742,24 @@ def main():
 
     cloture, volume = charger_marche()
     dps, bnpa = charger_fondamentaux()
+
+    versement = arguments.versement
+    if arguments.versement_eur is not None:
+        versement = arguments.versement_eur * 655.957
+    if versement is not None:
+        positions = (charger_portefeuille(arguments.portefeuille)
+                     if arguments.portefeuille else {})
+        eligibles, _ = univers_investissable(cloture, volume, arguments.liquidite_min)
+        choix = ligne_a_renforcer(positions, cloture, versement, eligibles,
+                                  arguments.plafond, arguments.regle,
+                                  arguments.courtage, arguments.minimum_ordre,
+                                  arguments.objectif)
+        print(f"donnees arretees au {cloture.index[-1].date()}\n")
+        afficher_versement(versement, choix, arguments.plafond, arguments.minimum_ordre)
+        return
+
+    if arguments.capital is None:
+        analyseur.error("indiquer --capital, ou --versement / --versement-eur")
 
     panier, exclus = panier_cible(
         arguments.capital, cloture, volume, bnpa,

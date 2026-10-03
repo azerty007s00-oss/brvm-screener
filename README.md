@@ -65,13 +65,17 @@ montaient, chaque filtre retirait de la valeur.
 `strategie/panier.py` applique ce que les données valident :
 
 ```bash
-python strategie/panier.py --capital 2000000
-python strategie/panier.py --capital 2000000 --portefeuille portfolio.json
+python strategie/panier.py --capital 2000000                      # panier cible
+python strategie/panier.py --capital 2000000 --portefeuille portfolio.json   # ordres
+python strategie/panier.py --versement-eur 50 --portefeuille portfolio.json \
+                           --objectif 2000000                      # versement du mois
 ```
 
 - **25 lignes équipondérées**, classées sur rendement bénéficiaire + faible volatilité
 - **liquidité en filtre, jamais en critère de tri** — trier dessus coûte ~7 points de CAGR
 - **rebalancement annuel** — le même panier perd 5,1 points en passant au mensuel
+- **plafond de 8 % par ligne** sur les versements : sans lui, renforcer ce qui a
+  le plus baissé finit avec 16 lignes et 31,9 % sur un seul titre
 - détection automatique des titres dont la cotation s'est arrêtée (SEMC et SICC
   depuis le 16/09/2026), signalés comme non liquidables
 

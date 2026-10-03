@@ -406,3 +406,100 @@ def test_ordres_respecte_le_minimum_de_perception():
 def test_minimum_nul_revient_au_pourcentage_pur():
     from strategie.panier import frais_ordre
     assert frais_ordre(5_000, 0.010, 0) == pytest.approx(5_000 * frais_par_sens(0.010))
+
+
+# ─── Versement mensuel et plafond par ligne ───────────────────────────────────
+
+def _marche_simple():
+    cloture, _ = _marche({"PETIT": 1_000.0, "MOYEN": 5_000.0, "GROS": 20_000.0})
+    return cloture
+
+
+def test_versement_choisit_la_ligne_la_plus_sous_ponderee():
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    # on détient déjà PETIT et MOYEN, pas GROS
+    choix = ligne_a_renforcer({"PETIT": 50, "MOYEN": 10}, cloture, 50_000,
+                              plafond=1.0, objectif=1_000_000)
+    assert choix["ticker"] == "GROS"
+
+
+def test_versement_respecte_le_plafond_par_ligne():
+    """Le cœur de la demande : aucune ligne ne doit dépasser le plafond."""
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    # PETIT pèse déjà 10 % d'un patrimoine visé de 1 000 000
+    choix = ligne_a_renforcer({"PETIT": 100}, cloture, 50_000,
+                              plafond=0.08, objectif=1_000_000)
+    assert choix["ticker"] != "PETIT", "une ligne au-delà du plafond ne doit pas être renforcée"
+
+
+def test_versement_limite_la_quantite_au_plafond():
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    choix = ligne_a_renforcer({}, cloture, 50_000, plafond=0.05, objectif=200_000)
+    # plafond 5 % de 200 000 = 10 000 F, soit 10 actions de PETIT au maximum
+    assert choix["montant"] <= 0.05 * 200_000 + choix["prix"]
+
+
+def test_versement_n_interdit_jamais_la_premiere_action():
+    """
+    Un portefeuille en constitution ne peut pas être diversifié : refuser tout
+    titre dont une action dépasse le plafond ne laisserait que les petits
+    nominaux.
+    """
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    choix = ligne_a_renforcer({}, cloture, 50_000, plafond=0.01)
+    assert choix["ticker"] is not None
+    assert choix["quantite"] >= 1
+
+
+def test_versement_ecarte_un_titre_hors_budget():
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    choix = ligne_a_renforcer({}, cloture, 6_000, plafond=1.0, objectif=1_000_000)
+    assert "GROS" in choix["exclus"]
+    assert "hors budget" in choix["exclus"]["GROS"]
+
+
+def test_versement_ecarte_un_titre_suspendu():
+    from strategie.panier import ligne_a_renforcer
+    cloture, _ = _marche({"BON": 1_000.0, "FIGE": 1_000.0},
+                         derniere_seance={"FIGE": 250})
+    choix = ligne_a_renforcer({}, cloture, 50_000, plafond=1.0, objectif=1_000_000)
+    assert choix["ticker"] == "BON"
+    assert "cotation arretee" in choix["exclus"]["FIGE"]
+
+
+def test_regle_creux_vise_le_titre_le_plus_loin_de_son_plus_haut():
+    from strategie.panier import ligne_a_renforcer
+    idx = _seances(300)
+    # STABLE reste à son plus haut, TOMBE a perdu la moitié
+    stable = pd.Series(1_000.0, index=idx)
+    tombe = pd.Series(1_000.0, index=idx)
+    tombe.iloc[-30:] = 500.0
+    cloture = pd.DataFrame({"STABLE": stable, "TOMBE": tombe})
+    choix = ligne_a_renforcer({}, cloture, 50_000, regle="creux",
+                              plafond=1.0, objectif=1_000_000)
+    assert choix["ticker"] == "TOMBE"
+
+
+def test_regle_inconnue_refusee():
+    from strategie.panier import ligne_a_renforcer
+    with pytest.raises(ValueError, match="regle inconnue"):
+        ligne_a_renforcer({}, _marche_simple(), 50_000, regle="martingale")
+
+
+def test_versement_trop_petit_ne_rend_aucune_ligne():
+    from strategie.panier import ligne_a_renforcer
+    choix = ligne_a_renforcer({}, _marche_simple(), 1_500, plafond=1.0)
+    assert choix["ticker"] is None
+
+
+def test_objectif_rend_le_plafond_moins_contraignant_au_depart():
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    sans = ligne_a_renforcer({}, cloture, 50_000, plafond=0.08)
+    avec = ligne_a_renforcer({}, cloture, 50_000, plafond=0.08, objectif=1_000_000)
+    assert avec["quantite"] >= sans["quantite"]
