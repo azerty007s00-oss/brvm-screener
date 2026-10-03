@@ -420,6 +420,54 @@ qu'entrer d'un bloc, garder le tilt value + faible volatilité (qui tient mieux 
 stagne : +10,0 % contre +6,1 % sur 2022-2024), et surveiller le rendement du dividende du
 portefeuille comme jauge — à 4 % on paie cher, à 8 % on est payé pour attendre.
 
+### Le précédent : la BRVM a déjà fait exactement ça
+
+Le parallèle le plus instructif n'est pas à chercher à l'étranger. Il est dans l'histoire récente du
+marché lui-même, **juste avant le début de mes données** :
+
+| Date | BRVM Composite | Variation |
+|---|---|---|
+| 2012 → 2015 | — | **+119 %**, meilleure bourse africaine ; capitalisation ×2,4 |
+| Mars 2016 *(sommet historique)* | 320,30 | — |
+| Fin 2016 | 292,17 | −8,8 % |
+| Fin 2017 | 243,06 | −16,8 % |
+| 2018 | — | **−29,2 %**, pire année de son histoire |
+| 1ᵉʳ janvier 2021 *(creux)* | 145,37 | **−54,6 % depuis le sommet** |
+| Fin 2025 | 345,75 | +137,8 % |
+| 30 septembre 2026 | 548,38 | +58,6 % sur 9 mois |
+
+Un cycle complet : **+119 % de hausse, puis −54,6 % sur quatre ans et dix mois.** La baisse n'a pas
+eu besoin d'un krach mondial pour se produire : elle s'explique par des causes locales — cacao en
+baisse de 46 % entre janvier 2016 et décembre 2017, instabilité politique au premier trimestre 2017.
+
+**Mes données commencent le 7 avril 2021, soit environ trois mois après le creux exact.** Tout ce
+rapport mesure donc une seule jambe de reprise, depuis le point bas. C'est la limite la plus
+importante de l'étude, et elle est structurelle : *un échantillon qui commence au creux d'un cycle
+ne peut pas contenir le contre-exemple*.
+
+Deux conséquences qu'il faut regarder en face.
+
+**La conclusion « ne rien filtrer » a un domaine de validité, pas une portée générale.** Elle est
+établie sur un marché qui remonte. Elle n'a jamais été testée sur un marché qui baisse pendant cinq
+ans, parce que les données ne le permettent pas.
+
+**Mon rejet du filtre de tendance est aussi dépendant de l'échantillon que mon soutien au passif.**
+J'ai mesuré que le filtre MA200 coûtait de la performance sur 2021-2026 ; c'est vrai, et c'est sans
+intérêt pour la question de savoir s'il aurait protégé pendant la baisse de 2016-2020. **Je ne peux
+pas l'exclure.** Un filtre de tendance est inutile dans une reprise et potentiellement utile dans un
+déclin prolongé — mes données ne contiennent que le premier cas.
+
+Pour mémoire, le reste des marchés frontières suit la même mécanique : l'indice MSCI Frontier
+Markets a perdu 53 % sur la seule année 2008 et environ deux tiers de sa valeur entre avril 2008 et
+février 2009, avec une reprise nettement plus lente que celle des marchés développés.
+
+Aujourd'hui, le marché est **71 % au-dessus de son sommet de 2016**, après une hausse de **+277 %**
+depuis le creux — plus forte que les +119 % du cycle précédent — et à un multiple deux fois
+supérieur à sa moyenne. Cela ne dit pas qu'une baisse est imminente : un marché cher peut le rester
+des années, et la croissance des bénéfices est réelle. Cela dit que le scénario baissier n'est pas
+une hypothèse d'école sur ce marché, qu'il s'y est produit une fois en dix ans, et qu'aucun chiffre
+de ce rapport ne l'a jamais rencontré.
+
 ### Ce que je ne peux pas te dire
 
 **Je n'ai pas testé si la valorisation prédit les rendements sur la BRVM, et je ne peux pas le
@@ -439,9 +487,11 @@ sa moyenne historique.
 
 Ce rapport mesure un passé exceptionnel. Il ne prédit rien.
 
-- **Une seule régime, 5,5 ans.** Le +42 % est tiré par 2021 et 2025-2026. 2022 et 2023 ont été
-  plats (−0,4 % et −0,2 % en médiane). **Un marché où 95 % des titres montent n'est pas l'état
-  normal d'un marché.** Le BRVM Composite a presque doublé en 16 mois (295,6 → 548,4) : après une
+- **Un seul régime, 5,5 ans, et c'est une jambe de reprise.** Les données commencent le
+  7 avril 2021, trois mois après le creux du cycle précédent. Le marché avait auparavant perdu
+  54,6 % en quatre ans et dix mois, dont −29,2 % sur la seule année 2018. **Un échantillon qui
+  commence au creux d'un cycle ne peut pas contenir le contre-exemple** : voir section 7. 2022 et
+  2023 ont été plats (−0,4 % et −0,2 % en médiane), c'est le seul test de résistance disponible. Le BRVM Composite a presque doublé en 16 mois (295,6 → 548,4) : après une
   telle hausse, le risque de retour à la moyenne est élevé, et la conclusion « ne filtre rien »
   est précisément celle qui souffrira le plus dans un marché baissier.
 - **Biais de survie confirmé et non corrigé.** Movis CI (SVOC) a été radié le 26/06/2025 après
@@ -495,3 +545,8 @@ elle coûte environ 3 points de CAGR par an en prime tant que la hausse dure.
 - [The low-volatility effect in African frontier equity markets](https://www.tandfonline.com/doi/full/10.1080/10293523.2024.2361986)
 - [Extending value and momentum to frontier market stocks](https://www.cxoadvisory.com/8622/value-premium/extending-value-and-momentum-to-frontier-market-stocks/)
 - [Is there an illiquidity premium in frontier markets?](https://www.sciencedirect.com/science/article/pii/S1566014119302481)
+- [BRVM — 2025 : la consolidation quinquennale, 99,15 % de progression en 5 ans](https://www.brvm.org/fr/mediacentre/actualites/2025-la-consolidation-quinquennale-9915-de-progression-en-5-ans)
+- [Raisons de la baisse spectaculaire de la BRVM en 2018](https://www.sikafinance.com/marches/raisons-de-la-baisse-spectaculaire-de-la-brvm-en-2018_15848)
+- [Krach boursier ou simple correction de la BRVM en 2017 ?](https://www.financialafrik.com/2018/01/23/krach-boursier-ou-simple-correction-de-la-brvm-en-2017/)
+- [Indice BRVM Composite : vers la renaissance du marché actions ? (avril 2021)](https://www.financialafrik.com/2021/04/10/indice-brvm-composite-vers-la-renaissance-du-marche-actions-de-la-bourse-regionale/)
+- [Frontier Markets: A Short History](https://foreignpolicy.com/2013/03/04/frontier-markets-a-short-history/)
