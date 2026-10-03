@@ -1,0 +1,505 @@
+"""
+tests/test_panier.py - Tests unitaires pour strategie/panier.py.
+
+Couvre le barème de frais, la détection de suspension, le filtre de liquidité,
+la recherche du budget optimal, la construction du panier et les ordres de
+rebalancement. Aucun appel réseau : données OHLCV synthétiques uniquement.
+"""
+
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+import json
+from datetime import date
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from strategie.panier import (
+    COURTAGE_SGI_DEFAUT,
+    SEUIL_RETARD_SUSPENSION,
+    _budget_optimal,
+    charger_portefeuille,
+    detecter_suspensions,
+    dividendes_attendus,
+    exercice_publie,
+    frais_par_sens,
+    ordres,
+    panier_cible,
+    scores,
+    univers_investissable,
+)
+
+
+# ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def _seances(n: int = 300) -> pd.DatetimeIndex:
+    return pd.date_range("2025-01-01", periods=n, freq="B")
+
+
+def _marche(prix: dict[str, float], n: int = 300, volume: float = 1_000.0,
+            derniere_seance: dict[str, int] | None = None):
+    """
+    Marché synthétique à prix constants.
+
+    derniere_seance permet d'arrêter la cotation d'un titre avant les autres,
+    pour simuler une suspension.
+    """
+    idx = _seances(n)
+    cloture, volumes = {}, {}
+    for ticker, p in prix.items():
+        serie = pd.Series(float(p), index=idx)
+        vol = pd.Series(float(volume), index=idx)
+        fin = (derniere_seance or {}).get(ticker)
+        if fin is not None:
+            serie.iloc[fin:] = np.nan
+            vol.iloc[fin:] = 0.0
+        cloture[ticker], volumes[ticker] = serie, vol
+    return pd.DataFrame(cloture), pd.DataFrame(volumes)
+
+
+# ─── Barème de frais ──────────────────────────────────────────────────────────
+
+def test_frais_par_sens_au_plafond_de_courtage():
+    """
+    1,4 % par sens au plafond de courtage de 1 %, taxes comprises : c'est le
+    chiffre que donne la grille des SGI, pas 1,65 % comme supposé d'abord.
+    """
+    assert frais_par_sens(0.010) == pytest.approx(0.014)
+
+
+def test_frais_par_sens_decroit_avec_le_courtage():
+    assert frais_par_sens(0.005) < frais_par_sens(COURTAGE_SGI_DEFAUT)
+
+
+def test_aller_retour_proche_de_2_8_pct_au_plafond():
+    """Le chiffre qui invalide toute stratégie à rotation rapide."""
+    assert 2 * frais_par_sens(0.010) == pytest.approx(0.028, abs=0.0005)
+
+
+def test_courtage_negocie_a_0_65_pct():
+    """Atlantique Finance, le meilleur taux de la grille."""
+    assert frais_par_sens(0.0065) == pytest.approx(0.0105)
+
+
+# ─── Exercice publié (pas d'anticipation d'information) ───────────────────────
+
+@pytest.mark.parametrize("jour,attendu", [
+    (date(2026, 1, 15), 2024),   # avant juillet : comptes 2025 pas encore publiés
+    (date(2026, 6, 30), 2024),
+    (date(2026, 7, 1),  2025),   # à partir de juillet : comptes 2025 disponibles
+    (date(2026, 12, 31), 2025),
+])
+def test_exercice_publie(jour, attendu):
+    assert exercice_publie(jour) == attendu
+
+
+# ─── Détection de suspension ──────────────────────────────────────────────────
+
+def test_detecte_un_titre_dont_la_cotation_s_arrete():
+    cloture, _ = _marche({"AAA": 1000, "BBB": 2000},
+                         derniere_seance={"BBB": 250})
+    suspendus = detecter_suspensions(cloture)
+    assert "BBB" in suspendus
+    assert "AAA" not in suspendus
+
+
+def test_ne_signale_pas_un_retard_sous_le_seuil():
+    n = 300
+    cloture, _ = _marche({"AAA": 1000, "BBB": 2000}, n=n,
+                         derniere_seance={"BBB": n - SEUIL_RETARD_SUSPENSION + 1})
+    assert detecter_suspensions(cloture) == {}
+
+
+def test_detecter_suspensions_sur_marche_vide():
+    assert detecter_suspensions(pd.DataFrame()) == {}
+
+
+# ─── Univers investissable ────────────────────────────────────────────────────
+
+def test_exclut_les_suspendus_et_les_illiquides():
+    # liquidité = prix x volume : AAA 1 M, BBB 10 M, CCC 10 M mais suspendu
+    cloture, volume = _marche({"AAA": 1_000, "BBB": 10_000, "CCC": 10_000},
+                              volume=1_000, derniere_seance={"CCC": 250})
+    eligibles, exclus = univers_investissable(cloture, volume,
+                                              liquidite_min=2_000_000)
+    assert eligibles == ["BBB"]
+    assert "liquidite" in exclus["AAA"]
+    assert "cotation arretee" in exclus["CCC"]
+
+
+def test_la_liquidite_ne_sert_pas_au_classement():
+    """
+    Résultat mesuré : trier sur la liquidité coûte ~7 points de CAGR. Elle doit
+    rester un filtre binaire, donc l'ordre renvoyé est alphabétique et non
+    décroissant en liquidité.
+    """
+    cloture, volume = _marche({"ZZZ": 10_000, "AAA": 90_000})
+    eligibles, _ = univers_investissable(cloture, volume, liquidite_min=1_000)
+    assert eligibles == sorted(eligibles)
+
+
+# ─── Budget optimal ───────────────────────────────────────────────────────────
+
+def test_budget_optimal_ne_depasse_pas_le_capital():
+    prix = [8_290.0, 38_990.0, 67.0, 1_545.0]
+    budget = _budget_optimal(1_000_000, prix)
+    assert sum(int(budget // p) * p for p in prix) <= 1_000_000
+
+
+def test_budget_optimal_reduit_le_cash_residuel():
+    """Le gain réel : l'arrondi naïf laissait jusqu'à 14 % non investi."""
+    prix = [8_290.0, 38_990.0, 11_500.0, 1_545.0, 3_395.0]
+    capital = 1_000_000.0
+    naif = capital / len(prix)
+    investi_naif = sum(int(naif // p) * p for p in prix)
+    budget = _budget_optimal(capital, prix)
+    investi_opt = sum(int(budget // p) * p for p in prix)
+    assert investi_opt > investi_naif
+    assert investi_opt / capital > 0.97
+
+
+def test_budget_optimal_sur_liste_vide():
+    assert _budget_optimal(1_000_000, []) == 0.0
+
+
+# ─── Scores ───────────────────────────────────────────────────────────────────
+
+def test_score_remplit_le_bnpa_manquant_par_la_mediane():
+    """
+    Pénaliser l'absence de BNPA dégrade le plancher de 39,2 % à 35,4 % : un
+    titre sans comptes publiés doit rester noté, pas écarté.
+    """
+    cloture, _ = _marche({"AAA": 1_000, "BBB": 1_000, "CCC": 1_000})
+    bnpa = {("AAA", 2024): 200.0, ("BBB", 2024): 50.0}   # CCC absent
+    table = scores(cloture, bnpa, ["AAA", "BBB", "CCC"], a_la_date=date(2026, 1, 15))
+    assert table["score"].notna().all()
+    assert pd.isna(table.at["CCC", "rdt_beneficiaire"])
+    # AAA a le meilleur rendement bénéficiaire, donc le meilleur score
+    assert table.index[0] == "AAA"
+
+
+def test_score_classe_par_rendement_beneficiaire_decroissant():
+    cloture, _ = _marche({"CHER": 10_000, "BONMARCHE": 1_000})
+    bnpa = {("CHER", 2024): 100.0, ("BONMARCHE", 2024): 100.0}
+    table = scores(cloture, bnpa, ["CHER", "BONMARCHE"], a_la_date=date(2026, 1, 15))
+    assert table.index[0] == "BONMARCHE"
+
+
+# ─── Panier cible ─────────────────────────────────────────────────────────────
+
+def _univers_type():
+    prix = {f"T{i:02d}": p for i, p in enumerate(
+        [8_290, 38_990, 11_500, 1_545, 3_395, 2_945, 16_835, 9_160,
+         7_995, 21_500, 4_100, 1_975, 15_000, 8_100, 9_750])}
+    cloture, volume = _marche(prix, volume=500)
+    bnpa = {(t, 2024): 500.0 + 10 * i for i, t in enumerate(prix)}
+    return cloture, volume, bnpa
+
+
+def test_panier_investit_la_quasi_totalite_du_capital():
+    cloture, volume, bnpa = _univers_type()
+    panier, _ = panier_cible(2_000_000, cloture, volume, bnpa,
+                             nb_lignes=10, liquidite_min=1_000)
+    assert len(panier) == 10
+    assert panier["montant"].sum() <= 2_000_000
+    assert panier["montant"].sum() / 2_000_000 > 0.97
+
+
+def test_panier_poids_approximativement_equiponderes():
+    cloture, volume, bnpa = _univers_type()
+    panier, _ = panier_cible(5_000_000, cloture, volume, bnpa,
+                             nb_lignes=10, liquidite_min=1_000)
+    cible = 1 / len(panier)
+    assert panier["poids"].max() < cible * 1.6
+    assert panier["poids"].min() > cible * 0.4
+
+
+def test_sans_tilt_retient_tout_l_univers_eligible():
+    cloture, volume, bnpa = _univers_type()
+    panier, _ = panier_cible(5_000_000, cloture, volume, bnpa,
+                             liquidite_min=1_000, avec_tilt=False)
+    assert len(panier) == len(cloture.columns)
+
+
+def test_panier_ecarte_un_titre_hors_budget_par_ligne():
+    cloture, volume = _marche({"ABORDABLE": 1_000, "ENORME": 5_000_000},
+                              volume=500)
+    bnpa = {("ABORDABLE", 2024): 100.0, ("ENORME", 2024): 100.0}
+    panier, exclus = panier_cible(1_000_000, cloture, volume, bnpa,
+                                  nb_lignes=2, liquidite_min=1)
+    assert "ENORME" in exclus
+    assert "budget par ligne" in exclus["ENORME"]
+    assert list(panier.index) == ["ABORDABLE"]
+
+
+def test_panier_exclut_un_titre_suspendu():
+    prix = {f"T{i:02d}": 1_000 + 100 * i for i in range(6)}
+    cloture, volume = _marche(prix, volume=500, derniere_seance={"T03": 250})
+    bnpa = {(t, 2024): 100.0 for t in prix}
+    panier, exclus = panier_cible(1_000_000, cloture, volume, bnpa,
+                                  nb_lignes=6, liquidite_min=1_000)
+    assert "T03" not in panier.index
+    assert "cotation arretee" in exclus["T03"]
+
+
+def test_panier_vide_si_capital_insuffisant():
+    cloture, volume = _marche({"ENORME": 10_000_000}, volume=500)
+    panier, _ = panier_cible(1_000, cloture, volume, {},
+                             nb_lignes=1, liquidite_min=1)
+    assert panier.empty
+
+
+# ─── Dividendes attendus ──────────────────────────────────────────────────────
+
+def test_dividendes_attendus_utilise_le_dernier_exercice_connu():
+    panier = pd.DataFrame(
+        {"prix": [1_000.0], "quantite": [10]}, index=["AAA"])
+    panier.index.name = "ticker"
+    dps = {("AAA", 2023): 50.0}   # 2025 et 2024 absents, recul jusqu'à 2023
+    table = dividendes_attendus(panier, dps, a_la_date=date(2026, 8, 1))
+    assert table.at["AAA", "exercice"] == 2023
+    assert table.at["AAA", "encaisse"] == pytest.approx(500.0)
+    assert table.at["AAA", "rendement"] == pytest.approx(0.05)
+
+
+def test_dividendes_attendus_tolere_un_titre_sans_historique():
+    panier = pd.DataFrame({"prix": [1_000.0], "quantite": [10]}, index=["AAA"])
+    panier.index.name = "ticker"
+    table = dividendes_attendus(panier, {}, a_la_date=date(2026, 8, 1))
+    assert pd.isna(table.at["AAA", "dps"])
+    assert table.at["AAA", "encaisse"] is None
+
+
+# ─── Ordres de rebalancement ──────────────────────────────────────────────────
+
+def test_ordres_vend_ce_qui_sort_et_achete_ce_qui_entre():
+    cloture, _ = _marche({"GARDE": 1_000, "SORT": 2_000, "ENTRE": 3_000})
+    panier = pd.DataFrame(
+        {"prix": [1_000.0, 3_000.0], "quantite": [10, 5]},
+        index=["GARDE", "ENTRE"])
+    panier.index.name = "ticker"
+    table, cout = ordres({"GARDE": 10, "SORT": 4}, panier, cloture)
+    sens = dict(zip(table["ticker"], table["sens"]))
+    assert sens == {"SORT": "VENTE", "ENTRE": "ACHAT"}   # GARDE inchangé, absent
+    assert cout > 0
+
+
+def test_ordres_signale_une_ligne_suspendue_non_liquidable():
+    cloture, _ = _marche({"BON": 1_000, "FIGE": 2_000},
+                         derniere_seance={"FIGE": 250})
+    panier = pd.DataFrame({"prix": [1_000.0], "quantite": [10]}, index=["BON"])
+    panier.index.name = "ticker"
+    table, _ = ordres({"FIGE": 5}, panier, cloture)
+    ligne = table[table["ticker"] == "FIGE"].iloc[0]
+    assert ligne["sens"] == "VENTE"
+    assert not ligne["negociable"]   # pandas stocke un np.bool_
+
+
+def test_cout_des_ordres_suit_le_courtage():
+    cloture, _ = _marche({"AAA": 1_000})
+    panier = pd.DataFrame({"prix": [1_000.0], "quantite": [100]}, index=["AAA"])
+    panier.index.name = "ticker"
+    _, cher = ordres({}, panier, cloture, courtage_sgi=0.010)
+    _, bon = ordres({}, panier, cloture, courtage_sgi=0.005)
+    assert bon < cher
+    assert cher == pytest.approx(100_000 * frais_par_sens(0.010))
+
+
+def test_ordres_vide_quand_le_portefeuille_est_deja_la_cible():
+    cloture, _ = _marche({"AAA": 1_000})
+    panier = pd.DataFrame({"prix": [1_000.0], "quantite": [10]}, index=["AAA"])
+    panier.index.name = "ticker"
+    table, cout = ordres({"AAA": 10}, panier, cloture)
+    assert table.empty
+    assert cout == 0.0
+
+
+# ─── Lecture du portefeuille ──────────────────────────────────────────────────
+
+def test_charger_portefeuille_agrege_les_lignes_du_meme_ticker(tmp_path):
+    chemin = tmp_path / "portfolio.json"
+    chemin.write_text(json.dumps([
+        {"ticker": "AAA", "quantity": 7},
+        {"ticker": "AAA", "quantity": 3},
+        {"ticker": "BBB", "quantity": 5},
+    ]), encoding="utf-8")
+    assert charger_portefeuille(str(chemin)) == {"AAA": 10, "BBB": 5}
+
+
+# ─── Calendrier de mise en paiement ───────────────────────────────────────────
+
+def test_mois_de_paiement_lit_le_calendrier_reel():
+    """Lit data/dividendes_paiements.csv : juin et juillet dominent."""
+    from strategie.panier import mois_de_paiement
+    calendrier = mois_de_paiement()
+    assert calendrier, "le calendrier ne doit pas être vide"
+    assert all(1 <= m <= 12 for mois in calendrier.values() for m in mois)
+    # SNTS paie historiquement en avril
+    assert 4 in calendrier.get("SNTS", [])
+
+
+def test_dividendes_attendus_expose_les_mois_de_paiement():
+    panier = pd.DataFrame({"prix": [45_000.0], "quantite": [1]}, index=["SNTS"])
+    panier.index.name = "ticker"
+    table = dividendes_attendus(panier, {("SNTS", 2024): 1_500.0},
+                                a_la_date=date(2026, 8, 1))
+    assert 4 in table.at["SNTS", "mois_paiement"]
+
+
+def test_calendrier_ne_retient_que_les_paiements():
+    """Les lignes 'annonce' et 'rectificatif' ne sont pas des mises en paiement."""
+    import pandas as _pd
+    from strategie.panier import RACINE, mois_de_paiement
+    brut = _pd.read_csv(os.path.join(RACINE, "data", "dividendes_paiements.csv"),
+                        parse_dates=["date"])
+    annonces = brut[brut["type"] == "annonce"]
+    assert not annonces.empty, "le jeu de test doit contenir au moins une annonce"
+    calendrier = mois_de_paiement()
+    for _, ligne in annonces.iterrows():
+        mois = calendrier.get(str(ligne["ticker"]), [])
+        paiements = brut[(brut["ticker"] == ligne["ticker"])
+                         & (brut["type"] == "paiement")]
+        assert set(mois) == set(paiements["date"].dt.month)
+
+
+# ─── Minimum de perception par ordre ──────────────────────────────────────────
+
+def test_frais_ordre_applique_le_pourcentage_sur_un_gros_ordre():
+    from strategie.panier import frais_ordre
+    # 200 000 F x 1,65 % = 3 300 F, bien au-dessus du minimum
+    assert frais_ordre(200_000, 0.010, 1_000) == pytest.approx(200_000 * frais_par_sens(0.010))
+
+
+def test_frais_ordre_applique_le_minimum_sur_un_petit_ordre():
+    from strategie.panier import frais_ordre
+    # 20 000 F x 1,65 % = 330 F, en dessous du minimum
+    assert frais_ordre(20_000, 0.010, 1_000) == 1_000
+
+
+def test_seuil_minimum_mordant():
+    """En dessous de ce montant par ligne, diversifier coûte plus cher."""
+    from strategie.panier import seuil_minimum_mordant, frais_ordre
+    seuil = seuil_minimum_mordant(0.010, 1_000)
+    assert seuil == pytest.approx(1_000 / frais_par_sens(0.010))
+    # juste au-dessus : le pourcentage ; juste en dessous : le minimum
+    assert frais_ordre(seuil * 1.01, 0.010, 1_000) > 1_000
+    assert frais_ordre(seuil * 0.99, 0.010, 1_000) == 1_000
+
+
+def test_seuil_monte_avec_le_minimum():
+    from strategie.panier import seuil_minimum_mordant
+    assert seuil_minimum_mordant(0.010, 5_000) > seuil_minimum_mordant(0.010, 1_000)
+
+
+def test_ordres_respecte_le_minimum_de_perception():
+    cloture, _ = _marche({"AAA": 100.0})
+    panier = pd.DataFrame({"prix": [100.0], "quantite": [50]}, index=["AAA"])
+    panier.index.name = "ticker"
+    # 5 000 F d'ordre : 1,65 % = 82 F, le minimum doit l'emporter
+    _, cout = ordres({}, panier, cloture, courtage_sgi=0.010, minimum_ordre=1_000)
+    assert cout == pytest.approx(1_000)
+
+
+def test_minimum_nul_revient_au_pourcentage_pur():
+    from strategie.panier import frais_ordre
+    assert frais_ordre(5_000, 0.010, 0) == pytest.approx(5_000 * frais_par_sens(0.010))
+
+
+# ─── Versement mensuel et plafond par ligne ───────────────────────────────────
+
+def _marche_simple():
+    cloture, _ = _marche({"PETIT": 1_000.0, "MOYEN": 5_000.0, "GROS": 20_000.0})
+    return cloture
+
+
+def test_versement_choisit_la_ligne_la_plus_sous_ponderee():
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    # on détient déjà PETIT et MOYEN, pas GROS
+    choix = ligne_a_renforcer({"PETIT": 50, "MOYEN": 10}, cloture, 50_000,
+                              plafond=1.0, objectif=1_000_000)
+    assert choix["ticker"] == "GROS"
+
+
+def test_versement_respecte_le_plafond_par_ligne():
+    """Le cœur de la demande : aucune ligne ne doit dépasser le plafond."""
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    # PETIT pèse déjà 10 % d'un patrimoine visé de 1 000 000
+    choix = ligne_a_renforcer({"PETIT": 100}, cloture, 50_000,
+                              plafond=0.08, objectif=1_000_000)
+    assert choix["ticker"] != "PETIT", "une ligne au-delà du plafond ne doit pas être renforcée"
+
+
+def test_versement_limite_la_quantite_au_plafond():
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    choix = ligne_a_renforcer({}, cloture, 50_000, plafond=0.05, objectif=200_000)
+    # plafond 5 % de 200 000 = 10 000 F, soit 10 actions de PETIT au maximum
+    assert choix["montant"] <= 0.05 * 200_000 + choix["prix"]
+
+
+def test_versement_n_interdit_jamais_la_premiere_action():
+    """
+    Un portefeuille en constitution ne peut pas être diversifié : refuser tout
+    titre dont une action dépasse le plafond ne laisserait que les petits
+    nominaux.
+    """
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    choix = ligne_a_renforcer({}, cloture, 50_000, plafond=0.01)
+    assert choix["ticker"] is not None
+    assert choix["quantite"] >= 1
+
+
+def test_versement_ecarte_un_titre_hors_budget():
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    choix = ligne_a_renforcer({}, cloture, 6_000, plafond=1.0, objectif=1_000_000)
+    assert "GROS" in choix["exclus"]
+    assert "hors budget" in choix["exclus"]["GROS"]
+
+
+def test_versement_ecarte_un_titre_suspendu():
+    from strategie.panier import ligne_a_renforcer
+    cloture, _ = _marche({"BON": 1_000.0, "FIGE": 1_000.0},
+                         derniere_seance={"FIGE": 250})
+    choix = ligne_a_renforcer({}, cloture, 50_000, plafond=1.0, objectif=1_000_000)
+    assert choix["ticker"] == "BON"
+    assert "cotation arretee" in choix["exclus"]["FIGE"]
+
+
+def test_regle_creux_vise_le_titre_le_plus_loin_de_son_plus_haut():
+    from strategie.panier import ligne_a_renforcer
+    idx = _seances(300)
+    # STABLE reste à son plus haut, TOMBE a perdu la moitié
+    stable = pd.Series(1_000.0, index=idx)
+    tombe = pd.Series(1_000.0, index=idx)
+    tombe.iloc[-30:] = 500.0
+    cloture = pd.DataFrame({"STABLE": stable, "TOMBE": tombe})
+    choix = ligne_a_renforcer({}, cloture, 50_000, regle="creux",
+                              plafond=1.0, objectif=1_000_000)
+    assert choix["ticker"] == "TOMBE"
+
+
+def test_regle_inconnue_refusee():
+    from strategie.panier import ligne_a_renforcer
+    with pytest.raises(ValueError, match="regle inconnue"):
+        ligne_a_renforcer({}, _marche_simple(), 50_000, regle="martingale")
+
+
+def test_versement_trop_petit_ne_rend_aucune_ligne():
+    from strategie.panier import ligne_a_renforcer
+    choix = ligne_a_renforcer({}, _marche_simple(), 1_500, plafond=1.0)
+    assert choix["ticker"] is None
+
+
+def test_objectif_rend_le_plafond_moins_contraignant_au_depart():
+    from strategie.panier import ligne_a_renforcer
+    cloture = _marche_simple()
+    sans = ligne_a_renforcer({}, cloture, 50_000, plafond=0.08)
+    avec = ligne_a_renforcer({}, cloture, 50_000, plafond=0.08, objectif=1_000_000)
+    assert avec["quantite"] >= sans["quantite"]
