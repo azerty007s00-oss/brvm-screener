@@ -509,16 +509,55 @@ comparaison soit à méthode constante) :
 
 **Les douze variantes testées perdent**, et plus la réserve est grosse, plus elle coûte. La raison
 est mécanique : les replis sont courts et peu profonds, le marché monte de 40 % par an entre-temps,
-donc le temps passé en cash coûte plus que le rabais obtenu.
+donc le temps passé en cash coûte plus que le rabais obtenu. Attention à la portée de ce résultat :
+douze variantes d'une même idée sur un seul échantillon, ce n'est pas « la réserve perd à tous les
+coups ».
 
-**Ce qui aide vraiment un buy-and-hold n'est pas une prévision : c'est le versement régulier
-lui-même.** Un DCA achète automatiquement plus de titres quand les cours baissent, sans rien avoir
-à anticiper. Le mécanisme est déjà dans la méthode.
+**La réserve ne sauve pas non plus dans un marché baissier.** J'avais d'abord écrit l'inverse —
+que pendant la baisse de 2016-2021 garder du cash aurait massivement payé. Je l'avais affirmé sans
+le tester. Testé sur la trajectoire reconstituée 2016-2021, l'écart est nul : −19,9 % tout investi,
+−19,9 % avec 20 ou 30 % en réserve, −19,7 % avec un seuil de déclenchement à −15 %. La raison est
+mécanique et vaut pour tout déclencheur de ce type : **dans une baisse durable, le seuil est franchi
+tout au début et la réserve est déployée immédiatement — avant le reste de la chute.** Une réserve
+n'aide que si on la déploie au creux, ce qui suppose de reconnaître le creux. Garder du cash sans
+jamais le déployer est une autre stratégie, qui s'appelle sortir du marché, et qui n'est pas
+testée ici.
 
-Une réserve d'honnêteté, la même que partout ailleurs dans ce rapport : ce résultat est mesuré sur
-un marché qui monte. Pendant la baisse de 2016-2021, garder du cash aurait massivement payé. Ce que
-je démontre, c'est qu'attendre les creux ne sert à rien *dans une phase de hausse* — pas que la
-réserve soit inutile en général.
+### En revanche, acheter la baisse *au niveau du titre* fonctionne
+
+L'erreur de mon test précédent était de supposer qu'acheter la baisse exige d'immobiliser du cash.
+Ce n'est pas le cas : on peut investir chaque versement intégralement et simplement **l'orienter
+vers ce qui a le plus reculé**. Même DCA de 50 €/mois, zéro cash immobilisé, seule change la ligne
+visée :
+
+| Règle de choix de la ligne achetée | Valeur finale | TRI |
+|---|---|---|
+| **Le titre le plus loin de son plus haut 1 an** | **9 963 €** | **+41,1 %** |
+| Le titre le plus haussier sur 3 mois | 9 260 € | +38,3 % |
+| Une ligne au hasard *(témoin)* | 9 017 € | +37,2 % |
+| La ligne la plus sous-pondérée | 8 362 € | +34,3 % |
+| Le titre le plus baissé sur 3 mois | 8 177 € | +33,5 % |
+
+Deux contrôles, parce que le premier résultat ne suffit jamais :
+
+- **Contre 200 tirages aléatoires** de la ligne achetée : le hasard donne une médiane de +34,7 %
+  (p5 +30,8 %, p95 +38,9 %). La règle du plus haut à un an bat **les 200 tirages**. Les autres
+  règles sont dans le bruit — y compris la règle « sous-pondérée », à peine au 42ᵉ percentile, donc
+  ni bonne ni mauvaise.
+- **Contre 12 dates de départ différentes** : l'avantage sur le hasard va de **+6,0 à +9,5 points**
+  de TRI, positif dans 100 % des cas.
+
+Noter que « le titre le plus baissé sur 3 mois » **perd**, alors que « le plus loin de son plus haut
+sur un an » gagne. L'horizon compte : le repli de court terme n'apporte rien, l'écart durable au
+sommet oui. C'est cohérent avec le facteur valeur de la section 2.
+
+**Ce qui aide donc un buy-and-hold n'est pas une prévision, c'est l'orientation du versement
+régulier.** Pas besoin d'anticiper quoi que ce soit ni d'immobiliser un centime.
+
+Les réserves habituelles s'appliquent : mesuré sur un marché qui monte, où les titres repliés se
+sont tous relevés. Cette règle achète par construction ce qui tombe, donc elle ramasserait aussi les
+sociétés en vraie difficulté — il n'y en a eu que deux sur 42 dans cet échantillon (ORGT, ONTBF),
+il y en aurait davantage dans un marché moins porteur.
 
 ### Ce que je ne peux pas te dire
 
