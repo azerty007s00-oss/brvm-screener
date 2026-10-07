@@ -84,8 +84,11 @@ export const plansRedressement = async () => new Map<string, PlanRedressement>()
 export type RegleMembre = {
   id: string; membreId: string; membreNom: string; nature: string;
   valeur: number | null; debut: string | null; fin: string | null; note: string | null;
+  actif: boolean;
 };
 export const reglesParMembre = async () => new Map<string, RegleMembre[]>();
+export const reglesImminentes = async (_m?: unknown, _j?: unknown) =>
+  new Map<string, RegleMembre[]>();
 export const envoyerCourriel = async (_a?: unknown) => ({ ok: true });
 export const transportConfigure = () => "aucun" as string;
 `);
@@ -135,6 +138,7 @@ const bourama = {
   nonInscrites: { nb: 2, montant: 1000, mois: ["2026-08-01", "2026-09-01"] },
   plan: null,
   regles: [],
+  reglesAVenir: [],
   avanceManquante: null,
 };
 const LE_30 = new Date("2026-09-30T08:00:00Z");
@@ -444,11 +448,11 @@ verifier(
 const REGLES_DEUX = [
   {
     id: "r1", membreId: "b", membreNom: "KONE Bourama", nature: "penalite_multiplicateur",
-    valeur: 2, debut: "2026-07-01", fin: "2027-06-30", note: "Sanction de l'assemblee du 28/06",
+    valeur: 2, debut: "2026-07-01", fin: "2027-06-30", note: "*Sanction* de l'assemblee du 28/06", actif: true,
   },
   {
     id: "r2", membreId: "b", membreNom: "KONE Bourama", nature: "cotisation",
-    valeur: 7500, debut: null, fin: null, note: null,
+    valeur: 7500, debut: null, fin: null, note: null, actif: true,
   },
 ];
 const texteRegles = lettre({ ...bourama, regles: REGLES_DEUX });
@@ -486,7 +490,7 @@ verifier(
  */
 const REGLE_AVANCE = {
   id: "r3", membreId: "b", membreNom: "KONE Bourama", nature: "avance_min",
-  valeur: 3, debut: null, fin: null, note: null,
+  valeur: 3, debut: null, fin: null, note: null, actif: true,
 };
 
 /* En defaut : le bloc disciplinaire, et pas de doublon dans le regime. */
@@ -666,10 +670,100 @@ verifier(
   "et le pluriel s'accorde quand il le faut",
 );
 
+/* ============ la mesure datee, annoncee avant sa date ================== */
+
+/*
+ * LE CAS DE BLA AIME ANGE DAVID, 7 OCTOBRE 2026.
+ *
+ * L'assemblee lui impose trois mois de cotisation d'avance « a compter du
+ * 10/10/2026 », et sa resolution precise : « doit etre regularisee par
+ * l'interesse AVANT le 10 octobre 2026 », faute de quoi l'exclusion est
+ * automatique. Les regles n'etant lues qu'une fois en vigueur, son courrier du
+ * 7 n'en disait rien : il aurait appris la mesure le jour ou il etait trop tard
+ * pour s'y conformer.
+ */
+const REGLE_BLA = {
+  id: "bla1",
+  membreId: "b",
+  membreNom: "BLA Aime Ange David",
+  nature: "avance_min",
+  valeur: 3,
+  debut: "2026-10-10",
+  fin: "2027-12-31",
+  note: "*Resolutions :* *Mesure disciplinaire concernant Bla Ange David :* ultime clemence.",
+  actif: true,
+};
+const texteAVenir = lettre({ ...bourama, reglesAVenir: [REGLE_BLA] });
+
+verifier(/MESURE A VENIR/.test(texteAVenir), "une mesure datee doit s'annoncer avant sa date");
+verifier(
+  /vous devrez detenir en permanence 3 mois de cotisation d'avance, soit 15 000 FCFA/.test(
+    texteAVenir,
+  ),
+  "et dire ce qu'elle exige, en francs comme en mois",
+);
+verifier(
+  /a compter du 10\/10\/2026 et jusqu'au 31\/12\/2027 — dans 10 jours/.test(texteAVenir),
+  "et combien de jours il reste : c'est le delai qui fait agir",
+);
+verifier(
+  /et jusqu'au 31\/12\/2027/.test(texteAVenir),
+  "le terme de la mesure se dit aussi",
+);
+verifier(
+  !/— dans 10 jours,/.test(texteAVenir),
+  "le decompte ferme la phrase, il ne la coupe pas",
+);
+verifier(
+  /C'est avant sa date qu'il faut s'y conformer/.test(texteAVenir),
+  "le courrier doit dire que le delai court avant la date, non apres",
+);
+verifier(
+  !/MESURE A VENIR/.test(texteBourama),
+  "sans mesure a venir, la section n'encombre pas le courrier",
+);
+
+/*
+ * La note est collee depuis WhatsApp. Sans nettoyage, le membre lit la
+ * ponctuation d'un autre outil au milieu d'une sanction.
+ */
+verifier(
+  /Resolutions : Mesure disciplinaire concernant Bla Ange David : ultime clemence\./.test(
+    texteAVenir,
+  ),
+  "le balisage WhatsApp d'une note ne doit pas partir tel quel",
+);
+verifier(!/\*/.test(texteAVenir), "aucune etoile ne doit subsister dans le courrier");
+
+/* La meme regle, une fois en vigueur, change de section et de temps. */
+const texteEnVigueur = lettre({ ...bourama, regles: [{ ...REGLE_BLA, debut: "2026-09-10" }] });
+verifier(
+  /VOTRE REGIME PARTICULIER/.test(texteEnVigueur) && !/MESURE A VENIR/.test(texteEnVigueur),
+  "en vigueur, elle releve du regime particulier et non des mesures a venir",
+);
+
+/* ---------------- un paragraphe, une ligne ----------------------------- */
+
+/*
+ * Un paragraphe coupe a la main se recoupe sur un telephone : on lit des lignes
+ * longues alternant avec des moignons. Les listes et les etapes gardent leurs
+ * retours, eux portent du sens.
+ */
+for (const ligne of texteBourama.split("\n")) {
+  const estListe = /^\s*[-\d]/.test(ligne) || /^\s{4}/.test(ligne);
+  const estTitre = ligne === ligne.toUpperCase();
+  if (estListe || estTitre || ligne.length < 60) continue;
+  verifier(
+    /[.:!?»]$/.test(ligne.trim()),
+    `paragraphe coupe a la main : « ...${ligne.trim().slice(-42)} »`,
+  );
+}
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 console.log(
   `OK - ${controles} controles du courrier de relance : objet, seuil R5, ` +
     "dettes de penalites et leur somme, liste des mois, R2, mode d'emploi des cotisations " +
-    "et des penalites, mesures disciplinaires, regime particulier",
+    "et des penalites, mesures disciplinaires, regime particulier, mesure a venir, " +
+    "notes collees et mise en forme",
 );

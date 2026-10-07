@@ -2,7 +2,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import {
   avancesExigees, circuitReglementsPret, penalitesDuesDetaillees, plansRedressement,
-  reglesParMembre, situationsClub,
+  reglesImminentes, reglesParMembre, situationsClub,
   type AvanceExigee, type DetteMembre, type PlanRedressement, type RegleMembre,
   type SituationClub,
 } from "@/lib/queries";
@@ -11,7 +11,7 @@ import { penalitesNonInscrites } from "@/lib/constat";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
 import {
   CLUB, EFFET, REGLES, accorde, dateCourte, deMois, debutMois, etatEcheance, fcfa,
-  joursAvantEcheance, lienDuSite, moisLong,
+  joursAvantEcheance, lienDuSite, moisLong, texteLisible,
 } from "@/lib/settings";
 
 /**
@@ -62,6 +62,15 @@ export type Destinataire = {
    */
   regles: RegleMembre[];
   /**
+   * Les regles qui entreront en vigueur sous peu.
+   *
+   * Une mesure datee s'annonce avant sa date : l'assemblee en impose une « a
+   * compter du 10/10 » en exigeant qu'elle soit « regularisee avant le 10
+   * octobre », et le site n'en disait rien jusqu'au 10. Le membre devait reunir
+   * quinze mille francs sans qu'on le lui rappelle.
+   */
+  reglesAVenir: RegleMembre[];
+  /**
    * Le plan de redressement accorde au membre, s'il en beneficie d'un.
    *
    * R5 le reserve au retard declare et ne l'accorde qu'une fois sur la duree du
@@ -106,6 +115,9 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
   const courues = await penalitesNonInscrites(situations);
   const plans = await plansRedressement().catch(() => new Map<string, PlanRedressement>());
   const regles = await reglesParMembre().catch(() => new Map<string, RegleMembre[]>());
+  const aVenir = await reglesImminentes(maintenant).catch(
+    () => new Map<string, RegleMembre[]>(),
+  );
 
   return situations
     .map((situation) => {
@@ -126,6 +138,7 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
         nonInscrites: courues?.get(situation.membreId) ?? { nb: 0, montant: 0, mois: [] },
         plan: plans.get(situation.membreId) ?? null,
         regles: regles.get(situation.membreId) ?? [],
+        reglesAVenir: aVenir.get(situation.membreId) ?? [],
         arrieres: situation.moisEnRetard.filter((m) => m !== moisCourant),
         echeanceDuJour,
         dette: dettes.get(situation.membreId) ?? {
@@ -319,6 +332,7 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
 export function texteRelance(
   {
     situation, arrieres, echeanceDuJour, avanceManquante, dette, nonInscrites, plan, regles,
+    reglesAVenir,
   }: Destinataire,
   siteUrl: string,
   maintenant: Date,
@@ -647,6 +661,59 @@ export function texteRelance(
    * decision d'assemblee les voyait tomber sans explication, et pouvait croire
    * a une erreur du site.
    */
+  /*
+   * CE QUI VA S'APPLIQUER, AVANT QUE CELA S'APPLIQUE.
+   *
+   * Une mesure datee ne se respecte que si on la connait avant sa date. Celle-ci
+   * se lit donc a tous les passages, et non une fois par mois : c'est le delai
+   * qui compte, pas la cadence.
+   */
+  if (reglesAVenir.length > 0) {
+    lignes.push("", "MESURE A VENIR");
+    for (const r of reglesAVenir) {
+      const jours = r.debut
+        ? Math.round(
+            (new Date(`${r.debut}T00:00:00Z`).getTime() -
+              new Date(`${maintenant.toISOString().slice(0, 10)}T00:00:00Z`).getTime()) /
+              86_400_000,
+          )
+        : 0;
+      /*
+       * Le decompte ferme la phrase au lieu de la couper : « a compter du
+       * 10/10/2026 — dans 10 jours, et jusqu'au 31/12/2027 » faisait buter sur
+       * l'incise, et c'est le delai qu'on veut laisser en tete.
+       */
+      const quand = r.debut ? `a compter du ${dateCourte(r.debut)}` : "prochainement";
+      const jusqua = r.fin ? ` et jusqu'au ${dateCourte(r.fin)}` : "";
+      const delai = jours > 0 ? ` — dans ${jours} ${accorde(jours, "jour")}` : "";
+      if (r.nature === "avance_min" && r.valeur) {
+        lignes.push(
+          `  - Avance minimale : vous devrez detenir en permanence ${r.valeur} mois de ` +
+            `cotisation d'avance, soit ${fcfa(r.valeur * REGLES.cotisationMensuelle)}, ` +
+            `${quand}${jusqua}${delai}.`,
+        );
+      } else if (r.nature === "cotisation" && r.valeur) {
+        lignes.push(
+          `  - Cotisation particuliere : ${fcfa(r.valeur)} par mois, ${quand}${jusqua}${delai}.`,
+        );
+      } else if (r.nature === "penalite_multiplicateur" && r.valeur) {
+        lignes.push(
+          `  - Penalites majorees : vos penalites de retard seront multipliees par ` +
+            `${r.valeur}, ${quand}${jusqua}${delai}.`,
+        );
+      } else if (r.nature === "plan_redressement") {
+        lignes.push(`  - Plan de redressement (R5), ${quand}${jusqua}${delai}.`);
+      } else {
+        lignes.push(`  - Mesure portee a votre dossier, ${quand}${jusqua}${delai}.`);
+      }
+      if (r.note) lignes.push(`    ${texteLisible(r.note)}`);
+    }
+    lignes.push(
+      "Cette mesure n'est pas encore en vigueur. C'est avant sa date qu'il faut s'y " +
+        "conformer : passe ce terme, le manquement se constate.",
+    );
+  }
+
   const aDire = regles.filter((r) => {
     if (r.nature === "cotisation" || r.nature === "penalite_multiplicateur" || r.nature === "note") {
       return true;
@@ -695,9 +762,14 @@ export function texteRelance(
             "exposerait a l'exclusion (R5).",
         );
       } else if (r.nature === "note") {
-        lignes.push(`  - ${r.note ?? "Mention portee a votre dossier"}${terme}.`);
+        lignes.push(`  - ${texteLisible(r.note) || "Mention portee a votre dossier"}${terme}.`);
       }
-      if (r.note && r.nature !== "note") lignes.push(`    ${r.note}`);
+      /*
+       * La note est collee depuis WhatsApp et en porte le balisage : sans
+       * nettoyage, le membre lit « *Resolutions :* *Mesure disciplinaire...* »,
+       * la ponctuation d'un autre outil au milieu d'une sanction.
+       */
+      if (r.note && r.nature !== "note") lignes.push(`    ${texteLisible(r.note)}`);
     }
     lignes.push(
       "Ces regles ont ete decidees en assemblee et sont inscrites a votre dossier. " +
@@ -779,10 +851,19 @@ export function texteRelance(
       "  4. Joignez la capture de votre transfert : elle epargne une question.",
       "  5. Le tresorier valide, et votre mois se marque d'une coche.",
       "",
-      "Le tresorier est prevenu par courriel des que vous declarez, le president et",
-      "vous-meme en copie : inutile d'ecrire en plus, et vous gardez la trace de ce",
-      "que vous avez declare. Tant que la validation n'a pas eu lieu, votre",
-      "declaration reste visible de tous, marquee « en attente » : rien ne se perd.",
+      /*
+       * UN PARAGRAPHE, UNE LIGNE.
+       *
+       * Celui-ci etait coupe a la main tous les soixante-quinze caracteres,
+       * quand les autres sont ecrits d'un trait. Sur un telephone, une ligne
+       * deja coupee se recoupe : on lit quatre lignes longues alternant avec
+       * quatre moignons. Les listes et les etapes numerotees gardent leurs
+       * retours -- la, ils portent du sens.
+       */
+      "Le tresorier est prevenu par courriel des que vous declarez, le president et " +
+        "vous-meme en copie : inutile d'ecrire en plus, et vous gardez la trace de ce " +
+        "que vous avez declare. Tant que la validation n'a pas eu lieu, votre " +
+        "declaration reste visible de tous, marquee « en attente » : rien ne se perd.",
     );
   }
 
@@ -827,8 +908,8 @@ export function texteRelance(
       "COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE",
       ...etapes,
       "",
-      "La penalite reste due jusqu'a cette verification : si une relance vous",
-      "parvient entre-temps et la reclame encore, ce n'est pas une erreur.",
+      "La penalite reste due jusqu'a cette verification : si une relance vous " +
+        "parvient entre-temps et la reclame encore, ce n'est pas une erreur.",
     );
   }
   /*

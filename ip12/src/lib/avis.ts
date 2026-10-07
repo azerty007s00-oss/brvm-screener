@@ -119,9 +119,9 @@ export async function avertirLeBureau(
     lignes.push(
       "",
       "AVERTISSEMENT — les regles individuelles n'ont pas pu etre lues.",
-      "Les courriers qui viennent de partir ne portent donc ni cotisation",
-      "particuliere, ni penalites majorees, ni avance imposee, ni plan de",
-      "redressement, et les montants reclames sont ceux du regime commun.",
+      "Les courriers qui viennent de partir ne portent donc ni cotisation particuliere, " +
+        "ni penalites majorees, ni avance imposee, ni plan de redressement, et les " +
+        "montants reclames sont ceux du regime commun.",
       `Detail technique : ${panne}`,
     );
   }
@@ -243,8 +243,8 @@ export async function avertirDeclaration(params: {
       : "Aucun justificatif n'est joint pour l'instant.",
     "",
     `A valider par le ${ROLES[principal.role].toLowerCase()}.` + (enCopie ? ` ${enCopie}` : ""),
-    "La ligne est deja visible de tous, marquee « en attente » : rien ne se perd",
-    "tant que la validation n'a pas eu lieu.",
+    "La ligne est deja visible de tous, marquee « en attente » : rien ne se perd " +
+      "tant que la validation n'a pas eu lieu.",
   ];
   const siteUrl = lienDuSite();
   if (siteUrl) lignes.push("", `Valider : ${siteUrl}/versements`);
@@ -290,9 +290,8 @@ export async function avertirReglementPenalite(params: {
       : "Aucun justificatif n'est joint pour l'instant.",
     "",
     `A verifier par le ${ROLES[principal.role].toLowerCase()}.` + (enCopie ? ` ${enCopie}` : ""),
-    "La penalite reste due jusqu'a la validation : rien n'entre en caisse sur",
-    "parole, et la relance continue de la reclamer tant que la ligne n'est pas",
-    "soldee.",
+    "La penalite reste due jusqu'a la validation : rien n'entre en caisse sur " +
+      "parole, et la relance continue de la reclamer tant que la ligne n'est pas soldee.",
   ];
   const siteUrl = lienDuSite();
   if (siteUrl) lignes.push("", `Verifier : ${siteUrl}/penalites`);

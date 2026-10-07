@@ -258,6 +258,29 @@ export function accorde(n: number, singulier: string, pluriel?: string): string 
   return n > 1 ? (pluriel ?? `${singulier}s`) : singulier;
 }
 
+/**
+ * Nettoie un texte saisi par le bureau avant de l'envoyer par courriel.
+ *
+ * Les notes des regles individuelles sont collees depuis WhatsApp, et en
+ * portent le balisage : « *Resolutions :* *Mesure disciplinaire concernant...* ».
+ * WhatsApp en fait du gras ; un courriel en texte brut affiche les etoiles. Le
+ * membre lisait donc la ponctuation d'un autre outil au milieu d'une mesure
+ * disciplinaire.
+ *
+ * On retire le balisage plutot que de le traduire : le courrier est en texte
+ * brut, il n'a pas de gras a offrir. Les retours a la ligne multiples se
+ * reduisent a un seul -- un texte colle en traine souvent.
+ */
+export function texteLisible(brut: string | null): string {
+  if (!brut) return "";
+  return brut
+    /* *gras*, _italique_, ~barre~ et `code` de WhatsApp, autour d'un mot ou d'une phrase. */
+    .replace(/(^|[\s(])[*_~`]+([^*_~`\n]+?)[*_~`]+(?=[\s).,:;!?]|$)/g, "$1$2")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\s*\n\s*/g, " ")
+    .trim();
+}
+
 export function joursAvantEcheance(maintenant: Date): number {
   return REGLES.jourEcheance - maintenant.getUTCDate();
 }

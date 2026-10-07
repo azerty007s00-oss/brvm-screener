@@ -672,6 +672,8 @@ export type RegleMembre = {
   debut: string | null;
   fin: string | null;
   note: string | null;
+  /** Une regle levee reste inscrite : elle a produit ses effets. */
+  actif: boolean;
 };
 
 /**
@@ -712,6 +714,7 @@ async function reglesIndividuellesBrut(toutes: boolean): Promise<RegleMembre[]> 
         debut: (r.debut as string | null) ?? null,
         fin: (r.fin as string | null) ?? null,
         note: (r.note as string | null) ?? null,
+        actif: Boolean(r.actif),
       }));
   } catch (e) {
     /*
@@ -857,6 +860,47 @@ async function reglesParMembreBrut(): Promise<Map<string, RegleMembre[]>> {
   const regles = await reglesIndividuelles().catch(() => [] as RegleMembre[]);
   const index = new Map<string, RegleMembre[]>();
   for (const r of regles) {
+    const siennes = index.get(r.membreId) ?? [];
+    siennes.push(r);
+    index.set(r.membreId, siennes);
+  }
+  return index;
+}
+
+/**
+ * Les regles qui vont entrer en vigueur, par membre.
+ *
+ * UNE MESURE DATEE S'ANNONCE AVANT SA DATE, NON APRES.
+ *
+ * L'assemblee impose a un membre trois mois de cotisation d'avance « a compter
+ * du 10/10/2026 », et sa resolution precise : « doit etre regularisee par
+ * l'interesse AVANT le 10 octobre 2026 », faute de quoi l'exclusion est
+ * automatique. Les regles n'etant lues qu'une fois en vigueur, le site n'en
+ * disait rien jusqu'au 10 -- c'est-a-dire jusqu'a ce qu'il soit trop tard pour
+ * s'executer. Le membre devait reunir quinze mille francs sans qu'on le lui
+ * rappelle.
+ *
+ * Trente jours d'avance : une mesure qui demande de mettre de l'argent de cote
+ * ne se prepare pas en trois jours.
+ */
+async function reglesImminentesBrut(
+  maintenant: Date,
+  jours = 30,
+): Promise<Map<string, RegleMembre[]>> {
+  const regles = await reglesIndividuelles(true).catch(() => [] as RegleMembre[]);
+  const aujourdhui = maintenant.toISOString().slice(0, 10);
+  const horizon = new Date(maintenant.getTime() + jours * 86_400_000)
+    .toISOString()
+    .slice(0, 10);
+
+  const index = new Map<string, RegleMembre[]>();
+  for (const r of regles) {
+    if (!r.actif || !r.debut) continue;
+    /* Deja en vigueur : elle releve de `reglesParMembre`, pas d'ici. */
+    if (r.debut <= aujourdhui) continue;
+    if (r.debut > horizon) continue;
+    /* Une regle qui se termine avant d'avoir commence n'a rien a annoncer. */
+    if (r.fin && r.fin < r.debut) continue;
     const siennes = index.get(r.membreId) ?? [];
     siennes.push(r);
     index.set(r.membreId, siennes);
@@ -1323,6 +1367,7 @@ export function listerMembres(inclureInactifs = false): Promise<MembreListe[]> {
 }
 
 export const reglesParMembre = cache(reglesParMembreBrut);
+export const reglesImminentes = cache(reglesImminentesBrut);
 export const plansRedressement = cache(plansRedressementBrut);
 export const plansDejaAccordes = cache(plansDejaAccordesBrut);
 
