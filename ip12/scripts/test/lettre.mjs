@@ -561,6 +561,111 @@ verifier(
   "et doit bien le dire quand il en est une",
 );
 
+/* ================= les quatre defauts du courrier reellement envoye */
+
+/*
+ * Le 7 octobre, dix membres ont recu la relance. Ces controles portent sur ce
+ * qui est parti ce matin-la, et qu'aucune donnee fabriquee n'avait montre.
+ */
+
+/* --- DRAME Khalil : une seule penalite, d'absence, aucune de retard ------ */
+
+const absenceSeule = {
+  ...bourama,
+  situation: { ...bourama.situation, moisEnRetard: [], joursDeRetard: 0 },
+  arrieres: [],
+  dette: { nb: 1, montant: 2000, nbRetard: 0, montantRetard: 0 },
+  nonInscrites: { nb: 0, montant: 0, mois: [] },
+};
+const texteAbsence = lettre(absenceSeule);
+
+/*
+ * Le courrier annoncait « dont 0 de retard (0 FCFA) et 1 d'absence » : le detail
+ * ne se justifie que si les deux natures existent. Un zero annonce fait chercher
+ * ce qu'il cache.
+ */
+verifier(!/0 de retard/.test(texteAbsence), "aucune composante nulle ne doit etre annoncee");
+verifier(
+  /Penalite d'absence ou autre, inscrite a votre compte : 1, pour un total de 2 000/.test(
+    texteAbsence,
+  ),
+  "une penalite d'absence seule se dit pour ce qu'elle est, au singulier",
+);
+
+/*
+ * Et il enchainait sur « a partir de 3 penalites DE RETARD impayees,
+ * l'exclusion sera encourue » juste sous l'annonce de son unique penalite
+ * d'absence : de quoi se croire au tiers d'un seuil dont on est a zero.
+ */
+verifier(
+  !/A partir de 3 penalites de retard/.test(texteAbsence),
+  "sans aucune penalite de retard, le seuil R5 n'a pas a etre evoque",
+);
+verifier(
+  /A partir de 3 penalites de retard/.test(
+    lettre({ ...absenceSeule, dette: { nb: 2, montant: 2500, nbRetard: 1, montantRetard: 500 } }),
+  ),
+  "mais des qu'il y a une penalite de retard, l'avertissement tient",
+);
+
+/* --- YOUSSOUF Mohamed : a jour de ses versements, 7 penalites de retard -- */
+
+const penalitesSeules = {
+  ...bourama,
+  situation: { ...bourama.situation, moisEnRetard: [], joursDeRetard: 0 },
+  arrieres: [],
+  echeanceDuJour: null,
+  dette: { nb: 7, montant: 3500, nbRetard: 7, montantRetard: 3500 },
+  nonInscrites: { nb: 0, montant: 0, mois: [] },
+};
+const textePenalites = lettre(penalitesSeules);
+
+/*
+ * Il recevait cinq etapes sur la declaration d'un VERSEMENT -- « indiquez le
+ * mois couvert » -- alors qu'il n'en doit aucun. On lui expliquait longuement
+ * ce qu'il n'a pas a faire, avant les trois lignes qui le concernent.
+ */
+verifier(
+  !/COMMENT ENREGISTRER VOTRE COTISATION/.test(textePenalites),
+  "qui ne doit aucune cotisation n'a que faire du mode d'emploi des versements",
+);
+verifier(
+  /COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE/.test(textePenalites),
+  "en revanche le chemin des penalites, lui, le concerne",
+);
+/*
+ * Et ce chemin doit alors se suffire : sans le bloc des cotisations au-dessus,
+ * personne ne lui a dit d'ouvrir le site ni ou toucher.
+ */
+verifier(
+  /1\. Ouvrez https/.test(textePenalites) && /2\. Touchez « Penalites »/.test(textePenalites),
+  "seul, le chemin des penalites doit commencer par ouvrir le site",
+);
+verifier(
+  /Le chemin n'est pas le meme/.test(texteBourama) &&
+    !/2\. Touchez « Penalites »/.test(texteBourama),
+  "accompagne du bloc des cotisations, il ne repete pas les deux premieres etapes",
+);
+/*
+ * Mais il doit quand meme dire OU : le membre vient d'etre envoye sur
+ * « Versements », et le bouton n'y est pas.
+ */
+verifier(
+  /1\. Touchez « Penalites », puis « Declarer un reglement »/.test(texteBourama),
+  "la premiere etape doit nommer la page, sans quoi on cherche le bouton",
+);
+
+/* --- l'objet, lu par dix personnes ------------------------------------- */
+
+verifier(
+  sujetRelance(absenceSeule, "2026-10-01", LE_30) === "IP12 — 1 penalite impayee",
+  "« 1 penalite(s) impayee(s) » : le nombre est connu au moment d'ecrire",
+);
+verifier(
+  sujetRelance(penalitesSeules, "2026-10-01", LE_30) === "IP12 — 7 penalites impayees",
+  "et le pluriel s'accorde quand il le faut",
+);
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 console.log(

@@ -243,6 +243,21 @@ export function moisDuClub(jusqua: string = debutMois()): string[] {
  * compile sans base ni `server-only`, et la regle qui decide du ton d'un
  * courrier envoye a dix personnes merite un controle.
  */
+/**
+ * Accorde un mot a un nombre.
+ *
+ * « 1 penalite(s) impayee(s) » est une facilite de developpeur, et elle se
+ * lisait en tete d'un courrier adresse a dix personnes. Le nombre est toujours
+ * connu au moment d'ecrire la phrase ; rien ne justifie de laisser le lecteur
+ * choisir.
+ *
+ * Les accords irreguliers ne sont pas du ressort de cette fonction : on lui
+ * donne la forme plurielle quand elle differe d'un simple « s ».
+ */
+export function accorde(n: number, singulier: string, pluriel?: string): string {
+  return n > 1 ? (pluriel ?? `${singulier}s`) : singulier;
+}
+
 export function joursAvantEcheance(maintenant: Date): number {
   return REGLES.jourEcheance - maintenant.getUTCDate();
 }

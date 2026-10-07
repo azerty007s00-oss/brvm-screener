@@ -10,7 +10,7 @@ import { phaseSeuilR5 } from "@/lib/penalites";
 import { penalitesNonInscrites } from "@/lib/constat";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
 import {
-  CLUB, EFFET, REGLES, dateCourte, deMois, debutMois, etatEcheance, fcfa,
+  CLUB, EFFET, REGLES, accorde, dateCourte, deMois, debutMois, etatEcheance, fcfa,
   joursAvantEcheance, lienDuSite, moisLong,
 } from "@/lib/settings";
 
@@ -299,7 +299,13 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
    * a leur sujet, puis les decouvrait dans le corps du message.
    */
   if (d.dette.nb > 0) {
-    return `${CLUB.sigle} — ${d.dette.nb} penalite(s) impayee(s)`;
+    /*
+     * « 1 penalite(s) impayee(s) » : la parenthese est une facilite de
+     * developpeur, et elle est en tete d'un courrier que dix personnes lisent.
+     * Le nombre est connu au moment d'ecrire la phrase.
+     */
+    const n = d.dette.nb;
+    return `${CLUB.sigle} — ${n} ${accorde(n, "penalite")} ${accorde(n, "impayee")}`;
   }
   const ou = etatEcheance(maintenant);
   if (ou === "a_venir") {
@@ -485,15 +491,30 @@ export function texteRelance(
      * le nombre annonce de la regle qui suit.
      */
     const autres = dette.nb - dette.nbRetard;
+    const montantAutres = dette.montant - dette.montantRetard;
     if (dette.nb > 0) {
+      /*
+       * TROIS CAS, ET AUCUNE COMPOSANTE NULLE.
+       *
+       * Le detail ne se justifiait que par la presence des deux natures, et la
+       * condition ne regardait que les absences : un membre n'ayant qu'une
+       * penalite d'absence lisait « dont 0 de retard (0 FCFA) et 1 d'absence ».
+       * Un zero annonce fait chercher ce qu'il cache.
+       */
       lignes.push(
-        autres > 0
+        autres > 0 && dette.nbRetard > 0
           ? `Penalites impayees inscrites a votre compte : ${dette.nb}, pour un total de ` +
             `${fcfa(dette.montant)} — dont ${dette.nbRetard} de retard ` +
             `(${fcfa(dette.montantRetard)}) et ${autres} d'absence ou autre ` +
-            `(${fcfa(dette.montant - dette.montantRetard)}).`
-          : `Penalites de retard impayees, inscrites a votre compte : ${dette.nbRetard}, ` +
-            `pour un total de ${fcfa(dette.montantRetard)}.`,
+            `(${fcfa(montantAutres)}).`
+          : autres > 0
+            ? `${accorde(autres, "Penalite")} d'absence ou autre, ` +
+              `${accorde(autres, "inscrite")} a votre compte : ${autres}, ` +
+              `pour un total de ${fcfa(montantAutres)}.`
+            : `${accorde(dette.nbRetard, "Penalite")} de retard ` +
+              `${accorde(dette.nbRetard, "impayee")}, ` +
+              `${accorde(dette.nbRetard, "inscrite")} a votre compte : ${dette.nbRetard}, ` +
+              `pour un total de ${fcfa(dette.montantRetard)}.`,
       );
     }
 
@@ -580,13 +601,16 @@ export function texteRelance(
           "ce cumul emportera l'exclusion de plein droit (R5), meme si vos cotisations sont " +
           "a jour. Vous avez jusque-la pour regulariser.",
       );
-    } else if (dette.nb > 0) {
+    } else if (dette.nbRetard > 0) {
       /*
-       * L'avertissement ne vaut que si quelque chose est deja inscrit.
+       * L'AVERTISSEMENT NE VAUT QUE POUR QUI A DEJA DES PENALITES DE RETARD.
        *
-       * Le paragraphe s'ouvre desormais aussi pour une penalite qui court sans
-       * etre encore constatee : annoncer l'exclusion a qui doit cinq cents francs
-       * depuis vingt jours, et rien au registre, alarmerait sans motif.
+       * Il se declenchait des qu'une penalite existait, de quelque nature :
+       * un membre n'ayant qu'une penalite d'absence lisait « a partir de 3
+       * penalites DE RETARD impayees, l'exclusion sera encourue » juste sous
+       * l'annonce de son unique penalite -- de quoi se croire au tiers d'un
+       * seuil dont il est a zero. Le seuil ne compte que les retards : sans
+       * retard inscrit, il n'y a rien a annoncer.
        */
       lignes.push(
         /*
@@ -726,8 +750,17 @@ export function texteRelance(
    * message au groupe, et le tresorier saisit a sa place -- ce que l'outil etait
    * cense supprimer. Cinq lignes suffisent a le rendre autonome.
    */
-  /* Le mode d'emploi ne sert qu'a qui doit verser : a jour, c'est du remplissage. */
-  if (siteUrl && !rienDu) {
+  /*
+   * LE MODE D'EMPLOI DES COTISATIONS NE SERT QU'A QUI EN DOIT UNE.
+   *
+   * Il paraissait des que le courrier reclamait quoi que ce soit. Un membre a
+   * jour de ses versements et ne devant que des penalites recevait donc cinq
+   * etapes sur la declaration d'un versement -- « indiquez le mois couvert » --
+   * avant les trois qui le concernent. On lui expliquait longuement ce qu'il n'a
+   * pas a faire.
+   */
+  const doitUneCotisation = echeanceDuJour !== null || arrieres.length > 0;
+  if (siteUrl && doitUneCotisation) {
     lignes.push(
       "",
       "COMMENT ENREGISTRER VOTRE COTISATION",
@@ -751,30 +784,52 @@ export function texteRelance(
       "que vous avez declare. Tant que la validation n'a pas eu lieu, votre",
       "declaration reste visible de tous, marquee « en attente » : rien ne se perd.",
     );
+  }
 
+  /*
+   * LE CHEMIN DES PENALITES, HORS DE CELUI DES COTISATIONS.
+   *
+   * Il etait imbrique dans le bloc ci-dessus : un membre a jour de ses
+   * versements et ne devant que des penalites n'en lisait donc rien, alors que
+   * c'est le seul qui le concerne. Les cinq etapes des cotisations, elles, ne
+   * valent que pour une cotisation -- elles demandent « le mois couvert »,
+   * qu'une penalite n'a pas.
+   */
+  if (siteUrl && dette.nb > 0 && circuitReglements) {
     /*
-     * LE CHEMIN DES PENALITES, PUISQUE LE COURRIER EN RECLAME.
-     *
-     * Les cinq etapes ci-dessus ne valent que pour une cotisation : elles
-     * demandent « le mois couvert », qu'une penalite n'a pas. Un membre a qui ce
-     * courrier reclamait sept mille francs de penalites n'avait donc rien a
-     * toucher -- il ecrivait au groupe, et le tresorier saisissait a sa place,
-     * ce que ces lignes servent justement a eviter.
+     * Les deux premieres etapes -- ouvrir le site, trouver la page -- ne se
+     * repetent pas quand le bloc des cotisations vient de les donner.
      */
-    if (dette.nb > 0 && circuitReglements) {
-      lignes.push(
-        "",
-        "COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE",
-        "  Le chemin n'est pas le meme : une penalite ne couvre aucun mois.",
-        "  1. Touchez « Penalites », puis « Declarer un reglement ».",
-        "  2. Choisissez la penalite reglee, la date et le moyen de paiement,",
-        "     et joignez la capture de votre transfert.",
-        "  3. Le tresorier verifie l'encaissement et solde la ligne.",
-        "",
-        "La penalite reste due jusqu'a cette verification : si une relance vous",
-        "parvient entre-temps et la reclame encore, ce n'est pas une erreur.",
-      );
-    }
+    /*
+     * Deux jeux d'etapes, ecrits chacun en entier. Les numeroter par decalage
+     * avait coute la seule indication qui compte quand on vient d'etre envoye
+     * sur « Versements » : ou se trouve le bouton.
+     */
+    const etapes = doitUneCotisation
+      ? [
+          "  Le chemin n'est pas le meme : une penalite ne couvre aucun mois.",
+          "  1. Touchez « Penalites », puis « Declarer un reglement ».",
+          "  2. Choisissez la penalite reglee, la date et le moyen de paiement,",
+          "     et joignez la capture de votre transfert.",
+          "  3. Le tresorier verifie l'encaissement et solde la ligne.",
+        ]
+      : [
+          `  1. Ouvrez ${siteUrl} et connectez-vous.`,
+          "  2. Touchez « Penalites » : dans la barre du bas sur telephone,",
+          "     dans la colonne de gauche sur ordinateur.",
+          "  3. Ouvrez « Declarer un reglement » et choisissez la penalite reglee,",
+          "     la date et le moyen de paiement.",
+          "  4. Joignez la capture de votre transfert.",
+          "  5. Le tresorier verifie l'encaissement et solde la ligne.",
+        ];
+    lignes.push(
+      "",
+      "COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE",
+      ...etapes,
+      "",
+      "La penalite reste due jusqu'a cette verification : si une relance vous",
+      "parvient entre-temps et la reclame encore, ce n'est pas une erreur.",
+    );
   }
   /*
    * La date distingue les passages du mois. Trois courriers au texte identique

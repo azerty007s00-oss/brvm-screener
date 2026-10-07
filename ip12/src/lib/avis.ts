@@ -1,7 +1,7 @@
 import "server-only";
 import { listerMembres } from "@/lib/queries";
 import { envoyerCourriel } from "@/lib/courriel";
-import { CLUB, dateCourte, fcfa, lienDuSite, moisLong, ROLES } from "@/lib/settings";
+import { CLUB, accorde, dateCourte, fcfa, lienDuSite, moisLong, ROLES } from "@/lib/settings";
 import { titulaires, DROITS } from "@/lib/droits";
 import type { Destinataire } from "@/lib/relance";
 import type { Role } from "@/lib/settings";
@@ -61,11 +61,14 @@ export async function avertirLeBureau(
     "Bonjour,",
     "",
     `Relance de ${moisLong(maintenant.toISOString().slice(0, 8) + "01")} : ` +
-      `${destinataires.length} membre(s) viennent d'etre relances.`,
+      `${destinataires.length} ${accorde(destinataires.length, "membre")} ` +
+        `${accorde(destinataires.length, "vient", "viennent")} d'etre ` +
+        `${accorde(destinataires.length, "relance")}.`,
     "",
     "A ENCAISSER",
-    `  Echeances du jour : ${attendus} membre(s).`,
-    `  Mois en retard : ${moisDus}, repartis sur ${enRetard.length} membre(s).`,
+    `  Echeances du jour : ${attendus} ${accorde(attendus, "membre")}.`,
+    `  Mois en retard : ${moisDus}, ${accorde(moisDus, "reparti")} sur ` +
+      `${enRetard.length} ${accorde(enRetard.length, "membre")}.`,
     `  Penalites dues a ce jour : ${fcfa(penalites)}.`,
     "",
     "DETAIL",
@@ -84,8 +87,10 @@ export async function avertirLeBureau(
     if (d.dette.nb > 0) {
       motifs.push(
         d.dette.nb === d.dette.nbRetard
-          ? `${d.dette.nb} penalite(s) de retard impayee(s)`
-          : `${d.dette.nb} penalite(s) impayee(s), dont ${d.dette.nbRetard} de retard`,
+          ? `${d.dette.nb} ${accorde(d.dette.nb, "penalite")} de retard ` +
+            `${accorde(d.dette.nb, "impayee")}`
+          : `${d.dette.nb} ${accorde(d.dette.nb, "penalite")} ` +
+            `${accorde(d.dette.nb, "impayee")}, dont ${d.dette.nbRetard} de retard`,
       );
     }
     /*
@@ -256,7 +261,8 @@ export async function avertirReglementPenalite(params: {
   const lignes = [
     "Bonjour,",
     "",
-    `${params.membreNom} declare avoir regle ${params.quantite} penalite(s), ` +
+    `${params.membreNom} declare avoir regle ${params.quantite} ` +
+      `${accorde(params.quantite, "penalite")}, ` +
       `soit ${fcfa(params.montant)}.`,
     params.avecJustificatif
       ? "Un justificatif est joint."
@@ -314,7 +320,8 @@ export async function avertirAbsence(params: {
     `Le secretariat a enregistre votre absence a la seance du ${dateCourte(params.seance.date)}` +
       `${params.seance.titre ? ` — ${params.seance.titre}` : ""}.`,
     "",
-    `Vous comptez desormais ${params.total} absence(s) injustifiee(s).`,
+    `Vous comptez desormais ${params.total} ${accorde(params.total, "absence")} ` +
+      `${accorde(params.total, "injustifiee")}.`,
     fermeUneTranche
       ? `Ce nombre ferme une tranche de ${absencesParTranche} : une penalite de ` +
         `${fcfa(penaliteAbsence)} est due.`
