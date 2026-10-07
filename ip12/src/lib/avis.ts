@@ -1,5 +1,5 @@
 import "server-only";
-import { listerMembres } from "@/lib/queries";
+import { listerMembres, reglesIndisponibles } from "@/lib/queries";
 import { envoyerCourriel } from "@/lib/courriel";
 import { CLUB, accorde, dateCourte, fcfa, lienDuSite, moisLong, ROLES } from "@/lib/settings";
 import { titulaires, DROITS } from "@/lib/droits";
@@ -103,6 +103,27 @@ export async function avertirLeBureau(
     }
     if (d.avanceManquante) motifs.push("avance obligatoire non tenue");
     lignes.push(`  ${d.situation.nom} — ${motifs.join(", ")}`);
+  }
+
+  /*
+   * UN COURRIER INCOMPLET DOIT SE DIRE INCOMPLET.
+   *
+   * Les regles individuelles portent la cotisation particuliere, le
+   * multiplicateur de penalite, l'avance imposee et le plan de redressement. Si
+   * leur lecture tombe en panne, la relance part quand meme -- c'est voulu --
+   * mais sans aucune de ces mesures, et sans que rien ne le signale. Le bureau
+   * croirait alors que personne n'en a.
+   */
+  const panne = reglesIndisponibles();
+  if (panne) {
+    lignes.push(
+      "",
+      "AVERTISSEMENT — les regles individuelles n'ont pas pu etre lues.",
+      "Les courriers qui viennent de partir ne portent donc ni cotisation",
+      "particuliere, ni penalites majorees, ni avance imposee, ni plan de",
+      "redressement, et les montants reclames sont ceux du regime commun.",
+      `Detail technique : ${panne}`,
+    );
   }
 
   const siteUrl = lienDuSite();

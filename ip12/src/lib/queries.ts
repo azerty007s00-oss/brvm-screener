@@ -1,6 +1,7 @@
 import { cache } from "react";
 import "server-only";
 import { db } from "./db";
+import { estTableAbsente } from "./erreurs";
 import { CLUB, REGLES, debutMois, estExigible, moisDuClub, tauxNormalise } from "./settings";
 import type { Role } from "./settings";
 import { situationMembre, type ReglesMembre, type SituationMembre } from "./penalites";
@@ -712,10 +713,37 @@ async function reglesIndividuellesBrut(toutes: boolean): Promise<RegleMembre[]> 
         fin: (r.fin as string | null) ?? null,
         note: (r.note as string | null) ?? null,
       }));
-  } catch {
-    // La table peut manquer d'une base a l'autre : son absence n'est pas une erreur.
+  } catch (e) {
+    /*
+     * LE SILENCE DE CE CATCH COUTE CHER.
+     *
+     * Il rendait [] pour toute erreur, au motif que la table peut manquer d'une
+     * base a l'autre. Or ces regles ne decorent pas le courrier : elles portent
+     * la cotisation particuliere, le multiplicateur de penalite, l'avance imposee
+     * et le plan de redressement. Rendre [] sur une erreur, c'est facturer le
+     * tarif commun a qui a une derogation, sous-penaliser qui est sous sanction
+     * et taire une mesure disciplinaire -- sans que rien ne le signale.
+     *
+     * L'absence de table reste toleree : elle est legitime sur une base neuve.
+     * Toute autre panne est retenue, pour que le bureau puisse apprendre que le
+     * courrier qu'il vient d'envoyer etait incomplet.
+     */
+    if (!estTableAbsente(e)) echecReglesIndividuelles = String(e);
     return [];
   }
+}
+
+/*
+ * La derniere panne de lecture des regles individuelles, s'il y en a eu une.
+ *
+ * Une variable de module, et non une exception : la relance doit partir meme
+ * sans les regles -- un courrier incomplet vaut mieux qu'aucun courrier -- mais
+ * personne ne doit croire complet celui qui ne l'est pas.
+ */
+let echecReglesIndividuelles: string | null = null;
+
+export function reglesIndisponibles(): string | null {
+  return echecReglesIndividuelles;
 }
 
 export type AvanceExigee = {

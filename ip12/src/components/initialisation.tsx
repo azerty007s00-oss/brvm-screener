@@ -50,7 +50,5 @@ export function EcranInitialisation({ detail }: { detail?: string }) {
 }
 
 /** Vrai quand l'erreur Postgres signale une table absente (code 42P01). */
-export function estTableAbsente(e: unknown): boolean {
-  const message = e instanceof Error ? e.message : String(e);
-  return /relation .* does not exist|42P01/i.test(message);
-}
+/* Reexporte : la definition vit dans `lib/erreurs`, que `lib/queries` peut lire. */
+export { estTableAbsente } from "@/lib/erreurs";
