@@ -41,6 +41,19 @@ const source = readFileSync(`${RACINE}/src/lib/relance.ts`, "utf8")
   .replace('from "@/lib/penalites"', 'from "../src/lib/penalites.js"');
 writeFileSync(`${RACINE}/${ATELIER}/relance.ts`, source);
 
+/*
+ * `courriel.ts` porte le rendu HTML du courrier. Il est recopie et compile avec
+ * le reste : ce qui est verifie est le texte ET la forme sous laquelle il part.
+ */
+writeFileSync(
+  `${RACINE}/${ATELIER}/courriel.ts`,
+  readFileSync(`${RACINE}/src/lib/courriel.ts`, "utf8")
+    .replace('import "server-only";\n', "")
+    .replace(/from "@\/lib\/(settings)"/g, 'from "../src/lib/$1.js"')
+    .replace(/from "@\/lib\/(version|queries|db)"/g, 'from "./doublures.js"')
+    .replace("function enHtml(", "export function enHtml("),
+);
+
 /* Les doublures ne servent qu'a satisfaire les imports : aucune n'est appelee. */
 writeFileSync(`${RACINE}/${ATELIER}/doublures.ts`, `
 export type Cellule = {
@@ -64,6 +77,7 @@ export const situationsClub = async (_a?: unknown): Promise<SituationClub[]> => 
 export const avancesExigees = async (_a?: unknown): Promise<AvanceExigee[]> => [];
 export const penalitesDuesDetaillees = async () => new Map<string, DetteMembre>();
 export const circuitReglementsPret = async () => true;
+export const versionDeployee = () => ({ revision: null, titre: null });
 /*
  * La part qui court sans etre inscrite est posee par le controle, cas par cas :
  * ce qui se mesure ici est ce que le courrier EN DIT, la lecture du registre
@@ -100,7 +114,8 @@ writeFileSync(penalites, penalitesOriginal.replace('from "./settings"', 'from ".
 try {
   execFileSync(
     "npx",
-    ["tsc", `${ATELIER}/relance.ts`, "--target", "es2022", "--module", "es2022",
+    ["tsc", `${ATELIER}/relance.ts`, `${ATELIER}/courriel.ts`,
+      "--target", "es2022", "--module", "es2022",
       "--moduleResolution", "bundler", "--outDir", `${ATELIER}-js`, "--rootDir", "."],
     { cwd: RACINE, stdio: "inherit" },
   );
@@ -108,6 +123,7 @@ try {
   writeFileSync(penalites, penalitesOriginal);
 }
 writeFileSync(`${RACINE}/${ATELIER}-js/package.json`, '{"type":"module"}');
+const { enHtml } = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/courriel.js`);
 const { texteRelance, sujetRelance } = await import(
   `${RACINE}/${ATELIER}-js/${ATELIER}/relance.js`
 );
@@ -759,11 +775,85 @@ for (const ligne of texteBourama.split("\n")) {
   );
 }
 
+/* ============ la forme sous laquelle le courrier part ================== */
+
+/*
+ * Le texte reste la source : le HTML n'en est qu'un rendu, et c'est le MEME
+ * texte qui est rendu ici. Rien n'est ecrit deux fois, donc rien ne peut
+ * diverger -- mais le rendu, lui, peut se degrader en silence.
+ */
+const html = enHtml(texteAVenir);
+
+verifier(
+  !/<p[^>]*>[^<]*Penalites de retard impayees[^<]*Vos 15 penalites/.test(html),
+  "deux lignes distinctes ne doivent pas fondre en un seul bloc : le montant de " +
+    "la dette et l'avertissement de R5 sont deux choses",
+);
+verifier(
+  /text-transform:uppercase[^>]*>MESURE A VENIR</.test(html),
+  "un titre en capitales doit devenir un titre",
+);
+verifier(
+  />MESURE DISCIPLINAIRE</.test(enHtml(texteSousPlan)),
+  "un titre suivi d'un tiret cadratin reste un titre : sa precision n'est pas en capitales",
+);
+verifier(
+  /<span style="font-size:14px[^>]*>plan de redressement \(R5\)\.<\/span>/.test(
+    enHtml(texteSousPlan),
+  ),
+  "et cette precision se met en gris, non en capitales",
+);
+verifier(
+  /border-left:2px solid/.test(html),
+  "les listes et les etapes doivent se distinguer du corps",
+);
+verifier(
+  /<a href="https:\/\/ip12-alpha\.vercel\.app"/.test(html),
+  "l'adresse du site doit etre cliquable : on ne recopie pas une adresse a la main",
+);
+verifier(
+  /font-size:13px[^>]*>Relance du 30\/09\/2026\.<\/p>/.test(html),
+  "la date du courrier appartient au pied, non au corps",
+);
+verifier(
+  /font-size:13px[^>]*>Le bureau — Investment Pioneers<\/p>/.test(html),
+  "la signature aussi",
+);
+verifier(
+  !/<p[^>]*>\s*<\/p>/.test(html),
+  "aucun paragraphe vide : les lignes vides reglent l'espacement, elles ne le remplissent pas",
+);
+
+/*
+ * Un courriel n'a pas de feuille de style : tout est en ligne. Et les couleurs
+ * sont posees explicitement -- Gmail sur Android inverse les siennes en theme
+ * sombre, et un fond laisse implicite devient noir sous une encre noire.
+ */
+verifier(!/<style|class=/.test(html), "aucune feuille ni classe : un courriel ne les lit pas");
+verifier(
+  /background:#ffffff/.test(html) && /color:#1f1b16/.test(html),
+  "le fond et l'encre du corps sont poses, non laisses au client",
+);
+
+/* Ce que le texte ne dit pas, le HTML ne l'invente pas. */
+const sansBalise = html.replace(/<[^>]*>/g, " ").replace(/&amp;/g, "&").replace(/\s+/g, " ");
+for (const mot of ["MESURE A VENIR", "15 000 FCFA", "Investment Pioneers"]) {
+  verifier(sansBalise.includes(mot), `« ${mot} » doit survivre au rendu`);
+}
+verifier(
+  !/<script|onerror=|onclick=/i.test(html),
+  "rien d'executable dans un courrier : les notes viennent du bureau, mais elles sont saisies",
+);
+verifier(
+  enHtml("Un <b>essai</b> & une esperluette").includes("&lt;b&gt;"),
+  "une balise saisie dans une note s'affiche, elle ne s'execute pas",
+);
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 console.log(
   `OK - ${controles} controles du courrier de relance : objet, seuil R5, ` +
     "dettes de penalites et leur somme, liste des mois, R2, mode d'emploi des cotisations " +
     "et des penalites, mesures disciplinaires, regime particulier, mesure a venir, " +
-    "notes collees et mise en forme",
+    "notes collees, mise en forme et rendu HTML",
 );

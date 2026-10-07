@@ -72,23 +72,184 @@ function optionsSmtp() {
  *
  * Un message sans partie HTML s'affiche vide dans certains clients, dont
  * l'application mobile de Gmail : le corps est bien la, personne ne le voit. Les
- * deux parties portent le meme contenu -- le texte reste la source, le HTML n'en
- * est qu'un rendu.
+ * deux parties portent le meme contenu -- LE TEXTE RESTE LA SOURCE, le HTML n'en
+ * est qu'un rendu. Rien n'est ecrit deux fois, donc rien ne peut diverger.
+ *
+ * Ce rendu lit la structure que les courriers respectent deja :
+ *
+ *   TITRE EN CAPITALES            une section
+ *   TITRE — avec une suite        une section, et sa precision en gris
+ *     - element                   une liste
+ *     1. etape                    une marche numerotee
+ *        suite indentee           la suite de la ligne precedente
+ *   Le bureau — ...               le pied, en gris et plus petit
+ *
+ * UNE LIGNE, UN PARAGRAPHE. Depuis que les paragraphes ne sont plus coupes a la
+ * main, chaque ligne du texte est une unite de sens complete. Les joindre faisait
+ * fondre en un seul bloc le montant de la dette et l'avertissement de R5, qui
+ * sont deux choses.
+ *
+ * Aucune balise n'est inventee : ce que le texte ne dit pas, le HTML ne le dit
+ * pas non plus.
+ *
+ * LES CONTRAINTES DU COURRIEL, NON CELLES DU WEB. Styles en ligne -- aucune
+ * feuille n'est lue --, tableaux pour la largeur, et des couleurs posees
+ * explicitement : Gmail sur Android inverse les siennes en theme sombre, et un
+ * fond laisse implicite devient noir sous une encre noire.
  */
+const ENCRE = "#1f1b16";
+const ENCRE_2 = "#5c5349";
+const MARINE = "#1b3557";
+const FILET = "#e4ded4";
+const PAPIER = "#ffffff";
+const FOND = "#f4f1ec";
+
+function echapper(t: string): string {
+  return t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/** Les adresses du site deviennent cliquables ; rien d'autre n'est touche. */
+function avecLiens(t: string): string {
+  return t.replace(
+    /(https?:\/\/[^\s<>"]+)/g,
+    `<a href="$1" style="color:${MARINE};text-decoration:underline">$1</a>`,
+  );
+}
+
+/**
+ * Un titre de section : tout ce qui precede un tiret cadratin est en capitales.
+ *
+ * « MESURE DISCIPLINAIRE — plan de redressement (R5). » est un titre dont la
+ * precision ne l'est pas. On ne teste donc pas la ligne entiere, sans quoi la
+ * moitie des titres du courrier passerait pour un paragraphe.
+ */
+function titreEtSuite(ligne: string): { titre: string; suite: string } | null {
+  const coupe = ligne.indexOf(" — ");
+  const tete = coupe === -1 ? ligne : ligne.slice(0, coupe);
+  const lettres = tete.replace(/[^A-Za-zÀ-ÿ]/g, "");
+  if (lettres.length < 4 || tete !== tete.toUpperCase()) return null;
+  return { titre: tete.trim(), suite: coupe === -1 ? "" : ligne.slice(coupe + 3).trim() };
+}
+
 function enHtml(texte: string): string {
-  const echappe = texte
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  const corps = echappe
-    .split("\n")
-    .map((l) => (l.trim() === "" ? "<br>" : `<div>${l}</div>`))
-    .join("");
+  const morceaux: string[] = [];
+  let paragraphe: string[] = [];
+  let liste: string[] = [];
+  let pied = false;
+
+  const viderParagraphe = (pied = false) => {
+    if (paragraphe.length === 0) return;
+    const style = pied
+      ? `margin:0 0 4px;font-size:13px;line-height:1.55;color:${ENCRE_2}`
+      : `margin:0 0 14px;font-size:15px;line-height:1.6;color:${ENCRE}`;
+    morceaux.push(`<p style="${style}">${avecLiens(paragraphe.join(" "))}</p>`);
+    paragraphe = [];
+  };
+  const viderListe = () => {
+    if (liste.length === 0) return;
+    morceaux.push(
+      `<table role="presentation" cellpadding="0" cellspacing="0" border="0" ` +
+        `style="margin:0 0 14px;border-left:2px solid ${FILET};padding-left:0">` +
+        liste
+          .map(
+            (l) =>
+              `<tr><td style="padding:3px 0 3px 12px;font-size:15px;line-height:1.55;` +
+              `color:${ENCRE}">${avecLiens(l)}</td></tr>`,
+          )
+          .join("") +
+        "</table>",
+    );
+    liste = [];
+  };
+
+  for (const brute of texte.split("\n")) {
+    const ligne = echapper(brute);
+    const nue = ligne.trim();
+
+    if (nue === "") {
+      viderParagraphe();
+      viderListe();
+      continue;
+    }
+
+    /* Une ligne indentee de quatre espaces ou plus prolonge la precedente. */
+    if (/^ {4,}/.test(ligne) && liste.length > 0) {
+      liste[liste.length - 1] += ` ${nue}`;
+      continue;
+    }
+    if (/^ {4,}/.test(ligne) && paragraphe.length > 0) {
+      paragraphe.push(nue);
+      continue;
+    }
+
+    const element = nue.match(/^(?:- |\d+\. )([\s\S]*)$/);
+    if (/^ {2}/.test(ligne) && element) {
+      viderParagraphe();
+      const numero = nue.match(/^(\d+)\. /);
+      liste.push(
+        numero
+          ? `<span style="color:${ENCRE_2}">${numero[1]}.</span> ${element[1]}`
+          : element[1],
+      );
+      continue;
+    }
+
+    const titre = titreEtSuite(nue);
+    if (titre) {
+      viderParagraphe();
+      viderListe();
+      morceaux.push(
+        `<p style="margin:26px 0 10px;padding-top:14px;border-top:1px solid ${FILET}">` +
+          `<span style="font-size:12.5px;font-weight:600;letter-spacing:0.07em;` +
+          `text-transform:uppercase;color:${MARINE}">${titre.titre}</span>` +
+          (titre.suite
+            ? `<br><span style="font-size:14px;color:${ENCRE_2}">${avecLiens(titre.suite)}</span>`
+            : "") +
+          "</p>",
+      );
+      continue;
+    }
+
+    viderListe();
+    /*
+     * Chaque ligne se ferme aussitot : elle est deja un paragraphe entier.
+     * Le pied -- la date du courrier et la signature -- se distingue du corps,
+     * comme il le fait sur le papier.
+     */
+    viderParagraphe();
+    paragraphe.push(nue);
+    const estPied =
+      /^(Relance|Courrier) du \d/.test(nue) || /^Le (bureau|suivi du club) — /.test(nue);
+    if (estPied) {
+      if (morceaux.length > 0 && !pied) {
+        morceaux.push(`<div style="height:10px;border-top:1px solid ${FILET};margin-top:18px"></div>`);
+        pied = true;
+      }
+      viderParagraphe(true);
+    }
+  }
+  viderParagraphe();
+  viderListe();
+
+  /*
+   * Le pied est pose a part : il ferme le courrier, et c'est la derniere ligne
+   * du texte qui le designe -- « Le bureau — Investment Pioneers ».
+   */
   return (
-    '<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;' +
-    'font-size:15px;line-height:1.5;color:#1f1b16;white-space:pre-wrap">' +
-    corps +
-    "</div>"
+    `<div style="margin:0;padding:0;background:${FOND}">` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" ` +
+    `style="background:${FOND};padding:16px 0"><tr><td align="center">` +
+    `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" ` +
+    `style="max-width:600px;background:${PAPIER};border:1px solid ${FILET};border-radius:12px">` +
+    `<tr><td style="padding:18px 22px;background:${MARINE};border-radius:12px 12px 0 0">` +
+    `<span style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;` +
+    `font-size:15px;font-weight:600;color:#ffffff;letter-spacing:0.02em">${CLUB.sigle}</span>` +
+    `<span style="font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;` +
+    `font-size:13px;color:#c3d4e8"> · ${CLUB.nom}</span>` +
+    `</td></tr><tr><td style="padding:22px;font-family:system-ui,-apple-system,` +
+    `'Segoe UI',Roboto,sans-serif">` +
+    morceaux.join("") +
+    "</td></tr></table></td></tr></table></div>"
   );
 }
 
