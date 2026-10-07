@@ -49,6 +49,38 @@ streamlit run app.py
 | `scoring.py` | Scoring multi-critères → signal ACHAT/NEUTRE/VENTE |
 | `analysis.py` | Analyse narrative complète par section |
 | `app.py` | Interface Streamlit |
+| `recherche/etude_facteurs.py` | Étude de rentabilité sur les données réelles (facteurs, robustesse, dimensionnement) |
+| `recherche/RAPPORT.md` | Conclusions chiffrées et limites de l'étude |
+| `strategie/panier.py` | Panier à faible rotation : univers, classement, ordres de rebalancement |
+| `collecte_calendrier.py` | Collecte le calendrier BRVM des mises en paiement de dividendes |
+
+## Stratégie à faible rotation
+
+L'approche technique du screener (revue bi-mensuelle, stop à 8 %, détention plafonnée
+à 90 jours) n'a pas été rentable sur 2021-2026. L'étude dans `recherche/` en donne les
+causes mesurées : le dividende était absent du backtest (7,33 %/an omis), les frais y
+valaient 1,3 % aller-retour contre 2,8 % réels, et sur un marché où 95 % des titres
+montaient, chaque filtre retirait de la valeur.
+
+`strategie/panier.py` applique ce que les données valident :
+
+```bash
+python strategie/panier.py --capital 2000000                      # panier cible
+python strategie/panier.py --capital 2000000 --portefeuille portfolio.json   # ordres
+python strategie/panier.py --versement-eur 50 --portefeuille portfolio.json \
+                           --objectif 2000000                      # versement du mois
+```
+
+- **25 lignes équipondérées**, classées sur rendement bénéficiaire + faible volatilité
+- **liquidité en filtre, jamais en critère de tri** — trier dessus coûte ~7 points de CAGR
+- **rebalancement annuel** — le même panier perd 5,1 points en passant au mensuel
+- **plafond de 8 % par ligne** sur les versements : sans lui, renforcer ce qui a
+  le plus baissé finit avec 16 lignes et 31,9 % sur un seul titre
+- détection automatique des titres dont la cotation s'est arrêtée (SEMC et SICC
+  depuis le 16/09/2026), signalés comme non liquidables
+
+Reproduire l'étude : `python recherche/etude_facteurs.py`. Lire `recherche/RAPPORT.md`
+section 7 avant d'engager de l'argent : les chiffres mesurent un passé exceptionnel.
 
 ## Changelog v2
 
