@@ -23,6 +23,16 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    /*
+     * Les ateliers des controles : du code recopie et compile, efface a la fin.
+     * Un controle qui echoue les laisse derriere lui, et le linter se mettait
+     * alors a rapporter des avertissements sur du code genere.
+     */
+    ".verif/**",
+    ".lettre/**",
+    ".lettre-js/**",
+    ".reglements/**",
+    ".reglements-js/**",
   ]),
 ]);
 

@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { membreCourant } from "@/lib/auth";
 import { baseConfiguree } from "@/lib/db";
-import { seConnecter } from "@/app/actions/auth";
-import { Champ, FormulaireAction } from "@/components/formulaires";
+import { demanderReinitialisation, seConnecter } from "@/app/actions/auth";
+import { Champ, Depliant, FormulaireAction } from "@/components/formulaires";
 import { Alerte } from "@/components/ui";
 import { CLUB } from "@/lib/settings";
 
@@ -62,9 +62,30 @@ export default async function PageConnexion() {
               autoComplete="current-password"
             />
           </FormulaireAction>
-          <p className="mt-5 text-center text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-            Mot de passe oublie ? Demandez au president de le reinitialiser.
-          </p>
+          {/*
+            * LA PHRASE MENE QUELQUE PART.
+            *
+            * Elle disait « demandez au president de le reinitialiser » sans
+            * donner le moyen de le demander : le membre rouvrait le groupe
+            * WhatsApp, ce que le site est cense remplacer. Un lien `mailto:`
+            * aurait publie l'adresse du president sur une page que n'importe
+            * qui peut ouvrir ; le site, lui, la connait deja et sait ecrire.
+            *
+            * Un depliant, non une autre page : la demande se fait sans quitter
+            * l'ecran de connexion, et ne s'impose a personne.
+            */}
+          <div className="mt-4">
+            <Depliant titre="Mot de passe oublie ?">
+              <p className="mb-3 text-[12.5px]" style={{ color: "var(--ink-2)" }}>
+                Indiquez l&apos;adresse avec laquelle vous vous connectez. Le president en
+                sera averti et vous donnera un mot de passe provisoire. Aucun mot de passe
+                ne circule par courriel.
+              </p>
+              <FormulaireAction action={demanderReinitialisation} libelle="Prevenir le president">
+                <Champ nom="email" libelle="Votre e-mail" type="email" autoComplete="email" />
+              </FormulaireAction>
+            </Depliant>
+          </div>
         </div>
       )}
     </main>

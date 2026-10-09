@@ -411,3 +411,45 @@ export async function envoyerAcces(
     texte: lignes.join("\n"),
   });
 }
+
+/**
+ * Un membre a oublie son mot de passe : le president doit le savoir.
+ *
+ * La page de connexion le disait sans donner le moyen de le demander. Cet avis
+ * porte la demande, et rien d'autre : aucun mot de passe, aucun lien de
+ * reinitialisation. C'est le president qui rouvre l'acces depuis la page
+ * Membres, comme aujourd'hui -- le circuit ne change pas, seule la demande
+ * cesse de passer par le groupe WhatsApp.
+ */
+export async function avertirDemandeReinitialisation(params: {
+  nom: string;
+  email: string;
+}): Promise<number> {
+  const titulaires = await adresses("gererMembres");
+  if (titulaires.length === 0) return 0;
+
+  const siteUrl = lienDuSite();
+  const lignes = [
+    "Bonjour,",
+    "",
+    `${params.nom} ne parvient plus a se connecter et demande la reinitialisation ` +
+      "de son mot de passe.",
+    `Adresse du compte : ${params.email}`,
+    "",
+    "Ouvrez sa fiche sur la page Membres et donnez-lui un mot de passe provisoire : " +
+      "il lui sera demande d'en choisir un autre a sa premiere connexion.",
+  ];
+  if (siteUrl) lignes.push("", `Reinitialiser : ${siteUrl}/membres`);
+  lignes.push("", `Le suivi du club — ${CLUB.nom}`);
+
+  let partis = 0;
+  for (const m of titulaires) {
+    const { ok } = await envoyerCourriel({
+      destinataire: m.email,
+      sujet: `${CLUB.sigle} — ${params.nom} demande un nouveau mot de passe`,
+      texte: lignes.join("\n"),
+    });
+    if (ok) partis++;
+  }
+  return partis;
+}

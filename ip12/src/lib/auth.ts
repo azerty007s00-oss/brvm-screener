@@ -1,16 +1,22 @@
 import { cookies } from "next/headers";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { db } from "./db";
+/*
+ * Les compteurs de `login_attempts` vivent a part : ce sont des donnees, non de
+ * la gestion de session. Ce fichier importe `next/headers` pour les cookies, et
+ * traine avec lui tout le typage de Next -- un controle qui veut verifier un
+ * plafond contre PostgreSQL devait donc compiler le cadre entier. Reexportes
+ * ici : les appelants ne changent pas.
+ */
+export {
+  tracerDemande, tracerTentative, tropDeDemandes, tropDeTentatives,
+} from "./tentatives";
 import { ROLES } from "./settings";
 import type { Role } from "./settings";
 import { peut, titulaires, type Droit } from "./droits";
 
 const COOKIE = "ip12_session";
 const DUREE_SESSION_JOURS = 30;
-
-/** Fenetre et plafond de la protection anti-force brute (table login_attempts). */
-const FENETRE_ANTI_FORCE_MINUTES = 15;
-const ECHECS_AVANT_BLOCAGE = 8;
 
 export type Membre = {
   id: string;
@@ -70,36 +76,6 @@ export function verifierMotDePasse(motDePasse: string, hash: string | null): boo
   const calcule = scryptSync(motDePasse, sel, 64);
   // Comparaison a temps constant : ne fuit pas la position du premier octet different.
   return calcule.length === reference.length && timingSafeEqual(calcule, reference);
-}
-
-/* ------------------------------------------------------- protection anti-force brute */
-
-export async function tropDeTentatives(email: string): Promise<boolean> {
-  try {
-    const sql = db();
-    const rows = await sql`
-      select count(*)::int as c
-      from login_attempts
-      where lower(email) = ${email.toLowerCase()}
-        and ok = false
-        and attempted_at > now() - (${FENETRE_ANTI_FORCE_MINUTES} || ' minutes')::interval
-    `;
-    return Number(rows[0]?.c ?? 0) >= ECHECS_AVANT_BLOCAGE;
-  } catch {
-    // Une table absente ne doit pas empecher de se connecter.
-    return false;
-  }
-}
-
-export async function tracerTentative(email: string, reussie: boolean): Promise<void> {
-  try {
-    const sql = db();
-    await sql`
-      insert into login_attempts (email, ok) values (${email.toLowerCase()}, ${reussie})
-    `;
-  } catch {
-    // La trace est un confort, pas une condition de connexion.
-  }
 }
 
 /* -------------------------------------------------------------------- sessions */

@@ -149,6 +149,18 @@ writeFileSync(
   `${RACINE}/${ATELIER}/constat.ts`,
   brancher(readFileSync(`${RACINE}/src/lib/constat.ts`, "utf8")),
 );
+/*
+ * Le plafond des demandes de reinitialisation : un chemin ouvert SANS CONNEXION,
+ * qui ecrit au president. Ce qui le borne doit etre verifie en base, et non sur
+ * la foi d'une requete relue.
+ */
+writeFileSync(
+  `${RACINE}/${ATELIER}/tentatives.ts`,
+  brancher(readFileSync(`${RACINE}/src/lib/tentatives.ts`, "utf8")).replace(
+    /from "\.\/db"/g,
+    'from "./doublures.js"',
+  ),
+);
 
 writeFileSync(`${RACINE}/${ATELIER}/doublures.ts`, `
 export type EtatFormulaire = { ok: boolean; message?: string; erreur?: string };
@@ -216,7 +228,7 @@ writeFileSync(penalitesTs, original.replace('from "./settings"', 'from "./settin
 try {
   execFileSync(
     "npx",
-    ["tsc", `${ATELIER}/penalites.ts`, `${ATELIER}/constat.ts`,
+    ["tsc", `${ATELIER}/penalites.ts`, `${ATELIER}/constat.ts`, `${ATELIER}/tentatives.ts`,
       "--target", "es2022", "--module", "es2022",
       "--moduleResolution", "bundler", "--strict", "--outDir", `${ATELIER}-js`,
       "--rootDir", "."],
@@ -229,6 +241,7 @@ writeFileSync(`${RACINE}/${ATELIER}-js/package.json`, '{"type":"module"}');
 globalThis.__sql = requete;
 const actions = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/penalites.js`);
 const constat = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/constat.js`);
+const auth = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/tentatives.js`);
 const { session, donnees, bornes } = await import(
   `${RACINE}/${ATELIER}-js/${ATELIER}/doublures.js`,
 );
@@ -549,6 +562,55 @@ courues = await constat.penalitesNonInscrites(situationVierge);
 egal(courues.get(vierge).montant, 0,
   "une penalite reglee reste inscrite : elle ne doit pas se remettre a courir");
 
+/* ========== 8. le plafond des demandes de reinitialisation ============== */
+
+/*
+ * POURQUOI CELUI-CI EST VERIFIE EN BASE.
+ *
+ * « Mot de passe oublie ? » est le seul chemin du site ouvert SANS CONNEXION
+ * qui declenche un courriel. Ce qui le borne n'est donc pas un confort : sans
+ * plafond, n'importe qui connaissant l'adresse du site inonde le president.
+ *
+ * Le compte est tenu dans `login_attempts`, sous une cle prefixee. Deux choses
+ * doivent tenir, et aucune ne se lit dans le code : que le plafond morde, et
+ * qu'il ne se melange pas aux echecs de connexion -- sans quoi il bloquerait le
+ * membre qui vient justement d'oublier son mot de passe.
+ */
+const QUI = "oubli@ip12.ci";
+
+egal(await auth.tropDeDemandes(QUI), false, "aucune demande : rien ne bloque");
+
+await auth.tracerDemande(QUI);
+await auth.tracerDemande(QUI);
+egal(await auth.tropDeDemandes(QUI), false, "deux demandes restent sous le plafond");
+
+await auth.tracerDemande(QUI);
+egal(await auth.tropDeDemandes(QUI), true, "la troisieme ferme le robinet");
+
+/* La cle est prefixee : la demande ne compte pas comme un echec de connexion. */
+egal(
+  lire(`select count(*) from login_attempts where lower(email) = '${QUI}';`),
+  "0",
+  "une demande ne s'inscrit pas sous l'adresse nue",
+);
+egal(
+  lire(`select count(*) from login_attempts where lower(email) = 'reinit:${QUI}';`),
+  "3",
+  "elle s'inscrit sous sa propre cle",
+);
+egal(await auth.tropDeTentatives(QUI), false,
+  "et le membre bloque en demandes peut toujours tenter de se connecter");
+
+/*
+ * L'inverse aussi : huit echecs de connexion bloquent la connexion, pas la
+ * demande -- c'est precisement a ce moment qu'on veut pouvoir la faire.
+ */
+const AUTRE = "bloque@ip12.ci";
+for (let i = 0; i < 8; i++) await auth.tracerTentative(AUTRE, false);
+egal(await auth.tropDeTentatives(AUTRE), true, "huit echecs bloquent la connexion");
+egal(await auth.tropDeDemandes(AUTRE), false,
+  "mais pas la demande de reinitialisation : c'est alors qu'elle sert");
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 psql("postgres", `drop database if exists ${BASE};`);
@@ -556,5 +618,6 @@ console.log(
   `OK - ${controles} controles du reglement declare, executes sur PostgreSQL : ` +
     "declaration sans effet sur la dette, unicite de l'attente, quantites, " +
     "scission a la validation, refus, solde total, constat rejouable, R4, " +
-    "lignes soldees intactes, borne de reprise, ce qui court sans etre inscrit",
+    "lignes soldees intactes, borne de reprise, ce qui court sans etre inscrit, " +
+    "plafond des demandes de reinitialisation",
 );

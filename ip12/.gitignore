@@ -43,3 +43,10 @@ next-env.d.ts
 
 # Verification des calculs
 .verif/
+# Ateliers des controles : recopies, compiles, puis effaces. Un controle qui
+# echoue les laisse derriere lui, et le linter se mettait alors a lire du code
+# genere.
+.lettre/
+.lettre-js/
+.reglements/
+.reglements-js/
