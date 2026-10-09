@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { premierMoisOuvert } from "@/lib/penalites";
 import type { CelluleMois } from "@/lib/penalites";
 import { exigerMembre } from "@/lib/auth";
 import {
@@ -126,11 +125,18 @@ export default async function PageVersements({
   const aujourdhui = debutMois();
 
   /*
-   * Le mois par lequel le reglement doit commencer : le premier dont il manque
-   * quelque chose. Le formulaire proposait le mois courant, ce qui conduisait
-   * droit au refus -- et, avant que ce refus existe, droit au mois saute.
+   * Le mois a proposer : le premier qui reste a regler.
+   *
+   * Le formulaire proposait le mois courant. Pour un membre en retard, c'etait
+   * precisement le mois a ne pas choisir ; pour un membre a jour, c'etait un
+   * mois deja paye, que la declaration refuse. Dans les deux cas il proposait
+   * un refus. `prochainMoisARegler` repond aux deux : le plus ancien mois
+   * ouvert s'il en reste un, sinon le premier mois que les avances ne couvrent
+   * pas encore.
    */
-  const premierOuvert = maSituation ? premierMoisOuvert(maSituation.cellules) : null;
+  const aRegler = maSituation?.prochainMoisARegler ?? null;
+  /* Passe le mois courant, c'est qu'il n'y a plus de retard : le ton change. */
+  const enAvance = aRegler !== null && aRegler > aujourdhui;
 
   /* Combien de membres ont solde le mois en cours : l'etat des cellules le dit. */
   const payesCeMois = situations.filter((x) => {
@@ -240,14 +246,16 @@ export default async function PageVersements({
                 nom="moisDebut"
                 libelle="Premier mois couvert"
                 type="month"
-                valeur={(premierOuvert ?? aujourdhui).slice(0, 7)}
+                valeur={(aRegler ?? aujourdhui).slice(0, 7)}
                 aide={
-                  premierOuvert
-                    ? `Les mois se reglent dans l'ordre : ${moisLong(premierOuvert)} est le plus ancien qui reste ouvert.` +
-                      (saisieDirecte
-                        ? " Pour un autre membre, c'est son propre mois le plus ancien qui s'applique."
-                        : "")
-                    : "Tout est a jour : ce mois-ci, ou les suivants pour une avance."
+                  (aRegler === null
+                    ? "Les mois se reglent dans l'ordre, du plus ancien au plus recent."
+                    : enAvance
+                      ? `Vous etes a jour : ${moisLong(aRegler)} est le prochain mois a regler.`
+                      : `Les mois se reglent dans l'ordre : ${moisLong(aRegler)} est le plus ancien qui reste ouvert.`) +
+                  (saisieDirecte
+                    ? " Pour un autre membre, c'est son propre prochain mois qui s'applique."
+                    : "")
                 }
               />
               <Champ

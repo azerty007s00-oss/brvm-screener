@@ -47,6 +47,50 @@ export function premierMoisOuvert(cellules: CelluleMois[]): string | null {
   return cellules.find((c) => c.manque > 0)?.mois ?? null;
 }
 
+/**
+ * Le mois a declarer : le premier qui ne soit pas couvert, avances comprises.
+ *
+ * `premierMoisOuvert` s'arrete au dernier mois de la grille, qui est le mois
+ * courant : il rend `null` des que tout est a jour. Ce n'est pas une reponse
+ * pour un formulaire de saisie -- le membre qui vient de solder octobre doit
+ * se voir proposer NOVEMBRE, non octobre, qu'il a deja paye et que la
+ * declaration refuserait.
+ *
+ * Au-dela de la grille, il n'y a que des avances. On avance donc de mois en
+ * mois dans les versements connus tant qu'ils soldent le mois : celui qui ne
+ * le solde pas est le prochain a regler. Les lignes servant ce calcul sont
+ * celles qui ont deja servi la grille -- aucune lecture de plus.
+ *
+ * La borne de 25 tours n'est pas de la prudence gratuite : la declaration
+ * plafonne a 24 mois d'un coup, donc aucune avance legitime ne va plus loin,
+ * et une boucle sur des donnees abimees ne doit pas faire tourner une page.
+ */
+export function prochainMoisARegler(
+  cellules: CelluleMois[],
+  versements: VersementConnu[],
+  requis: number,
+): string | null {
+  const ouvert = premierMoisOuvert(cellules);
+  if (ouvert) return ouvert;
+
+  const dernier = cellules.at(-1)?.mois;
+  if (!dernier) return null;
+
+  const porte = new Map<string, number>();
+  for (const v of versements) {
+    if (v.statut === "rejete") continue;
+    const cle = v.mois_couvert.slice(0, 10);
+    porte.set(cle, (porte.get(cle) ?? 0) + v.montant);
+  }
+
+  let mois = decalerMois(dernier, 1);
+  for (let tour = 0; tour < 25; tour++) {
+    if ((porte.get(mois) ?? 0) < requis) return mois;
+    mois = decalerMois(mois, 1);
+  }
+  return mois;
+}
+
 /** Vrai si le versement est intervenu apres l'echeance du mois qu'il couvre. */
 export function verseEnRetard(mois: string, dateVersement: string | null): boolean {
   if (!dateVersement) return false;
@@ -103,7 +147,7 @@ export type PenaliteCalculee = {
   figee: boolean;
 };
 
-type VersementConnu = {
+export type VersementConnu = {
   mois_couvert: string;
   montant: number;
   statut: "en_attente" | "valide" | "rejete";

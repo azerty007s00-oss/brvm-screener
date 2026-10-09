@@ -4,7 +4,12 @@ import { db } from "./db";
 import { estTableAbsente } from "./erreurs";
 import { CLUB, REGLES, debutMois, estExigible, moisDuClub, tauxNormalise } from "./settings";
 import type { Role } from "./settings";
-import { situationMembre, type ReglesMembre, type SituationMembre } from "./penalites";
+import {
+  prochainMoisARegler,
+  situationMembre,
+  type ReglesMembre,
+  type SituationMembre,
+} from "./penalites";
 import {
   KIND_PENALITE,
   REGLE_MEMBRE,
@@ -661,6 +666,15 @@ export type SituationClub = SituationMembre & {
   /** La part portant sur des mois a venir. */
   avance: number;
   retardDeclare: boolean;
+  /**
+   * Le mois par lequel ce membre doit reprendre son reglement, avances
+   * comprises. Null seulement si la grille est vide.
+   *
+   * Porte sur la situation plutot que recalcule par chaque ecran : le
+   * formulaire le propose, la declaration le controle, et les deux ne peuvent
+   * donc pas dire deux choses differentes.
+   */
+  prochainMoisARegler: string | null;
 };
 
 export type RegleMembre = {
@@ -1087,6 +1101,11 @@ async function situationsClubBrut(aujourdhui: Date): Promise<SituationClub[]> {
       retardDeclare:
         situation.moisEnRetard.length > 0 &&
         situation.moisEnRetard.every((mo) => declares.includes(mo)),
+      prochainMoisARegler: prochainMoisARegler(
+        situation.cellules,
+        siens,
+        derogations.get(m.id)?.cotisationMensuelle ?? reglages.cotisationMensuelle,
+      ),
     };
   });
 }

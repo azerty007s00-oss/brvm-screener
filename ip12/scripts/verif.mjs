@@ -30,6 +30,7 @@ const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent 
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5, premierMoisOuvert,
+  prochainMoisARegler,
 } = await import("../.verif/penalites.mjs");
 const {
   tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa,
@@ -1254,11 +1255,112 @@ assert.equal(
   "un mois pas encore echu mais non verse reste le mois a regler en premier",
 );
 
+/*
+ * LE MOIS QUE LE FORMULAIRE DOIT PROPOSER.
+ *
+ * `premierMoisOuvert` rend null des que tout est a jour, parce que la grille
+ * s'arrete au mois courant. Ce n'est pas une reponse pour une saisie : le
+ * membre qui vient de solder septembre doit se voir proposer octobre, non
+ * septembre, qu'il a paye et que la declaration refuserait.
+ */
+const toutVerse = [
+  ligne("2026-07-01", 5000), ligne("2026-08-01", 5000), ligne("2026-09-01", 5000),
+];
+const tousSoldes = situationMembre("n1", troisMois, toutVerse, [], septembre);
+assert.equal(
+  premierMoisOuvert(tousSoldes.cellules),
+  null,
+  "rien d'ouvert : c'est bien le cas ou il faut regarder plus loin",
+);
+assert.equal(
+  prochainMoisARegler(tousSoldes.cellules, toutVerse, 5000),
+  "2026-10-01",
+  "tout solde jusqu'au mois courant : le prochain mois a regler est le suivant",
+);
+
+/*
+ * Une avance va plus loin que la grille. Qui a paye d'avance octobre et
+ * novembre doit se voir proposer decembre : les mois couverts au-dela du mois
+ * courant comptent, eux aussi.
+ */
+const avecAvance = [
+  ligne("2026-07-01", 5000), ligne("2026-08-01", 5000), ligne("2026-09-01", 5000),
+  ligne("2026-10-01", 5000), ligne("2026-11-01", 5000),
+];
+const soldeEtAvance = situationMembre("n2", troisMois, avecAvance, [], septembre);
+assert.equal(
+  prochainMoisARegler(soldeEtAvance.cellules, avecAvance, 5000),
+  "2026-12-01",
+  "une avance repousse d'autant le prochain mois a regler",
+);
+
+// Une avance incomplete ne couvre pas son mois : c'est lui qu'il faut proposer.
+const avanceIncomplete = [
+  ligne("2026-07-01", 5000), ligne("2026-08-01", 5000), ligne("2026-09-01", 5000),
+  ligne("2026-10-01", 2000),
+];
+assert.equal(
+  prochainMoisARegler(
+    situationMembre("n3", troisMois, avanceIncomplete, [], septembre).cellules,
+    avanceIncomplete,
+    5000,
+  ),
+  "2026-10-01",
+  "un acompte d'avance ne solde pas le mois a venir",
+);
+
+/*
+ * Un retard l'emporte toujours sur l'avance : qui doit juillet et a paye
+ * octobre d'avance reprend par juillet, non par novembre.
+ */
+const trouEtAvance = [ligne("2026-08-01", 5000), ligne("2026-09-01", 5000), ligne("2026-10-01", 5000)];
+assert.equal(
+  prochainMoisARegler(
+    situationMembre("n4", troisMois, trouEtAvance, [], septembre).cellules,
+    trouEtAvance,
+    5000,
+  ),
+  "2026-07-01",
+  "le mois en retard passe avant toute avance deja versee",
+);
+
+// Une ligne rejetee ne couvre rien, pas plus en avance qu'ailleurs.
+const avanceRejetee = [
+  ligne("2026-07-01", 5000), ligne("2026-08-01", 5000), ligne("2026-09-01", 5000),
+  ligne("2026-10-01", 5000, "rejete"),
+];
+assert.equal(
+  prochainMoisARegler(
+    situationMembre("n5", troisMois, avanceRejetee, [], septembre).cellules,
+    avanceRejetee,
+    5000,
+  ),
+  "2026-10-01",
+  "une avance rejetee laisse son mois a regler",
+);
+
+// Une cotisation particuliere deplace le seuil : 10 000 exiges, 5 000 verses.
+const avanceSousDerogation = [
+  ligne("2026-07-01", 10_000), ligne("2026-08-01", 10_000), ligne("2026-09-01", 10_000),
+  ligne("2026-10-01", 5000),
+];
+assert.equal(
+  prochainMoisARegler(
+    situationMembre("n6", troisMois, avanceSousDerogation, [], septembre, undefined, {
+      cotisationMensuelle: 10_000,
+    }).cellules,
+    avanceSousDerogation,
+    10_000,
+  ),
+  "2026-10-01",
+  "le mois a venir se mesure a la cotisation du membre, non au tarif commun",
+);
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
     "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons, "
     + "net place et gain de gestion, reperes de l'abscisse, "
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
-    + "ordre de reglement des mois",
+    + "ordre de reglement des mois, prochain mois a regler",
 );

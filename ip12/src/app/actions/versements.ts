@@ -7,7 +7,6 @@ import { exigerMembre, exigerRole } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
 import { derogationsParMembre, reglagesEffectifs, situationsClub } from "@/lib/queries";
-import { premierMoisOuvert } from "@/lib/penalites";
 import type { ReglesMembre } from "@/lib/penalites";
 import { decalerMois, moisLong, premierDuMois } from "@/lib/settings";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
@@ -103,13 +102,13 @@ export async function declarerVersement(
    * la correction, qui est tracee.
    */
   const situation = (await situationsClub()).find((s) => s.membreId === membreCible);
-  const premierOuvert = situation ? premierMoisOuvert(situation.cellules) : null;
-  if (premierOuvert && moisDebut > premierOuvert) {
+  const aRegler = situation?.prochainMoisARegler ?? null;
+  if (aRegler && moisDebut > aRegler) {
     return {
       ok: false,
       erreur:
-        `${moisLong(premierOuvert)} n'est pas encore regle. Les mois se reglent dans ` +
-        `l'ordre, du plus ancien au plus recent : reprenez a ${moisLong(premierOuvert)}.`,
+        `${moisLong(aRegler)} reste a regler : les mois se reglent dans l'ordre, ` +
+        "du plus ancien au plus recent.",
     };
   }
 
