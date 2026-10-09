@@ -23,6 +23,30 @@ export type CelluleMois = {
   dateVersement: string | null;
 };
 
+/**
+ * Le mois par lequel le reglement doit commencer : le plus ancien dont il
+ * manque quelque chose.
+ *
+ * LES MOIS SE REGLENT DANS L'ORDRE. On ne regle pas octobre en laissant
+ * septembre ouvert : la penalite de l'art. 9 court sur le mois impaye, et un
+ * mois saute serait une penalite qui court sans fin sur un mois que le membre
+ * croit avoir compense en payant le suivant.
+ *
+ * `manque` est le seul critere, et c'est celui de la grille, du releve et de
+ * la relance : nul besoin d'une seconde definition de « ouvert » qui pourrait
+ * en differer. Il vaut zero des qu'un mois est couvert, qu'il soit valide ou
+ * seulement declare -- une declaration en attente ferme donc le mois ici : le
+ * membre a fait sa part, et le delai du tresorier ne doit pas l'empecher de
+ * regler le suivant. Il vaut zero aussi avant l'adhesion (`hors_periode`),
+ * qu'on ne doit pas.
+ *
+ * Rend `null` quand rien n'est ouvert : tout est a jour, et une avance sur les
+ * mois a venir est libre.
+ */
+export function premierMoisOuvert(cellules: CelluleMois[]): string | null {
+  return cellules.find((c) => c.manque > 0)?.mois ?? null;
+}
+
 /** Vrai si le versement est intervenu apres l'echeance du mois qu'il couvre. */
 export function verseEnRetard(mois: string, dateVersement: string | null): boolean {
   if (!dateVersement) return false;

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { premierMoisOuvert } from "@/lib/penalites";
 import type { CelluleMois } from "@/lib/penalites";
 import { exigerMembre } from "@/lib/auth";
 import {
@@ -124,6 +125,13 @@ export default async function PageVersements({
   const maSituation = situations.find((s) => s.membreId === membre.id);
   const aujourdhui = debutMois();
 
+  /*
+   * Le mois par lequel le reglement doit commencer : le premier dont il manque
+   * quelque chose. Le formulaire proposait le mois courant, ce qui conduisait
+   * droit au refus -- et, avant que ce refus existe, droit au mois saute.
+   */
+  const premierOuvert = maSituation ? premierMoisOuvert(maSituation.cellules) : null;
+
   /* Combien de membres ont solde le mois en cours : l'etat des cellules le dit. */
   const payesCeMois = situations.filter((x) => {
     const c = x.cellules.find((y) => y.mois === aujourdhui);
@@ -232,7 +240,15 @@ export default async function PageVersements({
                 nom="moisDebut"
                 libelle="Premier mois couvert"
                 type="month"
-                valeur={aujourdhui.slice(0, 7)}
+                valeur={(premierOuvert ?? aujourdhui).slice(0, 7)}
+                aide={
+                  premierOuvert
+                    ? `Les mois se reglent dans l'ordre : ${moisLong(premierOuvert)} est le plus ancien qui reste ouvert.` +
+                      (saisieDirecte
+                        ? " Pour un autre membre, c'est son propre mois le plus ancien qui s'applique."
+                        : "")
+                    : "Tout est a jour : ce mois-ci, ou les suivants pour une avance."
+                }
               />
               <Champ
                 nom="nbMois"

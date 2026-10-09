@@ -29,7 +29,7 @@ const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent 
 );
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
-  dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
+  dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5, premierMoisOuvert,
 } = await import("../.verif/penalites.mjs");
 const {
   tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa,
@@ -1140,10 +1140,125 @@ assert.equal(phaseSeuilR5(2, apresSeuilR5), "sous_le_seuil");
 assert.equal(issueR5(0, false, false, 15, apresSeuilR5).voie, "exclusion_plein_droit");
 assert.equal(issueR5(0, false, false, 15, avantSeuilR5).applicable, false);
 
+/* ------------------------------------------- l'ordre de reglement des mois */
+
+/*
+ * ON NE REGLE PAS UN MOIS EN LAISSANT UN MOIS ANTERIEUR OUVERT.
+ *
+ * `premierMoisOuvert` nomme le mois par lequel il faut reprendre. Ce qu'on
+ * verifie ici, c'est qu'il designe bien le PLUS ANCIEN mois ouvert, et que
+ * « ouvert » veuille dire la meme chose que partout ailleurs : un mois
+ * seulement declare est ferme, un mois d'avant l'adhesion n'a jamais ete du.
+ */
+const troisMois = ["2026-07-01", "2026-08-01", "2026-09-01"];
+const ligne = (mois, montant, statut = "valide", date = `${mois.slice(0, 8)}05`) => ({
+  mois_couvert: mois,
+  montant,
+  statut,
+  date_versement: date,
+});
+
+// Rien de verse : on reprend au premier mois du club pour ce membre.
+assert.equal(
+  premierMoisOuvert(situationMembre("o1", troisMois, [], [], septembre).cellules),
+  "2026-07-01",
+  "sans rien de verse, le reglement commence au mois le plus ancien",
+);
+
+/*
+ * LE CAS QUI MANQUAIT. Juillet impaye, aout et septembre soldes : c'est
+ * exactement le trou qu'on pouvait creuser, en payant les mois recents et en
+ * laissant le plus ancien derriere. Le mois a reprendre reste juillet.
+ */
+const trou = situationMembre(
+  "o2",
+  troisMois,
+  [ligne("2026-08-01", 5000), ligne("2026-09-01", 5000)],
+  [],
+  septembre,
+);
+assert.equal(trou.cellules[1].statut, "paye", "aout est bien solde dans ce scenario");
+assert.equal(
+  premierMoisOuvert(trou.cellules),
+  "2026-07-01",
+  "un mois saute reste le mois a reprendre, meme si les suivants sont payes",
+);
+
+// Un acompte ne ferme pas le mois : 2 000 sur 5 000 reste le mois a reprendre.
+assert.equal(
+  premierMoisOuvert(
+    situationMembre("o3", troisMois, [ligne("2026-07-01", 2000)], [], septembre).cellules,
+  ),
+  "2026-07-01",
+  "un acompte ne ferme pas le mois pour l'ordre de reglement",
+);
+
+/*
+ * Une declaration en attente ferme le mois pour cette regle. Le membre a fait
+ * sa part ; le delai que met le tresorier a valider ne doit pas l'empecher de
+ * regler le mois suivant.
+ */
+const enAttenteDeValidation = situationMembre(
+  "o4",
+  troisMois,
+  [ligne("2026-07-01", 5000, "en_attente"), ligne("2026-08-01", 5000)],
+  [],
+  septembre,
+);
+assert.equal(enAttenteDeValidation.cellules[0].statut, "en_attente");
+assert.equal(
+  premierMoisOuvert(enAttenteDeValidation.cellules),
+  "2026-09-01",
+  "un mois declare mais pas encore valide ne bloque pas le reglement du suivant",
+);
+
+// Avant l'adhesion, rien n'est du : on reprend au premier mois reellement du.
+assert.equal(
+  premierMoisOuvert(
+    situationMembre("o5", troisMois, [], [], septembre, "2026-09-01").cellules,
+  ),
+  "2026-09-01",
+  "les mois anterieurs a l'adhesion ne sont pas des mois a regler",
+);
+
+// Tout solde : plus rien d'ouvert, l'avance sur les mois a venir est libre.
+assert.equal(
+  premierMoisOuvert(
+    situationMembre(
+      "o6",
+      troisMois,
+      [ligne("2026-07-01", 5000), ligne("2026-08-01", 5000), ligne("2026-09-01", 5000)],
+      [],
+      septembre,
+    ).cellules,
+  ),
+  null,
+  "quand tout est solde, aucun mois ne bride le reglement",
+);
+
+/*
+ * Un mois a venir non verse est ouvert, lui aussi : payer novembre en laissant
+ * octobre vide serait encore sauter un mois, meme sans retard constate.
+ */
+const avantEcheanceDuMois = situationMembre(
+  "o7",
+  ["2026-09-01", "2026-10-01"],
+  [ligne("2026-09-01", 5000)],
+  [],
+  new Date("2026-10-05T12:00:00Z"),
+);
+assert.equal(avantEcheanceDuMois.cellules[1].statut, "a_venir");
+assert.equal(
+  premierMoisOuvert(avantEcheanceDuMois.cellules),
+  "2026-10-01",
+  "un mois pas encore echu mais non verse reste le mois a regler en premier",
+);
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
     "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons, "
     + "net place et gain de gestion, reperes de l'abscisse, "
-    + "cumul, gain de periode et marches, etat de l'echeance, seuil R5",
+    + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
+    + "ordre de reglement des mois",
 );

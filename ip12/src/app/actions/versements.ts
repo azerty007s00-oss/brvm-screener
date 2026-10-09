@@ -6,7 +6,8 @@ import { db } from "@/lib/db";
 import { exigerMembre, exigerRole } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
-import { derogationsParMembre, reglagesEffectifs } from "@/lib/queries";
+import { derogationsParMembre, reglagesEffectifs, situationsClub } from "@/lib/queries";
+import { premierMoisOuvert } from "@/lib/penalites";
 import type { ReglesMembre } from "@/lib/penalites";
 import { decalerMois, moisLong, premierDuMois } from "@/lib/settings";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
@@ -75,6 +76,42 @@ export async function declarerVersement(
   const derogations = await derogationsParMembre().catch(() => new Map<string, ReglesMembre>());
   const requis =
     derogations.get(membreCible)?.cotisationMensuelle ?? reglages.cotisationMensuelle;
+
+  /*
+   * LES MOIS SE REGLENT DANS L'ORDRE, DU PLUS ANCIEN AU PLUS RECENT.
+   *
+   * Rien ne l'imposait. Le seul controle portait sur les mois deja soldes, et
+   * un mois saute n'est pas un mois solde : on pouvait regler octobre en
+   * laissant septembre ouvert, puis novembre, indefiniment, pendant que
+   * l'arriere grossissait derriere. Le formulaire y poussait meme, en
+   * proposant le mois courant par defaut.
+   *
+   * Ce n'est pas un detail de saisie : la penalite de l'art. 9 court sur le
+   * mois impaye, et les parts de l'art. 12 se comptent sur les versements
+   * valides. Un mois saute, c'est une penalite qui court sans fin sur un mois
+   * que le membre croit avoir compense en payant le suivant.
+   *
+   * Le premier mois ouvert est celui dont il manque quelque chose -- `manque`
+   * le dit, et le dit de la meme facon que la grille, le releve et la relance.
+   * Une declaration en attente de validation ferme le mois pour ce controle :
+   * le membre a fait sa part, et le temps que met le tresorier ne doit pas
+   * l'empecher de regler le suivant.
+   *
+   * Le controle vaut aussi pour le tresorier et le president. Ils constatent
+   * un encaissement, mais l'imputation suit la regle du club : l'argent recu
+   * eteint la dette la plus ancienne. Une imputation exceptionnelle passe par
+   * la correction, qui est tracee.
+   */
+  const situation = (await situationsClub()).find((s) => s.membreId === membreCible);
+  const premierOuvert = situation ? premierMoisOuvert(situation.cellules) : null;
+  if (premierOuvert && moisDebut > premierOuvert) {
+    return {
+      ok: false,
+      erreur:
+        `${moisLong(premierOuvert)} n'est pas encore regle. Les mois se reglent dans ` +
+        `l'ordre, du plus ancien au plus recent : reprenez a ${moisLong(premierOuvert)}.`,
+    };
+  }
 
   const deja = (await sql`
     select to_char(period, 'YYYY-MM-DD') as mois, coalesce(sum(amount), 0)::bigint as total

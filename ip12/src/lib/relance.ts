@@ -848,6 +848,25 @@ export function texteRelance(
       "     dans la colonne de gauche sur ordinateur.",
       "  3. Ouvrez « Declarer un versement » et indiquez le mois couvert,",
       "     le montant, la date et le moyen de paiement.",
+      /*
+       * LE MOIS N'EST PAS AU CHOIX QUAND IL EN RESTE UN DERRIERE.
+       *
+       * « Indiquez le mois couvert » laissait croire a une liberte qui n'existe
+       * pas : les mois se reglent du plus ancien au plus recent, et le site
+       * refuse desormais une declaration qui saute un mois ouvert. Le courrier
+       * doit donc nommer le mois par lequel reprendre, sinon il envoie le
+       * membre vers un refus -- et un membre qui bute sur un refus ecrit au
+       * groupe, ce que ces cinq lignes servent a eviter.
+       *
+       * `arrieres` exclut le mois courant et reste dans l'ordre : son premier
+       * element est bien le plus ancien mois a regler.
+       */
+      ...(arrieres.length > 0
+        ? [
+            "     Les mois se reglent du plus ancien au plus recent :",
+            `     commencez par ${moisLong(arrieres[0])}.`,
+          ]
+        : []),
       "  4. Joignez la capture de votre transfert : elle epargne une question.",
       "  5. Le tresorier valide, et votre mois se marque d'une coche.",
       "",

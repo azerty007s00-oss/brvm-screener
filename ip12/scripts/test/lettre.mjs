@@ -564,6 +564,29 @@ verifier(
   /VOTRE REGIME PARTICULIER/.test(texteAJour),
   "c'est bien le regime qui lui est rappele",
 );
+/* ------------------------------- le mois par lequel il faut reprendre */
+
+/*
+ * LES MOIS SE REGLENT DANS L'ORDRE, ET LE COURRIER DOIT LE DIRE.
+ *
+ * « Indiquez le mois couvert » laissait croire a une liberte qui n'existe pas :
+ * le site refuse une declaration qui saute un mois ouvert. Sans cette ligne, le
+ * courrier envoyait le membre vers un refus. Bourama doit aout et septembre :
+ * c'est par aout qu'il reprend.
+ */
+verifier(
+  /Les mois se reglent du plus ancien au plus recent/.test(texteBourama),
+  "le courrier doit annoncer que les mois se reglent dans l'ordre",
+);
+verifier(
+  /commencez par août 2026\./.test(texteBourama),
+  "et nommer le mois le plus ancien, non le mois courant (moisLong accentue, comme partout dans la lettre)",
+);
+verifier(
+  !/commencez par septembre 2026/.test(texteBourama),
+  "jamais le mois courant quand un mois anterieur reste ouvert",
+);
+
 verifier(
   !/COMMENT ENREGISTRER VOTRE COTISATION/.test(texteAJour),
   "le mode d'emploi ne sert qu'a qui doit verser",
@@ -855,5 +878,5 @@ console.log(
   `OK - ${controles} controles du courrier de relance : objet, seuil R5, ` +
     "dettes de penalites et leur somme, liste des mois, R2, mode d'emploi des cotisations " +
     "et des penalites, mesures disciplinaires, regime particulier, mesure a venir, " +
-    "notes collees, mise en forme et rendu HTML",
+    "notes collees, ordre de reglement des mois, mise en forme et rendu HTML",
 );
