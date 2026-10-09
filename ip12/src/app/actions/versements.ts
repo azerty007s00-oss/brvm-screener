@@ -29,6 +29,7 @@ import {
 } from "@/lib/valeurs";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
 import { avertirDeclaration, avertirReglementPenalite } from "@/lib/avis";
+import { penalitesNonInscrites } from "@/lib/constat";
 import type { EtatFormulaire } from "./auth";
 
 const METHODES = Object.values(METHODE) as string[];
@@ -280,12 +281,46 @@ async function reglerPenalitesDeclarees(p: {
     return { ok: false, erreur: "La date de paiement est dans le futur." };
   }
 
-  const [dues, enAttente] = await Promise.all([
+  const [dues, enAttente, situations] = await Promise.all([
     listerPenalites({ membreId: p.auteur.id, statut: STATUT_PENALITE.due }),
     reglementsPenalite({ membreId: p.auteur.id, statut: STATUT_REGLEMENT.enAttente }),
+    situationsClub(),
   ]);
+
+  /*
+   * UNE PENALITE NE SE REGLE PAS AVANT D'ETRE NEE.
+   *
+   * Le membre ne cree pas sa penalite : elle est portee au registre par le
+   * constat -- automatique a chaque relance, le 7, le 9 et le 10 -- ou par la
+   * main du president ou du tresorier. Un reglement vise donc toujours une
+   * ligne qui existe, et c'est bien ainsi : laisser declarer le paiement
+   * d'une penalite qui n'est pas inscrite, ce serait laisser le membre
+   * declarer la penalite elle-meme.
+   *
+   * Mais entre deux relances, l'art. 9 fait courir des penalites que le
+   * registre ne porte pas encore. Le courrier les annonce, la page Penalites
+   * les montre -- et repondre « vous n'avez aucune penalite due » a qui vient
+   * de les lire serait un dementi. On dit donc laquelle des deux situations
+   * est la sienne.
+   */
+  const mienne = situations.find((x) => x.membreId === p.auteur.id);
+  const nonInscrites = mienne
+    ? (await penalitesNonInscrites([mienne]))?.get(p.auteur.id) ?? null
+    : null;
+
   if (dues.length === 0) {
-    return { ok: false, erreur: "Vous n'avez aucune penalite due." };
+    return {
+      ok: false,
+      erreur:
+        !nonInscrites || nonInscrites.nb === 0
+          ? "Vous n'avez aucune penalite due."
+          : nonInscrites.nb === 1
+            ? "Votre penalite n'est pas encore portee au registre : elle le sera au prochain " +
+              "constat, qui a lieu a chaque relance. Le tresorier peut aussi la porter des maintenant."
+            : `Vos ${nonInscrites.nb} penalites ne sont pas encore portees au registre : elles le ` +
+              "seront au prochain constat, qui a lieu a chaque relance. Le tresorier peut aussi " +
+              "les porter des maintenant.",
+    };
   }
 
   const imputations = imputerPenalites(
@@ -327,7 +362,11 @@ async function reglerPenalitesDeclarees(p: {
       ok: false,
       erreur:
         `Une penalite se regle entiere : ce versement en couvre ${fcfa(impute)}. ` +
-        `Declarez ${fcfa(impute)}, et gardez la difference pour une cotisation.`,
+        `Declarez ${fcfa(impute)}` +
+        (nonInscrites && nonInscrites.nb > 0
+          ? `. Le reste de votre dette — ${nonInscrites.nb} ${accorde(nonInscrites.nb, "penalite")} — ` +
+            "n'est pas encore porte au registre, et ne peut donc pas etre regle pour l'instant."
+          : ", et gardez la difference pour une cotisation."),
     };
   }
 
