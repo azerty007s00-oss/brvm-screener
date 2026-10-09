@@ -8,6 +8,7 @@ import {
   situationsClub,
 } from "@/lib/queries";
 import { journalRecent } from "@/lib/journal";
+import { joignablesPour } from "@/lib/avis";
 import {
   enregistrerReglages,
   reprendreHistorique,
@@ -18,7 +19,7 @@ import {
   leverRegleMembre,
 } from "@/app/actions/administration";
 import { listerMembres } from "@/lib/queries";
-import { CLUB, REGLES, ROLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { CLUB, REGLES, ROLES, accorde, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { REGLE_MEMBRE } from "@/lib/valeurs";
 import {
@@ -71,17 +72,19 @@ export default async function PageAdministration() {
     );
   }
 
-  let reglages, situations, journal, membres, regles, sorties, decomptes;
+  let reglages, situations, journal, membres, regles, sorties, decomptes, avertissables;
   try {
-    [reglages, situations, journal, membres, regles, sorties, decomptes] = await Promise.all([
-      reglagesEffectifs(),
-      situationsClub(),
-      journalRecent(30).catch(() => []),
-      listerMembres(),
-      reglesIndividuelles(true).catch(() => []),
-      listerSorties(),
-      decomptesSortie().catch(() => []),
-    ]);
+    [reglages, situations, journal, membres, regles, sorties, decomptes, avertissables] =
+      await Promise.all([
+        reglagesEffectifs(),
+        situationsClub(),
+        journalRecent(30).catch(() => []),
+        listerMembres(),
+        reglesIndividuelles(true).catch(() => []),
+        listerSorties(),
+        decomptesSortie().catch(() => []),
+        joignablesPour("gererMembres").catch(() => []),
+      ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
     throw e;
@@ -98,6 +101,26 @@ export default async function PageAdministration() {
     destinataire?: string;
   };
   const essaiReussi = detailEssai.reussi === true;
+
+  /*
+   * Les demandes de mot de passe oublie, telles que le journal les a gardees.
+   * Toutes, y compris celles qui n'ont rien envoye : c'est precisement
+   * celles-la que rien ne montrait.
+   */
+  const demandes = journal
+    .filter((j) => j.action === "demande_reinitialisation")
+    .slice(0, 6)
+    .map((j) => {
+      const d = (j.details ?? {}) as { email?: string; issue?: string; detail?: string };
+      return {
+        id: j.id,
+        quand: j.created_at,
+        adresse: d.email ?? "adresse non consignee",
+        issue: d.issue ?? "issue non consignee",
+        detail: d.detail ?? "",
+        partie: d.issue === "avertis",
+      };
+    });
 
 
   const moisDecouverts = situations.reduce((total, s) => total + s.nbMoisRetard, 0);
@@ -299,6 +322,132 @@ export default async function PageAdministration() {
           indesirables : un premier message entre deux adresses qui n&apos;ont jamais
           correspondu y atterrit souvent.
         </p>
+      </Tuile>
+
+      {/*
+        * CE QUE LE PRESIDENT NE POUVAIT PAS VOIR.
+        *
+        * Deux essais depuis la page de connexion : l'un avec l'adresse du
+        * president, qui a bien recu l'avis ; l'autre avec une adresse qui
+        * n'est celle d'aucun membre, et qui n'a rien envoye. Le second est
+        * voulu : ecrire a chaque adresse inconnue saisie sur une page que
+        * n'importe qui peut ouvrir, c'est offrir le moyen d'inonder la boite
+        * du president -- une adresse differente a chaque fois suffit a passer
+        * sous le plafond, qui se compte par adresse.
+        *
+        * Mais « rien envoye » ne doit pas valoir « rien su ». La demande est
+        * tracee, et se lit ici : qui a essaye, avec quelle adresse, et
+        * pourquoi rien n'est parti. Le journal n'est lu que du president : il
+        * peut dire ce que la page de connexion se refuse a dire.
+        */}
+      <Tuile
+        icone={<Icone.bouclier />}
+        titre="Mots de passe oublies"
+        resume="Les demandes faites depuis la page de connexion, et ce que chacune a donne."
+        marque={
+          <Badge ton={avertissables.length === 0 ? "rouge" : "vert"}>
+            {avertissables.length === 0
+              ? "personne n'est averti"
+              : `${avertissables.length} ${accorde(avertissables.length, "destinataire")}`}
+          </Badge>
+        }
+      >
+        {avertissables.length === 0 ? (
+          <Alerte ton="rouge" titre="Aucun avis ne peut partir">
+            <p>
+              Le membre qui demande un nouveau mot de passe lit « le bureau vient d&apos;en
+              etre averti », et personne ne l&apos;est : le droit sur les membres
+              n&apos;appartient qu&apos;au president, et aucune fiche active ne porte ce role
+              avec une adresse. Verifiez la page Membres.
+            </p>
+          </Alerte>
+        ) : (
+          <p className="mb-3 text-sm">
+            Averti : {avertissables.map((a) => `${a.nom} — ${a.email}`).join(", ")}.
+          </p>
+        )}
+
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Une adresse qui n&apos;est celle d&apos;aucun membre ne declenche aucun courrier, et
+          la page de connexion repond la meme chose dans tous les cas : dire « cette adresse
+          est inconnue » apprendrait a un inconnu qui est du club. La demande se lit ici, ou
+          vous etes seul a la lire.
+        </p>
+
+        {/*
+          * LE CAS QUI N'EST PAS SYMETRIQUE DES AUTRES.
+          *
+          * Le president est seul titulaire du droit sur les membres : l'avis
+          * lui parvient bien, mais il le renvoie a une page qu'il ne peut plus
+          * ouvrir. Lire la marche a suivre ici suppose d'etre connecte -- donc
+          * de ne pas en avoir besoin : c'est volontaire. On la lit AVANT, et le
+          * README la porte aussi, pour le jour ou cette page sera hors
+          * d'atteinte.
+          */}
+        <Depliant titre="Et si c'est vous qui perdez le votre ?">
+          <p className="text-xs" style={{ color: "var(--discret)" }}>
+            Ce formulaire ne vous depannera pas : il vous avertit vous-meme, et vous renvoie a
+            la page Membres, qui demande d&apos;etre connecte. La porte de secours est la route
+            d&apos;amorcage, et elle se franchit depuis un telephone :
+          </p>
+          <ol className="mt-2 space-y-1.5 text-xs" style={{ color: "var(--discret)" }}>
+            <li>
+              1. Sur Vercel, projet <code>ip12</code>, variables d&apos;environnement, ajouter
+              pour Production <code>SETUP_TOKEN</code> (une suite de caracteres connue de vous
+              seul) et <code>BOOTSTRAP_EMAIL</code> (l&apos;adresse de votre compte).
+            </li>
+            <li>2. Redeployer : une variable ajoutee ne vaut que pour les deploiements suivants.</li>
+            <li>
+              3. Ouvrir <code>/api/bootstrap?token=…</code> avec ce jeton. La reponse contient
+              un mot de passe provisoire.
+            </li>
+            <li>4. Se connecter, en changer aussitot — le site l&apos;exige.</li>
+            <li>
+              5. <strong>Supprimer <code>SETUP_TOKEN</code></strong>, puis redeployer. Tant
+              qu&apos;il est la, qui le devine reprend votre compte — c&apos;est pourquoi son
+              absence est comptee plus haut comme le bon etat.
+            </li>
+          </ol>
+          <p className="mt-2 text-xs" style={{ color: "var(--discret)" }}>
+            La meme marche a suivre figure dans le README du projet, lisible sans se connecter.
+            Pour n&apos;avoir jamais a en passer par la, l&apos;assemblee peut decider que le
+            vice-president detient aussi le droit sur les membres : il reinitialiserait alors
+            votre mot de passe depuis la page Membres. C&apos;est une decision de gouvernance,
+            non un reglage.
+          </p>
+        </Depliant>
+
+        {demandes.length === 0 ? (
+          <Vide>
+            Aucune demande depuis la mise en place de cette trace. Les essais faits avant
+            n&apos;y figurent pas : rien ne les consignait.
+          </Vide>
+        ) : (
+          <ul className="space-y-2">
+            {demandes.map((d) => (
+              <li
+                key={d.id}
+                className="rounded-lg border px-3 py-2 text-xs"
+                style={{ borderColor: "var(--line)" }}
+              >
+                <p className="font-medium break-words" style={{ color: "var(--ink)" }}>
+                  {d.adresse}
+                </p>
+                <p style={{ color: "var(--discret)" }}>
+                  {dateCourte(d.quand)} ·{" "}
+                  <span style={{ color: d.partie ? "var(--etat-ok)" : "var(--etat-attente)" }}>
+                    {d.partie ? "avis envoye" : d.issue}
+                  </span>
+                </p>
+                {d.detail && (
+                  <p className="break-words" style={{ color: "var(--discret)" }}>
+                    {d.detail}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </Tuile>
 
       <Rubrique>Le club</Rubrique>

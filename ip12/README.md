@@ -238,6 +238,41 @@ l'exécuter sur la base de production.
 4. **Les autres membres** — leur mot de passe se réinitialise depuis la page *Membres* ; chacun
    reçoit un provisoire qu'il remplace à sa première connexion.
 
+## Si le président perd son mot de passe
+
+Le cas n'est pas symétrique des autres, et c'est pour cela qu'il a sa section. Un membre qui
+perd le sien le demande depuis la page de connexion : le président en est averti et lui donne
+un provisoire depuis la page *Membres*. Le président, lui, est le seul titulaire du droit sur
+les membres (`DROITS.gererMembres`) : l'avis lui parvient, mais il désigne une page qu'il ne
+peut plus ouvrir. **Le formulaire de la page de connexion ne le dépannera pas.**
+
+La porte de secours est la même route que la mise en service, et elle se franchit depuis un
+téléphone :
+
+1. Sur Vercel, projet `ip12`, *Settings → Environment Variables*, ajouter pour
+   **Production** :
+   - `SETUP_TOKEN` — une suite de caractères quelconque, connue de vous seul (type *Secret*) ;
+   - `BOOTSTRAP_EMAIL` — l'adresse du compte président, celle avec laquelle vous vous
+     connectez.
+2. Redéployer (*Deployments → … → Redeploy*) : une variable ajoutée ne vaut que pour les
+   déploiements suivants.
+3. Ouvrir `https://<adresse-du-site>/api/bootstrap?token=<le jeton choisi>`. La page répond en
+   JSON et contient `motDePasseProvisoire`.
+4. Se connecter avec ce mot de passe, en changer immédiatement — le site l'exige à la première
+   connexion.
+5. **Supprimer `SETUP_TOKEN`** des variables d'environnement, puis redéployer. Tant qu'il est
+   présent, quiconque le devine peut reprendre le compte président : la page *Administration*
+   signale sa présence comme un défaut, et son absence comme le bon état.
+
+Cette route réinitialise le mot de passe de l'adresse de `BOOTSTRAP_EMAIL`, lui remet le rôle
+`president` et réactive la fiche. Si l'adresse n'est celle d'aucun membre, elle refuse et
+énumère les adresses enregistrées — de quoi corriger `BOOTSTRAP_EMAIL` sans deviner.
+
+Pour n'avoir jamais à en passer par là, l'assemblée peut décider que le vice-président détient
+aussi le droit sur les membres : il réinitialiserait alors le mot de passe du président depuis
+la page *Membres*, comme pour n'importe quel membre. C'est une ligne de `src/lib/droits.ts`,
+mais c'est une décision de gouvernance, pas un réglage.
+
 ## Développement
 
 ```bash

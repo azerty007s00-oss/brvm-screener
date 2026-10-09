@@ -14,8 +14,18 @@ import type { Role } from "@/lib/settings";
  * porte l'information a qui doit agir, au moment ou il doit agir.
  */
 
-/** Les adresses des titulaires d'un droit, actifs seulement. */
-async function adresses(droit: keyof typeof DROITS): Promise<{ nom: string; email: string }[]> {
+/**
+ * Les adresses des titulaires d'un droit, actifs seulement.
+ *
+ * Exportee parce qu'une liste vide est une panne silencieuse : l'avis rend
+ * alors 0 sans que rien ne le montre, et le president lit « le bureau vient
+ * d'en etre averti » quand personne ne peut l'etre. La page Administration
+ * affiche donc qui serait joint, nom et adresse, en lisant la meme liste --
+ * pas une seconde regle qui pourrait en differer.
+ */
+export async function joignablesPour(
+  droit: keyof typeof DROITS,
+): Promise<{ nom: string; email: string }[]> {
   const roles = DROITS[droit] as readonly Role[];
   const membres = await listerMembres().catch(() => []);
   return membres
@@ -130,7 +140,7 @@ export async function avertirLeBureau(
   if (siteUrl) lignes.push("", `Valider les encaissements : ${siteUrl}/versements`);
   lignes.push("", `Le suivi du club — ${CLUB.nom}`);
 
-  const bureau = await adresses("validerVersement");
+  const bureau = await joignablesPour("validerVersement");
   let partis = 0;
   for (const m of bureau) {
     const { ok } = await envoyerCourriel({
@@ -425,7 +435,7 @@ export async function avertirDemandeReinitialisation(params: {
   nom: string;
   email: string;
 }): Promise<{ partis: number; detail: string }> {
-  const titulaires = await adresses("gererMembres");
+  const titulaires = await joignablesPour("gererMembres");
   if (titulaires.length === 0) {
     /*
      * Rendre 0 sans dire pourquoi laissait le president devant un ecran qui
