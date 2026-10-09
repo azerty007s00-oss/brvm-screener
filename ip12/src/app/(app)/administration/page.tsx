@@ -43,6 +43,20 @@ const LIBELLE_REGLE: Record<string, string> = {
   [REGLE_MEMBRE.note]: "note",
 };
 
+/**
+ * Les details d'une trace, en une ligne lisible.
+ *
+ * Les valeurs simples seulement : un objet imbrique n'a rien a faire sur une
+ * ligne de journal, et le rendre en JSON brut rendrait la liste illisible.
+ */
+function resumeDetails(details: unknown): string {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return "";
+  return Object.entries(details as Record<string, unknown>)
+    .filter(([, v]) => v !== null && v !== undefined && typeof v !== "object")
+    .map(([cle, v]) => `${cle.replace(/_/g, " ")} : ${v}`)
+    .join(" · ");
+}
+
 export default async function PageAdministration() {
   const membre = await exigerMembre();
   const transport = transportConfigure();
@@ -440,12 +454,28 @@ export default async function PageAdministration() {
         ) : (
           <ul className="divide-y text-xs" style={{ borderColor: "var(--bordure)" }}>
             {journal.map((j) => (
-              <li key={j.id} className="flex flex-wrap justify-between gap-2 py-2">
-                <span>
-                  <strong>{j.actor_name ?? "—"}</strong> &middot; {j.action.replace(/_/g, " ")}
-                  {j.entity ? ` · ${j.entity}` : ""}
-                </span>
-                <span style={{ color: "var(--discret)" }}>{dateCourte(j.created_at)}</span>
+              <li key={j.id} className="py-2">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span>
+                    <strong>{j.actor_name ?? "—"}</strong> &middot; {j.action.replace(/_/g, " ")}
+                    {j.entity ? ` · ${j.entity}` : ""}
+                  </span>
+                  <span style={{ color: "var(--discret)" }}>{dateCourte(j.created_at)}</span>
+                </div>
+                {/*
+                  * LE DETAIL, ET NON LE SEUL INTITULE.
+                  *
+                  * Le journal ne disait que « qui » et « quoi ». Quand une action
+                  * echoue a moitie -- un avis qu'aucun destinataire n'a recu, une
+                  * demande portant une adresse inconnue -- l'intitule est le meme
+                  * que celui d'une reussite, et le president cherche ailleurs un
+                  * motif que la trace portait deja.
+                  */}
+                {resumeDetails(j.details) && (
+                  <p className="mt-0.5 text-[11px]" style={{ color: "var(--discret)" }}>
+                    {resumeDetails(j.details)}
+                  </p>
+                )}
               </li>
             ))}
           </ul>

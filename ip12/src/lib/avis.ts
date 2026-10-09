@@ -424,9 +424,16 @@ export async function envoyerAcces(
 export async function avertirDemandeReinitialisation(params: {
   nom: string;
   email: string;
-}): Promise<number> {
+}): Promise<{ partis: number; detail: string }> {
   const titulaires = await adresses("gererMembres");
-  if (titulaires.length === 0) return 0;
+  if (titulaires.length === 0) {
+    /*
+     * Rendre 0 sans dire pourquoi laissait le president devant un ecran qui
+     * annonce « le bureau vient d'en etre averti » alors que rien n'est parti.
+     * Le motif remonte, et le journal le garde.
+     */
+    return { partis: 0, detail: "aucun titulaire du droit sur les membres, actif et avec adresse" };
+  }
 
   const siteUrl = lienDuSite();
   const lignes = [
@@ -443,13 +450,18 @@ export async function avertirDemandeReinitialisation(params: {
   lignes.push("", `Le suivi du club — ${CLUB.nom}`);
 
   let partis = 0;
+  const motifs: string[] = [];
   for (const m of titulaires) {
-    const { ok } = await envoyerCourriel({
+    const { ok, detail } = await envoyerCourriel({
       destinataire: m.email,
       sujet: `${CLUB.sigle} — ${params.nom} demande un nouveau mot de passe`,
       texte: lignes.join("\n"),
     });
     if (ok) partis++;
+    else motifs.push(`${m.email} : ${detail}`);
   }
-  return partis;
+  return {
+    partis,
+    detail: partis > 0 ? `${partis} destinataire(s)` : motifs.join(" ; ") || "aucun envoi",
+  };
 }

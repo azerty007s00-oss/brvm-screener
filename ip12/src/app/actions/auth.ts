@@ -139,23 +139,54 @@ export async function demanderReinitialisation(
       "Vous recevrez un mot de passe provisoire.",
   };
 
-  if (await tropDeDemandes(email)) return reponse;
+  /*
+   * CHAQUE DEMANDE LAISSE UNE TRACE, QUELLE QUE SOIT SON ISSUE.
+   *
+   * La reponse est volontairement la meme dans tous les cas : elle n'apprend
+   * rien a un inconnu. Mais elle n'apprenait rien au president non plus, qui
+   * lisait « le bureau vient d'en etre averti » quand rien n'etait parti -- une
+   * adresse mal saisie, un compte inactif, un transport en panne, tout se
+   * ressemblait. Le journal, lui, n'est lu que par lui : il peut tout dire.
+   */
+  const tracer = (issue: string, detail?: string) =>
+    journaliser(null, "demande_reinitialisation", { entite: "members" }, {
+      email,
+      issue,
+      ...(detail ? { detail } : {}),
+    });
+
+  if (await tropDeDemandes(email)) {
+    await tracer("plafond atteint, rien n'est reparti");
+    return reponse;
+  }
   await tracerDemande(email);
 
   let membre;
   try {
     membre = await membreParEmail(email);
-  } catch {
+  } catch (e) {
+    await tracer("base injoignable", String(e));
     return { ok: false, erreur: "La base de donnees n'est pas joignable. Reessayez dans un instant." };
   }
-  if (!membre || !membre.actif) return reponse;
+  if (!membre) {
+    await tracer("aucun membre a cette adresse");
+    return reponse;
+  }
+  if (!membre.actif) {
+    await tracer("compte inactif");
+    return reponse;
+  }
 
   /* L'adresse saisie est celle qui a trouve le compte : inutile de la relire. */
-  await avertirDemandeReinitialisation({ nom: membre.nom, email }).catch(() => 0);
+  const envoi = await avertirDemandeReinitialisation({ nom: membre.nom, email }).catch((e) => ({
+    partis: 0,
+    detail: String(e),
+  }));
   await journaliser(
     { id: membre.id, nom: membre.nom },
     "demande_reinitialisation",
     { entite: "members", id: membre.id },
+    { email, issue: envoi.partis > 0 ? "avertis" : "aucun avis envoye", detail: envoi.detail },
   );
   return reponse;
 }
