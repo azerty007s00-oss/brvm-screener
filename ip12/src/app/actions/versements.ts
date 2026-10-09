@@ -7,8 +7,8 @@ import { exigerMembre, exigerRole } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
 import { derogationsParMembre, reglagesEffectifs, situationsClub } from "@/lib/queries";
-import type { ReglesMembre } from "@/lib/penalites";
-import { decalerMois, moisLong, premierDuMois } from "@/lib/settings";
+import { imputer, type ReglesMembre } from "@/lib/penalites";
+import { fcfa, moisLong } from "@/lib/settings";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
 import { avertirDeclaration } from "@/lib/avis";
@@ -34,14 +34,17 @@ export async function declarerVersement(
 ): Promise<EtatFormulaire> {
   const auteur = await exigerMembre();
   const membreCible = String(donnees.get("membreId") ?? auteur.id);
-  /*
-   * Le champ mois du navigateur envoie « 2026-08 » ; la base range les periodes
-   * au premier du mois. La conversion se fait ici, et accepte les deux formes.
-   */
-  const moisDebut = premierDuMois(String(donnees.get("moisDebut") ?? ""));
-  const nbMois = Math.max(1, Math.min(24, Number(donnees.get("nbMois") ?? 1)));
   const reglages = await reglagesEffectifs();
-  const montantParMois = Number(donnees.get("montant") ?? reglages.cotisationMensuelle);
+  /*
+   * UN SEUL CHAMP : LE MONTANT VERSE.
+   *
+   * Il y en avait trois -- mois de depart, nombre de mois, montant par mois --
+   * pour une information qui n'en est plus une. Les mois se reglent dans
+   * l'ordre : le premier mois impute est donc determine, et le montant verse
+   * dit le reste. Demander le mois, c'etait demander un choix que la
+   * declaration refuse.
+   */
+  const montant = Math.round(Number(donnees.get("montant") ?? 0));
   const dateVersement = String(donnees.get("dateVersement") ?? "").slice(0, 10);
   const mode = String(donnees.get("mode") ?? METHODE.mobileMoney);
   const reference = String(donnees.get("reference") ?? "").trim() || null;
@@ -54,96 +57,83 @@ export async function declarerVersement(
       erreur: "Seuls le tresorier et le president peuvent enregistrer un versement pour autrui.",
     };
   }
-  if (moisDebut === null) return { ok: false, erreur: "Mois de depart invalide." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVersement)) return { ok: false, erreur: "Date de versement invalide." };
-  if (!Number.isFinite(montantParMois) || montantParMois <= 0) {
-    return { ok: false, erreur: "Montant invalide." };
+  if (!Number.isFinite(montant) || montant <= 0) {
+    return { ok: false, erreur: "Indiquez le montant verse." };
   }
   if (!METHODES.includes(mode)) return { ok: false, erreur: "Mode de paiement inconnu." };
 
-  const mois = Array.from({ length: nbMois }, (_, i) => decalerMois(moisDebut, i));
   const sql = db();
 
   /*
-   * Un mois n'est ferme que lorsqu'il est complet.
+   * L'IMPUTATION, ET NON UN CHOIX DE MOIS.
    *
-   * La regle d'avant refusait tout second versement sur un mois deja touche :
-   * qui versait 2 000 sur 5 000 ne pouvait plus jamais ajouter les 3 000
-   * manquants, et le mois restait incomplet a jamais. On compte donc ce qui est
-   * deja porte au mois, et l'on ne refuse que ce qui est reellement solde.
+   * Les mois se reglent dans l'ordre, du plus ancien au plus recent : la
+   * penalite de l'art. 9 court sur le mois impaye, et un mois saute serait une
+   * penalite qui court sans fin sur un mois que le membre croit avoir
+   * compense en payant le suivant. L'argent recu eteint donc la dette la plus
+   * ancienne d'abord, et s'arrete ou il s'epuise -- le dernier mois peut
+   * n'etre couvert qu'en partie, puisqu'un mois n'est ferme que lorsqu'il est
+   * complet.
+   *
+   * La repartition est calculee par `imputer`, sur la situation qui sert deja
+   * la grille, le releve et la relance : un seul endroit decide de ce qu'un
+   * versement couvre.
+   *
+   * Cela vaut aussi pour le tresorier et le president. Ils constatent un
+   * encaissement, mais l'imputation suit la regle du club. Une imputation
+   * exceptionnelle passe par la correction, qui exige un motif et laisse une
+   * trace.
    */
+  const situation = (await situationsClub()).find((s) => s.membreId === membreCible);
+  if (!situation) return { ok: false, erreur: "Membre introuvable." };
+
   const derogations = await derogationsParMembre().catch(() => new Map<string, ReglesMembre>());
   const requis =
     derogations.get(membreCible)?.cotisationMensuelle ?? reglages.cotisationMensuelle;
 
   /*
-   * LES MOIS SE REGLENT DANS L'ORDRE, DU PLUS ANCIEN AU PLUS RECENT.
-   *
-   * Rien ne l'imposait. Le seul controle portait sur les mois deja soldes, et
-   * un mois saute n'est pas un mois solde : on pouvait regler octobre en
-   * laissant septembre ouvert, puis novembre, indefiniment, pendant que
-   * l'arriere grossissait derriere. Le formulaire y poussait meme, en
-   * proposant le mois courant par defaut.
-   *
-   * Ce n'est pas un detail de saisie : la penalite de l'art. 9 court sur le
-   * mois impaye, et les parts de l'art. 12 se comptent sur les versements
-   * valides. Un mois saute, c'est une penalite qui court sans fin sur un mois
-   * que le membre croit avoir compense en payant le suivant.
-   *
-   * Le premier mois ouvert est celui dont il manque quelque chose -- `manque`
-   * le dit, et le dit de la meme facon que la grille, le releve et la relance.
-   * Une declaration en attente de validation ferme le mois pour ce controle :
-   * le membre a fait sa part, et le temps que met le tresorier ne doit pas
-   * l'empecher de regler le suivant.
-   *
-   * Le controle vaut aussi pour le tresorier et le president. Ils constatent
-   * un encaissement, mais l'imputation suit la regle du club : l'argent recu
-   * eteint la dette la plus ancienne. Une imputation exceptionnelle passe par
-   * la correction, qui est tracee.
+   * Ce que chaque mois porte deja, le mois courant compris et les avances
+   * aussi : la grille s'arrete au mois courant, l'imputation non.
    */
-  const situation = (await situationsClub()).find((s) => s.membreId === membreCible);
-  const aRegler = situation?.prochainMoisARegler ?? null;
-  if (aRegler && moisDebut > aRegler) {
-    return {
-      ok: false,
-      erreur:
-        `${moisLong(aRegler)} reste a regler : les mois se reglent dans l'ordre, ` +
-        "du plus ancien au plus recent.",
-    };
-  }
-
   const deja = (await sql`
     select to_char(period, 'YYYY-MM-DD') as mois, coalesce(sum(amount), 0)::bigint as total
     from contributions
     where member_id = ${membreCible}::uuid
       and status <> ${STATUT_VERSEMENT.rejete}
-      and period = any(${mois}::date[])
     group by period
-    order by period
   `) as { mois: string; total: string | number }[];
+  const porte = new Map(deja.map((r) => [r.mois, Number(r.total)]));
 
-  const portes = new Map(deja.map((r) => [r.mois, Number(r.total)]));
-  const soldes = [...portes.entries()].filter(([, total]) => total >= requis).map(([m]) => m);
-  if (soldes.length > 0) {
+  const imputations = imputer(montant, situation.cellules, porte, requis);
+  if (imputations.length === 0) {
+    return { ok: false, erreur: "Il n'y a aucun mois a regler : tout est deja solde." };
+  }
+  /*
+   * Un montant que 24 mois n'absorbent pas ne doit pas etre tronque en
+   * silence : la difference serait encaissee sans etre portee nulle part.
+   */
+  const impute = imputations.reduce((t, i) => t + i.montant, 0);
+  if (impute < montant) {
     return {
       ok: false,
       erreur:
-        soldes.length === mois.length
-          ? `Ces mois sont deja soldes : ${soldes.join(", ")}.`
-          : `Deja soldes, a retirer de la periode : ${soldes.join(", ")}.`,
+        `Ce montant couvre plus de 24 mois. Declarez ${fcfa(impute)} maintenant, ` +
+        "puis le reste en une seconde fois.",
     };
   }
+  const mois = imputations.map((i) => i.mois);
 
   const lot = randomUUID();
   const statut = saisieDirecte ? STATUT_VERSEMENT.valide : STATUT_VERSEMENT.enAttente;
-  for (const m of mois) {
+  for (const { mois: m, montant: part } of imputations) {
     await sql`
       insert into contributions
         (member_id, period, kind, amount, paid_on, method, reference, note,
          batch_id, status, declared_by, reviewed_by, reviewed_at)
       values
         (${membreCible}::uuid, ${m}::date, ${KIND_VERSEMENT.cotisation},
-         ${Math.round(montantParMois)}, ${dateVersement}::date, ${mode}, ${reference}, ${note},
+         ${part}, ${dateVersement}::date, ${mode}, ${reference}, ${note},
          ${lot}::uuid, ${statut}, ${auteur.id}::uuid,
          ${saisieDirecte ? auteur.id : null}::uuid,
          ${saisieDirecte ? new Date().toISOString() : null}::timestamptz)
@@ -167,7 +157,7 @@ export async function declarerVersement(
       auteurId: auteur.id,
       membreNom: nomCible,
       mois,
-      montant: Math.round(montantParMois) * nbMois,
+      montant,
       avecJustificatif: pieces.joint,
     }).catch(() => 0);
   }
@@ -176,15 +166,27 @@ export async function declarerVersement(
     { id: auteur.id, nom: auteur.nom },
     "declaration_versement",
     { entite: "contributions", id: lot },
-    { membreCible, mois, montantTotal: Math.round(montantParMois) * nbMois },
+    { membreCible, imputations, montantTotal: montant },
   );
   revalidatePath("/", "layout");
-  const objet = nbMois === 1 ? "Versement" : `${nbMois} mois declares en un seul versement`;
+  /*
+   * LE MEMBRE DOIT LIRE OU SON ARGENT EST ALLE.
+   *
+   * Il ne choisit plus le mois : il a donc d'autant plus besoin de voir ce que
+   * son versement a couvert, et de le voir avant que le tresorier ne valide.
+   * Le detail par mois est ecrit en entier -- 5 000 sur juillet, 2 000 sur
+   * aout -- et non resume en un nombre de mois, qui cacherait justement le
+   * mois partiellement couvert.
+   */
+  const detail = imputations
+    .map((i) => `${fcfa(i.montant)} sur ${moisLong(i.mois)}`)
+    .join(", ");
+  const objet = `Versement de ${fcfa(montant)} — ${detail}`;
   return {
     ok: true,
     message: saisieDirecte
-      ? `${objet} enregistre et valide.`
-      : `${objet} — en attente de validation par le tresorier.`,
+      ? `${objet}. Enregistre et valide.`
+      : `${objet}. En attente de validation par le tresorier.`,
   };
 }
 

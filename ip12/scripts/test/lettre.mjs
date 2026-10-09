@@ -575,16 +575,20 @@ verifier(
  * c'est par aout qu'il reprend.
  */
 verifier(
-  /Les mois se reglent du plus ancien au plus recent/.test(texteBourama),
-  "le courrier doit annoncer que les mois se reglent dans l'ordre",
+  /s'impute sur août 2026, le plus ancien/.test(texteBourama),
+  "le courrier doit nommer le mois sur lequel l'argent ira, non le mois courant",
 );
 verifier(
-  /commencez par août 2026\./.test(texteBourama),
-  "et nommer le mois le plus ancien, non le mois courant (moisLong accentue, comme partout dans la lettre)",
+  /puis sur les suivants s'il le depasse/.test(texteBourama),
+  "et dire que le surplus continue dans l'ordre",
 );
 verifier(
-  !/commencez par septembre 2026/.test(texteBourama),
-  "jamais le mois courant quand un mois anterieur reste ouvert",
+  !/indiquez le mois couvert/.test(texteBourama),
+  "le courrier ne doit plus decrire un champ que le formulaire ne demande plus",
+);
+verifier(
+  /indiquez le montant verse/.test(texteBourama),
+  "il doit decrire le seul champ qui reste",
 );
 
 verifier(

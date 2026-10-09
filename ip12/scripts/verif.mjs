@@ -29,8 +29,8 @@ const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent 
 );
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
-  dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5, premierMoisOuvert,
-  prochainMoisARegler,
+  dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
+  prochainReglement, montantsParMois, imputer,
 } = await import("../.verif/penalites.mjs");
 const {
   tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa,
@@ -1146,10 +1146,9 @@ assert.equal(issueR5(0, false, false, 15, avantSeuilR5).applicable, false);
 /*
  * ON NE REGLE PAS UN MOIS EN LAISSANT UN MOIS ANTERIEUR OUVERT.
  *
- * `premierMoisOuvert` nomme le mois par lequel il faut reprendre. Ce qu'on
- * verifie ici, c'est qu'il designe bien le PLUS ANCIEN mois ouvert, et que
- * « ouvert » veuille dire la meme chose que partout ailleurs : un mois
- * seulement declare est ferme, un mois d'avant l'adhesion n'a jamais ete du.
+ * `prochainReglement` nomme le mois par lequel reprendre et ce qu'il reste a y
+ * porter. Le formulaire propose les deux, la declaration impute dessus : une
+ * seule fonction, donc aucun risque que l'ecran et le controle divergent.
  */
 const troisMois = ["2026-07-01", "2026-08-01", "2026-09-01"];
 const ligne = (mois, montant, statut = "valide", date = `${mois.slice(0, 8)}05`) => ({
@@ -1158,202 +1157,215 @@ const ligne = (mois, montant, statut = "valide", date = `${mois.slice(0, 8)}05`)
   statut,
   date_versement: date,
 });
+/* Le chemin que suit la production : situation, puis montants par mois. */
+const aRegler = (versements, requis = 5000, mois = troisMois, ...reste) =>
+  prochainReglement(
+    situationMembre("x", mois, versements, [], septembre, ...reste).cellules,
+    montantsParMois(versements),
+    requis,
+  );
 
 // Rien de verse : on reprend au premier mois du club pour ce membre.
-assert.equal(
-  premierMoisOuvert(situationMembre("o1", troisMois, [], [], septembre).cellules),
-  "2026-07-01",
-  "sans rien de verse, le reglement commence au mois le plus ancien",
+assert.deepEqual(
+  aRegler([]),
+  { mois: "2026-07-01", reste: 5000 },
+  "sans rien de verse, le reglement commence au mois le plus ancien, cotisation entiere",
 );
 
 /*
  * LE CAS QUI MANQUAIT. Juillet impaye, aout et septembre soldes : c'est
  * exactement le trou qu'on pouvait creuser, en payant les mois recents et en
- * laissant le plus ancien derriere. Le mois a reprendre reste juillet.
+ * laissant le plus ancien derriere.
  */
-const trou = situationMembre(
-  "o2",
-  troisMois,
-  [ligne("2026-08-01", 5000), ligne("2026-09-01", 5000)],
-  [],
-  septembre,
-);
-assert.equal(trou.cellules[1].statut, "paye", "aout est bien solde dans ce scenario");
+const trou = [ligne("2026-08-01", 5000), ligne("2026-09-01", 5000)];
 assert.equal(
-  premierMoisOuvert(trou.cellules),
+  aRegler(trou).mois,
   "2026-07-01",
   "un mois saute reste le mois a reprendre, meme si les suivants sont payes",
 );
 
-// Un acompte ne ferme pas le mois : 2 000 sur 5 000 reste le mois a reprendre.
-assert.equal(
-  premierMoisOuvert(
-    situationMembre("o3", troisMois, [ligne("2026-07-01", 2000)], [], septembre).cellules,
-  ),
-  "2026-07-01",
-  "un acompte ne ferme pas le mois pour l'ordre de reglement",
+// Un acompte ne ferme pas le mois, et le reste annonce est le seul reliquat.
+assert.deepEqual(
+  aRegler([ligne("2026-07-01", 2000)]),
+  { mois: "2026-07-01", reste: 3000 },
+  "un acompte laisse le mois ouvert, et il ne reste que le complement a verser",
 );
 
 /*
- * Une declaration en attente ferme le mois pour cette regle. Le membre a fait
- * sa part ; le delai que met le tresorier a valider ne doit pas l'empecher de
- * regler le mois suivant.
+ * Une declaration en attente ferme le mois pour cette regle : le membre a fait
+ * sa part, et le delai du tresorier ne doit pas l'empecher de regler le suivant.
  */
-const enAttenteDeValidation = situationMembre(
-  "o4",
-  troisMois,
-  [ligne("2026-07-01", 5000, "en_attente"), ligne("2026-08-01", 5000)],
-  [],
-  septembre,
-);
-assert.equal(enAttenteDeValidation.cellules[0].statut, "en_attente");
 assert.equal(
-  premierMoisOuvert(enAttenteDeValidation.cellules),
+  aRegler([ligne("2026-07-01", 5000, "en_attente"), ligne("2026-08-01", 5000)]).mois,
   "2026-09-01",
   "un mois declare mais pas encore valide ne bloque pas le reglement du suivant",
 );
 
 // Avant l'adhesion, rien n'est du : on reprend au premier mois reellement du.
 assert.equal(
-  premierMoisOuvert(
-    situationMembre("o5", troisMois, [], [], septembre, "2026-09-01").cellules,
-  ),
+  aRegler([], 5000, troisMois, "2026-09-01").mois,
   "2026-09-01",
   "les mois anterieurs a l'adhesion ne sont pas des mois a regler",
 );
 
-// Tout solde : plus rien d'ouvert, l'avance sur les mois a venir est libre.
-assert.equal(
-  premierMoisOuvert(
-    situationMembre(
-      "o6",
-      troisMois,
-      [ligne("2026-07-01", 5000), ligne("2026-08-01", 5000), ligne("2026-09-01", 5000)],
-      [],
-      septembre,
-    ).cellules,
-  ),
-  null,
-  "quand tout est solde, aucun mois ne bride le reglement",
-);
-
 /*
- * Un mois a venir non verse est ouvert, lui aussi : payer novembre en laissant
- * octobre vide serait encore sauter un mois, meme sans retard constate.
- */
-const avantEcheanceDuMois = situationMembre(
-  "o7",
-  ["2026-09-01", "2026-10-01"],
-  [ligne("2026-09-01", 5000)],
-  [],
-  new Date("2026-10-05T12:00:00Z"),
-);
-assert.equal(avantEcheanceDuMois.cellules[1].statut, "a_venir");
-assert.equal(
-  premierMoisOuvert(avantEcheanceDuMois.cellules),
-  "2026-10-01",
-  "un mois pas encore echu mais non verse reste le mois a regler en premier",
-);
-
-/*
- * LE MOIS QUE LE FORMULAIRE DOIT PROPOSER.
- *
- * `premierMoisOuvert` rend null des que tout est a jour, parce que la grille
- * s'arrete au mois courant. Ce n'est pas une reponse pour une saisie : le
- * membre qui vient de solder septembre doit se voir proposer octobre, non
- * septembre, qu'il a paye et que la declaration refuserait.
+ * Tout solde jusqu'au mois courant : la grille s'arrete la, mais la reponse ne
+ * peut pas etre « rien ». Le membre qui vient de solder septembre doit se voir
+ * proposer octobre, non septembre, qu'il a paye.
  */
 const toutVerse = [
   ligne("2026-07-01", 5000), ligne("2026-08-01", 5000), ligne("2026-09-01", 5000),
 ];
-const tousSoldes = situationMembre("n1", troisMois, toutVerse, [], septembre);
-assert.equal(
-  premierMoisOuvert(tousSoldes.cellules),
-  null,
-  "rien d'ouvert : c'est bien le cas ou il faut regarder plus loin",
-);
-assert.equal(
-  prochainMoisARegler(tousSoldes.cellules, toutVerse, 5000),
-  "2026-10-01",
+assert.deepEqual(
+  aRegler(toutVerse),
+  { mois: "2026-10-01", reste: 5000 },
   "tout solde jusqu'au mois courant : le prochain mois a regler est le suivant",
 );
 
-/*
- * Une avance va plus loin que la grille. Qui a paye d'avance octobre et
- * novembre doit se voir proposer decembre : les mois couverts au-dela du mois
- * courant comptent, eux aussi.
- */
-const avecAvance = [
-  ligne("2026-07-01", 5000), ligne("2026-08-01", 5000), ligne("2026-09-01", 5000),
-  ligne("2026-10-01", 5000), ligne("2026-11-01", 5000),
-];
-const soldeEtAvance = situationMembre("n2", troisMois, avecAvance, [], septembre);
+// Une avance repousse d'autant : octobre et novembre payes, on propose decembre.
 assert.equal(
-  prochainMoisARegler(soldeEtAvance.cellules, avecAvance, 5000),
+  aRegler([...toutVerse, ligne("2026-10-01", 5000), ligne("2026-11-01", 5000)]).mois,
   "2026-12-01",
   "une avance repousse d'autant le prochain mois a regler",
 );
 
 // Une avance incomplete ne couvre pas son mois : c'est lui qu'il faut proposer.
-const avanceIncomplete = [
-  ligne("2026-07-01", 5000), ligne("2026-08-01", 5000), ligne("2026-09-01", 5000),
-  ligne("2026-10-01", 2000),
-];
-assert.equal(
-  prochainMoisARegler(
-    situationMembre("n3", troisMois, avanceIncomplete, [], septembre).cellules,
-    avanceIncomplete,
-    5000,
-  ),
-  "2026-10-01",
+assert.deepEqual(
+  aRegler([...toutVerse, ligne("2026-10-01", 2000)]),
+  { mois: "2026-10-01", reste: 3000 },
   "un acompte d'avance ne solde pas le mois a venir",
 );
 
-/*
- * Un retard l'emporte toujours sur l'avance : qui doit juillet et a paye
- * octobre d'avance reprend par juillet, non par novembre.
- */
-const trouEtAvance = [ligne("2026-08-01", 5000), ligne("2026-09-01", 5000), ligne("2026-10-01", 5000)];
-assert.equal(
-  prochainMoisARegler(
-    situationMembre("n4", troisMois, trouEtAvance, [], septembre).cellules,
-    trouEtAvance,
-    5000,
-  ),
-  "2026-07-01",
-  "le mois en retard passe avant toute avance deja versee",
-);
-
 // Une ligne rejetee ne couvre rien, pas plus en avance qu'ailleurs.
-const avanceRejetee = [
-  ligne("2026-07-01", 5000), ligne("2026-08-01", 5000), ligne("2026-09-01", 5000),
-  ligne("2026-10-01", 5000, "rejete"),
-];
 assert.equal(
-  prochainMoisARegler(
-    situationMembre("n5", troisMois, avanceRejetee, [], septembre).cellules,
-    avanceRejetee,
-    5000,
-  ),
+  aRegler([...toutVerse, ligne("2026-10-01", 5000, "rejete")]).mois,
   "2026-10-01",
   "une avance rejetee laisse son mois a regler",
 );
 
+// Un retard l'emporte sur l'avance : qui doit juillet et a paye octobre
+// d'avance reprend par juillet, non par novembre.
+assert.equal(
+  aRegler([ligne("2026-08-01", 5000), ligne("2026-09-01", 5000), ligne("2026-10-01", 5000)]).mois,
+  "2026-07-01",
+  "le mois en retard passe avant toute avance deja versee",
+);
+
 // Une cotisation particuliere deplace le seuil : 10 000 exiges, 5 000 verses.
-const avanceSousDerogation = [
+const sousDerogation = [
   ligne("2026-07-01", 10_000), ligne("2026-08-01", 10_000), ligne("2026-09-01", 10_000),
   ligne("2026-10-01", 5000),
 ];
-assert.equal(
-  prochainMoisARegler(
-    situationMembre("n6", troisMois, avanceSousDerogation, [], septembre, undefined, {
+assert.deepEqual(
+  prochainReglement(
+    situationMembre("d", troisMois, sousDerogation, [], septembre, undefined, {
       cotisationMensuelle: 10_000,
     }).cellules,
-    avanceSousDerogation,
+    montantsParMois(sousDerogation),
     10_000,
   ),
-  "2026-10-01",
+  { mois: "2026-10-01", reste: 5000 },
   "le mois a venir se mesure a la cotisation du membre, non au tarif commun",
+);
+
+/* --------------------------------- l'imputation d'un versement sur les mois */
+
+/*
+ * LE MEMBRE N'INDIQUE PLUS LE MOIS : IL INDIQUE LE MONTANT.
+ *
+ * `imputer` repartit ce montant du plus ancien au plus recent. C'est le coeur
+ * de la declaration : ce que ces controles decrivent est exactement ce qui
+ * sera inscrit en base, une ligne par mois, avec son propre montant.
+ */
+const repartir = (montant, versements, requis = 5000, mois = troisMois) =>
+  imputer(
+    montant,
+    situationMembre("i", mois, versements, [], septembre).cellules,
+    montantsParMois(versements),
+    requis,
+  );
+
+assert.deepEqual(
+  repartir(5000, []),
+  [{ mois: "2026-07-01", montant: 5000 }],
+  "une cotisation entiere solde le mois le plus ancien",
+);
+
+assert.deepEqual(
+  repartir(2000, []),
+  [{ mois: "2026-07-01", montant: 2000 }],
+  "un acompte ne cree qu'une ligne, partielle, sur le mois le plus ancien",
+);
+
+// 8 000 sur un juillet deja entame de 2 000 : il complete juillet, puis entame aout.
+assert.deepEqual(
+  repartir(8000, [ligne("2026-07-01", 2000)]),
+  [
+    { mois: "2026-07-01", montant: 3000 },
+    { mois: "2026-08-01", montant: 5000 },
+  ],
+  "le versement complete le mois entame avant de passer au suivant",
+);
+
+assert.deepEqual(
+  repartir(15_000, []),
+  [
+    { mois: "2026-07-01", montant: 5000 },
+    { mois: "2026-08-01", montant: 5000 },
+    { mois: "2026-09-01", montant: 5000 },
+  ],
+  "trois cotisations couvrent trois mois, du plus ancien au plus recent",
+);
+
+// Le reliquat reste un reliquat : il ne se perd pas et ne gonfle pas un mois.
+assert.deepEqual(
+  repartir(12_000, []),
+  [
+    { mois: "2026-07-01", montant: 5000 },
+    { mois: "2026-08-01", montant: 5000 },
+    { mois: "2026-09-01", montant: 2000 },
+  ],
+  "ce qui depasse deux mois entiers entame le troisieme, sans le solder",
+);
+
+/*
+ * LE TROU EST ENJAMBE. Juillet du, aout paye, septembre du : 10 000 vont sur
+ * juillet et septembre. Aout ne recoit rien -- il serait compte deux fois.
+ */
+assert.deepEqual(
+  repartir(10_000, [ligne("2026-08-01", 5000)]),
+  [
+    { mois: "2026-07-01", montant: 5000 },
+    { mois: "2026-09-01", montant: 5000 },
+  ],
+  "un mois deja solde au milieu du parcours ne recoit rien",
+);
+
+// Tout a jour : le versement part en avance sur les mois suivants.
+assert.deepEqual(
+  repartir(10_000, toutVerse),
+  [
+    { mois: "2026-10-01", montant: 5000 },
+    { mois: "2026-11-01", montant: 5000 },
+  ],
+  "a jour, le versement s'impute en avance sur les mois a venir",
+);
+
+// Un montant nul ou negatif n'impute rien, et ne doit pas inventer de ligne.
+assert.deepEqual(repartir(0, []), [], "un montant nul n'impute rien");
+assert.deepEqual(repartir(-5000, []), [], "un montant negatif n'impute rien");
+
+/*
+ * LA BORNE NE DOIT PAS AVALER LA DIFFERENCE. Au-dela de 24 mois, `imputer`
+ * rend ce qu'il a pu placer, et l'action refuse : encaisser un montant sans le
+ * porter nulle part serait le pire des deux comportements.
+ */
+const trente = repartir(30 * 5000, []);
+assert.equal(trente.length, 24, "l'imputation s'arrete a 24 mois");
+assert.equal(
+  trente.reduce((t, i) => t + i.montant, 0),
+  24 * 5000,
+  "et le total impute est inferieur au montant verse, pour que l'appelant refuse",
 );
 
 console.log(
@@ -1362,5 +1374,5 @@ console.log(
     "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons, "
     + "net place et gain de gestion, reperes de l'abscisse, "
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
-    + "ordre de reglement des mois, prochain mois a regler",
+    + "ordre de reglement des mois, imputation d'un versement",
 );

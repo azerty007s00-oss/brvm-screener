@@ -846,25 +846,25 @@ export function texteRelance(
        */
       "  2. Touchez « Versements » : dans la barre du bas sur telephone,",
       "     dans la colonne de gauche sur ordinateur.",
-      "  3. Ouvrez « Declarer un versement » et indiquez le mois couvert,",
-      "     le montant, la date et le moyen de paiement.",
+      "  3. Ouvrez « Declarer un versement » et indiquez le montant verse,",
+      "     la date et le moyen de paiement.",
       /*
-       * LE MOIS N'EST PAS AU CHOIX QUAND IL EN RESTE UN DERRIERE.
+       * LE MOIS NE SE SAISIT PLUS, IL S'ANNONCE.
        *
-       * « Indiquez le mois couvert » laissait croire a une liberte qui n'existe
-       * pas : les mois se reglent du plus ancien au plus recent, et le site
-       * refuse desormais une declaration qui saute un mois ouvert. Le courrier
-       * doit donc nommer le mois par lequel reprendre, sinon il envoie le
-       * membre vers un refus -- et un membre qui bute sur un refus ecrit au
-       * groupe, ce que ces cinq lignes servent a eviter.
+       * Le courrier disait « indiquez le mois couvert ». Le formulaire ne le
+       * demande plus : les mois se reglent du plus ancien au plus recent, donc
+       * le mois impute est determine, et le montant verse dit le reste. Decrire
+       * un champ qui n'existe pas enverrait le membre chercher ce qu'il ne
+       * trouvera pas -- et un membre qui ne trouve pas ecrit au groupe, ce que
+       * ces cinq lignes servent a eviter.
        *
        * `arrieres` exclut le mois courant et reste dans l'ordre : son premier
-       * element est bien le plus ancien mois a regler.
+       * element est bien le mois sur lequel l'argent ira d'abord.
        */
       ...(arrieres.length > 0
         ? [
-            "     Les mois se reglent du plus ancien au plus recent :",
-            `     commencez par ${moisLong(arrieres[0])}.`,
+            `     Votre versement s'impute sur ${moisLong(arrieres[0])}, le plus ancien`,
+            "     mois ouvert, puis sur les suivants s'il le depasse.",
           ]
         : []),
       "  4. Joignez la capture de votre transfert : elle epargne une question.",

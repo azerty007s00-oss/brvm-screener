@@ -23,72 +23,108 @@ export type CelluleMois = {
   dateVersement: string | null;
 };
 
-/**
- * Le mois par lequel le reglement doit commencer : le plus ancien dont il
- * manque quelque chose.
- *
- * LES MOIS SE REGLENT DANS L'ORDRE. On ne regle pas octobre en laissant
- * septembre ouvert : la penalite de l'art. 9 court sur le mois impaye, et un
- * mois saute serait une penalite qui court sans fin sur un mois que le membre
- * croit avoir compense en payant le suivant.
- *
- * `manque` est le seul critere, et c'est celui de la grille, du releve et de
- * la relance : nul besoin d'une seconde definition de « ouvert » qui pourrait
- * en differer. Il vaut zero des qu'un mois est couvert, qu'il soit valide ou
- * seulement declare -- une declaration en attente ferme donc le mois ici : le
- * membre a fait sa part, et le delai du tresorier ne doit pas l'empecher de
- * regler le suivant. Il vaut zero aussi avant l'adhesion (`hors_periode`),
- * qu'on ne doit pas.
- *
- * Rend `null` quand rien n'est ouvert : tout est a jour, et une avance sur les
- * mois a venir est libre.
- */
-export function premierMoisOuvert(cellules: CelluleMois[]): string | null {
-  return cellules.find((c) => c.manque > 0)?.mois ?? null;
-}
-
-/**
- * Le mois a declarer : le premier qui ne soit pas couvert, avances comprises.
- *
- * `premierMoisOuvert` s'arrete au dernier mois de la grille, qui est le mois
- * courant : il rend `null` des que tout est a jour. Ce n'est pas une reponse
- * pour un formulaire de saisie -- le membre qui vient de solder octobre doit
- * se voir proposer NOVEMBRE, non octobre, qu'il a deja paye et que la
- * declaration refuserait.
- *
- * Au-dela de la grille, il n'y a que des avances. On avance donc de mois en
- * mois dans les versements connus tant qu'ils soldent le mois : celui qui ne
- * le solde pas est le prochain a regler. Les lignes servant ce calcul sont
- * celles qui ont deja servi la grille -- aucune lecture de plus.
- *
- * La borne de 25 tours n'est pas de la prudence gratuite : la declaration
- * plafonne a 24 mois d'un coup, donc aucune avance legitime ne va plus loin,
- * et une boucle sur des donnees abimees ne doit pas faire tourner une page.
- */
-export function prochainMoisARegler(
-  cellules: CelluleMois[],
-  versements: VersementConnu[],
-  requis: number,
-): string | null {
-  const ouvert = premierMoisOuvert(cellules);
-  if (ouvert) return ouvert;
-
-  const dernier = cellules.at(-1)?.mois;
-  if (!dernier) return null;
-
+/** Ce que chaque mois porte deja, rejets exclus. */
+export function montantsParMois(versements: VersementConnu[]): Map<string, number> {
   const porte = new Map<string, number>();
   for (const v of versements) {
     if (v.statut === "rejete") continue;
     const cle = v.mois_couvert.slice(0, 10);
     porte.set(cle, (porte.get(cle) ?? 0) + v.montant);
   }
+  return porte;
+}
+
+/**
+ * Le mois a regler, et ce qu'il reste a y porter.
+ *
+ * Le plus ancien mois ouvert s'arrete au dernier mois de la grille, qui est le mois
+ * courant : il rend `null` des que tout est a jour. Ce n'est pas une reponse
+ * pour une saisie -- le membre qui vient de solder octobre doit se voir
+ * proposer NOVEMBRE, non octobre, qu'il a paye et qu'une declaration
+ * n'imputerait nulle part.
+ *
+ * Au-dela de la grille, il n'y a que des avances : on avance donc de mois en
+ * mois tant qu'ils sont soldes. `reste` vaut la cotisation entiere sur un mois
+ * vierge, et le seul reliquat sur un mois deja entame -- c'est ce qui permet
+ * au formulaire de proposer le bon montant, 3 000 et non 5 000 quand un
+ * acompte de 2 000 a deja ete verse.
+ *
+ * La borne de 300 tours ne protege d'aucun cas legitime : elle empeche une
+ * donnee abimee de faire tourner une page sans fin.
+ */
+export function prochainReglement(
+  cellules: CelluleMois[],
+  porte: Map<string, number>,
+  requis: number,
+): { mois: string; reste: number } | null {
+  const ouvert = cellules.find((c) => c.manque > 0);
+  if (ouvert) return { mois: ouvert.mois, reste: ouvert.manque };
+
+  const dernier = cellules.at(-1)?.mois;
+  if (!dernier) return null;
 
   let mois = decalerMois(dernier, 1);
-  for (let tour = 0; tour < 25; tour++) {
-    if ((porte.get(mois) ?? 0) < requis) return mois;
+  for (let tour = 0; tour < 300; tour++) {
+    const reste = requis - (porte.get(mois) ?? 0);
+    if (reste > 0) return { mois, reste };
     mois = decalerMois(mois, 1);
   }
-  return mois;
+  return { mois, reste: requis };
+}
+
+export type Imputation = { mois: string; montant: number };
+
+/**
+ * Repartit un versement sur les mois, du plus ancien au plus recent.
+ *
+ * POURQUOI LE MEMBRE N'INDIQUE PLUS LE MOIS COUVERT.
+ *
+ * Il le choisissait, avec un nombre de mois et un montant par mois -- trois
+ * champs pour une information qui n'en est plus une : les mois se reglent dans
+ * l'ordre, donc le premier mois impute est determine, et le montant verse dit
+ * le reste. On ne demande plus ce que l'on sait deja, et on ne demande surtout
+ * plus un choix qui serait refuse.
+ *
+ * L'argent eteint la dette la plus ancienne d'abord, mois par mois, et
+ * s'arrete ou il s'epuise : le dernier mois peut n'etre couvert qu'en partie,
+ * ce que le modele admet depuis qu'un mois n'est ferme que lorsqu'il est
+ * complet. Un mois deja solde au milieu du parcours -- le cas du trou, juillet
+ * du et aout paye -- est enjambe sans rien recevoir.
+ *
+ * Rend une liste vide quand il n'y a rien a imputer, et une liste qui
+ * n'epuise pas le montant quand il depasse ce que `moisMaximum` peut absorber :
+ * c'est a l'appelant de refuser plutot que de perdre la difference.
+ */
+export function imputer(
+  montant: number,
+  cellules: CelluleMois[],
+  porte: Map<string, number>,
+  requis: number,
+  moisMaximum = 24,
+): Imputation[] {
+  const depart = prochainReglement(cellules, porte, requis);
+  if (depart === null || requis <= 0) return [];
+
+  const grille = new Map(cellules.map((c) => [c.mois, c]));
+  /* Ce qui manque pour solder un mois, dans la grille comme au-dela. */
+  const manqueDu = (mois: string): number => {
+    const c = grille.get(mois);
+    return c ? c.manque : Math.max(0, requis - (porte.get(mois) ?? 0));
+  };
+
+  const imputations: Imputation[] = [];
+  let reste = Math.round(montant);
+  let mois = depart.mois;
+  for (let tour = 0; tour < 300 && reste > 0 && imputations.length < moisMaximum; tour++) {
+    const manque = manqueDu(mois);
+    if (manque > 0) {
+      const part = Math.min(reste, manque);
+      imputations.push({ mois, montant: part });
+      reste -= part;
+    }
+    mois = decalerMois(mois, 1);
+  }
+  return imputations;
 }
 
 /** Vrai si le versement est intervenu apres l'echeance du mois qu'il couvre. */

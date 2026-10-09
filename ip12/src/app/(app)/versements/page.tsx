@@ -134,9 +134,9 @@ export default async function PageVersements({
    * ouvert s'il en reste un, sinon le premier mois que les avances ne couvrent
    * pas encore.
    */
-  const aRegler = maSituation?.prochainMoisARegler ?? null;
+  const aRegler = maSituation?.prochainReglement ?? null;
   /* Passe le mois courant, c'est qu'il n'y a plus de retard : le ton change. */
-  const enAvance = aRegler !== null && aRegler > aujourdhui;
+  const enAvance = aRegler !== null && aRegler.mois > aujourdhui;
 
   /* Combien de membres ont solde le mois en cours : l'etat des cellules le dit. */
   const payesCeMois = situations.filter((x) => {
@@ -242,38 +242,58 @@ export default async function PageVersements({
                   options={membres.map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
                 />
               )}
+              {/*
+                * UN CHAMP, LA OU IL Y EN AVAIT TROIS.
+                *
+                * Mois de depart, nombre de mois, montant par mois : on
+                * demandait au membre une information que le site possede. Les
+                * mois se reglent dans l'ordre, donc le premier mois impute est
+                * determine ; le montant verse dit le reste. Le montant propose
+                * est ce qu'il reste a porter au prochain mois -- 3 000 et non
+                * 5 000 si un acompte de 2 000 y figure deja.
+                *
+                * L'imputation exacte est annoncee apres l'envoi, mois par
+                * mois : c'est la qu'elle est sure, et pour un autre membre
+                * c'est la seule facon de la dire juste.
+                */}
               <Champ
-                nom="moisDebut"
-                libelle="Premier mois couvert"
-                type="month"
-                valeur={(aRegler ?? aujourdhui).slice(0, 7)}
+                nom="montant"
+                libelle="Montant verse (FCFA)"
+                type="number"
+                valeur={aRegler?.reste ?? REGLES.cotisationMensuelle}
+                min={1}
                 aide={
                   (aRegler === null
-                    ? "Les mois se reglent dans l'ordre, du plus ancien au plus recent."
+                    ? "Votre versement couvre les mois dans l'ordre, du plus ancien au plus recent."
                     : enAvance
-                      ? `Vous etes a jour : ${moisLong(aRegler)} est le prochain mois a regler.`
-                      : `Les mois se reglent dans l'ordre : ${moisLong(aRegler)} est le plus ancien qui reste ouvert.`) +
+                      ? `Vous etes a jour. Ce versement ira sur ${moisLong(aRegler.mois)}, puis sur les mois suivants s'il les depasse.`
+                      : `Ce versement ira sur ${moisLong(aRegler.mois)}, le plus ancien mois ouvert, puis sur les suivants s'il le depasse.`) +
                   (saisieDirecte
-                    ? " Pour un autre membre, c'est son propre prochain mois qui s'applique."
+                    ? " Pour un autre membre, c'est son propre mois le plus ancien qui recoit."
                     : "")
                 }
               />
-              <Champ
-                nom="nbMois"
-                libelle="Nombre de mois"
-                type="number"
-                valeur={1}
-                min={1}
-                max={24}
-                aide="Une avance de plusieurs mois cree une ligne par mois couvert."
-              />
-              <Champ
-                nom="montant"
-                libelle="Montant par mois (FCFA)"
-                type="number"
-                valeur={REGLES.cotisationMensuelle}
-                min={1}
-              />
+              {/*
+                * LES DEUX DETTES NE SE DECLARENT PAS AU MEME ENDROIT.
+                *
+                * Une penalite ne couvre aucun mois : elle vise une ligne du
+                * registre, et le tresorier la solde contre cette ligne. Elle a
+                * donc son propre formulaire. Un membre qui vient de verser
+                * cotisation et penalite en un seul transfert n'a aucune raison
+                * de le savoir -- il declare le tout ici, et sa penalite reste
+                * due sans qu'il comprenne pourquoi. La note ne parait que
+                * lorsqu'il en reste une a regler.
+                */}
+              {(maSituation?.nbPenalitesImpayees ?? 0) > 0 && (
+                <p className="mt-3 text-[12px]" style={{ color: "var(--discret)" }}>
+                  Ce formulaire ne regle que des cotisations. Une penalite ne couvre aucun mois
+                  et se declare a part, depuis{" "}
+                  <Link href="/penalites" className="underline">
+                    Penalites
+                  </Link>
+                  .
+                </p>
+              )}
               <Champ
                 nom="dateVersement"
                 libelle="Date du versement"

@@ -5,7 +5,8 @@ import { estTableAbsente } from "./erreurs";
 import { CLUB, REGLES, debutMois, estExigible, moisDuClub, tauxNormalise } from "./settings";
 import type { Role } from "./settings";
 import {
-  prochainMoisARegler,
+  montantsParMois,
+  prochainReglement,
   situationMembre,
   type ReglesMembre,
   type SituationMembre,
@@ -667,14 +668,14 @@ export type SituationClub = SituationMembre & {
   avance: number;
   retardDeclare: boolean;
   /**
-   * Le mois par lequel ce membre doit reprendre son reglement, avances
-   * comprises. Null seulement si la grille est vide.
+   * Le mois par lequel ce membre doit reprendre, et ce qu'il reste a y
+   * porter. Null seulement si la grille est vide.
    *
    * Porte sur la situation plutot que recalcule par chaque ecran : le
-   * formulaire le propose, la declaration le controle, et les deux ne peuvent
-   * donc pas dire deux choses differentes.
+   * formulaire propose ce mois et ce montant, la declaration impute dessus, et
+   * les deux ne peuvent donc pas dire deux choses differentes.
    */
-  prochainMoisARegler: string | null;
+  prochainReglement: { mois: string; reste: number } | null;
 };
 
 export type RegleMembre = {
@@ -1101,9 +1102,9 @@ async function situationsClubBrut(aujourdhui: Date): Promise<SituationClub[]> {
       retardDeclare:
         situation.moisEnRetard.length > 0 &&
         situation.moisEnRetard.every((mo) => declares.includes(mo)),
-      prochainMoisARegler: prochainMoisARegler(
+      prochainReglement: prochainReglement(
         situation.cellules,
-        siens,
+        montantsParMois(siens),
         derogations.get(m.id)?.cotisationMensuelle ?? reglages.cotisationMensuelle,
       ),
     };
