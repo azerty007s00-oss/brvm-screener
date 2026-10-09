@@ -30,7 +30,7 @@ const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent 
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
-  prochainReglement, montantsParMois, imputer,
+  prochainReglement, montantsParMois, imputer, imputerPenalites,
 } = await import("../.verif/penalites.mjs");
 const {
   tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa,
@@ -1368,11 +1368,98 @@ assert.equal(
   "et le total impute est inferieur au montant verse, pour que l'appelant refuse",
 );
 
+/* ------------------------------------- l'imputation sur les penalites dues */
+
+/*
+ * MEME REGLE QUE LES COTISATIONS, AUTRE UNITE.
+ *
+ * L'argent eteint la dette la plus ancienne d'abord -- mais une penalite ne se
+ * coupe pas : le registre la compte en unites entieres. Un versement n'en
+ * solde donc qu'un nombre entier, et ce qui ne suffit pas a en payer une de
+ * plus n'est pas impute : l'action refuse plutot que d'encaisser la
+ * difference.
+ */
+const pen = (id, quantite, montantUnitaire, dateConstat) => ({
+  id,
+  quantite,
+  montantUnitaire,
+  dateConstat,
+});
+/* Deux lignes : trois penalites de 500 en juillet, une de 1 000 en septembre. */
+const registre = [
+  pen("b", 1, 1000, "2026-09-10"),
+  pen("a", 3, 500, "2026-07-10"),
+];
+
+assert.deepEqual(
+  imputerPenalites(500, registre),
+  [{ penaliteId: "a", quantite: 1, montant: 500 }],
+  "500 soldent une penalite, et la plus ancienne d'abord malgre l'ordre de la liste",
+);
+
+assert.deepEqual(
+  imputerPenalites(1500, registre),
+  [{ penaliteId: "a", quantite: 3, montant: 1500 }],
+  "1 500 soldent les trois unites de la ligne la plus ancienne",
+);
+
+// Le versement deborde sur la ligne suivante, toujours dans l'ordre.
+assert.deepEqual(
+  imputerPenalites(2500, registre),
+  [
+    { penaliteId: "a", quantite: 3, montant: 1500 },
+    { penaliteId: "b", quantite: 1, montant: 1000 },
+  ],
+  "un versement plus large passe a la ligne suivante une fois la premiere soldee",
+);
+
+/*
+ * Ce qui ne tombe pas juste n'est pas impute : 1 200 soldent deux penalites de
+ * 500 et laissent 200, que l'appelant doit refuser plutot qu'encaisser.
+ */
+const penPartielle = imputerPenalites(1200, registre);
+assert.deepEqual(
+  penPartielle,
+  [{ penaliteId: "a", quantite: 2, montant: 1000 }],
+  "une penalite se regle entiere : 1 200 n'en soldent que deux de 500",
+);
+assert.equal(
+  penPartielle.reduce((t, i) => t + i.montant, 0),
+  1000,
+  "et le total impute reste inferieur au montant verse, pour que l'action refuse",
+);
+
+/*
+ * Une ligne portant deja une declaration en attente est enjambee : l'index
+ * unique de la base n'en accepte qu'une, et le tresorier doit se prononcer.
+ * C'est le pendant du mois declare mais pas encore valide.
+ */
+assert.deepEqual(
+  imputerPenalites(1000, registre, new Set(["a"])),
+  [{ penaliteId: "b", quantite: 1, montant: 1000 }],
+  "une ligne deja declaree est enjambee, la suivante recoit",
+);
+
+// Trop peu pour une seule unite : rien n'est impute, et rien n'est invente.
+assert.deepEqual(imputerPenalites(300, registre), [], "300 ne soldent aucune penalite de 500");
+assert.deepEqual(imputerPenalites(0, registre), [], "un montant nul n'impute rien");
+assert.deepEqual(imputerPenalites(-1000, registre), [], "un montant negatif n'impute rien");
+
+/*
+ * Un montant unitaire nul ferait boucler sans jamais consommer le versement :
+ * la ligne est ecartee, et le tresorier la verra rester due.
+ */
+assert.deepEqual(
+  imputerPenalites(1000, [pen("z", 2, 0, "2026-06-10"), pen("b", 1, 1000, "2026-09-10")]),
+  [{ penaliteId: "b", quantite: 1, montant: 1000 }],
+  "une ligne au montant unitaire nul est ecartee, non soldee gratuitement",
+);
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
     "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons, "
     + "net place et gain de gestion, reperes de l'abscisse, "
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
-    + "ordre de reglement des mois, imputation d'un versement",
+    + "ordre de reglement des mois, imputation d'un versement et des penalites",
 );

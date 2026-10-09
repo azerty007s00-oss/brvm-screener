@@ -243,6 +243,25 @@ export default async function PageVersements({
                 />
               )}
               {/*
+                * COTISATION OU PENALITE, AU MEME ENDROIT.
+                *
+                * Les deux se declaraient sur deux pages. Qui versait les deux
+                * en un seul transfert declarait le tout ici, et sa penalite
+                * restait due sans qu'il comprenne pourquoi. Le demander ote
+                * aussi la question de savoir ce que l'argent eteint d'abord :
+                * le membre sait ce qu'il a paye, et les statuts ne rendent les
+                * deux indissociables qu'au 10/01/2027.
+                */}
+              <Selection
+                nom="nature"
+                libelle="Ce que vous reglez"
+                valeur="cotisation"
+                options={[
+                  { valeur: "cotisation", libelle: "Une cotisation mensuelle" },
+                  { valeur: "penalite", libelle: "Une penalite" },
+                ]}
+              />
+              {/*
                 * UN CHAMP, LA OU IL Y EN AVAIT TROIS.
                 *
                 * Mois de depart, nombre de mois, montant par mois : on
@@ -264,12 +283,13 @@ export default async function PageVersements({
                 min={1}
                 aide={
                   (aRegler === null
-                    ? "Votre versement couvre les mois dans l'ordre, du plus ancien au plus recent."
+                    ? "Cotisation : votre versement couvre les mois dans l'ordre, du plus ancien au plus recent."
                     : enAvance
-                      ? `Vous etes a jour. Ce versement ira sur ${moisLong(aRegler.mois)}, puis sur les mois suivants s'il les depasse.`
-                      : `Ce versement ira sur ${moisLong(aRegler.mois)}, le plus ancien mois ouvert, puis sur les suivants s'il le depasse.`) +
+                      ? `Cotisation : ce versement ira sur ${moisLong(aRegler.mois)}, puis sur les mois suivants s'il les depasse.`
+                      : `Cotisation : ce versement ira sur ${moisLong(aRegler.mois)}, le plus ancien mois ouvert, puis sur les suivants s'il le depasse.`) +
+                  " Penalite : il solde les plus anciennes d'abord, et une penalite se regle entiere." +
                   (saisieDirecte
-                    ? " Pour un autre membre, c'est son propre mois le plus ancien qui recoit."
+                    ? " Pour un autre membre, c'est sa propre situation qui s'applique ; une penalite, elle, se solde depuis la page Penalites."
                     : "")
                 }
               />
@@ -286,8 +306,8 @@ export default async function PageVersements({
                 */}
               {(maSituation?.nbPenalitesImpayees ?? 0) > 0 && (
                 <p className="mt-3 text-[12px]" style={{ color: "var(--discret)" }}>
-                  Ce formulaire ne regle que des cotisations. Une penalite ne couvre aucun mois
-                  et se declare a part, depuis{" "}
+                  Vous avez aussi des penalites dues : choisissez « une penalite » ci-dessus
+                  pour en declarer le reglement. Le detail de chaque ligne se lit sur{" "}
                   <Link href="/penalites" className="underline">
                     Penalites
                   </Link>

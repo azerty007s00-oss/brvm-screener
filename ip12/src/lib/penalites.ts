@@ -127,6 +127,64 @@ export function imputer(
   return imputations;
 }
 
+export type LignePenalite = {
+  id: string;
+  quantite: number;
+  montantUnitaire: number;
+  dateConstat: string;
+};
+
+export type ImputationPenalite = { penaliteId: string; quantite: number; montant: number };
+
+/**
+ * Repartit un versement sur les penalites dues, de la plus ancienne a la plus
+ * recente.
+ *
+ * MEME REGLE QUE LES COTISATIONS, AUTRE UNITE. L'argent eteint la dette la
+ * plus ancienne d'abord -- mais une penalite ne se coupe pas : le registre la
+ * compte en unites entieres, au montant unitaire de sa ligne. Un versement
+ * n'en solde donc qu'un nombre entier, et ce qui ne suffit pas a en payer une
+ * de plus n'est pas impute.
+ *
+ * Une ligne portant deja une declaration en attente est enjambee : le
+ * tresorier doit d'abord se prononcer, et l'index unique de la base n'en
+ * accepte qu'une a la fois. C'est le pendant exact du mois declare mais pas
+ * encore valide, qui ne bloque pas le reglement du suivant.
+ *
+ * Un montant unitaire absent ou nul ferait boucler le calcul sur une ligne qui
+ * ne consomme rien : elle est ecartee, et le tresorier la verra rester due.
+ *
+ * Rend une liste qui n'epuise pas le montant quand il ne tombe pas juste :
+ * c'est a l'appelant de refuser plutot que d'encaisser la difference sans la
+ * porter nulle part.
+ */
+export function imputerPenalites(
+  montant: number,
+  lignes: LignePenalite[],
+  dejaEnAttente: Set<string> = new Set(),
+): ImputationPenalite[] {
+  let reste = Math.round(montant);
+  if (!Number.isFinite(reste) || reste <= 0) return [];
+
+  const ordonnees = [...lignes].sort(
+    (a, b) => a.dateConstat.localeCompare(b.dateConstat) || a.id.localeCompare(b.id),
+  );
+
+  const imputations: ImputationPenalite[] = [];
+  for (const l of ordonnees) {
+    if (reste <= 0) break;
+    if (dejaEnAttente.has(l.id)) continue;
+    const unitaire = Math.round(l.montantUnitaire);
+    if (!Number.isInteger(l.quantite) || l.quantite < 1 || unitaire <= 0) continue;
+
+    const quantite = Math.min(l.quantite, Math.floor(reste / unitaire));
+    if (quantite < 1) continue;
+    imputations.push({ penaliteId: l.id, quantite, montant: quantite * unitaire });
+    reste -= quantite * unitaire;
+  }
+  return imputations;
+}
+
 /** Vrai si le versement est intervenu apres l'echeance du mois qu'il couvre. */
 export function verseEnRetard(mois: string, dateVersement: string | null): boolean {
   if (!dateVersement) return false;

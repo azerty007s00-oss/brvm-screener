@@ -6,12 +6,29 @@ import { db } from "@/lib/db";
 import { exigerMembre, exigerRole } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
-import { derogationsParMembre, reglagesEffectifs, situationsClub } from "@/lib/queries";
-import { imputer, type ReglesMembre } from "@/lib/penalites";
-import { fcfa, moisLong } from "@/lib/settings";
-import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
+import {
+  derogationsParMembre,
+  listerPenalites,
+  reglagesEffectifs,
+  reglementsPenalite,
+  situationsClub,
+} from "@/lib/queries";
+import {
+  imputer,
+  imputerPenalites,
+  type ImputationPenalite,
+  type ReglesMembre,
+} from "@/lib/penalites";
+import { accorde, fcfa, moisLong } from "@/lib/settings";
+import {
+  KIND_VERSEMENT,
+  METHODE,
+  STATUT_PENALITE,
+  STATUT_REGLEMENT,
+  STATUT_VERSEMENT,
+} from "@/lib/valeurs";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
-import { avertirDeclaration } from "@/lib/avis";
+import { avertirDeclaration, avertirReglementPenalite } from "@/lib/avis";
 import type { EtatFormulaire } from "./auth";
 
 const METHODES = Object.values(METHODE) as string[];
@@ -45,6 +62,20 @@ export async function declarerVersement(
    * declaration refuse.
    */
   const montant = Math.round(Number(donnees.get("montant") ?? 0));
+  /*
+   * COTISATION OU PENALITE : C'EST LE MEMBRE QUI LE DIT.
+   *
+   * Les deux se declaraient a deux endroits, et qui versait les deux en un
+   * seul transfert voyait sa penalite rester due sans comprendre pourquoi.
+   * Les fusionner supposait de decider ce que l'argent eteint d'abord -- ce
+   * que les statuts ne tranchent qu'au 10/01/2027
+   * (`penalitesIndissociables`). Le demander lui ote la question : il sait ce
+   * qu'il a paye.
+   *
+   * Dans les deux cas, meme regle et meme circuit : du plus ancien au plus
+   * recent, et la validation du tresorier apres declaration.
+   */
+  const nature = String(donnees.get("nature") ?? "cotisation");
   const dateVersement = String(donnees.get("dateVersement") ?? "").slice(0, 10);
   const mode = String(donnees.get("mode") ?? METHODE.mobileMoney);
   const reference = String(donnees.get("reference") ?? "").trim() || null;
@@ -62,6 +93,22 @@ export async function declarerVersement(
     return { ok: false, erreur: "Indiquez le montant verse." };
   }
   if (!METHODES.includes(mode)) return { ok: false, erreur: "Mode de paiement inconnu." };
+  if (nature !== "cotisation" && nature !== "penalite") {
+    return { ok: false, erreur: "Precisez s'il s'agit d'une cotisation ou d'une penalite." };
+  }
+
+  if (nature === "penalite") {
+    return reglerPenalitesDeclarees({
+      auteur,
+      membreCible,
+      montant,
+      datePaiement: dateVersement,
+      mode,
+      reference,
+      note,
+      donnees,
+    });
+  }
 
   const sql = db();
 
@@ -187,6 +234,160 @@ export async function declarerVersement(
     message: saisieDirecte
       ? `${objet}. Enregistre et valide.`
       : `${objet}. En attente de validation par le tresorier.`,
+  };
+}
+
+/*
+ * Le reglement de penalites declare depuis le formulaire des versements.
+ *
+ * CE N'EST PAS UNE ACTION EXPORTEE, ET CELA COMPTE. Dans un fichier
+ * « use server », tout export devient un point d'entree appelable depuis le
+ * navigateur. Ce chemin n'a pas de controle de droit propre -- il herite de
+ * celui de `declarerVersement` -- et doit donc rester hors d'atteinte.
+ *
+ * Il ecrit dans `penalty_settlements`, exactement comme la declaration faite
+ * depuis la page Penalites : meme table, meme statut d'attente, meme
+ * validation du tresorier. Seul le chemin d'acces change.
+ */
+async function reglerPenalitesDeclarees(p: {
+  auteur: { id: string; nom: string };
+  membreCible: string;
+  montant: number;
+  datePaiement: string;
+  mode: string;
+  reference: string | null;
+  note: string | null;
+  donnees: FormData;
+}): Promise<EtatFormulaire> {
+  /*
+   * CHACUN NE DECLARE QUE POUR LUI, MEME ICI.
+   *
+   * La regle vient de la page Penalites et ne doit pas s'affaiblir en passant
+   * par un autre formulaire : declarer pour un autre, puis valider sa propre
+   * declaration, viderait le controle de son sens. Le tresorier qui constate
+   * un encaissement de penalite le solde directement depuis la page
+   * Penalites, ou son geste vaut validation -- et ou il est trace comme tel.
+   */
+  if (p.membreCible !== p.auteur.id) {
+    return {
+      ok: false,
+      erreur:
+        "Une penalite ne se declare que pour soi. Pour un autre membre, soldez-la " +
+        "depuis la page Penalites : votre saisie y vaut validation.",
+    };
+  }
+  if (p.datePaiement > new Date().toISOString().slice(0, 10)) {
+    return { ok: false, erreur: "La date de paiement est dans le futur." };
+  }
+
+  const [dues, enAttente] = await Promise.all([
+    listerPenalites({ membreId: p.auteur.id, statut: STATUT_PENALITE.due }),
+    reglementsPenalite({ membreId: p.auteur.id, statut: STATUT_REGLEMENT.enAttente }),
+  ]);
+  if (dues.length === 0) {
+    return { ok: false, erreur: "Vous n'avez aucune penalite due." };
+  }
+
+  const imputations = imputerPenalites(
+    p.montant,
+    dues.map((d) => ({
+      id: d.id,
+      quantite: d.quantite,
+      montantUnitaire: d.montant_unitaire,
+      dateConstat: d.date_constat,
+    })),
+    new Set(enAttente.map((r) => r.penalite_id)),
+  );
+  const impute = imputations.reduce((t, i) => t + i.montant, 0);
+
+  if (imputations.length === 0) {
+    /*
+     * Deux causes, et le membre doit savoir laquelle : un montant trop petit
+     * pour une seule penalite, ou des lignes qui attendent toutes le
+     * tresorier. Un meme message pour les deux le laisserait reessayer en
+     * vain.
+     */
+    const libres = dues.filter((d) => !enAttente.some((r) => r.penalite_id === d.id));
+    if (libres.length === 0) {
+      return {
+        ok: false,
+        erreur:
+          "Toutes vos penalites portent deja une declaration en attente : le tresorier " +
+          "doit d'abord se prononcer.",
+      };
+    }
+    const plusPetite = Math.min(...libres.map((d) => d.montant_unitaire));
+    return {
+      ok: false,
+      erreur: `Ce montant ne couvre aucune penalite entiere : la plus petite est de ${fcfa(plusPetite)}.`,
+    };
+  }
+  if (impute < p.montant) {
+    return {
+      ok: false,
+      erreur:
+        `Une penalite se regle entiere : ce versement en couvre ${fcfa(impute)}. ` +
+        `Declarez ${fcfa(impute)}, et gardez la difference pour une cotisation.`,
+    };
+  }
+
+  const sql = db();
+  const lot = randomUUID();
+  const posees: ImputationPenalite[] = [];
+  for (const i of imputations) {
+    try {
+      await sql`
+        insert into penalty_settlements
+          (penalty_id, member_id, quantity, paid_on, method, reference, note, batch_id,
+           status, declared_by)
+        values (${i.penaliteId}::uuid, ${p.auteur.id}::uuid, ${i.quantite},
+                ${p.datePaiement}::date, ${p.mode}, ${p.reference}, ${p.note}, ${lot}::uuid,
+                ${STATUT_REGLEMENT.enAttente}, ${p.auteur.id}::uuid)
+      `;
+      posees.push(i);
+    } catch (e) {
+      /*
+       * Une declaration posee entre-temps sur cette ligne : on passe, sans
+       * perdre celles qui ont abouti. Le membre lit ce qui est parti, et peut
+       * declarer le reste une fois le tresorier passe.
+       */
+      if (/penalty_settlements_une_attente_idx/.test(String(e))) continue;
+      throw e;
+    }
+  }
+  if (posees.length === 0) {
+    return {
+      ok: false,
+      erreur:
+        "Une declaration vient d'etre posee sur ces penalites : rouvrez la page pour voir " +
+        "ou vous en etes.",
+    };
+  }
+
+  const quantite = posees.reduce((t, i) => t + i.quantite, 0);
+  const total = posees.reduce((t, i) => t + i.montant, 0);
+  const pieces = await enregistrerJustificatif(p.donnees, lot, p.auteur.id, p.auteur.id);
+  await avertirReglementPenalite({
+    auteurId: p.auteur.id,
+    membreNom: p.auteur.nom,
+    quantite,
+    montant: total,
+    avecJustificatif: pieces.joint,
+  }).catch(() => 0);
+
+  await journaliser(
+    { id: p.auteur.id, nom: p.auteur.nom },
+    "declaration_reglement_penalite",
+    { entite: "penalty_settlements", id: lot },
+    { imputations: posees, montantTotal: total, depuis: "versements" },
+  );
+  revalidatePath("/", "layout");
+  return {
+    ok: true,
+    message:
+      `Reglement de ${fcfa(total)} declare sur ${quantite} ${accorde(quantite, "penalite")}, ` +
+      `de la plus ancienne a la plus recente. En attente de validation par le tresorier : ` +
+      "les penalites restent dues jusque-la.",
   };
 }
 
