@@ -443,6 +443,85 @@ egal(lire(`select coalesce(sum(quantity),0) from penalties
            where member_id='${membre.id}' and status='due' and kind='retard';`), "2",
   "ne doivent rester dues que les 2 de la ligne restee intacte");
 
+/* ========================= 5 bis. un versement, un geste du tresorier */
+
+/*
+ * Un versement reparti sur plusieurs penalites ecrit une declaration par
+ * ligne, reliees par leur lot. Le tresorier les validait une a une : trois
+ * gestes pour un transfert, et le risque d'en laisser une en attente. Il
+ * valide ou refuse desormais le lot entier.
+ *
+ * Un membre a part, pour ne rien deranger des comptes qui precedent.
+ */
+const autre = {
+  id: uns(`insert into members (full_name, email, role, password_hash, joined_on)
+           values ('DIALLO Awa','a@ip12.ci','membre','x',current_date) returning id;`),
+  nom: "DIALLO Awa",
+};
+const ancienne = nouvellePenalite(2, 500, autre.id);
+const recente = nouvellePenalite(1, 1000, autre.id);
+session.acteur = autre;
+r = await actions.declarerReglementPenalite(
+  {},
+  formulaire({ montant: 2000, datePaiement: AUJOURDHUI, mode: "mobile_money" }),
+);
+verifier(r.ok, `un versement sur deux lignes doit passer : ${r.erreur ?? ""}`);
+const lotAwa = lire(`select batch_id from penalty_settlements where penalty_id='${ancienne}';`);
+egal(lire(`select count(*) from penalty_settlements where batch_id='${lotAwa}';`), "2",
+  "deux lignes reglees d'un seul versement : deux declarations, un seul lot");
+
+// Le tresorier valide le lot : les deux lignes sont soldees d'un geste.
+session.acteur = tresorier;
+r = await actions.validerReglementPenalite({}, formulaire({ lot: lotAwa }));
+verifier(r.ok, `la validation du lot doit passer : ${r.erreur ?? ""}`);
+egal(lire(`select status from penalties where id='${ancienne}';`), "payee",
+  "la premiere ligne du lot est soldee");
+egal(lire(`select status from penalties where id='${recente}';`), "payee",
+  "la seconde aussi, du meme geste");
+egal(lire(`select count(*) from penalty_settlements
+           where batch_id='${lotAwa}' and status='validee';`), "2",
+  "et les deux declarations sont marquees validees");
+r = await actions.validerReglementPenalite({}, formulaire({ lot: lotAwa }));
+verifier(!r.ok, "un lot deja examine ne se valide pas une seconde fois");
+
+// Un transfert non recu l'est pour toutes les lignes qu'il pretendait regler.
+const l1 = nouvellePenalite(1, 500, autre.id);
+const l2 = nouvellePenalite(1, 500, autre.id);
+session.acteur = autre;
+r = await actions.declarerReglementPenalite(
+  {},
+  formulaire({ montant: 1000, datePaiement: AUJOURDHUI, mode: "especes" }),
+);
+verifier(r.ok, `le second versement doit passer : ${r.erreur ?? ""}`);
+const lotRefuse = lire(`select batch_id from penalty_settlements where penalty_id='${l1}';`);
+session.acteur = tresorier;
+r = await actions.rejeterReglementPenalite({}, formulaire({ lot: lotRefuse, motif: "rien recu" }));
+verifier(r.ok, `le refus du lot doit passer : ${r.erreur ?? ""}`);
+egal(lire(`select count(*) from penalty_settlements
+           where batch_id='${lotRefuse}' and status='rejetee' and review_note='rien recu';`), "2",
+  "le refus porte sur tout le lot, motif compris");
+egal(lire(`select count(*) from penalties
+           where id in ('${l1}','${l2}') and status='due';`), "2",
+  "et les deux penalites restent dues");
+
+// Nul ne valide son propre lot, fut-il tresorier.
+const t1 = nouvellePenalite(1, 500, tresorier.id);
+nouvellePenalite(1, 500, tresorier.id);
+session.acteur = tresorier;
+r = await actions.declarerReglementPenalite(
+  {},
+  formulaire({ montant: 1000, datePaiement: AUJOURDHUI, mode: "especes" }),
+);
+verifier(r.ok, `le tresorier declare pour lui-meme : ${r.erreur ?? ""}`);
+const lotTresorier = lire(`select batch_id from penalty_settlements
+                           where penalty_id='${t1}' and status='en_attente';`);
+r = await actions.validerReglementPenalite({}, formulaire({ lot: lotTresorier }));
+verifier(!r.ok && /votre propre declaration/.test(r.erreur ?? ""),
+  "un lot declare par le tresorier ne se valide pas par lui");
+egal(lire(`select count(*) from penalty_settlements
+           where batch_id='${lotTresorier}' and status='en_attente';`), "2",
+  "aucune de ses lignes n'est touchee : le lot se refuse en entier");
+
 /* ============================ 6. le constat, desormais automatique */
 
 /*

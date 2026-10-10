@@ -602,97 +602,160 @@ export async function declarerReglementPenalite(
   };
 }
 
+/**
+ * Les declarations visees par un geste du tresorier : un lot entier, ou une
+ * declaration isolee.
+ *
+ * UN REGLEMENT, UN GESTE. Un versement reparti sur plusieurs penalites ecrit
+ * une declaration par ligne, reliees par un meme lot. Le tresorier les
+ * examinait une a une -- trois validations pour un seul transfert, avec le
+ * risque d'en laisser une en attente. Il examine desormais le lot ; un
+ * identifiant isole reste accepte, pour les declarations faites une par une.
+ */
+function cibleDeclaration(donnees: FormData): { lot: string | null; id: string | null } {
+  const lot = String(donnees.get("lot") ?? "").trim() || null;
+  const id = String(donnees.get("id") ?? "").trim() || null;
+  return { lot, id };
+}
+
 /** Le tresorier valide la declaration : c'est ce geste, et lui seul, qui solde. */
 export async function validerReglementPenalite(
   _precedent: EtatFormulaire,
   donnees: FormData,
 ): Promise<EtatFormulaire> {
   const auteur = await exigerDroit("gererPenalites");
-  const id = String(donnees.get("id") ?? "");
-  if (!id) return { ok: false, erreur: "Declaration introuvable." };
+  const { lot, id } = cibleDeclaration(donnees);
+  if (!lot && !id) return { ok: false, erreur: "Declaration introuvable." };
 
   const sql = db();
-  const lignes = (await sql`
-    select r.penalty_id, r.member_id, r.quantity, r.declared_by,
+  /* De la plus ancienne penalite a la plus recente, comme a l'imputation. */
+  const declarations = (await sql`
+    select r.id, r.penalty_id, r.quantity, r.declared_by,
            to_char(r.paid_on, 'YYYY-MM-DD') as paid_on, r.method
     from penalty_settlements r
-    where r.id = ${id}::uuid and r.status = ${STATUT_REGLEMENT.enAttente}
+    join penalties p on p.id = r.penalty_id
+    where r.status = ${STATUT_REGLEMENT.enAttente}
+      and (${lot}::uuid is null or r.batch_id = ${lot}::uuid)
+      and (${id}::uuid is null or r.id = ${id}::uuid)
+    order by p.incurred_on, p.created_at, r.id
   `) as {
-    penalty_id: string; member_id: string; quantity: number;
+    id: string; penalty_id: string; quantity: number;
     declared_by: string; paid_on: string; method: string;
   }[];
-  if (lignes.length === 0) return { ok: false, erreur: "Declaration introuvable ou deja examinee." };
-  const declaration = lignes[0];
+  if (declarations.length === 0) {
+    return { ok: false, erreur: "Declaration introuvable ou deja examinee." };
+  }
 
   /*
    * Personne ne valide sa propre declaration, meme titulaire du droit : le
-   * tresorier qui declare depuis son compte de membre voit sa ligne examinee par
-   * le president. La regle vaut deja pour les versements ; elle vaut ici pour la
-   * meme raison -- un encaissement se constate a deux.
+   * tresorier qui declare depuis son compte de membre voit son reglement
+   * examine par le president. La regle vaut deja pour les versements ; elle
+   * vaut ici pour la meme raison -- un encaissement se constate a deux. Un lot
+   * n'a qu'un declarant : il se refuse en entier.
    */
-  if (String(declaration.declared_by) === auteur.id) {
+  if (declarations.some((d) => String(d.declared_by) === auteur.id)) {
     return {
       ok: false,
       erreur: "Vous ne pouvez pas valider votre propre declaration : le president s'en charge.",
     };
   }
 
-  const note = `Regle le ${dateCourte(declaration.paid_on)} par ${libelleMode(declaration.method)}, declare par le membre`;
-  const issue = await soldeLigne(
-    String(declaration.penalty_id),
-    Number(declaration.quantity),
-    auteur.id,
-    note,
-  );
-  if (!issue.ok) return { ok: false, erreur: issue.erreur };
-
-  await sql`
-    update penalty_settlements
-    set status = ${STATUT_REGLEMENT.validee}, reviewed_by = ${auteur.id}::uuid, reviewed_at = now()
-    where id = ${id}::uuid
-  `;
-  await journaliser(
-    { id: auteur.id, nom: auteur.nom },
-    "validation_reglement_penalite",
-    { entite: "penalty_settlements", id },
-    { quantite: issue.quantite, restant: issue.reste, montant: issue.montant },
-  );
+  let soldees = 0;
+  let montant = 0;
+  let resteDu = 0;
+  const echecs: string[] = [];
+  for (const declaration of declarations) {
+    const note =
+      `Regle le ${dateCourte(declaration.paid_on)} par ${libelleMode(declaration.method)}, ` +
+      "declare par le membre";
+    const issue = await soldeLigne(
+      String(declaration.penalty_id),
+      Number(declaration.quantity),
+      auteur.id,
+      note,
+    );
+    /*
+     * Une ligne qui ne se solde plus -- annulee entre-temps -- n'arrete pas les
+     * autres : sa declaration reste en attente, et le tresorier le lit.
+     */
+    if (!issue.ok) {
+      echecs.push(issue.erreur);
+      continue;
+    }
+    await sql`
+      update penalty_settlements
+      set status = ${STATUT_REGLEMENT.validee}, reviewed_by = ${auteur.id}::uuid, reviewed_at = now()
+      where id = ${declaration.id}::uuid
+    `;
+    await journaliser(
+      { id: auteur.id, nom: auteur.nom },
+      "validation_reglement_penalite",
+      { entite: "penalty_settlements", id: String(declaration.id) },
+      { quantite: issue.quantite, restant: issue.reste, montant: issue.montant, lot },
+    );
+    soldees += issue.quantite;
+    montant += issue.montant;
+    resteDu += issue.reste;
+  }
   revalidatePath("/", "layout");
+
+  if (echecs.length > 0) {
+    return {
+      ok: false,
+      erreur:
+        (soldees > 0
+          ? `${soldees} ${accorde(soldees, "penalite")} ${accorde(soldees, "soldee")} ; `
+          : "") +
+        `${echecs.length} ${accorde(echecs.length, "declaration")} non ` +
+        `${accorde(echecs.length, "validee")} : ${echecs.join(" ; ")}`,
+    };
+  }
   return {
     ok: true,
     message:
-      issue.reste === 0
-        ? `Reglement valide : penalite soldee (${issue.quantite}).`
-        : `Reglement valide : ${issue.quantite} regle(s), il reste ${issue.reste} dû(s).`,
+      `Reglement valide : ${soldees} ${accorde(soldees, "penalite")} ` +
+      `${accorde(soldees, "soldee")}, ${fcfa(montant)}` +
+      (resteDu > 0 ? `. Il reste ${resteDu} ${accorde(resteDu, "penalite")} ${accorde(resteDu, "due")}.` : "."),
   };
 }
 
-/** Refus : la penalite reste due, et le membre sait pourquoi. */
+/** Refus : les penalites restent dues, et le membre sait pourquoi. */
 export async function rejeterReglementPenalite(
   _precedent: EtatFormulaire,
   donnees: FormData,
 ): Promise<EtatFormulaire> {
   const auteur = await exigerDroit("gererPenalites");
-  const id = String(donnees.get("id") ?? "");
+  const { lot, id } = cibleDeclaration(donnees);
   const motif = String(donnees.get("motif") ?? "").trim() || null;
-  if (!id) return { ok: false, erreur: "Declaration introuvable." };
+  if (!lot && !id) return { ok: false, erreur: "Declaration introuvable." };
 
   const sql = db();
-  const faites = await sql`
+  /* Un transfert non recu l'est pour toutes les lignes qu'il pretendait regler. */
+  const faites = (await sql`
     update penalty_settlements
     set status = ${STATUT_REGLEMENT.rejetee}, reviewed_by = ${auteur.id}::uuid,
         reviewed_at = now(), review_note = ${motif}
-    where id = ${id}::uuid and status = ${STATUT_REGLEMENT.enAttente}
-    returning penalty_id
-  `;
+    where status = ${STATUT_REGLEMENT.enAttente}
+      and (${lot}::uuid is null or batch_id = ${lot}::uuid)
+      and (${id}::uuid is null or id = ${id}::uuid)
+    returning id
+  `) as { id: string }[];
   if (faites.length === 0) return { ok: false, erreur: "Declaration introuvable ou deja examinee." };
 
-  await journaliser(
-    { id: auteur.id, nom: auteur.nom },
-    "refus_reglement_penalite",
-    { entite: "penalty_settlements", id },
-    { motif },
-  );
+  for (const f of faites) {
+    await journaliser(
+      { id: auteur.id, nom: auteur.nom },
+      "refus_reglement_penalite",
+      { entite: "penalty_settlements", id: String(f.id) },
+      { motif, lot },
+    );
+  }
   revalidatePath("/", "layout");
-  return { ok: true, message: "Declaration refusee : la penalite reste due." };
+  return {
+    ok: true,
+    message:
+      faites.length === 1
+        ? "Declaration refusee : la penalite reste due."
+        : `Reglement refuse : les ${faites.length} penalites restent dues.`,
+  };
 }

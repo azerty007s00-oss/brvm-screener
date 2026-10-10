@@ -189,6 +189,30 @@ export default async function PagePenalites() {
   );
   const mesDeclarations = reglements.filter((r) => r.membre_id === membre.id);
   const aExaminer = reglements.filter((r) => r.statut === STATUT_REGLEMENT.enAttente);
+  /*
+   * UN VERSEMENT, UNE LIGNE A EXAMINER.
+   *
+   * Un versement reparti sur plusieurs penalites ecrit une declaration par
+   * ligne, reliees par leur lot. Les afficher une a une faisait valider trois
+   * fois un seul transfert. Elles se presentent groupees, et se valident ou
+   * se refusent en un geste. Une declaration sans lot reste seule.
+   */
+  const lotsAExaminer = [
+    ...aExaminer
+      .reduce((groupes, r) => {
+        const cle = r.lot ?? r.id;
+        groupes.set(cle, [...(groupes.get(cle) ?? []), r]);
+        return groupes;
+      }, new Map<string, typeof aExaminer>())
+      .values(),
+  ].map((lignes) => ({
+    cle: lignes[0].lot ?? lignes[0].id,
+    parLot: Boolean(lignes[0].lot),
+    premiere: lignes[0],
+    lignes,
+    montant: lignes.reduce((t, r) => t + r.montant, 0),
+    quantite: lignes.reduce((t, r) => t + r.quantite, 0),
+  }));
 
   const saisie = gere ? (
     <Panneau
@@ -478,36 +502,43 @@ export default async function PagePenalites() {
       )}
 
       {gere && circuitPret && (
-        <Carte titre={`Reglements declares, a verifier (${aExaminer.length})`}>
-          {aExaminer.length === 0 ? (
+        <Carte titre={`Reglements declares, a verifier (${lotsAExaminer.length})`}>
+          {lotsAExaminer.length === 0 ? (
             <Vide>Aucun reglement declare en attente.</Vide>
           ) : (
             <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
-              {aExaminer.map((r) => (
-                <li key={r.id} className="py-3">
+              {lotsAExaminer.map(({ cle, parLot, premiere: r, lignes, montant, quantite }) => (
+                <li key={cle} className="py-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium">
-                        {r.membre_nom} &middot; {fcfa(r.montant)}
-                        {r.quantite > 1 && (
+                        {r.membre_nom} &middot; {fcfa(montant)}
+                        {quantite > 1 && (
                           <span className="font-normal" style={{ color: "var(--discret)" }}>
                             {" "}
-                            ({r.quantite} × {fcfa(r.montant_unitaire)})
+                            ({quantite} penalites)
                           </span>
                         )}
                       </p>
                       <p className="text-xs" style={{ color: "var(--discret)" }}>
-                        {LIBELLE_NATURE[r.nature] ?? r.nature} constatee le{" "}
-                        {dateCourte(r.date_constat)} &middot; paye le{" "}
-                        {dateCourte(r.date_paiement)} &middot; {libelleMode(r.mode)}
+                        Paye le {dateCourte(r.date_paiement)} &middot; {libelleMode(r.mode)}
                         {r.reference ? ` · ref. ${r.reference}` : ""}
                       </p>
-                      {r.quantite < r.quantite_ligne && (
-                        <p className="text-xs" style={{ color: "var(--etat-attente)" }}>
-                          Reglement partiel : {r.quantite} sur {r.quantite_ligne}. Le reste
-                          restera dû.
-                        </p>
-                      )}
+                      <ul className="mt-1 space-y-0.5">
+                        {lignes.map((l) => (
+                          <li key={l.id} className="text-xs" style={{ color: "var(--discret)" }}>
+                            {LIBELLE_NATURE[l.nature] ?? l.nature} constatee le{" "}
+                            {dateCourte(l.date_constat)} &middot; {l.quantite} ×{" "}
+                            {fcfa(l.montant_unitaire)}
+                            {l.quantite < l.quantite_ligne && (
+                              <span style={{ color: "var(--etat-attente)" }}>
+                                {" "}
+                                — partiel : {l.quantite} sur {l.quantite_ligne}, le reste restera dû
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
                       {r.note && (
                         <p className="mt-1 text-xs italic" style={{ color: "var(--discret)" }}>
                           {r.note}
@@ -544,18 +575,26 @@ export default async function PagePenalites() {
                         action={validerReglementPenalite}
                         libelle="Valider"
                         compact
-                        confirmation="Valider ce reglement ? La penalite sera soldee."
+                        confirmation={
+                          lignes.length > 1
+                            ? `Valider ce reglement de ${fcfa(montant)} ? Les ${lignes.length} penalites seront soldees.`
+                            : "Valider ce reglement ? La penalite sera soldee."
+                        }
                       >
-                        <ChampCache nom="id" valeur={r.id} />
+                        <ChampCache nom={parLot ? "lot" : "id"} valeur={cle} />
                       </FormulaireAction>
                       <FormulaireAction
                         action={rejeterReglementPenalite}
                         libelle="Refuser"
                         variante="danger"
                         compact
-                        confirmation="Refuser ce reglement ? La penalite restera due."
+                        confirmation={
+                          lignes.length > 1
+                            ? `Refuser ce reglement ? Les ${lignes.length} penalites resteront dues.`
+                            : "Refuser ce reglement ? La penalite restera due."
+                        }
                       >
-                        <ChampCache nom="id" valeur={r.id} />
+                        <ChampCache nom={parLot ? "lot" : "id"} valeur={cle} />
                         <input
                           name="motif"
                           placeholder="Motif"
