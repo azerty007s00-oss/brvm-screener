@@ -1,0 +1,754 @@
+import { EFFET, REGLES, debutMois, decalerMois, estExigible } from "./settings";
+
+export type StatutMois =
+  | "paye"
+  | "paye_en_retard"
+  | "en_attente"
+  /** Echeance passee, quelque chose a ete verse, mais pas tout. */
+  | "partiel"
+  | "retard"
+  | "a_venir"
+  | "hors_periode";
+
+export type CelluleMois = {
+  mois: string;
+  statut: StatutMois;
+  /** Tout ce qui est connu pour ce mois, validations en attente comprises. */
+  montant: number;
+  /** La cotisation attendue ce mois-la, taux particulier compris. */
+  requis: number;
+  /** Ce qui manque pour solder le mois. Zero des qu'il est couvert. */
+  manque: number;
+  /** Date du versement qui a complete le mois, non du premier acompte. */
+  dateVersement: string | null;
+};
+
+/**
+ * Ce qu'il faut verser en cotisations pour etre a jour : tous les mois
+ * ouverts, du plus ancien au mois courant.
+ *
+ * LE CHIFFRE QUI MANQUAIT, A L'ACCUEIL COMME DANS LE COURRIER.
+ *
+ * Les deux annoncaient la cotisation du SEUL mois courant, et, juste a cote,
+ * la dette de penalites ENTIERE : deux chiffres poses cote a cote, calcules sur
+ * deux bases. Qui devait juillet, aout et septembre lisait 5 000 FCFA -- ceux
+ * d'octobre -- quand il lui en fallait 20 000 pour etre a jour. Et depuis que
+ * l'argent eteint la dette la plus ancienne d'abord, ces 5 000 iraient sur
+ * juillet : octobre resterait ouvert, et une penalite de plus courrait.
+ *
+ * La grille s'arrete au mois courant : la somme ne compte donc aucune avance.
+ * `manque` vaut zero sur un mois couvert, declare ou d'avant l'adhesion : un
+ * seul critere, celui de la grille, du releve et de l'imputation.
+ */
+export function cotisationsARegler(
+  cellules: readonly Pick<CelluleMois, "mois" | "manque">[],
+): { total: number; mois: string[] } {
+  const ouverts = cellules.filter((c) => c.manque > 0);
+  return { total: ouverts.reduce((t, c) => t + c.manque, 0), mois: ouverts.map((c) => c.mois) };
+}
+
+/** Nombre de mois de `a` a `b` (0 si meme mois, negatif si `b` precede `a`). */
+function ecartMois(a: string, b: string): number {
+  return (
+    (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 +
+    (Number(b.slice(5, 7)) - Number(a.slice(5, 7)))
+  );
+}
+
+/**
+ * Ou en est l'avance obligatoire d'un membre.
+ *
+ * TROIS ETATS, ET NON PLUS DEUX. Le bureau a tranche : rien tant qu'il a plus
+ * que le minimum ; un preavis des qu'il n'en a plus que le minimum -- la
+ * prochaine echeance consomme un mois d'avance, et sans nouveau versement il
+ * passerait dessous ; la mesure disciplinaire une fois en defaut.
+ *
+ * L'EXIGENCE S'ARRETE AU TERME DE LA MESURE. Trois mois d'avance, a trois
+ * mois de la fin, couvrent deja tout ce que la mesure exige : au-dela, ce
+ * seraient des cotisations du regime commun payees d'avance, que rien
+ * n'impose. Sans ce plafond, un membre a jour aurait ete declare en defaut en
+ * novembre 2027 faute d'avoir paye janvier 2028, deux mois apres la fin de sa
+ * mesure. L'exigence est donc le plus petit de deux nombres : les mois imposes,
+ * et les mois qui restent a couvrir jusqu'au terme.
+ *
+ * Les mois se comptent comme l'avance elle-meme : le mois courant y entre tant
+ * que son echeance n'est pas passee. Le dernier mois couvert est celui du
+ * terme, si le terme tombe au plus tot a son echeance ; sinon le precedent --
+ * une mesure qui s'eteint le 5 decembre n'exige pas la cotisation de decembre,
+ * due le 10.
+ *
+ * `pourMaintenir` est ce qu'il doit verser pour rester au minimum apres la
+ * prochaine echeance : le courrier le chiffre, plutot que de lui laisser
+ * faire le calcul.
+ */
+export function etatAvance(
+  avanceDetenue: number,
+  moisExiges: number,
+  cotisation: number,
+  /** Terme de l'obligation, inclus. */
+  fin: string | null = null,
+  maintenant: Date = new Date(),
+): {
+  montantExige: number;
+  /** Les mois effectivement exiges : les mois imposes, plafonnes au terme. */
+  moisRequis: number;
+  /** Les mois qui restent a couvrir jusqu'au terme ; null sans terme. */
+  moisRestants: number | null;
+  respectee: boolean;
+  auSeuil: boolean;
+  manque: number;
+  pourMaintenir: number;
+} {
+  const courant = debutMois(maintenant);
+  const premier = estExigible(courant, maintenant) ? decalerMois(courant, 1) : courant;
+  let moisRestants: number | null = null;
+  if (fin) {
+    const moisDuTerme = `${fin.slice(0, 8)}01`;
+    const dernier =
+      fin >= echeanceDuMois(moisDuTerme) ? moisDuTerme : decalerMois(moisDuTerme, -1);
+    moisRestants = Math.max(0, ecartMois(premier, dernier) + 1);
+  }
+  const plafonne = (restants: number | null) =>
+    restants === null ? moisExiges : Math.min(moisExiges, Math.max(0, restants));
+
+  const moisRequis = plafonne(moisRestants);
+  const montantExige = moisRequis * cotisation;
+  const respectee = avanceDetenue >= montantExige;
+  /* Apres la prochaine echeance : un mois consomme, et un mois de terme en moins. */
+  const requisApres = plafonne(moisRestants === null ? null : moisRestants - 1) * cotisation;
+  return {
+    montantExige,
+    moisRequis,
+    moisRestants,
+    respectee,
+    auSeuil: respectee && avanceDetenue - cotisation < requisApres,
+    manque: Math.max(0, montantExige - avanceDetenue),
+    pourMaintenir: Math.max(0, requisApres + cotisation - avanceDetenue),
+  };
+}
+
+/** Ce que chaque mois porte deja, rejets exclus. */
+export function montantsParMois(versements: VersementConnu[]): Map<string, number> {
+  const porte = new Map<string, number>();
+  for (const v of versements) {
+    if (v.statut === "rejete") continue;
+    const cle = v.mois_couvert.slice(0, 10);
+    porte.set(cle, (porte.get(cle) ?? 0) + v.montant);
+  }
+  return porte;
+}
+
+/**
+ * Le mois a regler, et ce qu'il reste a y porter.
+ *
+ * Le plus ancien mois ouvert s'arrete au dernier mois de la grille, qui est le mois
+ * courant : il rend `null` des que tout est a jour. Ce n'est pas une reponse
+ * pour une saisie -- le membre qui vient de solder octobre doit se voir
+ * proposer NOVEMBRE, non octobre, qu'il a paye et qu'une declaration
+ * n'imputerait nulle part.
+ *
+ * Au-dela de la grille, il n'y a que des avances : on avance donc de mois en
+ * mois tant qu'ils sont soldes. `reste` vaut la cotisation entiere sur un mois
+ * vierge, et le seul reliquat sur un mois deja entame -- c'est ce qui permet
+ * au formulaire de proposer le bon montant, 3 000 et non 5 000 quand un
+ * acompte de 2 000 a deja ete verse.
+ *
+ * La borne de 300 tours ne protege d'aucun cas legitime : elle empeche une
+ * donnee abimee de faire tourner une page sans fin.
+ */
+export function prochainReglement(
+  cellules: CelluleMois[],
+  porte: Map<string, number>,
+  requis: number,
+): { mois: string; reste: number } | null {
+  const ouvert = cellules.find((c) => c.manque > 0);
+  if (ouvert) return { mois: ouvert.mois, reste: ouvert.manque };
+
+  const dernier = cellules.at(-1)?.mois;
+  if (!dernier) return null;
+
+  let mois = decalerMois(dernier, 1);
+  for (let tour = 0; tour < 300; tour++) {
+    const reste = requis - (porte.get(mois) ?? 0);
+    if (reste > 0) return { mois, reste };
+    mois = decalerMois(mois, 1);
+  }
+  return { mois, reste: requis };
+}
+
+export type Imputation = { mois: string; montant: number };
+
+/**
+ * Repartit un versement sur les mois, du plus ancien au plus recent.
+ *
+ * POURQUOI LE MEMBRE N'INDIQUE PLUS LE MOIS COUVERT.
+ *
+ * Il le choisissait, avec un nombre de mois et un montant par mois -- trois
+ * champs pour une information qui n'en est plus une : les mois se reglent dans
+ * l'ordre, donc le premier mois impute est determine, et le montant verse dit
+ * le reste. On ne demande plus ce que l'on sait deja, et on ne demande surtout
+ * plus un choix qui serait refuse.
+ *
+ * L'argent eteint la dette la plus ancienne d'abord, mois par mois, et
+ * s'arrete ou il s'epuise : le dernier mois peut n'etre couvert qu'en partie,
+ * ce que le modele admet depuis qu'un mois n'est ferme que lorsqu'il est
+ * complet. Un mois deja solde au milieu du parcours -- le cas du trou, juillet
+ * du et aout paye -- est enjambe sans rien recevoir.
+ *
+ * Rend une liste vide quand il n'y a rien a imputer, et une liste qui
+ * n'epuise pas le montant quand il depasse ce que `moisMaximum` peut absorber :
+ * c'est a l'appelant de refuser plutot que de perdre la difference.
+ */
+export function imputer(
+  montant: number,
+  cellules: CelluleMois[],
+  porte: Map<string, number>,
+  requis: number,
+  moisMaximum = 24,
+): Imputation[] {
+  const depart = prochainReglement(cellules, porte, requis);
+  if (depart === null || requis <= 0) return [];
+
+  const grille = new Map(cellules.map((c) => [c.mois, c]));
+  /* Ce qui manque pour solder un mois, dans la grille comme au-dela. */
+  const manqueDu = (mois: string): number => {
+    const c = grille.get(mois);
+    return c ? c.manque : Math.max(0, requis - (porte.get(mois) ?? 0));
+  };
+
+  const imputations: Imputation[] = [];
+  let reste = Math.round(montant);
+  let mois = depart.mois;
+  for (let tour = 0; tour < 300 && reste > 0 && imputations.length < moisMaximum; tour++) {
+    const manque = manqueDu(mois);
+    if (manque > 0) {
+      const part = Math.min(reste, manque);
+      imputations.push({ mois, montant: part });
+      reste -= part;
+    }
+    mois = decalerMois(mois, 1);
+  }
+  return imputations;
+}
+
+export type LignePenalite = {
+  id: string;
+  quantite: number;
+  montantUnitaire: number;
+  dateConstat: string;
+  /** Instant d'inscription au registre : departage deux penalites du meme jour. */
+  inscrite?: string;
+};
+
+export type ImputationPenalite = { penaliteId: string; quantite: number; montant: number };
+
+/**
+ * Repartit un versement sur les penalites dues, de la plus ancienne a la plus
+ * recente.
+ *
+ * MEME REGLE QUE LES COTISATIONS, AUTRE UNITE. L'argent eteint la dette la
+ * plus ancienne d'abord -- mais une penalite ne se coupe pas : le registre la
+ * compte en unites entieres, au montant unitaire de sa ligne. Un versement
+ * n'en solde donc qu'un nombre entier, et ce qui ne suffit pas a en payer une
+ * de plus n'est pas impute.
+ *
+ * Une ligne portant deja une declaration en attente est enjambee : le
+ * tresorier doit d'abord se prononcer, et l'index unique de la base n'en
+ * accepte qu'une a la fois. C'est le pendant exact du mois declare mais pas
+ * encore valide, qui ne bloque pas le reglement du suivant.
+ *
+ * Un montant unitaire absent ou nul ferait boucler le calcul sur une ligne qui
+ * ne consomme rien : elle est ecartee, et le tresorier la verra rester due.
+ *
+ * Rend une liste qui n'epuise pas le montant quand il ne tombe pas juste :
+ * c'est a l'appelant de refuser plutot que d'encaisser la difference sans la
+ * porter nulle part.
+ */
+export function imputerPenalites(
+  montant: number,
+  lignes: LignePenalite[],
+  dejaEnAttente: Set<string> = new Set(),
+): ImputationPenalite[] {
+  let reste = Math.round(montant);
+  if (!Number.isFinite(reste) || reste <= 0) return [];
+
+  /*
+   * Deux penalites peuvent porter la meme date de constat : la reprise
+   * d'arriere en ecrit plusieurs d'un coup, et le tresorier en saisit parfois
+   * deux le meme jour. Les departager par identifiant -- un tirage aleatoire --
+   * reglerait l'une ou l'autre au hasard. La premiere inscrite passe la
+   * premiere ; l'identifiant ne departage plus que des egalites parfaites.
+   */
+  const ordonnees = [...lignes].sort(
+    (a, b) =>
+      a.dateConstat.localeCompare(b.dateConstat) ||
+      (a.inscrite ?? "").localeCompare(b.inscrite ?? "") ||
+      a.id.localeCompare(b.id),
+  );
+
+  const imputations: ImputationPenalite[] = [];
+  for (const l of ordonnees) {
+    if (reste <= 0) break;
+    if (dejaEnAttente.has(l.id)) continue;
+    const unitaire = Math.round(l.montantUnitaire);
+    if (!Number.isInteger(l.quantite) || l.quantite < 1 || unitaire <= 0) continue;
+
+    const quantite = Math.min(l.quantite, Math.floor(reste / unitaire));
+    if (quantite < 1) continue;
+    imputations.push({ penaliteId: l.id, quantite, montant: quantite * unitaire });
+    reste -= quantite * unitaire;
+  }
+  return imputations;
+}
+
+/** Vrai si le versement est intervenu apres l'echeance du mois qu'il couvre. */
+export function verseEnRetard(mois: string, dateVersement: string | null): boolean {
+  if (!dateVersement) return false;
+  const echeance = `${mois.slice(0, 8)}${String(REGLES.jourEcheance).padStart(2, "0")}`;
+  return dateVersement.slice(0, 10) > echeance;
+}
+
+export type SituationMembre = {
+  membreId: string;
+  cellules: CelluleMois[];
+  moisEnRetard: string[];
+  /** Mois regles, mais apres le 10 : la penalite reste due (art. 9). */
+  moisRegularisesEnRetard: string[];
+  nbMoisRetard: number;
+  /** Jours ecoules depuis l'echeance du plus ancien mois impaye. */
+  joursDeRetard: number;
+  /** R2 - droit de vote suspendu des 30 jours de retard. */
+  voteSuspendu: boolean;
+  /** R3 - la declaration WhatsApp devient obligatoire a l'entree dans le 2e mois. */
+  declarationRequise: boolean;
+  /** R5 - 3 mois de retard atteints, ou 3 penalites impayees une fois la regle en vigueur. */
+  exclusionEncourue: boolean;
+  /** Penalites de retard constatees et non reglees. */
+  nbPenalitesImpayees: number;
+  /** Vrai quand c'est le cumul de penalites, non les cotisations, qui l'expose. */
+  exclusionParPenalites: boolean;
+  penalites: PenaliteCalculee[];
+  /**
+   * La penalite que l'art. 9 fait courir sur les mois impayes.
+   *
+   * CE N'EST PAS LA DETTE DU MEMBRE, ET CELA NE S'AFFICHE PAS. Le registre porte
+   * en plus les penalites d'absence, et celles de mois anciens dont la cotisation
+   * a fini par etre versee sans que la penalite le soit. Ce total les ignore : il
+   * a valu a la relance, au recapitulatif du bureau, a l'accueil et a « Mon
+   * compte » d'annoncer 1 000 FCFA quand le club en attendait 8 500.
+   *
+   * Ce qu'un ecran affiche est la dette inscrite plus ce qui court, par
+   * `penalitesNonInscrites` (lib/constat). Ce champ-ci sert au constat, qui
+   * transcrit mois par mois, et aux controles de calcul.
+   */
+  totalPenalites: number;
+};
+
+export type PenaliteCalculee = {
+  mois: string;
+  taux: number;
+  montant: number;
+  doublee: boolean;
+  /**
+   * Penalite d'un mois finalement regle, mais apres l'echeance. L'art. 9 la dit
+   * "definitivement acquise au benefice du club" : elle reste due, et la
+   * majoration R4 ne s'y applique pas puisque le retard a cesse.
+   */
+  figee: boolean;
+};
+
+export type VersementConnu = {
+  mois_couvert: string;
+  montant: number;
+  statut: "en_attente" | "valide" | "rejete";
+  date_versement: string | null;
+};
+
+/**
+ * Construit la situation d'un membre mois par mois.
+ *
+ * Un versement en attente de validation compte comme honore : le membre a remis
+ * l'argent, seule la contresignature du tresorier manque. Le penaliser pour le
+ * delai de validation du bureau serait injuste.
+ */
+/**
+ * Ce qui, chez un membre, deroge au regime commun.
+ *
+ * Le club peut convenir d'une cotisation differente, ou majorer les penalites
+ * d'un membre sous sanction. Un champ absent vaut « regime commun » : les
+ * statuts restent la reference, la derogation l'exception nommee.
+ */
+export type ReglesMembre = {
+  cotisationMensuelle?: number;
+  /** Taux de l'art. 9, tel que regle par le bureau. Fraction, non pourcentage. */
+  tauxPenalite?: number;
+  /** Multiplie la penalite, par-dessus le doublement R4. 1 = regime commun. */
+  multiplicateurPenalite?: number;
+};
+
+export function situationMembre(
+  membreId: string,
+  moisDuClub: string[],
+  versements: VersementConnu[],
+  moisDeclares: string[] = [],
+  aujourdhui: Date = new Date(),
+  moisAdhesion?: string,
+  propres: ReglesMembre = {},
+  nbPenalitesImpayees = 0,
+): SituationMembre {
+  /*
+   * Un mois peut porter plusieurs versements : un acompte, puis le complement.
+   * Ce n'est couvert que lorsque la somme atteint la cotisation attendue --
+   * verser 2 000 sur 5 000 ne libere pas de l'obligation de l'art. 8.
+   */
+  const requis = propres.cotisationMensuelle ?? REGLES.cotisationMensuelle;
+  const parMois = new Map<string, VersementConnu[]>();
+  for (const v of versements) {
+    if (v.statut === "rejete") continue;
+    const cle = v.mois_couvert.slice(0, 10);
+    const liste = parMois.get(cle);
+    if (liste) liste.push(v);
+    else parMois.set(cle, [v]);
+  }
+
+  /**
+   * La date a laquelle un mois est solde : celle du versement qui le complete,
+   * non celle du premier acompte. Un acompte le 5 et le solde le 15 font un mois
+   * regularise en retard, avec la penalite que l'art. 9 y attache.
+   */
+  const dateDeSolde = (lignes: VersementConnu[]): string | null => {
+    let cumul = 0;
+    for (const v of [...lignes].sort((a, b) =>
+      (a.date_versement ?? "").localeCompare(b.date_versement ?? ""),
+    )) {
+      cumul += v.montant;
+      if (cumul >= requis) return v.date_versement;
+    }
+    return null;
+  };
+
+  const cellules: CelluleMois[] = [];
+  const moisEnRetard: string[] = [];
+
+  const moisRegularisesEnRetard: string[] = [];
+
+  for (const mois of moisDuClub) {
+    if (moisAdhesion && mois < moisAdhesion) {
+      cellules.push({ mois, statut: "hors_periode", montant: 0, requis: 0, manque: 0, dateVersement: null });
+      continue;
+    }
+    const lignes = parMois.get(mois) ?? [];
+    const connu = lignes.reduce((t, v) => t + v.montant, 0);
+    const valide = lignes.filter((v) => v.statut === "valide").reduce((t, v) => t + v.montant, 0);
+    const manque = Math.max(0, requis - connu);
+
+    /*
+     * Couvert au sens strict : les versements valides suffisent. Si le compte n'y
+     * est qu'en comptant les declarations non encore validees, le mois est en
+     * attente -- c'est au tresorier de trancher, pas au declarant.
+     */
+    if (valide >= requis) {
+      const tardif = verseEnRetard(mois, dateDeSolde(lignes.filter((v) => v.statut === "valide")));
+      if (tardif) moisRegularisesEnRetard.push(mois);
+      cellules.push({
+        mois,
+        statut: tardif ? "paye_en_retard" : "paye",
+        montant: connu,
+        requis,
+        manque: 0,
+        dateVersement: dateDeSolde(lignes.filter((v) => v.statut === "valide")),
+      });
+      continue;
+    }
+    if (connu >= requis) {
+      cellules.push({
+        mois,
+        statut: "en_attente",
+        montant: connu,
+        requis,
+        manque: 0,
+        dateVersement: dateDeSolde(lignes),
+      });
+      continue;
+    }
+
+    /*
+     * Le compte n'y est pas. Passe l'echeance, le mois est en retard, qu'il ait
+     * recu un acompte ou rien du tout : la penalite de l'art. 9 porte sur
+     * l'obligation, pas sur ce qui reste a payer. « Partiel » n'est qu'un mot
+     * plus juste pour le membre, jamais un traitement plus doux.
+     */
+    if (estExigible(mois, aujourdhui)) {
+      cellules.push({
+        mois,
+        statut: connu > 0 ? "partiel" : "retard",
+        montant: connu,
+        requis,
+        manque,
+        dateVersement: null,
+      });
+      moisEnRetard.push(mois);
+    } else {
+      cellules.push({ mois, statut: "a_venir", montant: connu, requis, manque, dateVersement: null });
+    }
+  }
+
+  /*
+   * Les penalites deviennent indissociables des cotisations : les laisser courir
+   * en reglant sa cotisation ne protege plus. La regle ne vaut qu'a partir de sa
+   * date d'effet -- une sanction ne retroagit pas sur des retards anterieurs a la
+   * decision qui l'institue.
+   */
+  const exclusionParPenalites =
+    aujourdhui.toISOString().slice(0, 10) >= EFFET.penalitesIndissociables &&
+    nbPenalitesImpayees >= REGLES.penalitesImpayeesAvantExclusion;
+
+  const nbMoisRetard = moisEnRetard.length;
+  const joursDeRetard = nbMoisRetard === 0 ? 0 : joursDepuisEcheance(moisEnRetard[0], aujourdhui);
+  const penalites = calculerPenalites(moisEnRetard, moisRegularisesEnRetard, propres);
+
+  return {
+    membreId,
+    cellules,
+    moisEnRetard,
+    moisRegularisesEnRetard,
+    nbMoisRetard,
+    joursDeRetard,
+    voteSuspendu: joursDeRetard >= REGLES.suspensionVoteApresJours,
+    declarationRequise:
+      nbMoisRetard >= REGLES.declarationObligatoireApresMois &&
+      !moisEnRetard.every((m) => moisDeclares.includes(m)),
+    exclusionEncourue: nbMoisRetard >= REGLES.exclusionApresMois || exclusionParPenalites,
+    nbPenalitesImpayees,
+    exclusionParPenalites,
+    penalites,
+    totalPenalites: penalites.reduce((total, p) => total + p.montant, 0),
+  };
+}
+
+function joursDepuisEcheance(mois: string, aujourdhui: Date): number {
+  const echeance = new Date(
+    `${mois.slice(0, 8)}${String(REGLES.jourEcheance).padStart(2, "0")}T23:59:59Z`,
+  );
+  return Math.max(0, Math.floor((aujourdhui.getTime() - echeance.getTime()) / 86_400_000));
+}
+
+/**
+ * Art. 9 : 10 % du versement du des lors que l'echeance du 10 est depassee.
+ *
+ * La penalite nait du depassement, pas de l'absence de paiement : un mois regle
+ * en retard la conserve, "definitivement acquise au benefice du club". Regulariser
+ * eteint la cotisation, jamais la penalite.
+ *
+ * R4 : des 3 mois encore impayes, les penalites des 3 mois les plus recents
+ * doublent (leur cumul passe de 30 % a 60 % du versement du). La majoration ne
+ * frappe que le retard en cours : un mois deja regle ne peut plus s'aggraver.
+ */
+export function calculerPenalites(
+  moisEnRetard: string[],
+  moisRegularisesEnRetard: string[] = [],
+  propres: ReglesMembre = {},
+): PenaliteCalculee[] {
+  const cotisation = propres.cotisationMensuelle ?? REGLES.cotisationMensuelle;
+  const tauxDeBase = propres.tauxPenalite ?? REGLES.tauxPenalite;
+  const multiplicateur = propres.multiplicateurPenalite ?? 1;
+
+  const impayes = [...moisEnRetard].sort();
+  const doublement = impayes.length >= REGLES.doublementApresMois;
+  const aDoubler = impayes.slice(-REGLES.moisPenalitesDoublees);
+
+  const sur = (mois: string, doublee: boolean, figee: boolean): PenaliteCalculee => {
+    const taux = (doublee ? tauxDeBase * 2 : tauxDeBase) * multiplicateur;
+    return { mois, taux, montant: Math.round(cotisation * taux), doublee, figee };
+  };
+
+  return [
+    ...impayes.map((mois) => sur(mois, doublement && aDoubler.includes(mois), false)),
+    ...[...moisRegularisesEnRetard].sort().map((mois) => sur(mois, false, true)),
+  ].sort((a, b) => a.mois.localeCompare(b.mois));
+}
+
+/**
+ * Ou se situe un membre vis-a-vis du seuil de penalites de R5.
+ *
+ * UN SEUL COMPTE DECIDE. Le courrier annoncait le nombre lu au registre, puis
+ * choisissait sa phrase sur un autre compte, lu autrement : un membre portant
+ * quinze penalites de retard lisait « a partir de 3 penalites de retard
+ * impayees, l'exclusion sera encourue », comme s'il en etait loin. Le seuil et
+ * le nombre annonce doivent sortir de la meme grandeur, et la fonction ne prend
+ * donc qu'un nombre.
+ *
+ * Trois etats, parce que la regle ne mord qu'a sa date d'effet : une sanction ne
+ * retroagit pas sur des retards anterieurs a la decision qui l'institue.
+ */
+export type PhaseSeuilR5 = "sous_le_seuil" | "atteint_avant_effet" | "atteint_en_vigueur";
+
+export function phaseSeuilR5(
+  nbPenalitesRetard: number,
+  aujourdhui: Date = new Date(),
+): PhaseSeuilR5 {
+  if (nbPenalitesRetard < REGLES.penalitesImpayeesAvantExclusion) return "sous_le_seuil";
+  return aujourdhui.toISOString().slice(0, 10) >= EFFET.penalitesIndissociables
+    ? "atteint_en_vigueur"
+    : "atteint_avant_effet";
+}
+
+/**
+ * R5 : au 3e mois de retard, l'issue depend du respect de R3.
+ * Retard non declare -> exclusion de plein droit ; declare -> plan de redressement.
+ */
+export function issueR5(
+  nbMoisRetard: number,
+  retardDeclare: boolean,
+  planDejaUtilise: boolean,
+  nbPenalitesImpayees = 0,
+  aujourdhui: Date = new Date(),
+): { applicable: boolean; voie: "exclusion_plein_droit" | "plan_redressement" | "vote_art20" | null; texte: string } {
+  /*
+   * Les penalites sont devenues indissociables des cotisations. Un membre a jour
+   * de ses cotisations mais laissant courir ses penalites est desormais expose :
+   * c'est precisement l'abus que l'assemblee a voulu fermer.
+   */
+  const parPenalites =
+    aujourdhui.toISOString().slice(0, 10) >= EFFET.penalitesIndissociables &&
+    nbPenalitesImpayees >= REGLES.penalitesImpayeesAvantExclusion;
+
+  if (nbMoisRetard < REGLES.exclusionApresMois) {
+    if (!parPenalites) return { applicable: false, voie: null, texte: "" };
+    return {
+      applicable: true,
+      voie: "exclusion_plein_droit",
+      texte:
+        `${nbPenalitesImpayees} pénalités de retard impayées, alors que les cotisations ` +
+        "sont à jour. Les pénalités étant indissociables des cotisations depuis le " +
+        `${EFFET.penalitesIndissociables.split("-").reverse().join("/")}, l'exclusion est ` +
+        "acquise de plein droit (R5).",
+    };
+  }
+  if (!retardDeclare) {
+    return {
+      applicable: true,
+      voie: "exclusion_plein_droit",
+      texte:
+        `Retard de ${nbMoisRetard} mois non déclaré au groupe (R3 non respectée) : ` +
+        `exclusion de plein droit, remboursement sous ${REGLES.delaiRemboursementMois} mois ` +
+        `au cours de cession diminué de ${(REGLES.fraisCession * 100).toFixed(0)} % de frais.`,
+    };
+  }
+  if (planDejaUtilise) {
+    return {
+      applicable: true,
+      voie: "vote_art20",
+      texte:
+        "Le plan de redressement a déjà été accordé à ce membre. " +
+        `Exclusion soumise au vote des ${(REGLES.majoriteExclusion * 100).toFixed(0)} % (art. 20).`,
+    };
+  }
+  return {
+    applicable: true,
+    voie: "plan_redressement",
+    texte:
+      "Retard déclaré au groupe : le membre garde le bénéfice d'un plan de redressement, " +
+      "accordable une seule fois sur la durée du club." +
+      (parPenalites
+        ? ` Le plan porte sur l'ensemble de sa dette : ses ${nbPenalitesImpayees} pénalités ` +
+          "impayées en font partie, celles-ci étant indissociables des cotisations."
+        : ""),
+  };
+}
+
+/** Mois pour lequel la relance du 10 doit partir. */
+export function moisARelancer(aujourdhui: Date = new Date()): string {
+  const mois = `${aujourdhui.getUTCFullYear()}-${String(aujourdhui.getUTCMonth() + 1).padStart(2, "0")}-01`;
+  return estExigible(mois, aujourdhui) ? mois : decalerMois(mois, -1);
+}
+
+/* ------------------------------------------------------- absences en reunion */
+
+export type TrancheAbsence = {
+  /** Rang de la tranche : la premiere, la deuxieme… Sert de cle au constat. */
+  rang: number;
+  /** Rang de l'absence qui a ferme la tranche, pour dire a partir de quand elle est due. */
+  absenceDeclenchante: number;
+  montant: number;
+};
+
+/**
+ * Tranches d'absences injustifiees penalisables.
+ *
+ * Le club sanctionne la repetition, non l'empechement ponctuel : seule une tranche
+ * complete est due, et le reste court jusqu'a la suivante. Les absences excusees --
+ * c'est au secretaire de les justifier -- ne comptent pas.
+ *
+ * Le rang rend le constat idempotent : une tranche deja portee au registre y reste
+ * sous la meme cle, et un nouveau constat n'ajoute que celles qui manquent.
+ */
+export function tranchesAbsence(
+  nbAbsencesInjustifiees: number,
+  regles: { penaliteAbsence: number; absencesParTranche: number } = REGLES,
+): TrancheAbsence[] {
+  const parTranche = Math.floor(regles.absencesParTranche);
+  if (parTranche <= 0 || nbAbsencesInjustifiees <= 0) return [];
+
+  const completes = Math.floor(nbAbsencesInjustifiees / parTranche);
+  return Array.from({ length: completes }, (_, i) => ({
+    rang: i + 1,
+    absenceDeclenchante: (i + 1) * parTranche,
+    montant: regles.penaliteAbsence,
+  }));
+}
+
+/* ------------------------------------------- rapprochement avec le registre */
+
+/**
+ * Une penalite deja portee au registre, telle que la page la connait.
+ *
+ * `cle` est la cle de rapprochement des versions actuelles ; elle manque sur
+ * les lignes ecrites par une version anterieure, d'ou le second critere.
+ */
+export type PenaliteAuRegistre = {
+  membreId: string;
+  nature: string;
+  dateConstat: string;
+  cle: string | null;
+};
+
+/** La cle de rapprochement d'une penalite de retard. */
+export function cleRetard(membreId: string, mois: string): string {
+  return `retard:${membreId}:${mois}`;
+}
+
+/** L'echeance du mois : la date a laquelle la penalite est inscrite. */
+export function echeanceDuMois(mois: string, jourEcheance = REGLES.jourEcheance): string {
+  return `${mois.slice(0, 8)}${String(jourEcheance).padStart(2, "0")}`;
+}
+
+/**
+ * Vrai si cette penalite de retard figure deja au registre.
+ *
+ * Le rapprochement se fait sur la cle, mais aussi sur le couple membre-echeance :
+ * la base porte des lignes ecrites par une version anterieure, dont les cles
+ * suivaient une autre convention. Ne chercher que les cles actuelles ferait
+ * paraitre indefiniment « a constater » ce qui est deja inscrit -- le bureau
+ * appuie sur le bouton, l'action reconnait la ligne et ne la recree pas, et la
+ * liste ne desemplit jamais.
+ *
+ * La borne de reprise ecarte en outre ce que le tresorier a deja compte a la
+ * main : au-dela, le constat automatique prend le relais.
+ */
+export function dejaAuRegistre(
+  membreId: string,
+  mois: string,
+  registre: PenaliteAuRegistre[],
+  borne?: string,
+  jourEcheance = REGLES.jourEcheance,
+): boolean {
+  if (borne && mois <= borne) return true;
+  const cle = cleRetard(membreId, mois);
+  const echeance = echeanceDuMois(mois, jourEcheance);
+  return registre.some(
+    (p) =>
+      p.cle === cle ||
+      (p.membreId === membreId && p.nature === "retard" && p.dateConstat.slice(0, 10) === echeance),
+  );
+}

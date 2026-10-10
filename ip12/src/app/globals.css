@@ -1,0 +1,703 @@
+@import "tailwindcss";
+
+@theme {
+  /*
+   * Direction « banque privee ».
+   *
+   * La charte brun-et-or de la banniere teintait tout le site : montants en or,
+   * recettes en vert, depenses en rouge, cartes brunes. A force de couleur,
+   * plus rien ne signalait. Ici, une seule couleur d'accent -- l'or -- et
+   * seulement pour la courbe du portefeuille, ses points, l'anneau de focus et
+   * le logo. Les montants sont a l'encre, avec leur signe ; le rouge ne dit que
+   * ce qui manque, l'ambre que ce qui attend.
+   *
+   * Les jetons --color-* servent aux utilitaires Tailwind ; les variables de
+   * :root portent les memes roles et basculent avec le theme.
+   */
+  --color-page: #fdfcfa;
+  --color-side: #f4f1ec;
+  --color-sunk: #efebe5;
+  --color-line: #e8e2d9;
+  --color-line-2: #d6cec2;
+  --color-ink: #1c1713;
+  --color-ink-2: #625950;
+  --color-ink-3: #756b60;
+  --color-gold: #a8842a;
+  --color-gold-ink: #7c6118;
+  --color-accent: #1e3a5f;
+  --color-sur-accent: #ffffff;
+  --color-gain: #1b6e45;
+  --color-perte: #b3261e;
+  --color-etat-paye: #2e7d52;
+  --color-brand: #1e3a5f;
+  --color-brand-mark: #d4b25a;
+  --color-etat-ok: #4f4740;
+  --color-etat-ok-fond: #e6e0d6;
+  --color-etat-attente: #8a5f0f;
+  --color-etat-attente-fond: #f6ecd8;
+  --color-etat-manque: #a8322c;
+  --color-etat-manque-fond: #f6dedc;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, "Roboto Mono", monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+
+  --ease-doux: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-trace: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+/*
+ * Un role par jeton, et le theme n'en change que la valeur.
+ *
+ * Les noms anciens (--fond, --carte, --texte, --discret, --bordure, et les
+ * trois etats) sont conserves et pointes sur les nouveaux : ils sont poses dans
+ * une centaine d'endroits, et ils designent exactement les memes roles. Ce qui
+ * change, ce sont les valeurs -- et le fait qu'une carte n'a plus de fond
+ * propre : les sections se separent par l'espace et un filet.
+ */
+:root {
+  color-scheme: light;
+  --page: #fdfcfa;
+  /*
+   * `--repos` : une surface calme derriere une carte, hors session. C'etait
+   * `--side` jusqu'a ce que la colonne passe au bleu nuit -- un meme jeton
+   * servait deux roles, et changer l'un cassait l'autre : la page de connexion
+   * s'est retrouvee avec ses encres grises sur fond bleu, 1,81:1.
+   */
+  --repos: #f4f1ec;
+  --side: #1b3557;
+  --sunk: #efebe5;
+  --line: #e8e2d9;
+  --line-2: #d6cec2;
+  --ink: #1c1713;
+  --ink-2: #625950;
+  --ink-3: #756b60;
+  --gold: #a8842a;
+  --gold-ink: #7c6118;
+
+  /*
+   * LE BLEU NUIT EST LA COULEUR DE LA MARQUE, ET RIEN D'AUTRE.
+   *
+   * Le club trouvait le site trop gris. La reponse n'est pas de recolorer les
+   * chiffres -- c'est ce dont on sortait -- mais de donner une couleur a ce qui
+   * designe le club et a ce qu'on lui demande de faire : la tuile du logo, le
+   * bouton principal, l'element courant de la navigation. Le bleu nuit tient
+   * 11,2:1 sur la page, ce qu'aucun bleu de lien ne tient.
+   */
+  --accent: #1e3a5f;
+  --sur-accent: #ffffff;
+
+  /*
+   * LE VERT ET LE ROUGE SONT RESERVES A LA PERFORMANCE.
+   *
+   * Un gain, une plus-value, une variation de valeur : ce sont les seuls
+   * endroits ou la couleur ajoute quelque chose que le signe ne dit pas deja.
+   * Jamais sur un mouvement d'argent -- une depense prevue n'est pas une perte,
+   * et une cotisation encaissee n'est pas un gain.
+   */
+  --gain: #1b6e45;
+  --perte: #b3261e;
+  /* Le mois paye, au registre : un etat, pas une performance. */
+  --etat-paye: #2e7d52;
+
+  --brand: #1e3a5f;
+  --brand-mark: #d4b25a;
+
+  /*
+   * LA BARRE LATERALE PORTE SA PROPRE PALETTE.
+   *
+   * Le bleu nuit de la marque ne colorait qu'une tuile de 26 px. Sur la colonne
+   * de navigation, il tient une surface : le club se reconnait en ouvrant le
+   * site, et le contenu -- chiffres, tableaux, courbes -- reste sur fond clair,
+   * ou il se lit. C'est la seule grande surface coloree du site, et elle ne porte
+   * aucune donnee.
+   *
+   * DES JETONS NOMMES, ET NON UNE REDEFINITION DES JETONS DE LA PAGE. Redefinir
+   * `--ink` dans l'aside aurait marche dans le navigateur, et laisse le controle
+   * de contraste mesurer les couleurs de la page : il aurait annonce 8 couples
+   * conformes en en mesurant d'autres. Ici chaque couple est ecrit, donc mesure.
+   */
+  --side-ink: #ffffff;
+  --side-ink-2: #c3d4e8;
+  --side-ink-3: #9db4d0;
+  --side-line: #2d5480;
+  --side-line-2: #4a729e;
+  /* La pastille de l'element courant : un bleu plus clair, non un blanc criard. */
+  --side-actif: #274b73;
+  /* L'icone courante prend l'or de la marque, seule touche chaude de la colonne. */
+  --side-accent: #ddbf6e;
+  --side-marque: #ddbf6e;
+  --side-sur-marque: #1b3557;
+  --side-raise: 0 1px 2px rgb(0 0 0 / 0.25), 0 0 0 1px rgb(255 255 255 / 0.1);
+  --voile: rgb(28 23 19 / 0.28);
+
+  --etat-ok: #4f4740;
+  --etat-ok-fond: #e6e0d6;
+  --etat-attente: #8a5f0f;
+  --etat-attente-fond: #f6ecd8;
+  --etat-manque: #a8322c;
+  --etat-manque-fond: #f6dedc;
+
+  /* La bande de gain : c'est du gain, donc c'est vert -- tres dilue. */
+  --c-bande: rgb(27 110 69 / 0.10);
+
+  --raise: 0 1px 2px rgb(28 23 19 / 0.07), 0 0 0 1px rgb(28 23 19 / 0.07);
+  --pop: 0 12px 32px -12px rgb(28 23 19 / 0.28), 0 0 0 1px rgb(28 23 19 / 0.08);
+
+  /* Noms anciens, memes roles. */
+  --fond: var(--page);
+  --carte: var(--page);
+  --texte: var(--ink);
+  --discret: var(--ink-2);
+  --bordure: var(--line);
+  --or-doux: var(--sunk);
+  --vert: var(--etat-ok);
+  --vert-fond: var(--etat-ok-fond);
+  --vert-encre: var(--etat-ok);
+  --ambre: var(--etat-attente);
+  --ambre-fond: var(--etat-attente-fond);
+  --ambre-encre: var(--etat-attente);
+  --rouge: var(--etat-manque);
+  --rouge-fond: var(--etat-manque-fond);
+  --rouge-encre: var(--etat-manque);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #13110e;
+    --repos: #0e0c0a;
+    --side: #101a28;
+    --sunk: #1c1915;
+    --line: #26231e;
+    --line-2: #3a352f;
+    --ink: #efe9e1;
+    --ink-2: #a89e92;
+    --ink-3: #8f857a;
+    --gold: #cfae55;
+    --gold-ink: #d9bb66;
+    /* Sur fond sombre, le bleu nuit s'eclaircit ; la tuile du logo reste or. */
+    --accent: #8fb4e0;
+    --sur-accent: #0f1b2b;
+    --gain: #63c08f;
+    --perte: #f08b80;
+    --etat-paye: #56b584;
+    --brand: #d4b25a;
+    --brand-mark: #1a120a;
+    /*
+     * En sombre, la colonne garde son identite bleue, en plus profond : une
+     * colonne grise a cote d'une page presque noire ne se distinguait que par un
+     * filet.
+     */
+    --side-ink: #eef2f8;
+    --side-ink-2: #a7bad2;
+    --side-ink-3: #8397b2;
+    --side-line: #2a3b52;
+    --side-line-2: #3e5372;
+    --side-actif: #1d2b3f;
+    --side-accent: #d4b25a;
+    --side-marque: #d4b25a;
+    --side-sur-marque: #1a120a;
+    --side-raise: 0 0 0 1px rgb(220 235 255 / 0.1), 0 1px 2px rgb(0 0 0 / 0.4);
+    --voile: rgb(0 0 0 / 0.5);
+    --etat-ok: #d5ccc0;
+    --etat-ok-fond: #2b2722;
+    --etat-attente: #e0b25a;
+    --etat-attente-fond: #33260d;
+    --etat-manque: #ec8a80;
+    --etat-manque-fond: #3a1714;
+    --c-bande: rgb(99 192 143 / 0.12);
+    --raise: 0 0 0 1px rgb(255 240 220 / 0.1), 0 1px 2px rgb(0 0 0 / 0.4);
+    --pop: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 240 220 / 0.1);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #13110e;
+  --repos: #0e0c0a;
+  --side: #101a28;
+  --sunk: #1c1915;
+  --line: #26231e;
+  --line-2: #3a352f;
+  --ink: #efe9e1;
+  --ink-2: #a89e92;
+  --ink-3: #8f857a;
+  --gold: #cfae55;
+  --gold-ink: #d9bb66;
+  /* Sur fond sombre, le bleu nuit s'eclaircit ; la tuile du logo reste or. */
+  --accent: #8fb4e0;
+  --sur-accent: #0f1b2b;
+  --gain: #63c08f;
+  --perte: #f08b80;
+  --etat-paye: #56b584;
+  --brand: #d4b25a;
+  --brand-mark: #1a120a;
+  /* Meme colonne bleu nuit qu'en sombre automatique : un seul theme, deux portes. */
+  --side-ink: #eef2f8;
+  --side-ink-2: #a7bad2;
+  --side-ink-3: #8397b2;
+  --side-line: #2a3b52;
+  --side-line-2: #3e5372;
+  --side-actif: #1d2b3f;
+  --side-accent: #d4b25a;
+  --side-marque: #d4b25a;
+  --side-sur-marque: #1a120a;
+  --side-raise: 0 0 0 1px rgb(220 235 255 / 0.1), 0 1px 2px rgb(0 0 0 / 0.4);
+  --voile: rgb(0 0 0 / 0.5);
+  --etat-ok: #d5ccc0;
+  --etat-ok-fond: #2b2722;
+  --etat-attente: #e0b25a;
+  --etat-attente-fond: #33260d;
+  --etat-manque: #ec8a80;
+  --etat-manque-fond: #3a1714;
+  --c-bande: rgb(99 192 143 / 0.12);
+  --raise: 0 0 0 1px rgb(255 240 220 / 0.1), 0 1px 2px rgb(0 0 0 / 0.4);
+  --pop: 0 12px 32px -12px rgb(0 0 0 / 0.7), 0 0 0 1px rgb(255 240 220 / 0.1);
+}
+
+/*
+ * LE FILET PAR DEFAUT EST LE FILET DU THEME.
+ *
+ * Tailwind pose `border-color: currentColor` sur tout element : un `divide-y`
+ * ou un `border-t` sans classe de couleur prend donc la couleur du TEXTE. Dix-
+ * sept listes de l'application etaient dans ce cas -- Mon compte, Versements,
+ * Titres, Caisse, Penalites, Membres, Administration -- et leurs separateurs
+ * sortaient a l'encre pleine : un trait noir la ou il fallait un filet, et en
+ * theme sombre un trait presque blanc qui decoupait la page en tranches.
+ *
+ * Le corriger a la source vaut mieux que d'ajouter `border-[--line]` partout :
+ * la faute reviendrait au premier `divide-y` ecrit sans y penser.
+ */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--line);
+  }
+}
+
+body {
+  background: var(--fond);
+  color: var(--texte);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tableau des mois : lecture horizontale sur mobile sans casser la page. */
+.defilement-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+@media print {
+  .sans-impression { display: none !important; }
+
+  /*
+   * Un releve signe se lit sur papier, pas sur ecran : fond blanc, encre noire,
+   * aucun aplat a imprimer. Les couleurs de marque coutent de l'encre et rendent
+   * les chiffres moins lisibles une fois photocopies.
+   */
+  :root {
+    --fond: #fff;
+    --carte: #fff;
+    --texte: #000;
+    --discret: #444;
+    --bordure: #999;
+
+    /*
+     * Les etats passent au noir : sur papier, c'est la forme du glyphe qui
+     * porte l'information, jamais la teinte. Un aplat vert photocopie devient
+     * un gris qu'on ne distingue plus du rouge.
+     */
+    --vert: #111;
+    --vert-fond: #fff;
+    --vert-encre: #111;
+    --ambre: #111;
+    --ambre-fond: #fff;
+    --ambre-encre: #111;
+    --rouge: #111;
+    --rouge-fond: #fff;
+    --rouge-encre: #111;
+    --or-doux: #f2f2f2;
+  }
+
+  body { background: #fff !important; color: #000 !important; }
+
+  main { max-width: none !important; padding: 0 !important; }
+
+  .a-imprimer { break-inside: avoid; }
+
+  /* Une bordure fine survit a la photocopie la ou une ombre disparait. */
+  .impression-encadre {
+    border: 1px solid #999 !important;
+    box-shadow: none !important;
+    background: #fff !important;
+  }
+
+  table { break-inside: auto; }
+  tr { break-inside: avoid; }
+  thead { display: table-header-group; }
+}
+
+/*
+ * Mouvement.
+ *
+ * Trois gestes seulement, et tous coupes des que le systeme signale une
+ * preference pour moins d'animation : une apparition au chargement pour les
+ * blocs du haut, une apparition au defilement pour ceux d'en bas, et un
+ * enfoncement au doigt. Les durees restent entre 130 et 420 ms : au-dela, sur
+ * un telephone d'entree de gamme, l'animation se lit comme une lenteur.
+ */
+@keyframes apparait {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Bloc visible d'emblee : decalage en cascade, plafonne a six rangs. */
+  .apparait {
+    animation: apparait 560ms var(--ease-doux) both;
+    animation-delay: calc(var(--rang, 0) * 35ms);
+  }
+
+  /*
+   * Bloc plus bas : l'animation suit le defilement plutot que l'horloge, sinon
+   * elle se joue hors ecran et on ne la voit jamais. Sans le support du
+   * navigateur la regle ne s'applique pas et le bloc s'affiche normalement.
+   */
+  @supports (animation-timeline: view()) {
+    .revele {
+      animation: apparait 560ms var(--ease-doux) both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 20%;
+    }
+  }
+
+  /* Retour au doigt : la surface s'enfonce le temps de l'appui. */
+  .tapable {
+    transition: transform 120ms linear, box-shadow 120ms linear, background-color 120ms linear;
+  }
+  .tapable:active { transform: scale(0.985); }
+
+  /* Ouverture d'un depliant. */
+  @keyframes deplie {
+    from { opacity: 0; transform: translateY(-4px); }
+    to   { opacity: 1; transform: none; }
+  }
+  details[open] > .contenu-depliant {
+    animation: deplie 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  }
+}
+
+/* Le chevron d'un depliant pivote, y compris sans animation (sans transition). */
+.chevron { transition: transform 160ms ease; }
+details[open] > summary .chevron { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .chevron { transition: none; } }
+
+/*
+ * Lignes du registre : le triangle par defaut du navigateur tomberait a cote du
+ * nom, ou le chevron dit deja l'ouverture.
+ */
+.ligne-registre > summary { list-style: none; -webkit-tap-highlight-color: transparent; }
+.ligne-registre > summary::-webkit-details-marker { display: none; }
+.ligne-registre > summary::marker { content: ""; }
+@media (prefers-reduced-motion: no-preference) {
+  .ligne-registre[open] > summary + div { animation: deplie 240ms cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+}
+
+/*
+ * LE GRAPHIQUE SE TRACE.
+ *
+ * Une courbe posee d'un coup est une image ; une courbe qui se trace est une
+ * histoire, et c'est bien une histoire qu'on lit ici -- trois ans de
+ * versements, et ce que la gestion en a fait. Le mouvement suit la lecture :
+ * la courbe de gauche a droite, puis la bande qui la separe du net place,
+ * puis les points, puis le halo du dernier releve, celui d'aujourd'hui.
+ *
+ * `pathLength="1"` normalise la longueur du trace : le tireté vaut 1, et l'on
+ * fait glisser son decalage de 1 a 0 quelle que soit la longueur reelle du
+ * chemin, qui change avec la periode et avec la largeur de l'ecran.
+ *
+ * Les durees du second passage sont plus courtes : au changement de periode on
+ * sait deja ce qu'on regarde, et l'attente se remarquerait.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes trace {
+    from { stroke-dashoffset: 1; }
+    to   { stroke-dashoffset: 0; }
+  }
+  @keyframes fondu {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+  @keyframes halo {
+    0%   { opacity: 0.3; transform: scale(1); }
+    70%  { opacity: 0; transform: scale(2.8); }
+    100% { opacity: 0; transform: scale(2.8); }
+  }
+
+  .trace {
+    stroke-dasharray: 1;
+    animation: trace var(--duree-trace, 1150ms) var(--ease-trace) var(--retard-trace, 180ms) both;
+  }
+  .bande {
+    animation: fondu var(--duree-bande, 800ms) ease-out var(--retard-bande, 650ms) both;
+  }
+  .point {
+    animation: fondu 320ms ease-out var(--retard-point, 1250ms) both;
+  }
+
+  /*
+   * `transform-box: fill-box` : sans lui, l'echelle du halo se calcule sur la
+   * boite du SVG entier et le cercle part en diagonale au lieu de s'ouvrir sur
+   * place.
+   */
+  .halo {
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: halo 3200ms ease-out 1700ms infinite both;
+  }
+
+  /*
+   * Le survol glisse d'un releve a l'autre plutot que de sauter : le
+   * deplacement dit lequel on quitte et lequel on prend, ce qu'une apparition
+   * seche ne dit pas. 120 ms, lineaire : le reperage doit suivre la main sans
+   * trainer derriere elle.
+   */
+  .vise {
+    transition: transform 120ms linear, opacity 120ms linear;
+  }
+
+  /* La barre des parts pousse depuis la gauche, un segment apres l'autre. */
+  .segment-part {
+    transform-origin: left center;
+    animation: pousse 700ms var(--ease-doux) both;
+    animation-delay: calc(620ms + var(--i, 0) * 35ms);
+  }
+  @keyframes pousse {
+    from { transform: scaleX(0); }
+    to   { transform: scaleX(1); }
+  }
+}
+
+/*
+ * Moins d'animation : rien ne bouge, et surtout rien ne manque. La courbe est
+ * deja tracee, la bande et les points sont la, le halo n'existe pas -- une
+ * pulsation sans fin est precisement ce qu'on demande d'eteindre.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .halo { display: none; }
+}
+
+/* Ombre douce des cartes en relief, plutot qu'un trait a plat. */
+.relief {
+  box-shadow: 0 1px 2px rgba(42, 26, 16, 0.05), 0 10px 20px -16px rgba(42, 26, 16, 0.35);
+}
+.relief-fort {
+  box-shadow: 0 2px 4px rgba(42, 26, 16, 0.06), 0 18px 30px -22px rgba(42, 26, 16, 0.5);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .relief,
+  :root:not([data-theme="light"]) .relief-fort { box-shadow: none; }
+}
+:root[data-theme="dark"] .relief,
+:root[data-theme="dark"] .relief-fort { box-shadow: none; }
+
+@media print {
+  .apparait, .revele, .trace, .bande, .point, .segment-part { animation: none !important; }
+  .halo { display: none !important; }
+  .relief, .relief-fort { box-shadow: none !important; }
+}
+
+/* Anneau d'attente des boutons. Il disparait si le systeme demande moins d'animation. */
+.rouet {
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  opacity: 0.85;
+  animation: tourne 620ms linear infinite;
+}
+@keyframes tourne { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .rouet { animation: none; } }
+
+/*
+ * Bandeau de chiffres cles.
+ *
+ * Les filets separent les cellules voisines, jamais le bord : sur telephone
+ * deux par rangee, sur ordinateur toutes sur une rangee. Ils se calculent ici
+ * parce qu'ils changent avec la largeur, ce qu'un style en ligne ne sait pas
+ * faire.
+ */
+/*
+ * Deux par rangee : la disposition de base, celle du telephone -- et celle que
+ * garde une carte etroite sur grand ecran, comme « Performance » sur l'accueil,
+ * qui occupe une demi-colonne.
+ */
+.cellule-chiffre { padding-inline: 16px 14px; }
+.cellule-chiffre:nth-child(odd) { padding-inline-start: 0; }
+.cellule-chiffre:nth-child(even) { padding-inline-end: 0; border-inline-start: 1px solid var(--line); }
+.cellule-chiffre:nth-child(n + 3) { border-block-start: 1px solid var(--line); }
+
+/*
+ * LA RANGEE UNIQUE N'ARRIVE QU'A 1 280 px, NON A 1 024.
+ *
+ * Entre les deux, la barre laterale existe deja -- elle prend 232 px -- mais
+ * l'ecran est encore etroit : le contenu n'a que 792 px a 1 024. Quatre
+ * cellules y donnent 158 px de texte chacune, et « 1 107 095 FCFA » en demande
+ * 170 : il debordait de 12 px et touchait le filet voisin. Rogner deux pixels
+ * sur le chiffre ramenait le debordement a 2 px -- un ajustement qui tient par
+ * chance, et qui cederait au premier montant a huit chiffres, que le club
+ * atteindra. Deux rangees de deux tiennent, elles, quel que soit le montant.
+ */
+@media (min-width: 1280px) {
+  /*
+   * UNE SEULE RANGEE, ET SEULEMENT QUAND LE BANDEAU LA DEMANDE.
+   *
+   * Les regles du telephone au-dessus portent une pseudo-classe : leur poids
+   * est 0,2,0. Celles d'ici etaient ecrites sur la seule classe, 0,1,0, et
+   * perdaient donc -- l'ordre d'ecriture n'y change rien. Resultat visible a
+   * partir de 1 024 px : la troisieme cellule et la cinquieme gardaient
+   * `padding-inline-start: 0` et leur texte touchait le filet, les cellules
+   * paires perdaient leur retrait a droite, et les cellules 3 et suivantes
+   * conservaient un filet horizontal qui les decalait d'un pixel.
+   *
+   * Le descendant `.rangee-unique >` ramene ces regles a 0,2,0 et les place
+   * apres : a poids egal, la derniere ecrite l'emporte. Et le bandeau qui n'a
+   * pas la place d'une rangee ne porte pas la classe, donc garde ses deux
+   * colonnes a toute largeur.
+   */
+  .rangee-unique { grid-template-columns: repeat(var(--colonnes, 2), minmax(0, 1fr)); }
+  .rangee-unique > .cellule-chiffre {
+    padding-inline: 20px;
+    border-block-start: none;
+    border-inline-start: 1px solid var(--line);
+  }
+  .rangee-unique > .cellule-chiffre:first-child {
+    padding-inline-start: 0;
+    border-inline-start: none;
+  }
+  .rangee-unique > .cellule-chiffre:last-child { padding-inline-end: 0; }
+}
+
+/*
+ * Panneau de saisie : lateral sur ordinateur, feuille sur telephone.
+ *
+ * Bati sur un <details> pour rester utilisable sans JavaScript. Le voile et la
+ * feuille sont en position fixe : aucun ancetre ne doit porter de
+ * `backdrop-filter`, qui en ferait son bloc conteneur -- la lecon du tiroir.
+ */
+.panneau > summary { list-style: none; -webkit-tap-highlight-color: transparent; }
+.panneau > summary::-webkit-details-marker { display: none; }
+.panneau > summary::marker { content: ""; }
+
+.panneau > .voile,
+.panneau > .feuille { display: none; }
+
+.panneau[open] > .voile {
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--voile);
+}
+
+.panneau[open] > .feuille {
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  z-index: 41;
+  background: var(--page);
+  inset-inline: 0;
+  bottom: 0;
+  max-height: calc(100dvh - 48px);
+  border-start-start-radius: 18px;
+  border-start-end-radius: 18px;
+  box-shadow: var(--pop);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@media (min-width: 1024px) {
+  .panneau[open] > .feuille {
+    inset-block: 0;
+    inset-inline: auto 0;
+    width: 440px;
+    max-height: none;
+    border-radius: 0;
+    border-inline-start: 1px solid var(--line);
+    box-shadow: -24px 0 48px -28px rgb(28 23 19 / 0.35);
+    padding-bottom: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  @keyframes feuille-monte { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+  @keyframes panneau-glisse { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: none; } }
+  @keyframes voile-parait { from { opacity: 0; } to { opacity: 1; } }
+  .panneau[open] > .voile { animation: voile-parait 220ms ease both; }
+  .panneau[open] > .feuille { animation: feuille-monte 320ms var(--ease-doux, ease) both; }
+  @media (min-width: 1024px) {
+    .panneau[open] > .feuille { animation: panneau-glisse 300ms var(--ease-doux, ease) both; }
+  }
+  .menu-ligne { animation: deplie 160ms ease-out both; }
+}
+
+/*
+ * Le focus se voit, partout et de la meme facon.
+ *
+ * Il etait laisse au navigateur, donc bleu sur certains et invisible sur
+ * d'autres -- et l'on ne pouvait pas traverser le site au clavier sans deviner
+ * ou l'on se trouvait. L'anneau d'or est le seul emploi de l'or hors la courbe.
+ */
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline-offset: 1px;
+}
+
+@media print {
+  /*
+   * Le papier ne porte ni navigation, ni bouton, ni menu : ce qui s'imprime,
+   * c'est le contenu et lui seul, sur toute la largeur de la feuille.
+   */
+  aside,
+  nav,
+  .panneau > summary,
+  .menu-ligne,
+  button {
+    display: none !important;
+  }
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+  table,
+  .defilement-x {
+    width: 100% !important;
+    overflow: visible !important;
+  }
+  li,
+  tr,
+  section {
+    break-inside: avoid;
+  }
+}
+
+/* Le pouce du selecteur glisse ; il s'arrete net si l'on demande moins d'animation. */
+@media (prefers-reduced-motion: no-preference) {
+  .pouce { transition: transform 300ms var(--ease-doux, ease); }
+}

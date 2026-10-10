@@ -1,0 +1,918 @@
+import { exigerMembre } from "@/lib/auth";
+import { peut } from "@/lib/droits";
+import {
+  decomptesSortie,
+  listerSorties,
+  reglagesEffectifs,
+  reglesIndividuelles,
+  situationsClub,
+} from "@/lib/queries";
+import { journalRecent } from "@/lib/journal";
+import { joignablesPour } from "@/lib/avis";
+import {
+  enregistrerReglages,
+  reprendreHistorique,
+  reprendrePenalites,
+  enregistrerSortie,
+  envoyerCourrielEssai,
+  inscrireRegleMembre,
+  leverRegleMembre,
+} from "@/app/actions/administration";
+import { listerMembres } from "@/lib/queries";
+import { CLUB, REGLES, ROLES, accorde, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
+import { REGLE_MEMBRE } from "@/lib/valeurs";
+import {
+  adresseDuCompte,
+  controlesOuverture,
+  descriptionTransport,
+  etatVariablesEnvoi,
+  transportConfigure,
+} from "@/lib/courriel";
+import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Rubrique, Tuile, Vide } from "@/components/ui";
+import { Icone } from "@/components/icones";
+import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Administration" };
+
+const LIBELLE_REGLE: Record<string, string> = {
+  [REGLE_MEMBRE.cotisationParticuliere]: "cotisation particulière",
+  [REGLE_MEMBRE.multiplicateurPenalite]: "pénalités majorées",
+  [REGLE_MEMBRE.avanceMinimale]: "avance minimale exigée",
+  [REGLE_MEMBRE.planRedressement]: "plan de redressement (R5)",
+  [REGLE_MEMBRE.note]: "note",
+};
+
+/**
+ * Les details d'une trace, en une ligne lisible.
+ *
+ * Les valeurs simples seulement : un objet imbrique n'a rien a faire sur une
+ * ligne de journal, et le rendre en JSON brut rendrait la liste illisible.
+ */
+function resumeDetails(details: unknown): string {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return "";
+  return Object.entries(details as Record<string, unknown>)
+    .filter(([, v]) => v !== null && v !== undefined && typeof v !== "object")
+    .map(([cle, v]) => `${cle.replace(/_/g, " ")} : ${v}`)
+    .join(" · ");
+}
+
+export default async function PageAdministration() {
+  const membre = await exigerMembre();
+  const transport = transportConfigure();
+  const adresseClub = adresseDuCompte();
+  const etatEnvoi = etatVariablesEnvoi();
+  const controles = controlesOuverture();
+  if (!peut(membre, "gererReglages")) {
+    return (
+      <Carte titre="Administration">
+        <Alerte ton="rouge">Cette page est réservée au président.</Alerte>
+      </Carte>
+    );
+  }
+
+  let reglages, situations, journal, membres, regles, sorties, decomptes, avertissables;
+  try {
+    [reglages, situations, journal, membres, regles, sorties, decomptes, avertissables] =
+      await Promise.all([
+        reglagesEffectifs(),
+        situationsClub(),
+        journalRecent(30).catch(() => []),
+        listerMembres(),
+        reglesIndividuelles(true).catch(() => []),
+        listerSorties(),
+        decomptesSortie().catch(() => []),
+        joignablesPour("gererMembres").catch(() => []),
+      ]);
+  } catch (e) {
+    if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
+    throw e;
+  }
+
+  /*
+   * Le journal garde la trace de chaque essai : on peut donc en afficher l'issue
+   * apres coup, la ou le message de confirmation s'efface au rechargement.
+   */
+  const dernierEssai = journal.find((j) => j.action === "essai_courriel") ?? null;
+  const detailEssai = (dernierEssai?.details ?? {}) as {
+    reussi?: boolean;
+    detail?: string;
+    destinataire?: string;
+  };
+  const essaiReussi = detailEssai.reussi === true;
+
+  /*
+   * Les demandes de mot de passe oublie, telles que le journal les a gardees.
+   * Toutes, y compris celles qui n'ont rien envoye : c'est precisement
+   * celles-la que rien ne montrait.
+   */
+  const demandes = journal
+    .filter((j) => j.action === "demande_reinitialisation")
+    .slice(0, 6)
+    .map((j) => {
+      const d = (j.details ?? {}) as { email?: string; issue?: string; detail?: string };
+      return {
+        id: j.id,
+        quand: j.created_at,
+        adresse: d.email ?? "adresse non consignée",
+        issue: d.issue ?? "issue non consignée",
+        detail: d.detail ?? "",
+        partie: d.issue === "avertis",
+      };
+    });
+
+
+  const moisDecouverts = situations.reduce((total, s) => total + s.nbMoisRetard, 0);
+  const penalitesDues = situations.reduce((total, s) => total + s.nbPenalitesImpayees, 0);
+
+  /*
+   * Ce qui bloque, isole du reste : ces deux cles gouvernent des portes ouvertes
+   * sur l'exterieur, et leur defaut ne se voit nulle part ailleurs. Tant qu'il
+   * en reste une, elle passe devant tout le contenu de la page.
+   */
+  const aRegler = controles.filter((c) => !c.ok);
+
+  /*
+   * Propose le dernier mois ou personne n'etait en retard, plutot qu'une date
+   * arbitraire : c'est la borne que le president cherche, et elle se deduit des
+   * donnees sans lire l'horloge pendant le rendu.
+   */
+  const premierDecouvert = situations
+    .flatMap((s) => s.moisEnRetard)
+    .sort()
+    .at(0);
+  const grille = situations[0]?.cellules ?? [];
+  /*
+   * Le decompte du tresorier court jusqu'au mois en cours des lors que son
+   * echeance est passee. La grille s'arretant au mois courant, son dernier
+   * element le donne sans lire l'horloge pendant le rendu.
+   */
+  const moisCourant = (grille.at(-1)?.mois ?? CLUB.dateCreation).slice(0, 7);
+  const defautJusqua = (
+    premierDecouvert
+      ? (grille.find((c) => c.mois === premierDecouvert)
+          ? grille[Math.max(0, grille.findIndex((c) => c.mois === premierDecouvert) - 1)]?.mois
+          : undefined) ?? premierDecouvert
+      : (grille.at(-1)?.mois ?? CLUB.dateCreation)
+  ).slice(0, 7);
+
+  return (
+    <>
+      {/*
+        * « Acces total » est un mot, non une pastille doree : le fond pale
+        * portait une encre pale, et la gelule s'affichait vide sur le site en
+        * ligne. Un etat se dit ; il n'a pas besoin d'etre encadre.
+        *
+        * Le nom passe en detail, sur sa propre ligne : accole au titre, il se
+        * lisait « Administration SORO Tielina Aboudramane · president », d'une
+        * seule traite.
+        */}
+      <EnTeteEcran
+        titre="Administration"
+        detail={`${membre.nom} · ${ROLES[membre.role].toLowerCase()}`}
+        marque={
+          <span className="text-[13px]" style={{ color: "var(--ink-2)" }}>
+            Accès total
+          </span>
+        }
+      />
+
+      <CarteEtat
+        chiffres={[
+          { libelle: "Membres", brut: situations.length },
+          {
+            libelle: moisDecouverts > 1 ? "Mois découverts" : "Mois découvert",
+            brut: moisDecouverts,
+
+          },
+          {
+            libelle: penalitesDues > 1 ? "Pénalités dues" : "Pénalité due",
+            brut: penalitesDues,
+
+          },
+        ]}
+      />
+
+      {aRegler.length > 0 && (
+        <div
+          className="apparait overflow-hidden rounded-2xl border"
+          style={{
+            background: "var(--etat-manque-fond)",
+            borderColor: "var(--etat-manque)",
+            ["--rang" as string]: 2,
+          }}
+        >
+          <p
+            className="flex items-center gap-2 px-3.5 pt-3 pb-2.5 text-sm font-semibold"
+            style={{ color: "var(--etat-manque)" }}
+          >
+            <Icone.alerte taille={17} />
+            {aRegler.length} point{aRegler.length > 1 ? "s" : ""} à régler
+          </p>
+          {aRegler.map((c) => (
+            <p
+              key={c.cle}
+              className="border-t px-3.5 py-2.5 text-xs"
+              style={{ borderColor: "var(--etat-manque)" }}
+            >
+              <strong className="text-sm font-semibold">
+                <code>{c.cle}</code>
+              </strong>
+              <br />
+              {/*
+                * `--line-2` est une couleur de filet, non d'encre : posee sur
+                * le fond d'alerte elle donnait 1,22:1 en clair -- l'explication
+                * de ce qui manque etait la seule chose qu'on ne pouvait pas
+                * lire. `--ink-2` tient 5,35:1 sur ce meme fond.
+                */}
+              <span style={{ color: "var(--ink-2)" }}>{c.explication}</span>
+            </p>
+          ))}
+        </div>
+      )}
+
+      <Rubrique>Au quotidien</Rubrique>
+
+      <Tuile
+        icone={<Icone.courriel />}
+        titre="Relances"
+        resume="Départ automatique le 7, le 9 et le 10, après vérification des paiements."
+        marque={<Badge ton={transport === "aucun" ? "rouge" : "vert"}>{transport === "aucun" ? "à l'arrêt" : "active"}</Badge>}
+      >
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Le courrier part le 7, le 9 et le 10 de chaque mois aux membres qui n&apos;ont toujours
+          pas versé à cette date ; chaque envoi revérifie qui a payé entre-temps. Sans
+          transport configuré, les alertes restent visibles sur le site, mais rien ne part et
+          cela ne se remarque pas.
+        </p>
+        <p className="mb-3 text-sm">
+          Transport :{" "}
+          <span style={{ color: transport === "aucun" ? "var(--etat-manque)" : "var(--etat-ok)" }}>
+            {descriptionTransport()}
+          </span>
+        </p>
+        {/*
+          * Le resultat du dernier essai, lu au journal. Sans lui, « je n'ai rien
+          * recu » ne se distingue pas de « le serveur a refuse » : le message de
+          * confirmation disparait au rechargement, et l'on ne sait plus quoi
+          * chercher.
+          */}
+        {dernierEssai && (
+          <div
+            className="mb-3 rounded-lg border px-3 py-2 text-xs"
+            style={{
+              borderColor: essaiReussi ? "var(--etat-ok)" : "var(--etat-manque)",
+              color: "var(--discret)",
+            }}
+          >
+            <p className="font-medium" style={{ color: essaiReussi ? "var(--etat-ok)" : "var(--etat-manque)" }}>
+              Dernier essai du {dateCourte(dernierEssai.created_at)} :{" "}
+              {essaiReussi ? "accepté par le serveur" : "refusé"}
+            </p>
+            {detailEssai.destinataire && <p>Remis à : {detailEssai.destinataire}</p>}
+            {detailEssai.detail && <p className="break-words">Réponse : {detailEssai.detail}</p>}
+          </div>
+        )}
+
+        {transport === "aucun" ? (
+          <Alerte ton="ambre" titre="Rien ne partira, ni le 7, ni le 9, ni le 10">
+            <p>
+              Voici ce que le serveur voit réellement. Les noms seulement : une valeur de mot de
+              passe ne s&apos;affiche pas, même ici.
+            </p>
+            <ul className="mt-2 space-y-0.5">
+              {etatEnvoi.variables.map((v) => (
+                <li key={v.nom}>
+                  <code>{v.nom}</code> :{" "}
+                  <strong style={{ color: v.presente ? "var(--etat-ok)" : "var(--etat-manque)" }}>
+                    {v.presente ? "présente" : "absente"}
+                  </strong>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2">
+              Environnement servi : <code>{etatEnvoi.environnement}</code>.
+            </p>
+            <p className="mt-2">
+              {etatEnvoi.variables.every((v) => !v.presente)
+                ? "Aucune n'arrive : les variables sont enregistrées sur un autre projet, ou pour un autre environnement que celui indiqué ci-dessus, ou le formulaire n'a pas été validé. Vérifiez que le projet Vercel ouvert est bien celui qui sert cette adresse, et que la case correspondant à l'environnement ci-dessus est cochée."
+                : "Certaines arrivent et d'autres non : les manquantes portent vraisemblablement une faute de frappe dans leur nom, ou un espace avant ou après. Le nom doit s'écrire exactement comme ci-dessus, en majuscules."}
+            </p>
+          </Alerte>
+        ) : (
+          <FormulaireAction action={envoyerCourrielEssai} libelle="Envoyer un courrier d'essai">
+            <Selection
+              nom="destination"
+              libelle="Envoyer à"
+              valeur="moi"
+              options={[
+                { valeur: "moi", libelle: `Mon adresse (${membre.email})` },
+                ...(adresseClub
+                  ? [{ valeur: "club", libelle: `L'adresse du club (${adresseClub})` }]
+                  : []),
+              ]}
+            />
+          </FormulaireAction>
+        )}
+        <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
+          Seules ces deux adresses, déjà connues du site, sont proposées : un formulaire qui
+          enverrait ou l&apos;on veut depuis l&apos;adresse du club serait un relais ouvert. Si
+          le courrier n&apos;arrive pas alors que le serveur l&apos;a accepté, il est dans les
+          indésirables : un premier message entre deux adresses qui n&apos;ont jamais
+          correspondu y atterrit souvent.
+        </p>
+      </Tuile>
+
+      {/*
+        * CE QUE LE PRESIDENT NE POUVAIT PAS VOIR.
+        *
+        * Deux essais depuis la page de connexion : l'un avec l'adresse du
+        * president, qui a bien recu l'avis ; l'autre avec une adresse qui
+        * n'est celle d'aucun membre, et qui n'a rien envoye. Le second est
+        * voulu : ecrire a chaque adresse inconnue saisie sur une page que
+        * n'importe qui peut ouvrir, c'est offrir le moyen d'inonder la boite
+        * du president -- une adresse differente a chaque fois suffit a passer
+        * sous le plafond, qui se compte par adresse.
+        *
+        * Mais « rien envoye » ne doit pas valoir « rien su ». La demande est
+        * tracee, et se lit ici : qui a essaye, avec quelle adresse, et
+        * pourquoi rien n'est parti. Le journal n'est lu que du president : il
+        * peut dire ce que la page de connexion se refuse a dire.
+        */}
+      <Tuile
+        icone={<Icone.bouclier />}
+        titre="Mots de passe oubliés"
+        resume="Les demandes faites depuis la page de connexion, et ce que chacune a donné."
+        marque={
+          <Badge ton={avertissables.length === 0 ? "rouge" : "vert"}>
+            {avertissables.length === 0
+              ? "personne n'est averti"
+              : `${avertissables.length} ${accorde(avertissables.length, "destinataire")}`}
+          </Badge>
+        }
+      >
+        {avertissables.length === 0 ? (
+          <Alerte ton="rouge" titre="Aucun avis ne peut partir">
+            <p>
+              Le membre qui demande un nouveau mot de passe lit « le bureau vient d&apos;en
+              être averti », et personne ne l&apos;est : le droit sur les membres
+              n&apos;appartient qu&apos;au président, et aucune fiche active ne porte ce rôle
+              avec une adresse. Vérifiez la page Membres.
+            </p>
+          </Alerte>
+        ) : (
+          <p className="mb-3 text-sm">
+            Averti : {avertissables.map((a) => `${a.nom} (${a.email})`).join(", ")}.
+          </p>
+        )}
+
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Une adresse qui n&apos;est celle d&apos;aucun membre ne déclenche aucun courrier, et
+          la page de connexion répond la même chose dans tous les cas : dire « cette adresse
+          est inconnue » apprendrait à un inconnu qui est du club. La demande se lit ici, où
+          vous êtes seul à la lire.
+        </p>
+
+        {/*
+          * LE CAS QUI N'EST PAS SYMETRIQUE DES AUTRES.
+          *
+          * Le president est seul titulaire du droit sur les membres : l'avis
+          * lui parvient bien, mais il le renvoie a une page qu'il ne peut plus
+          * ouvrir. Lire la marche a suivre ici suppose d'etre connecte -- donc
+          * de ne pas en avoir besoin : c'est volontaire. On la lit AVANT, et le
+          * README la porte aussi, pour le jour ou cette page sera hors
+          * d'atteinte.
+          */}
+        <Depliant titre="Et si c'est vous qui perdez le vôtre ?">
+          <p className="text-xs" style={{ color: "var(--discret)" }}>
+            Ce formulaire ne vous dépannera pas : il vous avertit vous-même, et vous renvoie à
+            la page Membres, qui demande d&apos;être connecté. La porte de secours est la route
+            d&apos;amorçage, et elle se franchit depuis un téléphone :
+          </p>
+          <ol className="mt-2 space-y-1.5 text-xs" style={{ color: "var(--discret)" }}>
+            <li>
+              1. Sur Vercel, projet <code>ip12</code>, variables d&apos;environnement, ajouter
+              pour Production <code>SETUP_TOKEN</code> (une suite de caractères connue de vous
+              seul) et <code>BOOTSTRAP_EMAIL</code> (l&apos;adresse de votre compte).
+            </li>
+            <li>2. Redéployer : une variable ajoutée ne vaut que pour les déploiements suivants.</li>
+            <li>
+              3. Ouvrir <code>/api/bootstrap?token=…</code> avec ce jeton. La réponse contient
+              un mot de passe provisoire.
+            </li>
+            <li>4. Se connecter, puis en changer aussitôt : le site l&apos;exige.</li>
+            <li>
+              5. <strong>Supprimer <code>SETUP_TOKEN</code></strong>, puis redéployer. Tant
+              qu&apos;il est là, qui le devine reprend votre compte. C&apos;est pourquoi son
+              absence est comptée plus haut comme le bon état.
+            </li>
+          </ol>
+          <p className="mt-2 text-xs" style={{ color: "var(--discret)" }}>
+            La même marche à suivre figure dans le README du projet, lisible sans se connecter.
+            Pour n&apos;avoir jamais à en passer par là, l&apos;assemblée peut décider que le
+            vice-président détient aussi le droit sur les membres : il réinitialiserait alors
+            votre mot de passe depuis la page Membres. C&apos;est une décision de gouvernance,
+            non un réglage.
+          </p>
+        </Depliant>
+
+        {demandes.length === 0 ? (
+          <Vide>
+            Aucune demande depuis la mise en place de cette trace. Les essais faits avant
+            n&apos;y figurent pas : rien ne les consignait.
+          </Vide>
+        ) : (
+          <ul className="space-y-2">
+            {demandes.map((d) => (
+              <li
+                key={d.id}
+                className="rounded-lg border px-3 py-2 text-xs"
+                style={{ borderColor: "var(--line)" }}
+              >
+                <p className="font-medium break-words" style={{ color: "var(--ink)" }}>
+                  {d.adresse}
+                </p>
+                <p style={{ color: "var(--discret)" }}>
+                  {dateCourte(d.quand)} ·{" "}
+                  <span style={{ color: d.partie ? "var(--etat-ok)" : "var(--etat-attente)" }}>
+                    {d.partie ? "avis envoyé" : d.issue}
+                  </span>
+                </p>
+                {d.detail && (
+                  <p className="break-words" style={{ color: "var(--discret)" }}>
+                    {d.detail}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Tuile>
+
+      <Rubrique>Le club</Rubrique>
+
+      <Tuile
+        icone={<Icone.reglages />}
+        titre="Réglages du club"
+        resume="Cotisation, échéance, taux, doublement."
+      >
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Ces valeurs viennent des statuts et sont inscrites dans le code. Les modifier ici les fait
+          primer, sans toucher au code, si l&apos;assemblée amende les articles 6, 8 ou 9. Laissez un
+          champ vide pour conserver la valeur en vigueur.
+        </p>
+        <Depliant titre="Modifier les règles">
+          <FormulaireAction action={enregistrerReglages} libelle="Enregistrer">
+            <Champ
+              nom="cotisation"
+              libelle="Cotisation mensuelle (FCFA)"
+              type="number"
+              min={1}
+              valeur={reglages.cotisationMensuelle}
+              requis={false}
+              aide="Art. 6."
+            />
+            <Champ
+              nom="jourEcheance"
+              libelle="Jour d'échéance"
+              type="number"
+              min={1}
+              max={28}
+              valeur={reglages.jourEcheance}
+              requis={false}
+              aide="Art. 8. Entre le 1 et le 28."
+            />
+            <Champ
+              nom="tauxPenalite"
+              libelle="Taux de pénalité"
+              type="number"
+              step="0.01"
+              min={0.01}
+              max={1}
+              valeur={reglages.tauxPenalite}
+              requis={false}
+              aide="Art. 9. En fraction : 0,1 pour 10 %."
+            />
+          </FormulaireAction>
+        </Depliant>
+      </Tuile>
+
+      <Tuile
+        icone={<Icone.personnes />}
+        titre="Règles individuelles"
+        resume="Dérogations au régime commun, votées en assemblée."
+        marque={regles.length > 0 ? <Badge ton="neutre">{regles.length}</Badge> : undefined}
+      >
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Les statuts valent pour tous. Le club peut néanmoins convenir d&apos;une cotisation
+          différente, majorer les pénalités d&apos;un membre sous sanction, ou accorder le plan de
+          redressement que R5 réserve au retard déclaré. Ces accords se prenaient de mémoire :
+          les inscrire les rend opposables et datables. Une règle levée n&apos;est pas effacée :
+          elle a produit ses effets.
+        </p>
+
+        {regles.length === 0 ? (
+          <Vide>Aucune dérogation : le régime commun s&apos;applique à tous.</Vide>
+        ) : (
+          <ul className="mb-4 divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {regles.map((r) => (
+              <li key={r.id} className="flex flex-wrap items-start justify-between gap-2 py-2">
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                    {r.membreNom}
+                    <span className="font-normal" style={{ color: "var(--discret)" }}>
+                      {LIBELLE_REGLE[r.nature] ?? r.nature}
+                    </span>
+                    {r.valeur !== null && (
+                      <Badge ton="ambre">
+                        {r.nature === REGLE_MEMBRE.multiplicateurPenalite
+                          ? `x ${r.valeur}`
+                          : r.nature === REGLE_MEMBRE.avanceMinimale
+                            ? `${r.valeur} mois`
+                            : fcfa(r.valeur)}
+                      </Badge>
+                    )}
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--discret)" }}>
+                    {r.debut ? `dès le ${dateCourte(r.debut)}` : "sans date de début"}
+                    {r.fin ? ` · jusqu'au ${dateCourte(r.fin)}` : " · sans terme"}
+                    {r.note ? ` · ${r.note}` : ""}
+                  </p>
+                </div>
+                <FormulaireAction
+                  action={leverRegleMembre}
+                  libelle="Lever"
+                  variante="discret"
+                  compact
+                  confirmation={`Lever cette règle pour ${r.membreNom} ?`}
+                >
+                  <ChampCache nom="id" valeur={r.id} />
+                </FormulaireAction>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <Depliant titre="Inscrire une règle">
+          <FormulaireAction action={inscrireRegleMembre} libelle="Inscrire">
+            <Selection
+              nom="membre"
+              libelle="Membre"
+              options={membres.map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
+            />
+            <Selection
+              nom="nature"
+              libelle="Nature"
+              valeur={REGLE_MEMBRE.cotisationParticuliere}
+              options={Object.values(REGLE_MEMBRE).map((v) => ({
+                valeur: v,
+                libelle: LIBELLE_REGLE[v] ?? v,
+              }))}
+            />
+            <Champ
+              nom="valeur"
+              libelle="Valeur"
+              type="number"
+              min={1}
+              requis={false}
+              aide="Un montant en FCFA pour la cotisation ; un NOMBRE DE MOIS pour l'avance minimale ; un multiplicateur (2 = double) pour les pénalités. Laisser vide pour un plan ou une note."
+            />
+            <Champ nom="debut" libelle="À compter du" type="date" requis={false} />
+            <Champ
+              nom="fin"
+              libelle="Jusqu'au"
+              type="date"
+              requis={false}
+              aide="Sans terme, la dérogation devient un régime parallèle durable."
+            />
+            <Champ nom="note" libelle="Motif ou référence de la décision" requis={false} />
+          </FormulaireAction>
+        </Depliant>
+      </Tuile>
+
+      <Rubrique>Contrôle</Rubrique>
+
+      <Tuile
+        icone={<Icone.journal />}
+        titre={`Journal (${journal.length})`}
+        resume="Chaque validation y laisse une trace nominative."
+      >
+        {journal.length === 0 ? (
+          <Vide>Aucune opération enregistrée.</Vide>
+        ) : (
+          <ul className="divide-y text-xs" style={{ borderColor: "var(--bordure)" }}>
+            {journal.map((j) => (
+              <li key={j.id} className="py-2">
+                <div className="flex flex-wrap justify-between gap-2">
+                  <span>
+                    <strong>{j.actor_name ?? "Automatique"}</strong> &middot; {j.action.replace(/_/g, " ")}
+                    {j.entity ? ` · ${j.entity}` : ""}
+                  </span>
+                  <span style={{ color: "var(--discret)" }}>{dateCourte(j.created_at)}</span>
+                </div>
+                {/*
+                  * LE DETAIL, ET NON LE SEUL INTITULE.
+                  *
+                  * Le journal ne disait que « qui » et « quoi ». Quand une action
+                  * echoue a moitie -- un avis qu'aucun destinataire n'a recu, une
+                  * demande portant une adresse inconnue -- l'intitule est le meme
+                  * que celui d'une reussite, et le president cherche ailleurs un
+                  * motif que la trace portait deja.
+                  */}
+                {resumeDetails(j.details) && (
+                  <p className="mt-0.5 text-[11px]" style={{ color: "var(--discret)" }}>
+                    {resumeDetails(j.details)}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
+          Chaque validation, correction et constat y laisse une trace nominative.
+        </p>
+      </Tuile>
+
+      <Tuile
+        icone={<Icone.sortie />}
+        titre="Sorties et exclusions"
+        resume="Ce que chaque membre emporterait en partant aujourd'hui."
+      >
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          L&apos;art. 20 rembourse la part au cours de cession, diminuée de{" "}
+          {(REGLES.fraisCession * 100).toFixed(0)} % de frais, et l&apos;art. 9 veut que les
+          pénalités dues restent acquises au club : elles se retranchent du versement. Le
+          remboursement intervient sous {REGLES.delaiRemboursementMois} mois (R5). Une exclusion
+          demande le vote des {(REGLES.majoriteExclusion * 100).toFixed(0)} %.
+        </p>
+
+        {decomptes.length > 0 && (
+          <div className="defilement-x mb-4">
+            <table className="w-full min-w-[34rem] text-xs">
+              <thead>
+                <tr style={{ color: "var(--discret)" }}>
+                  <th className="py-1 text-left font-medium">Membre</th>
+                  <th className="py-1 text-right font-medium">Part</th>
+                  <th className="py-1 text-right font-medium">Frais {(REGLES.fraisCession * 100).toFixed(0)} %</th>
+                  <th className="py-1 text-right font-medium">Avance</th>
+                  <th className="py-1 text-right font-medium">Net</th>
+                </tr>
+              </thead>
+              <tbody>
+                {decomptes.map((d) => (
+                  <tr key={d.membreId} className="border-t" style={{ borderColor: "var(--bordure)" }}>
+                    <td className="py-1.5">{d.nom}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.valeurBrute)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisIndicatifs)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.avance)}</td>
+                    <td className="py-1.5 text-right font-medium tabular-nums">{fcfa(d.netIndicatif)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="mt-2 text-[11px]" style={{ color: "var(--discret)" }}>
+              Indicatif, sur l&apos;avoir connu du club (portefeuille et caisse). Les frais
+              réels de la SGI ne sont connus qu&apos;après coup : ces chiffres ouvrent la
+              discussion, ils ne la closent pas. L&apos;avance est rendue au nominal et
+              ne supporte donc aucun frais de cession ; les pénalités dues sont déjà
+              retranchées, leur déduction ayant lieu au calcul de la part.
+            </p>
+          </div>
+        )}
+
+        {sorties.length > 0 && (
+          <ul className="mb-4 divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {sorties.map((s) => (
+              <li key={s.id} className="py-2">
+                <p className="text-sm font-medium">
+                  {s.membreNom} &middot; {dateCourte(s.date)} &middot; {fcfa(s.netVerse)} versés
+                </p>
+                <p className="text-xs" style={{ color: "var(--discret)" }}>
+                  {s.motif ?? "motif non précisé"} &middot; part {fcfa(s.valeurBrute)} &minus; frais{" "}
+                  {fcfa(s.frais)} &minus; acquis au club {fcfa(s.acquisAuClub)}
+                  {s.note ? ` · ${s.note}` : ""}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <Depliant titre="Enregistrer une sortie">
+          <FormulaireAction action={enregistrerSortie} libelle="Enregistrer la sortie">
+            <Selection
+              nom="membre"
+              libelle="Membre sortant"
+              options={membres.map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
+            />
+            <Champ
+              nom="date"
+              libelle="Date de sortie"
+              type="date"
+              valeur={new Date().toISOString().slice(0, 10)}
+            />
+            <Champ
+              nom="motif"
+              libelle="Motif"
+              aide="Démission, exclusion prononcée au vote, exclusion de plein droit (R5)…"
+            />
+            <Champ
+              nom="valeurBrute"
+              libelle="Valeur de la part (FCFA)"
+              type="number"
+              min={0}
+              aide="Au cours de cession. Le tableau ci-dessus en donne l'estimation au dernier relevé."
+            />
+            <Champ
+              nom="frais"
+              libelle="Frais retenus (FCFA)"
+              type="number"
+              min={0}
+              aide={`${(REGLES.fraisCession * 100).toFixed(0)} % selon l'art. 20 ; saisir les frais réels s'ils différent.`}
+            />
+            <Champ
+              nom="acquisAuClub"
+              libelle="Pénalités acquises au club (FCFA)"
+              type="number"
+              min={0}
+              valeur={0}
+              aide="Art. 9 : les pénalités dues ne se remboursent pas."
+            />
+            <Champ nom="note" libelle="Référence de la décision" requis={false} />
+          </FormulaireAction>
+        </Depliant>
+      </Tuile>
+
+      <Tuile
+        icone={<Icone.bouclier />}
+        titre="Sécurité"
+        resume="Les clés qui ouvrent le site sur l'extérieur."
+        marque={<Badge ton={controles.every((c) => c.ok) ? "vert" : "rouge"}>{controles.every((c) => c.ok) ? "conforme" : `${controles.filter((c) => !c.ok).length} alertes`}</Badge>}
+      >
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Deux variables gouvernent des portes ouvertes sur l&apos;extérieur. Leur état ne se lit
+          nulle part ailleurs : le voici, pour n&apos;avoir pas à s&apos;en souvenir.
+        </p>
+        <ul className="space-y-2">
+          {controles.map((c) => (
+            <li key={c.cle} className="text-sm">
+              <p className="flex flex-wrap items-center gap-1.5 font-medium">
+                <code>{c.cle}</code>
+                <Badge ton={c.ok ? "vert" : "rouge"}>{c.ok ? "Conforme" : "À corriger"}</Badge>
+              </p>
+              <p className="text-xs" style={{ color: "var(--discret)" }}>
+                {c.explication}
+              </p>
+            </li>
+          ))}
+        </ul>
+      </Tuile>
+
+      {/*
+        * Ce qui ne sert qu'une fois.
+        *
+        * Les deux reprises figuraient sous « Au quotidien », entre les relances
+        * et le journal. Elles n'ont pourtant servi qu'a amorcer l'outil : les
+        * garder au milieu du travail courant laisse croire qu'il y a la quelque
+        * chose a faire chaque mois, et expose a les rejouer par megarde.
+        */}
+      <Rubrique>Mise en place, servie une seule fois</Rubrique>
+
+      <Tuile
+        icone={<Icone.plus />}
+        titre="Reprise de l'historique"
+        resume="Marquer payés, en une fois, les mois antérieurs à l'outil."
+      >
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Marque payés, en une opération, tous les mois encore découverts jusqu&apos;au mois choisi.
+          Chaque ligne est datée de l&apos;échéance du mois qu&apos;elle couvre, jamais
+          d&apos;aujourd&apos;hui : antidater au {reglages.jourEcheance} évite de créer des
+          pénalités fictives sur du passé déjà réglé.
+        </p>
+        {moisDecouverts > 0 && (
+          <div className="mb-3">
+            <Alerte ton="ambre">
+              {moisDecouverts} mois sont actuellement découverts, répartis sur{" "}
+              {situations.filter((s) => s.nbMoisRetard > 0).length} membres. Tant que
+              l&apos;historique n&apos;est pas repris, chacun apparaît en retard depuis la création
+              du club.
+            </Alerte>
+          </div>
+        )}
+        <Depliant titre="Reprendre l'historique">
+          <FormulaireAction
+            action={reprendreHistorique}
+            libelle="Marquer ces mois payés"
+            confirmation="Marquer payés tous les mois découverts de la période ? L'opération est rejouable et ne double jamais un mois déjà couvert."
+          >
+            <Champ
+              nom="depuis"
+              libelle="Premier mois du club"
+              type="month"
+              valeur={CLUB.dateCreation.slice(0, 7)}
+              aide="Le club a-t-il cotisé dès sa constitution, ou seulement à l'ouverture du compte ?"
+            />
+            <Champ
+              nom="jusqua"
+              libelle="Dernier mois à jour"
+              type="month"
+              valeur={defautJusqua}
+              aide={
+                premierDecouvert
+                  ? `Proposé : le mois précédant le premier découvert (${moisLong(premierDecouvert)}). Les mois suivants resteront des retards.`
+                  : "Le dernier mois où tout le monde était à jour."
+              }
+            />
+            <Champ
+              nom="montant"
+              libelle="Montant par mois (FCFA)"
+              type="number"
+              min={1}
+              valeur={reglages.cotisationMensuelle}
+              aide="Les montants particuliers se corrigent ensuite ligne par ligne."
+            />
+            <details className="mt-3">
+              <summary
+                className="tapable flex h-11 cursor-pointer list-none items-center gap-2 rounded-lg px-2.5 text-[13px]"
+                style={{ color: "var(--ink-2)" }}
+              >
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" className="chevron flex-none">
+                  <path
+                    d="M9.5 6 L15.5 12 L9.5 18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                Une borne différente pour certains membres
+              </summary>
+              <p className="mt-2 text-xs" style={{ color: "var(--discret)" }}>
+                Tous ne sont pas à jour au même mois. Laissez vide pour appliquer la borne commune.
+              </p>
+              {membres.map((m) => (
+                <Champ
+                  key={m.id}
+                  nom={`jusqua_${m.id}`}
+                  libelle={m.nom}
+                  type="month"
+                  requis={false}
+                />
+              ))}
+            </details>
+          </FormulaireAction>
+        </Depliant>
+      </Tuile>
+
+      <Tuile
+        icone={<Icone.horloge />}
+        titre="Reprise des pénalités"
+        resume="Le décompte que le trésorier tenait à la main."
+      >
+        <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+          Les pénalités antérieures ne peuvent pas naître du calcul : une fois l&apos;historique
+          repris, tous les mois passés portent la date de leur échéance, donc sont à l&apos;heure.
+          Le retard réel de l&apos;époque n&apos;est connu que du trésorier, qui l&apos;a suivi à la
+          main. Saisissez ici le nombre de mois qu&apos;il annonce pour chacun, à{" "}
+          {fcfa(Math.round(reglages.cotisationMensuelle * reglages.tauxPenalite))} le mois.
+        </p>
+        <Depliant titre="Saisir les mois de pénalité par membre">
+          <FormulaireAction action={reprendrePenalites} libelle="Porter au registre">
+            <Champ
+              nom="jusqua"
+              libelle="Décompte arrêté à"
+              type="month"
+              valeur={moisCourant}
+              aide="Le dernier mois couvert par le décompte du trésorier. Au-delà, le site prend le relais et ne recompte rien en deçà."
+            />
+            {membres.map((m) => (
+              <Champ
+                key={m.id}
+                nom={`mois_${m.id}`}
+                libelle={m.nom}
+                type="number"
+                min={0}
+                max={200}
+                valeur={0}
+                requis={false}
+              />
+            ))}
+          </FormulaireAction>
+        </Depliant>
+        <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
+          Rejouable : la ligne d&apos;un membre est remplacée tant qu&apos;elle n&apos;a pas été
+          soldée, jamais dupliquée. Laissez à zéro ceux qui ne doivent rien. Le mois
+          d&apos;arrêt compte : le constat automatique ne produira plus rien en deçà, ce qui évite
+          de compter deux fois les mêmes retards.
+        </p>
+      </Tuile>
+
+
+      <p className="text-center text-[11px]" style={{ color: "var(--discret)" }}>
+        {CLUB.nom} &middot; fondé le {dateCourte(CLUB.dateCreation)} &middot; premier mois repris :{" "}
+        {moisLong(`${CLUB.dateCreation.slice(0, 8)}01`)}
+      </p>
+    </>
+  );
+}

@@ -1,0 +1,164 @@
+import Link from "next/link";
+import { exigerMembre } from "@/lib/auth";
+import { peut } from "@/lib/droits";
+import { listerMembres, situationsClub, synthese } from "@/lib/queries";
+import { basculerActivite, creerMembre, modifierMembre, reinitialiserMotDePasse } from "@/app/actions/membres";
+import { CLUB, ROLES, dateCourte, fcfa } from "@/lib/settings";
+import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
+import { Badge, Carte, EnTeteEcran, Vide } from "@/components/ui";
+import { Panneau } from "@/components/panneau";
+import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import { Chiffre } from "@/components/chiffre";
+
+export const dynamic = "force-dynamic";
+export const metadata = { title: "Membres" };
+
+const OPTIONS_ROLE = Object.entries(ROLES).map(([valeur, libelle]) => ({ valeur, libelle }));
+
+export default async function PageMembres() {
+  const membre = await exigerMembre();
+  const estPresident = membre.role === "president";
+  // Le bureau tient les comptes : il edite la piece de chacun (voir /releve).
+  const peutEditerReleve = peut(membre, "validerVersement") || peut(membre, "gererReglages");
+
+  let membres, situations, s;
+  try {
+    [membres, situations, s] = await Promise.all([
+      listerMembres(estPresident),
+      situationsClub(),
+      synthese(),
+    ]);
+  } catch (e) {
+    if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
+    throw e;
+  }
+
+  const saisie = estPresident ? (
+    <Panneau
+      libelle="Nouveau profil"
+      titre="Ajouter un membre"
+      introduction={`Un mot de passe provisoire est généré : transmettez-le au membre, qui devra le remplacer à sa première connexion. Statuts : de ${CLUB.membresMin} à ${CLUB.membresMax} membres.`}
+    >
+        <FormulaireAction action={creerMembre} libelle="Créer le profil">
+          <Champ nom="nom" libelle="Nom et prénoms" />
+          <Champ nom="email" libelle="Adresse e-mail" type="email" />
+          <Champ nom="telephone" libelle="Téléphone" requis={false} />
+          <Champ nom="titre" libelle="Intitulé (facultatif)" requis={false} />
+          <Selection nom="role" libelle="Rôle" valeur="membre" options={OPTIONS_ROLE} />
+          <Champ nom="dateAdhesion" libelle="Date d'adhésion" type="date" valeur={CLUB.dateCreation} />
+        </FormulaireAction>
+    </Panneau>
+  ) : null;
+
+  return (
+    <>
+      <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
+        <EnTeteEcran
+          titre="Effectif"
+          chiffre={
+            <>
+              <Chiffre valeur={membres.filter((m) => m.actif).length} format="entier" /> sur{" "}
+              {CLUB.membresMax}
+            </>
+          }
+          detail={`Les statuts fixent le club entre ${CLUB.membresMin} et ${CLUB.membresMax} membres.`}
+        />
+        <div className="sans-impression">{saisie}</div>
+      </div>
+
+      <Carte titre={`Effectif (${membres.filter((m) => m.actif).length} / ${CLUB.membresMax})`}>
+        {membres.length === 0 ? (
+          <Vide>Aucun membre enregistré.</Vide>
+        ) : (
+          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {membres.map((m) => {
+              const situation = situations.find((x) => x.membreId === m.id);
+              const part = s.parts.find((p) => p.membreId === m.id);
+              return (
+                <li key={m.id} className="py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                        {m.nom}
+                        {m.role !== "membre" && <Badge ton="or">{ROLES[m.role]}</Badge>}
+                        {!m.actif && <Badge ton="neutre">Inactif</Badge>}
+                        {situation && situation.nbMoisRetard > 0 && (
+                          <Badge ton="rouge">{situation.nbMoisRetard} mois de retard</Badge>
+                        )}
+                        {situation?.voteSuspendu && <Badge ton="rouge">Vote suspendu</Badge>}
+                      </p>
+                      <p className="truncate text-xs" style={{ color: "var(--discret)" }}>
+                        {m.email}
+                        {m.telephone ? ` · ${m.telephone}` : ""} &middot; adhésion{" "}
+                        {dateCourte(m.date_adhesion)}
+                      </p>
+                      {part && (
+                        <p className="mt-0.5 text-xs" style={{ color: "var(--discret)" }}>
+                          Versé {fcfa(part.verse)} &middot; part{" "}
+                          {(part.part * 100).toFixed(1).replace(".", ",")} % &middot; valeur{" "}
+                          {fcfa(part.valeur)}
+                        </p>
+                      )}
+                    </div>
+                    {peutEditerReleve && (
+                      <Link
+                        href={`/releve/${m.id}`}
+                        className="sans-impression h-8 shrink-0 rounded-lg px-3 text-[12.5px] font-medium"
+                        style={{
+                          background: "var(--page)",
+                          color: "var(--ink)",
+                          border: "1px solid var(--line-2)",
+                          lineHeight: "30px",
+                        }}
+                      >
+                        Relevé
+                      </Link>
+                    )}
+                  </div>
+
+                  {estPresident && (
+                    <div className="mt-2">
+                      <Depliant titre="Gérer">
+                        <FormulaireAction action={modifierMembre} libelle="Enregistrer les modifications">
+                          <ChampCache nom="id" valeur={m.id} />
+                          <Champ nom="nom" libelle="Nom" valeur={m.nom} />
+                          <Champ nom="email" libelle="E-mail" type="email" valeur={m.email} />
+                          <Champ nom="telephone" libelle="Téléphone" valeur={m.telephone ?? ""} requis={false} />
+                          <Champ nom="titre" libelle="Intitulé" valeur={m.titre ?? ""} requis={false} />
+                          <Selection nom="role" libelle="Rôle" valeur={m.role} options={OPTIONS_ROLE} />
+                        </FormulaireAction>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <FormulaireAction
+                            action={reinitialiserMotDePasse}
+                            libelle="Réinitialiser le mot de passe"
+                            variante="discret"
+                            compact
+                            confirmation={`Générer un nouveau mot de passe provisoire pour ${m.nom} ?`}
+                          >
+                            <ChampCache nom="id" valeur={m.id} />
+                          </FormulaireAction>
+                          {m.id !== membre.id && (
+                            <FormulaireAction
+                              action={basculerActivite}
+                              libelle={m.actif ? "Désactiver" : "Réactiver"}
+                              variante="danger"
+                              compact
+                              confirmation={`${m.actif ? "Désactiver" : "Réactiver"} ${m.nom} ?`}
+                            >
+                              <ChampCache nom="id" valeur={m.id} />
+                            </FormulaireAction>
+                          )}
+                        </div>
+                      </Depliant>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </Carte>
+
+    </>
+  );
+}
