@@ -9,7 +9,7 @@ import { Frise, GlypheEtat, LIBELLE_STATUT, STATUTS_LEGENDE, statutLigne } from 
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 import { penalitesNonInscrites } from "@/lib/constat";
 import type { ReactNode } from "react";
-import type { StatutMois } from "@/lib/penalites";
+import { cotisationsARegler, type StatutMois } from "@/lib/penalites";
 import { Chiffre } from "@/components/chiffre";
 
 export const dynamic = "force-dynamic";
@@ -93,7 +93,6 @@ export default async function TableauDeBord() {
 
   const maFenetre = maSituation?.cellules.slice(-14) ?? [];
   const moisCourant = debutMois();
-  const celluleDuMois = maSituation?.cellules.find((c) => c.mois === moisCourant);
   /*
    * LA DETTE DE PENALITES, LA MEME QUE PARTOUT AILLEURS.
    *
@@ -240,8 +239,15 @@ export default async function TableauDeBord() {
                     <Couple
                       chiffres={[
                         {
-                          libelle: "Cotisation due",
-                          brut: celluleDuMois?.manque ?? REGLES.cotisationMensuelle,
+                          /*
+                           * Elle portait la cotisation du SEUL mois courant, a
+                           * cote d'une dette de penalites ENTIERE : qui devait
+                           * trois mois lisait 5 000 FCFA. Elle porte maintenant
+                           * tout ce qu'il faut verser pour etre a jour -- le
+                           * meme calcul que le courrier de relance.
+                           */
+                          libelle: "Cotisations a regler",
+                          brut: cotisationsARegler(maSituation.cellules).total,
                         },
                         {
                           /*

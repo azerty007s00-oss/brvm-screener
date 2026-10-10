@@ -23,6 +23,30 @@ export type CelluleMois = {
   dateVersement: string | null;
 };
 
+/**
+ * Ce qu'il faut verser en cotisations pour etre a jour : tous les mois
+ * ouverts, du plus ancien au mois courant.
+ *
+ * LE CHIFFRE QUI MANQUAIT, A L'ACCUEIL COMME DANS LE COURRIER.
+ *
+ * Les deux annoncaient la cotisation du SEUL mois courant, et, juste a cote,
+ * la dette de penalites ENTIERE : deux chiffres poses cote a cote, calcules sur
+ * deux bases. Qui devait juillet, aout et septembre lisait 5 000 FCFA -- ceux
+ * d'octobre -- quand il lui en fallait 20 000 pour etre a jour. Et depuis que
+ * l'argent eteint la dette la plus ancienne d'abord, ces 5 000 iraient sur
+ * juillet : octobre resterait ouvert, et une penalite de plus courrait.
+ *
+ * La grille s'arrete au mois courant : la somme ne compte donc aucune avance.
+ * `manque` vaut zero sur un mois couvert, declare ou d'avant l'adhesion : un
+ * seul critere, celui de la grille, du releve et de l'imputation.
+ */
+export function cotisationsARegler(
+  cellules: readonly Pick<CelluleMois, "mois" | "manque">[],
+): { total: number; mois: string[] } {
+  const ouverts = cellules.filter((c) => c.manque > 0);
+  return { total: ouverts.reduce((t, c) => t + c.manque, 0), mois: ouverts.map((c) => c.mois) };
+}
+
 /** Ce que chaque mois porte deja, rejets exclus. */
 export function montantsParMois(versements: VersementConnu[]): Map<string, number> {
   const porte = new Map<string, number>();

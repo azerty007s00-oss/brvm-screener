@@ -6,7 +6,7 @@ import {
   type AvanceExigee, type DetteMembre, type PlanRedressement, type RegleMembre,
   type SituationClub,
 } from "@/lib/queries";
-import { phaseSeuilR5 } from "@/lib/penalites";
+import { cotisationsARegler, phaseSeuilR5 } from "@/lib/penalites";
 import { penalitesNonInscrites } from "@/lib/constat";
 import { envoyerCourriel, transportConfigure } from "@/lib/courriel";
 import {
@@ -431,6 +431,24 @@ export function texteRelance(
         })
         .join("\n"),
     );
+    /*
+     * LE TOTAL, COMME POUR LES PENALITES.
+     *
+     * Le courrier chiffrait le seul mois courant -- « votre versement de 5 000
+     * FCFA » -- puis listait les mois anterieurs sans montant, quand les
+     * penalites, elles, recevaient leur total. Le membre retenait 5 000 ; il
+     * lui en fallait 20 000. Et depuis que l'argent eteint la dette la plus
+     * ancienne d'abord, ces 5 000 iraient sur le premier mois de la liste, non
+     * sur le mois courant : il croirait avoir regle octobre, et octobre
+     * resterait ouvert.
+     *
+     * Le chiffre vient de `cotisationsARegler`, que l'accueil lit aussi : le
+     * site et le courrier ne peuvent plus annoncer deux montants differents.
+     */
+    const aJour = cotisationsARegler(situation.cellules);
+    if (aJour.total > 0) {
+      lignes.push(`Total des cotisations a regler pour etre a jour : ${fcfa(aJour.total)}.`);
+    }
 
 
     if (arrieres.length >= REGLES.declarationObligatoireApresMois) {

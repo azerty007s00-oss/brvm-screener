@@ -30,7 +30,7 @@ const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent 
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
-  prochainReglement, montantsParMois, imputer, imputerPenalites,
+  prochainReglement, montantsParMois, imputer, imputerPenalites, cotisationsARegler,
 } = await import("../.verif/penalites.mjs");
 const {
   tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa,
@@ -1455,11 +1455,70 @@ assert.deepEqual(
   "une ligne au montant unitaire nul est ecartee, non soldee gratuitement",
 );
 
+/* ------------------------------------ le total des cotisations a regler */
+
+/*
+ * LE CHIFFRE QUE L'ACCUEIL ET LE COURRIER PARTAGENT.
+ *
+ * Tous deux annoncaient la cotisation du seul mois courant, a cote d'une
+ * dette de penalites entiere. Qui devait trois mois lisait 5 000 FCFA.
+ */
+const quatreMois = ["2026-07-01", "2026-08-01", "2026-09-01", "2026-10-01"];
+const auDix = new Date("2026-10-10T07:00:00Z");
+const total = (versements, adhesion) =>
+  cotisationsARegler(situationMembre("t", quatreMois, versements, [], auDix, adhesion).cellules);
+
+// Le cas signale : juillet, aout, septembre impayes, octobre du ce jour.
+assert.deepEqual(
+  total([]),
+  { total: 20_000, mois: quatreMois },
+  "qui doit juillet a octobre doit 20 000 pour etre a jour, non les 5 000 d'octobre",
+);
+
+// Un acompte compte pour ce qu'il manque, pas pour une cotisation entiere.
+assert.equal(
+  total([ligne("2026-07-01", 2000)]).total,
+  18_000,
+  "un acompte de 2 000 sur juillet ramene le total a 18 000",
+);
+
+// Un mois declare, en attente de validation, n'est plus a regler.
+assert.equal(
+  total([ligne("2026-07-01", 5000, "en_attente")]).total,
+  15_000,
+  "un mois declare mais pas encore valide n'est pas reclame une seconde fois",
+);
+
+// Une ligne rejetee ne couvre rien : le mois reste a regler.
+assert.equal(
+  total([ligne("2026-07-01", 5000, "rejete")]).total,
+  20_000,
+  "une ligne rejetee ne diminue pas le total",
+);
+
+// Avant l'adhesion, rien n'est du.
+assert.deepEqual(
+  total([], "2026-09-01"),
+  { total: 10_000, mois: ["2026-09-01", "2026-10-01"] },
+  "les mois anterieurs a l'adhesion n'entrent pas dans le total",
+);
+
+// Tout solde : rien a regler, et une avance n'entre pas dans le compte.
+assert.deepEqual(
+  total([
+    ligne("2026-07-01", 5000), ligne("2026-08-01", 5000), ligne("2026-09-01", 5000),
+    ligne("2026-10-01", 5000), ligne("2026-11-01", 5000),
+  ]),
+  { total: 0, mois: [] },
+  "a jour, le total est nul, et l'avance de novembre ne le rend pas negatif",
+);
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
     "individuelles, retards, absences, R3, R5, relance, etats du registre, horizons, "
     + "net place et gain de gestion, reperes de l'abscisse, "
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
-    + "ordre de reglement des mois, imputation d'un versement et des penalites",
+    + "ordre de reglement des mois, imputation d'un versement et des penalites, "
+    + "total des cotisations a regler",
 );

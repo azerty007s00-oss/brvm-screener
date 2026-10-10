@@ -574,6 +574,23 @@ verifier(
  * courrier envoyait le membre vers un refus. Bourama doit aout et septembre :
  * c'est par aout qu'il reprend.
  */
+/*
+ * LE TOTAL DES COTISATIONS, COMME CELUI DES PENALITES.
+ *
+ * Le courrier chiffrait le seul mois courant -- « votre versement de 5 000
+ * FCFA pour septembre » -- puis listait aout sans montant. Les penalites, elles,
+ * recevaient leur total. Bourama doit aout et septembre : 10 000 FCFA.
+ */
+verifier(
+  /Total des cotisations a regler pour etre a jour : 10 000 FCFA\./.test(texteBourama),
+  "le courrier doit donner le total des cotisations a regler, non le seul mois courant",
+);
+verifier(
+  texteBourama.indexOf("Total des cotisations a regler") >
+    texteBourama.indexOf("Mois anterieurs encore manquants"),
+  "le total suit la liste des mois qu'il additionne",
+);
+
 verifier(
   /s'impute sur août 2026, le plus ancien/.test(texteBourama),
   "le courrier doit nommer le mois sur lequel l'argent ira, non le mois courant",
