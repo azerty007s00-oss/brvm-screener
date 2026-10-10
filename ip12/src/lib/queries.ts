@@ -803,7 +803,7 @@ async function avancesExigeesBrut(aujourdhui: Date): Promise<AvanceExigee[]> {
     .map((r) => {
       const mois = r.valeur ?? 0;
       const avanceDetenue = situations.find((x) => x.membreId === r.membreId)?.avance ?? 0;
-      const etat = etatAvance(avanceDetenue, mois, reglages.cotisationMensuelle);
+      const etat = etatAvance(avanceDetenue, mois, reglages.cotisationMensuelle, r.fin, aujourdhui);
       return {
         membreId: r.membreId,
         membreNom: r.membreNom,

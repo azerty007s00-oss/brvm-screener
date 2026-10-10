@@ -1545,6 +1545,30 @@ assert.deepEqual(
 );
 assert.equal(etatAvance(0, 3, 5000).manque, 15_000, "rien detenu : tout manque");
 
+/*
+ * L'OBLIGATION QUI S'ETEINT AVANT LA RUPTURE NE VAUT PAS PREAVIS.
+ *
+ * Le 7 novembre, au minimum : sans versement, il passerait dessous le 11. Si
+ * la regle prend fin le 10, cela n'arrivera jamais -- lui demander de verser
+ * pour la maintenir serait lui faire payer une obligation morte.
+ */
+const le7Novembre = new Date("2026-11-07T08:00:00Z");
+assert.equal(
+  etatAvance(15_000, 3, 5000, "2026-11-10", le7Novembre).auSeuil,
+  false,
+  "une regle qui s'eteint le jour de l'echeance n'appelle aucun preavis",
+);
+assert.equal(
+  etatAvance(15_000, 3, 5000, "2026-11-11", le7Novembre).auSeuil,
+  true,
+  "une regle qui dure au-dela de l'echeance l'appelle : la rupture aurait lieu",
+);
+assert.equal(
+  etatAvance(15_000, 3, 5000, "2026-11-10", le7Novembre).respectee,
+  true,
+  "l'obligation reste tenue : seul le preavis tombe",
+);
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +

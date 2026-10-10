@@ -1,4 +1,4 @@
-import { EFFET, REGLES, decalerMois, estExigible } from "./settings";
+import { EFFET, REGLES, debutMois, decalerMois, estExigible } from "./settings";
 
 export type StatutMois =
   | "paye"
@@ -65,6 +65,9 @@ export function etatAvance(
   avanceDetenue: number,
   moisExiges: number,
   cotisation: number,
+  /** Terme de l'obligation, inclus. */
+  fin: string | null = null,
+  maintenant: Date = new Date(),
 ): {
   montantExige: number;
   respectee: boolean;
@@ -74,10 +77,19 @@ export function etatAvance(
 } {
   const montantExige = moisExiges * cotisation;
   const respectee = avanceDetenue >= montantExige;
+  /*
+   * UN PREAVIS N'A DE SENS QUE SI L'OBLIGATION DURE JUSQU'A LA RUPTURE.
+   *
+   * Au seuil, c'est l'echeance du mois courant qui ferait passer sous le
+   * minimum : la rupture tomberait le lendemain. Une obligation qui s'eteint
+   * au plus tard ce jour-la ne sera jamais rompue -- avertir le membre, ce
+   * serait lui faire verser pour maintenir une avance que plus rien n'exige.
+   */
+  const dureJusquALaRupture = !fin || fin > echeanceDuMois(debutMois(maintenant));
   return {
     montantExige,
     respectee,
-    auSeuil: respectee && avanceDetenue < montantExige + cotisation,
+    auSeuil: respectee && avanceDetenue < montantExige + cotisation && dureJusquALaRupture,
     manque: Math.max(0, montantExige - avanceDetenue),
     pourMaintenir: Math.max(0, montantExige + cotisation - avanceDetenue),
   };
