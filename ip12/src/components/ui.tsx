@@ -312,7 +312,7 @@ export function CarteEtat({
        * chiffres cote a cote se comparent d'un regard, empiles ils se lisent
        * l'un apres l'autre.
        */
-      className={`apparait grid grid-cols-2 border-t border-b${rangeeUnique ? " rangee-unique" : ""}`}
+      className={`apparait grid grid-cols-2 border-t border-b${rangeeUnique ? " rangée-unique" : ""}`}
       style={{
         borderColor: "var(--line)",
         ["--colonnes" as string]: colonnes ?? chiffres.length,

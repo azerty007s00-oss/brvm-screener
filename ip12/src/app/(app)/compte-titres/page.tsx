@@ -83,7 +83,7 @@ export default async function PageCompteTitres() {
           <p className="text-xs" style={{ color: "var(--discret)" }}>
             {dateCourte(a.date_transfert)}
             {a.montant === 0
-              ? " · preleves dans le compte-titres"
+              ? " · prélevés dans le compte-titres"
               : a.frais > 0
                 ? ` · dont ${fcfa(a.frais)} de frais`
                 : ""}
@@ -106,7 +106,7 @@ export default async function PageCompteTitres() {
                 action: supprimerApport,
                 champs: <ChampCache nom="id" valeur={a.id} />,
                 confirmation:
-                  "Supprimer ce mouvement ? Il disparaitra des comptes ; le journal en gardera le detail et votre nom.",
+                  "Supprimer ce mouvement ? Il disparaîtra des comptes ; le journal en gardera le détail et votre nom.",
                 confirmer: "Supprimer",
               },
             ]}
@@ -122,7 +122,7 @@ export default async function PageCompteTitres() {
     <Panneau
       libelle="Enregistrer un mouvement"
       titre="Mouvement vers la SGI"
-      introduction="L'art. 14 confie la transmission des ordres au president, le bureau agissant par delegation : votre saisie vaut enregistrement, sans validation par un tiers."
+      introduction="L'art. 14 confie la transmission des ordres au président, le bureau agissant par délégation : votre saisie vaut enregistrement, sans validation par un tiers."
     >
         <FormulaireAction action={enregistrerApport} libelle="Enregistrer">
           <Champ
@@ -133,10 +133,10 @@ export default async function PageCompteTitres() {
           />
           <Champ
             nom="montant"
-            libelle="Montant vire (FCFA)"
+            libelle="Montant viré (FCFA)"
             type="number"
             min={0}
-            aide="Ce qui quitte la caisse, frais compris. Zero pour n'inscrire que des frais."
+            aide="Ce qui quitte la caisse, frais compris. Zéro pour n'inscrire que des frais."
           />
           <Champ
             nom="frais"
@@ -145,7 +145,7 @@ export default async function PageCompteTitres() {
             min={0}
             valeur={0}
             requis={false}
-            aide="Retenus a l'arrivee sur le virement, ou preleves seuls dans le compte-titres : laissez alors le montant a zero. Zero ici si les frais sont regles a part depuis la caisse."
+            aide="Retenus à l'arrivée sur le virement, ou prélevés seuls dans le compte-titres : laissez alors le montant à zéro. Zéro ici si les frais sont réglés à part depuis la caisse."
           />
           <Selection
             nom="sens"
@@ -154,15 +154,15 @@ export default async function PageCompteTitres() {
             options={[
               {
                 valeur: SENS_TRANSFERT.entree,
-                libelle: "Apport — de la caisse vers la SGI",
+                libelle: "Apport, de la caisse vers la SGI",
               },
               {
                 valeur: SENS_TRANSFERT.sortie,
-                libelle: "Retrait — de la SGI vers la caisse",
+                libelle: "Retrait, de la SGI vers la caisse",
               },
             ]}
           />
-          <Champ nom="note" libelle="Note ou reference" requis={false} />
+          <Champ nom="note" libelle="Note ou référence" requis={false} />
         </FormulaireAction>
     </Panneau>
   ) : null;
@@ -175,7 +175,7 @@ export default async function PageCompteTitres() {
           sous={`chez ${CLUB.sgi}`}
           brut={s.totalApports}
           unite="FCFA"
-          detail="Apports vers la societe de gestion, diminues des retraits revenus en caisse."
+          detail="Apports vers la société de gestion, diminués des retraits revenus en caisse."
         />
         <div className="sans-impression">{saisie}</div>
       </div>
@@ -185,26 +185,26 @@ export default async function PageCompteTitres() {
           { libelle: "Apports", brut: entrees.reduce((t, a) => t + a.montant, 0), unite: "FCFA" },
           { libelle: "Retraits", brut: sorties.reduce((t, a) => t + a.montant, 0), unite: "FCFA" },
           {
-            libelle: "Frais supportes",
+            libelle: "Frais supportés",
             brut: fraisTotaux,
             unite: "FCFA",
-            contexte: "Depot, SGI et banque",
+            contexte: "Dépôt, SGI et banque",
           },
         ]}
       />
 
       {fraisTotaux > 0 && (
-        <Carte titre="Ce que les frais ont coute">
+        <Carte titre="Ce que les frais ont coûte">
           <ul className="space-y-1 text-sm">
             <li className="flex justify-between gap-2">
               <span style={{ color: "var(--discret)" }}>
-                Retenus a l&apos;arrivee sur les virements
+                Retenus à l&apos;arrivée sur les virements
               </span>
               <span className="tabular-nums">{fcfa(fraisRetenus)}</span>
             </li>
             <li className="flex justify-between gap-2">
               <span style={{ color: "var(--discret)" }}>
-                Regles depuis la caisse
+                Réglés depuis la caisse
               </span>
               <span className="tabular-nums">{fcfa(fraisPayesEnCaisse)}</span>
             </li>
@@ -212,14 +212,14 @@ export default async function PageCompteTitres() {
               className="flex justify-between gap-2 border-t pt-1 font-semibold"
               style={{ borderColor: "var(--bordure)" }}
             >
-              <span>Total supporte par le club</span>
+              <span>Total supporté par le club</span>
               <span className="tabular-nums">{fcfa(fraisTotaux)}</span>
             </li>
           </ul>
           <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
-            Sur {fcfa(s.totalApports)} vires, {fcfa(netInvesti)} sont reellement
-            arrives sur le compte-titres. Le TRI porte sur le montant vire,
-            frais compris : ce sont des sommes engagees, et une performance qui
+            Sur {fcfa(s.totalApports)} virés, {fcfa(netInvesti)} sont réellement
+            arrivés sur le compte-titres. Le TRI porte sur le montant viré,
+            frais compris : ce sont des sommes engagées, et une performance qui
             les ignorerait flatterait sans rien vouloir dire.
           </p>
         </Carte>
@@ -227,7 +227,7 @@ export default async function PageCompteTitres() {
 
       <Carte titre={`Historique (${apports.length})`}>
         {apports.length === 0 ? (
-          <Vide>Aucun mouvement enregistre.</Vide>
+          <Vide>Aucun mouvement enregistré.</Vide>
         ) : (
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {entrees.map((a) => (
@@ -246,7 +246,7 @@ export default async function PageCompteTitres() {
                 <GroupeReplie
                   libelle="Retraits"
                   nombre={sorties.length}
-                  detail={`de ${dateCourte(datesSorties[0])} a ${dateCourte(datesSorties[datesSorties.length - 1])}`}
+                  detail={`de ${dateCourte(datesSorties[0])} à ${dateCourte(datesSorties[datesSorties.length - 1])}`}
                   total={
                     <span style={{ color: "var(--etat-manque)" }}>
                       &minus; {fcfa(sorties.reduce((t, a) => t + a.montant, 0))}

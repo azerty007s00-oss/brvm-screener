@@ -72,9 +72,9 @@ export const REGLE_MEMBRE = {
 
 export const MODES_AFFICHES: { valeur: string; libelle: string }[] = [
   { valeur: METHODE.mobileMoney, libelle: "Mobile Money" },
-  { valeur: METHODE.especes, libelle: "Especes" },
+  { valeur: METHODE.especes, libelle: "Espèces" },
   { valeur: METHODE.virement, libelle: "Virement" },
-  { valeur: METHODE.cheque, libelle: "Cheque" },
+  { valeur: METHODE.cheque, libelle: "Chèque" },
 ];
 
 export function libelleMode(mode: string): string {
@@ -102,15 +102,15 @@ export const CATEGORIES_DEPENSE = [
   { valeur: "impressions", libelle: "Impressions et fournitures" },
   { valeur: "frais_bancaires", libelle: "Frais bancaires" },
   { valeur: "frais_sgi", libelle: "Frais SGI" },
-  { valeur: "regularisation", libelle: "Regularisation de caisse" },
-  { valeur: "autre", libelle: "Autre depense" },
+  { valeur: "regularisation", libelle: "Régularisation de caisse" },
+  { valeur: "autre", libelle: "Autre dépense" },
 ];
 
 export const CATEGORIES_RECETTE = [
   { valeur: "versements_acquis", libelle: "Versements acquis au club (art. 18)" },
-  { valeur: "penalites_anterieures", libelle: "Penalites anterieures, detail non disponible" },
-  { valeur: "interets", libelle: "Interets et produits" },
-  { valeur: "regularisation", libelle: "Regularisation de caisse" },
+  { valeur: "penalites_anterieures", libelle: "Pénalités antérieures, détail non disponible" },
+  { valeur: "interets", libelle: "Intérêts et produits" },
+  { valeur: "regularisation", libelle: "Régularisation de caisse" },
   { valeur: "autre", libelle: "Autre recette" },
 ];
 

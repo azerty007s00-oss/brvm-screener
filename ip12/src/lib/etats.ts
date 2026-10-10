@@ -12,13 +12,13 @@ import type { CelluleMois, StatutMois } from "./penalites";
  */
 
 export const LIBELLE_STATUT: Record<StatutMois, string> = {
-  paye: "Paye",
-  paye_en_retard: "Paye en retard",
+  paye: "Payé",
+  paye_en_retard: "Payé en retard",
   en_attente: "En attente",
   partiel: "Incomplet",
   retard: "En retard",
-  a_venir: "A venir",
-  hors_periode: "Hors periode",
+  a_venir: "À venir",
+  hors_periode: "Hors période",
 };
 
 /** Les six etats qui figurent en legende : « hors periode » n'est rien a montrer. */
@@ -32,8 +32,8 @@ export const STATUTS_LEGENDE: StatutMois[] = [
 ];
 
 const MOIS_COURTS = [
-  "janv.", "fevr.", "mars", "avr.", "mai", "juin",
-  "juil.", "aout", "sept.", "oct.", "nov.", "dec.",
+  "janv.", "févr.", "mars", "avr.", "mai", "juin",
+  "juil.", "août", "sept.", "oct.", "nov.", "déc.",
 ];
 
 /** « sept. » plutot que « septembre 2026 » : une frise n'a pas la place. */
@@ -101,7 +101,7 @@ export function statutLigne(cellules: CelluleMois[]): {
     .map((c) => moisCourt(c.mois));
 
   return {
-    texte: avance.length > 0 ? `A jour, avance ${avance.at(-1)}` : "A jour",
+    texte: avance.length > 0 ? `À jour, avance ${avance.at(-1)}` : "À jour",
     encre: "var(--vert-encre)",
   };
 }

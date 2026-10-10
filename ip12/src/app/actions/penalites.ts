@@ -84,7 +84,7 @@ export async function constaterPenalitesAbsence(
        * les tranches d'un rattrapage sembleraient nees le meme jour.
        */
       const naissance = a.datesInjustifiees[t.absenceDeclenchante - 1] ?? null;
-      const motif = `Absence en reunion — ${t.absenceDeclenchante} absences injustifiees (tranche ${t.rang})`;
+      const motif = `Absence en réunion : ${t.absenceDeclenchante} absences injustifiées (tranche ${t.rang})`;
 
       if (naissance) {
         await sql`
@@ -125,15 +125,15 @@ export async function constaterPenalitesAbsence(
 
   const reste =
     infondees > 0
-      ? ` ${infondees} tranche${infondees > 1 ? "s" : ""} au registre n'${infondees > 1 ? "ont" : "a"} plus de fondement depuis qu'une absence a ete excusee : a annuler a la main.`
+      ? ` ${infondees} tranche${infondees > 1 ? "s" : ""} au registre n'${infondees > 1 ? "ont" : "a"} plus de fondement depuis qu'une absence a été excusée : à annuler à la main.`
       : "";
 
   if (creees === 0) {
-    return { ok: true, message: `Aucune nouvelle tranche d'absences a constater.${reste}` };
+    return { ok: true, message: `Aucune nouvelle tranche d'absences à constater.${reste}` };
   }
   return {
     ok: true,
-    message: `${creees} penalite${creees > 1 ? "s" : ""} d'absence constatee${creees > 1 ? "s" : ""}.${reste}`,
+    message: `${creees} pénalité${creees > 1 ? "s" : ""} d'absence constatée${creees > 1 ? "s" : ""}.${reste}`,
   };
 }
 
@@ -151,7 +151,7 @@ export async function ajouterPenalite(
   const dateConstat = String(donnees.get("dateConstat") ?? "").slice(0, 10);
 
   if (!membreId) return { ok: false, erreur: "Membre introuvable." };
-  if (!NATURES.includes(nature)) return { ok: false, erreur: "Nature de penalite inconnue." };
+  if (!NATURES.includes(nature)) return { ok: false, erreur: "Nature de pénalité inconnue." };
   if (!Number.isFinite(montantUnitaire) || montantUnitaire <= 0) {
     return { ok: false, erreur: "Montant invalide." };
   }
@@ -171,7 +171,7 @@ export async function ajouterPenalite(
     { membreId, nature, montant: Math.round(quantite) * Math.round(montantUnitaire) },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Penalite enregistree." };
+  return { ok: true, message: "Pénalité enregistrée." };
 }
 
 /**
@@ -206,7 +206,7 @@ async function soldeLigne(
     created_by: string;
     incurred_on: string;
   }[];
-  if (lignes.length === 0) return { ok: false, erreur: "Penalite introuvable ou deja soldee." };
+  if (lignes.length === 0) return { ok: false, erreur: "Pénalité introuvable ou déjà soldée." };
 
   const ligne = lignes[0];
   const restant = Number(ligne.quantity);
@@ -221,7 +221,7 @@ async function soldeLigne(
    * refuser d'agir que d'ecrire un nombre qui n'en est pas un.
    */
   if (!Number.isInteger(restant) || restant < 1) {
-    return { ok: false, erreur: "Quantite de la penalite illisible : rien n'a ete modifie." };
+    return { ok: false, erreur: "Quantité de la pénalité illisible : rien n'a été modifié." };
   }
 
   /*
@@ -247,7 +247,7 @@ async function soldeLigne(
       returning id
     `;
     if (faites.length === 0) {
-      return { ok: false, erreur: "La ligne a change entre-temps : rouvrez la page et reprenez." };
+      return { ok: false, erreur: "La ligne a changé entre-temps : rouvrez la page et reprenez." };
     }
     return { ok: true, quantite, reste: 0, montant: quantite * unitaire };
   }
@@ -266,7 +266,7 @@ async function soldeLigne(
     returning id
   `;
   if (ajuste.length === 0) {
-    return { ok: false, erreur: "La ligne a change entre-temps : rouvrez la page et reprenez." };
+    return { ok: false, erreur: "La ligne a changé entre-temps : rouvrez la page et reprenez." };
   }
   await sql`
     insert into penalties
@@ -302,8 +302,8 @@ export async function reglerPenalite(
     ok: true,
     message:
       issue.reste === 0
-        ? `Penalite soldee : ${issue.quantite} mois regle(s).`
-        : `${issue.quantite} mois regle(s). Il reste ${issue.reste} mois dû(s) sur cette ligne.`,
+        ? `Pénalité soldée : ${issue.quantite} mois réglé(s).`
+        : `${issue.quantite} mois réglé(s). Il reste ${issue.reste} mois dû(s) sur cette ligne.`,
   };
 }
 
@@ -324,7 +324,7 @@ export async function annulerPenalite(
     where id = ${id}::uuid and status = ${STATUT_PENALITE.due}
     returning id
   `;
-  if (rows.length === 0) return { ok: false, erreur: "Penalite introuvable ou deja soldee." };
+  if (rows.length === 0) return { ok: false, erreur: "Pénalité introuvable ou déjà soldée." };
 
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
@@ -333,7 +333,7 @@ export async function annulerPenalite(
     { motif },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Penalite annulee." };
+  return { ok: true, message: "Pénalité annulée." };
 }
 
 /**
@@ -355,7 +355,7 @@ export async function rouvrirPenalite(
   const auteur = await exigerDroit("gererPenalites");
   const id = String(donnees.get("id") ?? "");
   const motif = String(donnees.get("motif") ?? "").trim();
-  if (!motif) return { ok: false, erreur: "Indiquez pourquoi cette penalite redevient due." };
+  if (!motif) return { ok: false, erreur: "Indiquez pourquoi cette pénalité redevient due." };
 
   const sql = db();
   const rows = (await sql`
@@ -366,7 +366,7 @@ export async function rouvrirPenalite(
     returning id, quantity, unit_amount
   `) as { id: string; quantity: number; unit_amount: number | string }[];
   if (rows.length === 0) {
-    return { ok: false, erreur: "Penalite introuvable, ou deja due : il n'y a rien a reprendre." };
+    return { ok: false, erreur: "Pénalité introuvable, ou déjà due : il n'y a rien à reprendre." };
   }
 
   await journaliser(
@@ -376,7 +376,7 @@ export async function rouvrirPenalite(
     { motif, quantite: rows[0].quantity, montant: Number(rows[0].unit_amount) * rows[0].quantity },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Penalite remise en dû." };
+  return { ok: true, message: "Pénalité remise en dû." };
 }
 
 /* ------------------------------------ reglement declare par le membre */
@@ -428,12 +428,12 @@ export async function declarerReglementPenalite(
     return {
       ok: false,
       erreur:
-        "Une penalite ne se declare que pour soi. Pour un autre membre, soldez-la " +
-        "depuis la page Penalites : votre saisie y vaut validation.",
+        "Une pénalité ne se déclare que pour soi. Pour un autre membre, soldez-la " +
+        "depuis la page Pénalités : votre saisie y vaut validation.",
     };
   }
   if (!Number.isFinite(montant) || montant <= 0) {
-    return { ok: false, erreur: "Indiquez le montant verse." };
+    return { ok: false, erreur: "Indiquez le montant versé." };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(datePaiement)) {
     return { ok: false, erreur: "Date de paiement invalide." };
@@ -485,13 +485,13 @@ export async function declarerReglementPenalite(
       ok: false,
       erreur:
         !nonInscrites || nonInscrites.nb === 0
-          ? "Vous n'avez aucune penalite due."
+          ? "Vous n'avez aucune pénalité due."
           : nonInscrites.nb === 1
-            ? "Votre penalite n'est pas encore portee au registre : elle le sera au prochain " +
-              "constat, qui a lieu a chaque relance. Le tresorier peut aussi la porter des maintenant."
-            : `Vos ${nonInscrites.nb} penalites ne sont pas encore portees au registre : elles le ` +
-              "seront au prochain constat, qui a lieu a chaque relance. Le tresorier peut aussi " +
-              "les porter des maintenant.",
+            ? "Votre pénalité n'est pas encore portée au registre : elle le sera au prochain " +
+              "constat, qui a lieu à chaque relance. Le trésorier peut aussi la porter dès maintenant."
+            : `Vos ${nonInscrites.nb} pénalités ne sont pas encore portées au registre : elles le ` +
+              "seront au prochain constat, qui a lieu à chaque relance. Le trésorier peut aussi " +
+              "les porter dès maintenant.",
     };
   }
 
@@ -520,26 +520,26 @@ export async function declarerReglementPenalite(
       return {
         ok: false,
         erreur:
-          "Toutes vos penalites portent deja une declaration en attente : le tresorier " +
+          "Toutes vos pénalités portent déjà une déclaration en attente : le trésorier " +
           "doit d'abord se prononcer.",
       };
     }
     const plusPetite = Math.min(...libres.map((d) => Number(d.unit_amount)));
     return {
       ok: false,
-      erreur: `Ce montant ne couvre aucune penalite entiere : la plus petite est de ${fcfa(plusPetite)}.`,
+      erreur: `Ce montant ne couvre aucune pénalité entière : la plus petite est de ${fcfa(plusPetite)}.`,
     };
   }
   if (impute < montant) {
     return {
       ok: false,
       erreur:
-        `Une penalite se regle entiere : ce versement en couvre ${fcfa(impute)}. ` +
-        `Declarez ${fcfa(impute)}` +
+        `Une pénalité se règle entière : ce versement en couvre ${fcfa(impute)}. ` +
+        `Déclarez ${fcfa(impute)}` +
         (nonInscrites && nonInscrites.nb > 0
-          ? `. Le reste de votre dette — ${nonInscrites.nb} ${accorde(nonInscrites.nb, "penalite")} — ` +
-            "n'est pas encore porte au registre, et ne peut donc pas etre regle pour l'instant."
-          : ", et gardez la difference pour une cotisation."),
+          ? `. Le reste de votre dette (${nonInscrites.nb} ${accorde(nonInscrites.nb, "pénalité")}) ` +
+            "n'est pas encore porté au registre, et ne peut donc pas être réglé pour l'instant."
+          : ", et gardez la différence pour une cotisation."),
     };
   }
 
@@ -570,8 +570,8 @@ export async function declarerReglementPenalite(
     return {
       ok: false,
       erreur:
-        "Une declaration vient d'etre posee sur ces penalites : rouvrez la page pour voir " +
-        "ou vous en etes.",
+        "Une déclaration vient d'être posée sur ces pénalités : rouvrez la page pour voir " +
+        "ou vous en êtes.",
     };
   }
 
@@ -596,9 +596,9 @@ export async function declarerReglementPenalite(
   return {
     ok: true,
     message:
-      `Reglement de ${fcfa(total)} declare sur ${quantite} ${accorde(quantite, "penalite")}, ` +
-      "de la plus ancienne a la plus recente. En attente de validation par le tresorier : " +
-      "les penalites restent dues jusque-la.",
+      `Règlement de ${fcfa(total)} déclaré sur ${quantite} ${accorde(quantite, "pénalité")}, ` +
+      "de la plus ancienne à la plus récente. En attente de validation par le trésorier : " +
+      "les pénalités restent dues jusque-là.",
   };
 }
 
@@ -625,7 +625,7 @@ export async function validerReglementPenalite(
 ): Promise<EtatFormulaire> {
   const auteur = await exigerDroit("gererPenalites");
   const { lot, id } = cibleDeclaration(donnees);
-  if (!lot && !id) return { ok: false, erreur: "Declaration introuvable." };
+  if (!lot && !id) return { ok: false, erreur: "Déclaration introuvable." };
 
   const sql = db();
   /* De la plus ancienne penalite a la plus recente, comme a l'imputation. */
@@ -643,7 +643,7 @@ export async function validerReglementPenalite(
     declared_by: string; paid_on: string; method: string;
   }[];
   if (declarations.length === 0) {
-    return { ok: false, erreur: "Declaration introuvable ou deja examinee." };
+    return { ok: false, erreur: "Déclaration introuvable ou déjà examinée." };
   }
 
   /*
@@ -656,7 +656,7 @@ export async function validerReglementPenalite(
   if (declarations.some((d) => String(d.declared_by) === auteur.id)) {
     return {
       ok: false,
-      erreur: "Vous ne pouvez pas valider votre propre declaration : le president s'en charge.",
+      erreur: "Vous ne pouvez pas valider votre propre déclaration : le président s'en charge.",
     };
   }
 
@@ -666,8 +666,8 @@ export async function validerReglementPenalite(
   const echecs: string[] = [];
   for (const declaration of declarations) {
     const note =
-      `Regle le ${dateCourte(declaration.paid_on)} par ${libelleMode(declaration.method)}, ` +
-      "declare par le membre";
+      `Réglé le ${dateCourte(declaration.paid_on)} par ${libelleMode(declaration.method)}, ` +
+      "déclaré par le membre";
     const issue = await soldeLigne(
       String(declaration.penalty_id),
       Number(declaration.quantity),
@@ -704,18 +704,18 @@ export async function validerReglementPenalite(
       ok: false,
       erreur:
         (soldees > 0
-          ? `${soldees} ${accorde(soldees, "penalite")} ${accorde(soldees, "soldee")} ; `
+          ? `${soldees} ${accorde(soldees, "pénalité")} ${accorde(soldees, "soldée")} ; `
           : "") +
-        `${echecs.length} ${accorde(echecs.length, "declaration")} non ` +
-        `${accorde(echecs.length, "validee")} : ${echecs.join(" ; ")}`,
+        `${echecs.length} ${accorde(echecs.length, "déclaration")} non ` +
+        `${accorde(echecs.length, "validée")} : ${echecs.join(" ; ")}`,
     };
   }
   return {
     ok: true,
     message:
-      `Reglement valide : ${soldees} ${accorde(soldees, "penalite")} ` +
-      `${accorde(soldees, "soldee")}, ${fcfa(montant)}` +
-      (resteDu > 0 ? `. Il reste ${resteDu} ${accorde(resteDu, "penalite")} ${accorde(resteDu, "due")}.` : "."),
+      `Règlement validé : ${soldees} ${accorde(soldees, "pénalité")} ` +
+      `${accorde(soldees, "soldée")}, ${fcfa(montant)}` +
+      (resteDu > 0 ? `. Il reste ${resteDu} ${accorde(resteDu, "pénalité")} ${accorde(resteDu, "due")}.` : "."),
   };
 }
 
@@ -727,7 +727,7 @@ export async function rejeterReglementPenalite(
   const auteur = await exigerDroit("gererPenalites");
   const { lot, id } = cibleDeclaration(donnees);
   const motif = String(donnees.get("motif") ?? "").trim() || null;
-  if (!lot && !id) return { ok: false, erreur: "Declaration introuvable." };
+  if (!lot && !id) return { ok: false, erreur: "Déclaration introuvable." };
 
   const sql = db();
   /* Un transfert non recu l'est pour toutes les lignes qu'il pretendait regler. */
@@ -740,7 +740,7 @@ export async function rejeterReglementPenalite(
       and (${id}::uuid is null or id = ${id}::uuid)
     returning id
   `) as { id: string }[];
-  if (faites.length === 0) return { ok: false, erreur: "Declaration introuvable ou deja examinee." };
+  if (faites.length === 0) return { ok: false, erreur: "Déclaration introuvable ou déjà examinée." };
 
   for (const f of faites) {
     await journaliser(
@@ -755,7 +755,7 @@ export async function rejeterReglementPenalite(
     ok: true,
     message:
       faites.length === 1
-        ? "Declaration refusee : la penalite reste due."
-        : `Reglement refuse : les ${faites.length} penalites restent dues.`,
+        ? "Déclaration refusée : la pénalité reste due."
+        : `Règlement refusé : les ${faites.length} pénalités restent dues.`,
   };
 }

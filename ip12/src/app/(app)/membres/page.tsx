@@ -37,15 +37,15 @@ export default async function PageMembres() {
     <Panneau
       libelle="Nouveau profil"
       titre="Ajouter un membre"
-      introduction={`Un mot de passe provisoire est genere : transmettez-le au membre, qui devra le remplacer a sa premiere connexion. Statuts : de ${CLUB.membresMin} a ${CLUB.membresMax} membres.`}
+      introduction={`Un mot de passe provisoire est généré : transmettez-le au membre, qui devra le remplacer à sa première connexion. Statuts : de ${CLUB.membresMin} à ${CLUB.membresMax} membres.`}
     >
-        <FormulaireAction action={creerMembre} libelle="Creer le profil">
-          <Champ nom="nom" libelle="Nom et prenoms" />
+        <FormulaireAction action={creerMembre} libelle="Créer le profil">
+          <Champ nom="nom" libelle="Nom et prénoms" />
           <Champ nom="email" libelle="Adresse e-mail" type="email" />
-          <Champ nom="telephone" libelle="Telephone" requis={false} />
-          <Champ nom="titre" libelle="Intitule (facultatif)" requis={false} />
-          <Selection nom="role" libelle="Role" valeur="membre" options={OPTIONS_ROLE} />
-          <Champ nom="dateAdhesion" libelle="Date d'adhesion" type="date" valeur={CLUB.dateCreation} />
+          <Champ nom="telephone" libelle="Téléphone" requis={false} />
+          <Champ nom="titre" libelle="Intitulé (facultatif)" requis={false} />
+          <Selection nom="role" libelle="Rôle" valeur="membre" options={OPTIONS_ROLE} />
+          <Champ nom="dateAdhesion" libelle="Date d'adhésion" type="date" valeur={CLUB.dateCreation} />
         </FormulaireAction>
     </Panneau>
   ) : null;
@@ -68,7 +68,7 @@ export default async function PageMembres() {
 
       <Carte titre={`Effectif (${membres.filter((m) => m.actif).length} / ${CLUB.membresMax})`}>
         {membres.length === 0 ? (
-          <Vide>Aucun membre enregistre.</Vide>
+          <Vide>Aucun membre enregistré.</Vide>
         ) : (
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {membres.map((m) => {
@@ -89,12 +89,12 @@ export default async function PageMembres() {
                       </p>
                       <p className="truncate text-xs" style={{ color: "var(--discret)" }}>
                         {m.email}
-                        {m.telephone ? ` · ${m.telephone}` : ""} &middot; adhesion{" "}
+                        {m.telephone ? ` · ${m.telephone}` : ""} &middot; adhésion{" "}
                         {dateCourte(m.date_adhesion)}
                       </p>
                       {part && (
                         <p className="mt-0.5 text-xs" style={{ color: "var(--discret)" }}>
-                          Verse {fcfa(part.verse)} &middot; part{" "}
+                          Versé {fcfa(part.verse)} &middot; part{" "}
                           {(part.part * 100).toFixed(1).replace(".", ",")} % &middot; valeur{" "}
                           {fcfa(part.valeur)}
                         </p>
@@ -111,39 +111,39 @@ export default async function PageMembres() {
                           lineHeight: "30px",
                         }}
                       >
-                        Releve
+                        Relevé
                       </Link>
                     )}
                   </div>
 
                   {estPresident && (
                     <div className="mt-2">
-                      <Depliant titre="Gerer">
+                      <Depliant titre="Gérer">
                         <FormulaireAction action={modifierMembre} libelle="Enregistrer les modifications">
                           <ChampCache nom="id" valeur={m.id} />
                           <Champ nom="nom" libelle="Nom" valeur={m.nom} />
                           <Champ nom="email" libelle="E-mail" type="email" valeur={m.email} />
-                          <Champ nom="telephone" libelle="Telephone" valeur={m.telephone ?? ""} requis={false} />
-                          <Champ nom="titre" libelle="Intitule" valeur={m.titre ?? ""} requis={false} />
-                          <Selection nom="role" libelle="Role" valeur={m.role} options={OPTIONS_ROLE} />
+                          <Champ nom="telephone" libelle="Téléphone" valeur={m.telephone ?? ""} requis={false} />
+                          <Champ nom="titre" libelle="Intitulé" valeur={m.titre ?? ""} requis={false} />
+                          <Selection nom="role" libelle="Rôle" valeur={m.role} options={OPTIONS_ROLE} />
                         </FormulaireAction>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <FormulaireAction
                             action={reinitialiserMotDePasse}
-                            libelle="Reinitialiser le mot de passe"
+                            libelle="Réinitialiser le mot de passe"
                             variante="discret"
                             compact
-                            confirmation={`Generer un nouveau mot de passe provisoire pour ${m.nom} ?`}
+                            confirmation={`Générer un nouveau mot de passe provisoire pour ${m.nom} ?`}
                           >
                             <ChampCache nom="id" valeur={m.id} />
                           </FormulaireAction>
                           {m.id !== membre.id && (
                             <FormulaireAction
                               action={basculerActivite}
-                              libelle={m.actif ? "Desactiver" : "Reactiver"}
+                              libelle={m.actif ? "Désactiver" : "Réactiver"}
                               variante="danger"
                               compact
-                              confirmation={`${m.actif ? "Desactiver" : "Reactiver"} ${m.nom} ?`}
+                              confirmation={`${m.actif ? "Désactiver" : "Réactiver"} ${m.nom} ?`}
                             >
                               <ChampCache nom="id" valeur={m.id} />
                             </FormulaireAction>

@@ -340,12 +340,12 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
     d.avanceManquante === null &&
     !d.avanceAuSeuil;
   if (rienDu && d.avanceFinissante?.fin && annonceFinAvance(d, maintenant)) {
-    return `${CLUB.sigle} — fin de votre mesure d'avance le ${dateCourte(d.avanceFinissante.fin)}`;
+    return `${CLUB.sigle} : fin de votre mesure d'avance le ${dateCourte(d.avanceFinissante.fin)}`;
   }
   if (rienDu && d.regles.length > 0) {
-    return `${CLUB.sigle} — rappel de votre regime particulier`;
+    return `${CLUB.sigle} : rappel de votre régime particulier`;
   }
-  if (d.avanceManquante) return `${CLUB.sigle} — avance obligatoire non constituee`;
+  if (d.avanceManquante) return `${CLUB.sigle} : avance obligatoire non constituée`;
   /*
    * Le preavis passe apres tout ce qui est du : un membre en retard lit
    * d'abord son retard. Seul, il dit ce qu'il est -- un avertissement, non un
@@ -357,7 +357,7 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
     d.echeanceDuJour === null &&
     d.dette.nb === 0
   ) {
-    return `${CLUB.sigle} — votre avance obligatoire arrive au minimum`;
+    return `${CLUB.sigle} : votre avance obligatoire arrive au minimum`;
   }
   /*
    * Le plan vient apres l'avance non tenue -- celle-ci est un manquement, celui-la
@@ -365,7 +365,7 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
    * c'est le courrier qu'il faut ouvrir.
    */
   if (d.plan && d.arrieres.length > 0) {
-    return `${CLUB.sigle} — plan de redressement : ${d.arrieres.length} mois a regulariser`;
+    return `${CLUB.sigle} : plan de redressement : ${d.arrieres.length} mois à régulariser`;
   }
   /*
    * LE COMPTE DES MOIS EN RETARD, PAS CELUI DES MOIS ANTERIEURS.
@@ -378,7 +378,7 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
    */
   if (d.arrieres.length > 0) {
     const n = d.situation.moisEnRetard.length;
-    return `${CLUB.sigle} — versement en retard (${n} mois)`;
+    return `${CLUB.sigle} : versement en retard (${n} mois)`;
   }
   /*
    * L'objet annonce la dette inscrite, toutes natures, et non le seul decompte
@@ -392,15 +392,15 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
      * Le nombre est connu au moment d'ecrire la phrase.
      */
     const n = d.dette.nb;
-    return `${CLUB.sigle} — ${n} ${accorde(n, "penalite")} ${accorde(n, "impayee")}`;
+    return `${CLUB.sigle} : ${n} ${accorde(n, "pénalité")} ${accorde(n, "impayée")}`;
   }
   const ou = etatEcheance(maintenant);
   if (ou === "a_venir") {
-    return `${CLUB.sigle} — versement ${deMois(moisCourant)} attendu le ${REGLES.jourEcheance}`;
+    return `${CLUB.sigle} : versement ${deMois(moisCourant)} attendu le ${REGLES.jourEcheance}`;
   }
   return ou === "aujourdhui"
-    ? `${CLUB.sigle} — votre versement ${deMois(moisCourant)} est du aujourd'hui`
-    : `${CLUB.sigle} — votre versement ${deMois(moisCourant)} est en retard`;
+    ? `${CLUB.sigle} : votre versement ${deMois(moisCourant)} est dû aujourd'hui`
+    : `${CLUB.sigle} : votre versement ${deMois(moisCourant)} est en retard`;
 }
 
 export function texteRelance(
@@ -433,8 +433,8 @@ export function texteRelance(
   if (rienDu) {
     lignes.push(
       "",
-      "Vous etes a jour de vos versements et de vos penalites : ce courrier ne vous " +
-        "reclame rien. Il rappelle les regles particulieres qui vous sont applicables, " +
+      "Vous êtes à jour de vos versements et de vos pénalités : ce courrier ne vous " +
+        "réclame rien. Il rappelle les règles particulières qui vous sont applicables, " +
         "pour qu'aucune ne vous surprenne.",
     );
   }
@@ -453,9 +453,9 @@ export function texteRelance(
     const du = cellule && cellule.requis > 0 ? cellule.manque : REGLES.cotisationMensuelle;
     const rappelAcompte =
       dejaVerse > 0
-        ? ` Vous avez deja verse ${fcfa(dejaVerse)} sur ${fcfa(cellule?.requis ?? 0)} : ` +
-          "le mois n'est solde qu'au dernier franc, et la penalite de l'art. 9 porte " +
-          "sur la cotisation entiere."
+        ? ` Vous avez déjà versé ${fcfa(dejaVerse)} sur ${fcfa(cellule?.requis ?? 0)} : ` +
+          "le mois n'est soldé qu'au dernier franc, et la pénalité de l'art. 9 porte " +
+          "sur la cotisation entière."
         : "";
     lignes.push(
       "",
@@ -472,11 +472,11 @@ export function texteRelance(
           `(art. 8) : il vous reste ${reste} jour${reste > 1 ? "s" : ""}.`
         : ou === "aujourdhui"
           ? `Votre versement de ${fcfa(du)} pour ` +
-            `${moisLong(echeanceDuJour)} est du aujourd'hui, dernier jour de l'echeance ` +
+            `${moisLong(echeanceDuJour)} est dû aujourd'hui, dernier jour de l'échéance ` +
             "statutaire (art. 8)."
           : `Votre versement de ${fcfa(du)} pour ` +
-            `${moisLong(echeanceDuJour)} etait du le ${REGLES.jourEcheance} (art. 8) : ` +
-            `il est en retard de ${-reste} jour${-reste > 1 ? "s" : ""}, et la penalite ` +
+            `${moisLong(echeanceDuJour)} était dû le ${REGLES.jourEcheance} (art. 8) : ` +
+            `il est en retard de ${-reste} jour${-reste > 1 ? "s" : ""}, et la pénalité ` +
             "de l'art. 9 court.") + rappelAcompte,
     );
   }
@@ -491,7 +491,7 @@ export function texteRelance(
        * un seul mois sous un titre qui disait les contenir tous, et pouvait
        * croire septembre solde.
        */
-      echeanceDuJour ? "Mois anterieurs encore manquants :" : "Versements encore manquants :",
+      echeanceDuJour ? "Mois antérieurs encore manquants :" : "Versements encore manquants :",
       /*
        * Le detail du mois entame : dire « septembre » a qui a deja verse 2 000
        * le laisserait croire a une erreur du site. Le montant qui manque leve
@@ -501,7 +501,7 @@ export function texteRelance(
         .map((m) => {
           const c = situation.cellules.find((x) => x.mois === m);
           return c && c.montant > 0
-            ? `  - ${moisLong(m)} : ${fcfa(c.montant)} verses sur ${fcfa(c.requis)}, il manque ${fcfa(c.manque)}`
+            ? `  - ${moisLong(m)} : ${fcfa(c.montant)} versés sur ${fcfa(c.requis)}, il manque ${fcfa(c.manque)}`
             : `  - ${moisLong(m)}`;
         })
         .join("\n"),
@@ -522,23 +522,23 @@ export function texteRelance(
      */
     const aJour = cotisationsARegler(situation.cellules);
     if (aJour.total > 0) {
-      lignes.push(`Total des cotisations a regler pour etre a jour : ${fcfa(aJour.total)}.`);
+      lignes.push(`Total des cotisations à régler pour être à jour : ${fcfa(aJour.total)}.`);
     }
 
 
     if (arrieres.length >= REGLES.declarationObligatoireApresMois) {
       lignes.push(
         "",
-        "Rappel R3 : a partir du 2e mois de retard, vous devez declarer votre situation sur le " +
+        "Rappel R3 : à partir du 2e mois de retard, vous devez déclarer votre situation sur le " +
           "groupe WhatsApp du club en taguant tous les membres, au plus tard le lendemain. " +
-          "Cette declaration conditionne votre droit au plan de redressement prevu par R5.",
+          "Cette déclaration conditionne votre droit au plan de redressement prévu par R5.",
       );
     }
     if (arrieres.length >= REGLES.doublementApresMois) {
       lignes.push(
         "",
-        "Rappel R4 : au-dela de 3 mois de retard, les penalites des 3 derniers mois sont doublees " +
-          "(de 30 % a 60 % du versement du).",
+        "Rappel R4 : au-delà de 3 mois de retard, les pénalités des 3 derniers mois sont doublées " +
+          "(de 30 % à 60 % du versement dû).",
       );
     }
     /*
@@ -556,9 +556,9 @@ export function texteRelance(
     if (situation.joursDeRetard >= REGLES.suspensionVoteApresJours) {
       lignes.push(
         "",
-        `Rappel R2 : votre plus ancien mois impaye date de ${situation.joursDeRetard} jours. ` +
-          `Au-dela de ${REGLES.suspensionVoteApresJours} jours de retard, le droit de vote est ` +
-          "suspendu : le votre l'est donc des a present, jusqu'a regularisation complete.",
+        `Rappel R2 : votre plus ancien mois impayé date de ${situation.joursDeRetard} jours. ` +
+          `Au-delà de ${REGLES.suspensionVoteApresJours} jours de retard, le droit de vote est ` +
+          "suspendu : le vôtre l'est donc dès à présent, jusqu'à régularisation complète.",
       );
     }
   }
@@ -610,17 +610,17 @@ export function texteRelance(
        */
       lignes.push(
         autres > 0 && dette.nbRetard > 0
-          ? `Penalites impayees inscrites a votre compte : ${dette.nb}, pour un total de ` +
-            `${fcfa(dette.montant)} — dont ${dette.nbRetard} de retard ` +
+          ? `Pénalités impayées inscrites à votre compte : ${dette.nb}, pour un total de ` +
+            `${fcfa(dette.montant)}, dont ${dette.nbRetard} de retard ` +
             `(${fcfa(dette.montantRetard)}) et ${autres} d'absence ou autre ` +
             `(${fcfa(montantAutres)}).`
           : autres > 0
-            ? `${accorde(autres, "Penalite")} d'absence ou autre, ` +
-              `${accorde(autres, "inscrite")} a votre compte : ${autres}, ` +
+            ? `${accorde(autres, "Pénalité")} d'absence ou autre, ` +
+              `${accorde(autres, "inscrite")} à votre compte : ${autres}, ` +
               `pour un total de ${fcfa(montantAutres)}.`
-            : `${accorde(dette.nbRetard, "Penalite")} de retard ` +
-              `${accorde(dette.nbRetard, "impayee")}, ` +
-              `${accorde(dette.nbRetard, "inscrite")} a votre compte : ${dette.nbRetard}, ` +
+            : `${accorde(dette.nbRetard, "Pénalité")} de retard ` +
+              `${accorde(dette.nbRetard, "impayée")}, ` +
+              `${accorde(dette.nbRetard, "inscrite")} à votre compte : ${dette.nbRetard}, ` +
               `pour un total de ${fcfa(dette.montantRetard)}.`,
       );
     }
@@ -642,8 +642,8 @@ export function texteRelance(
     if (nonInscrites.montant > 0) {
       const combien =
         nonInscrites.nb > 1
-          ? `${nonInscrites.nb} mois encore impayes`
-          : "un mois encore impaye";
+          ? `${nonInscrites.nb} mois encore impayés`
+          : "un mois encore impayé";
       /*
        * « PAS ENCORE PORTEE A VOTRE COMPTE » NE REGARDE PAS LE MEMBRE.
        *
@@ -656,13 +656,13 @@ export function texteRelance(
        */
       lignes.push(
         dette.nb > 0
-          ? `S'y ajoute la penalite de l'art. 9 sur ${combien} : ` +
+          ? `S'y ajoute la pénalité de l'art. 9 sur ${combien} : ` +
             `${fcfa(nonInscrites.montant)}.`
-          : `Penalite de l'art. 9 sur ${combien} : ${fcfa(nonInscrites.montant)}.`,
+          : `Pénalité de l'art. 9 sur ${combien} : ${fcfa(nonInscrites.montant)}.`,
       );
       if (dette.nb > 0) {
         lignes.push(
-          `Total des penalites dues a ce jour : ${fcfa(dette.montant + nonInscrites.montant)}.`,
+          `Total des pénalités dues à ce jour : ${fcfa(dette.montant + nonInscrites.montant)}.`,
         );
       }
     }
@@ -683,17 +683,17 @@ export function texteRelance(
      */
     if (plan && phase !== "sous_le_seuil") {
       lignes.push(
-        `Vos ${dette.nbRetard} penalites de retard impayees atteignent le seuil de ${seuil} ` +
-          "fixe par l'assemblee. Elles entrent dans le plan de redressement detaille " +
-          "plus bas : l'exclusion de plein droit est ecartee tant que vous en tenez " +
+        `Vos ${dette.nbRetard} pénalités de retard impayées atteignent le seuil de ${seuil} ` +
+          "fixé par l'assemblée. Elles entrent dans le plan de redressement détaillé " +
+          "plus bas : l'exclusion de plein droit est écartée tant que vous en tenez " +
           "les termes.",
       );
     } else if (phase === "atteint_en_vigueur") {
       lignes.push(
-        `Vos penalites de retard atteignent le seuil de ${seuil} fixe par l'assemblee : ` +
-          "les penalites etant " +
+        `Vos pénalités de retard atteignent le seuil de ${seuil} fixé par l'assemblée : ` +
+          "les pénalités étant " +
           `indissociables des cotisations depuis le ${dateCourte(effet)}, l'exclusion est ` +
-          "encourue de plein droit (R5), meme si vos cotisations sont a jour.",
+          "encourue de plein droit (R5), même si vos cotisations sont à jour.",
       );
     } else if (phase === "atteint_avant_effet") {
       lignes.push(
@@ -702,11 +702,11 @@ export function texteRelance(
          * porte trois -- le total, les retards, les absences -- et que le seuil
          * ne compte que les retards. On le nomme.
          */
-        `Vos ${dette.nbRetard} penalites de retard impayees atteignent deja le seuil de ` +
-          `${seuil} fixe par l'assemblee. A compter du ` +
-          `${dateCourte(effet)}, les penalites deviendront indissociables des cotisations et ` +
-          "ce cumul emportera l'exclusion de plein droit (R5), meme si vos cotisations sont " +
-          "a jour. Vous avez jusque-la pour regulariser.",
+        `Vos ${dette.nbRetard} pénalités de retard impayées atteignent déjà le seuil de ` +
+          `${seuil} fixé par l'assemblée. À compter du ` +
+          `${dateCourte(effet)}, les pénalités deviendront indissociables des cotisations et ` +
+          "ce cumul emportera l'exclusion de plein droit (R5), même si vos cotisations sont " +
+          "à jour. Vous avez jusque-là pour régulariser.",
       );
     } else if (dette.nbRetard > 0) {
       /*
@@ -726,8 +726,8 @@ export function texteRelance(
          * absences s'y ajoutent : sans ce mot, le membre lirait qu'il atteint un
          * seuil qu'il n'atteint pas.
          */
-        `A partir de ${seuil} penalites de retard impayees, l'exclusion sera encourue de ` +
-          "plein droit (R5) meme si vos cotisations sont a jour — regle applicable le " +
+        `À partir de ${seuil} pénalités de retard impayées, l'exclusion sera encourue de ` +
+          "plein droit (R5) même si vos cotisations sont à jour. Règle applicable le " +
           `${dateCourte(effet)}.`,
       );
     }
@@ -762,7 +762,7 @@ export function texteRelance(
    * qui compte, pas la cadence.
    */
   if (reglesAVenir.length > 0) {
-    lignes.push("", "MESURE A VENIR");
+    lignes.push("", "MESURE À VENIR");
     for (const r of reglesAVenir) {
       const jours = r.debut
         ? Math.round(
@@ -776,34 +776,34 @@ export function texteRelance(
        * 10/10/2026 — dans 10 jours, et jusqu'au 31/12/2027 » faisait buter sur
        * l'incise, et c'est le delai qu'on veut laisser en tete.
        */
-      const quand = r.debut ? `a compter du ${dateCourte(r.debut)}` : "prochainement";
+      const quand = r.debut ? `à compter du ${dateCourte(r.debut)}` : "prochainement";
       const jusqua = r.fin ? ` et jusqu'au ${dateCourte(r.fin)}` : "";
-      const delai = jours > 0 ? ` — dans ${jours} ${accorde(jours, "jour")}` : "";
+      const delai = jours > 0 ? `, dans ${jours} ${accorde(jours, "jour")}` : "";
       if (r.nature === "avance_min" && r.valeur) {
         lignes.push(
-          `  - Avance minimale : vous devrez detenir en permanence ${r.valeur} mois de ` +
+          `  - Avance minimale : vous devrez détenir en permanence ${r.valeur} mois de ` +
             `cotisation d'avance, soit ${fcfa(r.valeur * REGLES.cotisationMensuelle)}, ` +
             `${quand}${jusqua}${delai}.`,
         );
       } else if (r.nature === "cotisation" && r.valeur) {
         lignes.push(
-          `  - Cotisation particuliere : ${fcfa(r.valeur)} par mois, ${quand}${jusqua}${delai}.`,
+          `  - Cotisation particulière : ${fcfa(r.valeur)} par mois, ${quand}${jusqua}${delai}.`,
         );
       } else if (r.nature === "penalite_multiplicateur" && r.valeur) {
         lignes.push(
-          `  - Penalites majorees : vos penalites de retard seront multipliees par ` +
+          `  - Pénalités majorées : vos pénalités de retard seront multipliées par ` +
             `${r.valeur}, ${quand}${jusqua}${delai}.`,
         );
       } else if (r.nature === "plan_redressement") {
         lignes.push(`  - Plan de redressement (R5), ${quand}${jusqua}${delai}.`);
       } else {
-        lignes.push(`  - Mesure portee a votre dossier, ${quand}${jusqua}${delai}.`);
+        lignes.push(`  - Mesure portée à votre dossier, ${quand}${jusqua}${delai}.`);
       }
       if (r.note) lignes.push(`    ${texteLisible(r.note)}`);
     }
     lignes.push(
       "Cette mesure n'est pas encore en vigueur. C'est avant sa date qu'il faut s'y " +
-        "conformer : passe ce terme, le manquement se constate.",
+        "conformer : passé ce terme, le manquement se constate.",
     );
   }
 
@@ -831,10 +831,10 @@ export function texteRelance(
     return false;
   });
   if (aDire.length > 0) {
-    lignes.push("", "VOTRE REGIME PARTICULIER");
+    lignes.push("", "VOTRE RÉGIME PARTICULIER");
     for (const r of aDire) {
       const fenetre = [
-        r.debut ? `a compter du ${dateCourte(r.debut)}` : null,
+        r.debut ? `à compter du ${dateCourte(r.debut)}` : null,
         r.fin ? `jusqu'au ${dateCourte(r.fin)}` : null,
       ]
         .filter(Boolean)
@@ -842,22 +842,22 @@ export function texteRelance(
       const terme = fenetre ? ` (${fenetre})` : "";
       if (r.nature === "cotisation" && r.valeur) {
         lignes.push(
-          `  - Cotisation particuliere : ${fcfa(r.valeur)} par mois${terme}, en lieu et ` +
+          `  - Cotisation particulière : ${fcfa(r.valeur)} par mois${terme}, en lieu et ` +
             "place du montant de l'article 6.",
         );
       } else if (r.nature === "penalite_multiplicateur" && r.valeur) {
         lignes.push(
-          `  - Penalites majorees : vos penalites de retard sont multipliees par ` +
+          `  - Pénalités majorées : vos pénalités de retard sont multipliées par ` +
             `${r.valeur}${terme}. Le taux de l'art. 9 s'applique, puis cette majoration.`,
         );
       } else if (r.nature === "avance_min" && r.valeur) {
         lignes.push(
-          `  - Avance minimale : vous devez detenir en permanence ${r.valeur} mois de ` +
-            `cotisation d'avance${terme}. Cette obligation est tenue a ce jour ; la rompre ` +
-            "exposerait a l'exclusion (R5).",
+          `  - Avance minimale : vous devez détenir en permanence ${r.valeur} mois de ` +
+            `cotisation d'avance${terme}. Cette obligation est tenue à ce jour ; la rompre ` +
+            "exposerait à l'exclusion (R5).",
         );
       } else if (r.nature === "note") {
-        lignes.push(`  - ${texteLisible(r.note) || "Mention portee a votre dossier"}${terme}.`);
+        lignes.push(`  - ${texteLisible(r.note) || "Mention portée à votre dossier"}${terme}.`);
       }
       /*
        * La note est collee depuis WhatsApp et en porte le balisage : sans
@@ -867,7 +867,7 @@ export function texteRelance(
       if (r.note && r.nature !== "note") lignes.push(`    ${texteLisible(r.note)}`);
     }
     lignes.push(
-      "Ces regles ont ete decidees en assemblee et sont inscrites a votre dossier. " +
+      "Ces règles ont été décidées en assemblée et sont inscrites à votre dossier. " +
         "Le bureau peut vous en rappeler les termes.",
     );
   }
@@ -875,13 +875,13 @@ export function texteRelance(
   if (plan) {
     lignes.push(
       "",
-      "MESURE DISCIPLINAIRE — plan de redressement (R5).",
-      "L'assemblee vous a accorde un plan de redressement : votre retard declare " +
-        "au groupe (R3) vous en a ouvert le benefice, et l'exclusion de plein droit " +
-        "est ecartee tant que vous en tenez les termes.",
-      plan.note ? `Termes convenus : ${plan.note}` : "Les termes sont ceux convenus en assemblee.",
+      "MESURE DISCIPLINAIRE : plan de redressement (R5).",
+      "L'assemblée vous a accordé un plan de redressement : votre retard déclaré " +
+        "au groupe (R3) vous en a ouvert le bénéfice, et l'exclusion de plein droit " +
+        "est écartée tant que vous en tenez les termes.",
+      plan.note ? `Termes convenus : ${plan.note}` : "Les termes sont ceux convenus en assemblée.",
       plan.fin
-        ? `Le plan court jusqu'au ${dateCourte(plan.fin)}. Passe ce terme, le regime ` +
+        ? `Le plan court jusqu'au ${dateCourte(plan.fin)}. Passé ce terme, le régime ` +
           "commun s'applique de nouveau."
         : "Le plan est sans terme fixe.",
       /*
@@ -889,8 +889,8 @@ export function texteRelance(
        * le laisse expirer sans regulariser ne retrouve pas le droit commun, il
        * tombe sous le vote de l'art. 20.
        */
-      "Ce plan ne s'accorde qu'une fois sur la duree du club : s'il devait ne pas " +
-        "etre tenu, l'exclusion serait soumise au vote de l'assemblee (art. 20).",
+      "Ce plan ne s'accorde qu'une fois sur la durée du club : s'il devait ne pas " +
+        "être tenu, l'exclusion serait soumise au vote de l'assemblée (art. 20).",
     );
   }
 
@@ -909,11 +909,11 @@ export function texteRelance(
       "FIN DE VOTRE MESURE D'AVANCE",
       `Votre mesure d'avance obligatoire prend fin le ${terme}.`,
       avanceFinissante.respectee
-        ? "Votre avance couvre deja vos cotisations jusqu'a cette date : vous n'avez plus " +
-          "rien a constituer d'avance."
-        : `D'ici la, elle n'exige plus que les mois qui restent jusqu'au terme : ` +
+        ? "Votre avance couvre déjà vos cotisations jusqu'à cette date : vous n'avez plus " +
+          "rien à constituer d'avance."
+        : `D'ici là, elle n'exige plus que les mois qui restent jusqu'au terme : ` +
           `${avanceFinissante.moisRequis} mois, soit ${fcfa(avanceFinissante.montantExige)}.`,
-      `Apres le ${terme}, le regime commun reprend : la cotisation de chaque mois, au plus ` +
+      `Après le ${terme}, le régime commun reprend : la cotisation de chaque mois, au plus ` +
         `tard le ${REGLES.jourEcheance}.`,
     );
   }
@@ -930,10 +930,10 @@ export function texteRelance(
     lignes.push(
       "",
       "VOTRE AVANCE OBLIGATOIRE ARRIVE AU MINIMUM",
-      `L'assemblee vous impose de detenir en permanence ${avanceAuSeuil.mois} mois de ` +
-        `cotisation d'avance, soit ${fcfa(avanceAuSeuil.montantExige)}. Vous en detenez ` +
+      `L'assemblée vous impose de détenir en permanence ${avanceAuSeuil.mois} mois de ` +
+        `cotisation d'avance, soit ${fcfa(avanceAuSeuil.montantExige)}. Vous en détenez ` +
         `${fcfa(avanceAuSeuil.avanceDetenue)} : l'obligation est tenue.`,
-      "Mais chaque echeance consomme un mois de cette avance : sans nouveau versement, la " +
+      "Mais chaque échéance consomme un mois de cette avance : sans nouveau versement, la " +
         `prochaine la fera passer sous le minimum. Versez au moins ` +
         `${fcfa(avanceAuSeuil.pourMaintenir)} pour la maintenir.`,
       avanceAuSeuil.fin
@@ -945,23 +945,23 @@ export function texteRelance(
   if (avanceManquante) {
     lignes.push(
       "",
-      "MESURE DISCIPLINAIRE — avance obligatoire.",
+      "MESURE DISCIPLINAIRE : avance obligatoire.",
       /*
        * A l'approche du terme, l'exigence se limite aux mois qui restent :
        * annoncer « trois mois, soit 10 000 FCFA » se contredirait.
        */
       avanceManquante.moisRequis < avanceManquante.mois && avanceManquante.fin
-        ? `L'assemblee vous impose ${avanceManquante.mois} mois de cotisation d'avance. ` +
+        ? `L'assemblée vous impose ${avanceManquante.mois} mois de cotisation d'avance. ` +
           `La mesure prenant fin le ${dateCourte(avanceManquante.fin)}, il n'en reste ` +
-          `que ${avanceManquante.moisRequis} a couvrir, soit ${fcfa(avanceManquante.montantExige)}.`
-        : `L'assemblee vous impose de detenir en permanence ${avanceManquante.mois} mois de ` +
+          `que ${avanceManquante.moisRequis} à couvrir, soit ${fcfa(avanceManquante.montantExige)}.`
+        : `L'assemblée vous impose de détenir en permanence ${avanceManquante.mois} mois de ` +
           `cotisation d'avance, soit ${fcfa(avanceManquante.montantExige)}.`,
-      `Vous en detenez aujourd'hui ${fcfa(avanceManquante.avanceDetenue)} : il manque ` +
+      `Vous en détenez aujourd'hui ${fcfa(avanceManquante.avanceDetenue)} : il manque ` +
         `${fcfa(Math.max(0, avanceManquante.montantExige - avanceManquante.avanceDetenue))}.`,
       avanceManquante.fin
         ? `Cette obligation court jusqu'au ${dateCourte(avanceManquante.fin)}.`
         : "Cette obligation est sans terme fixe.",
-      "A defaut de regularisation, l'exclusion est automatique (R5).",
+      "À défaut de régularisation, l'exclusion est automatique (R5).",
     );
   }
 
@@ -1010,31 +1010,31 @@ export function texteRelance(
     lignes.push(
       "",
       lesDeux
-        ? "COMMENT ENREGISTRER VOS REGLEMENTS"
+        ? "COMMENT ENREGISTRER VOS RÈGLEMENTS"
         : doitUnePenalite
-          ? "COMMENT ENREGISTRER LE REGLEMENT DE VOS PENALITES"
+          ? "COMMENT ENREGISTRER LE RÈGLEMENT DE VOS PÉNALITÉS"
           : "COMMENT ENREGISTRER VOTRE COTISATION",
       `  1. Ouvrez ${siteUrl} et connectez-vous.`,
       /*
        * Le tiroir a disparu avec la refonte : la navigation est en bas de
        * l'ecran sur telephone, dans une colonne a gauche sur ordinateur.
        */
-      "  2. Touchez « Versements » : dans la barre du bas sur telephone,",
+      "  2. Touchez « Versements » : dans la barre du bas sur téléphone,",
       "     dans la colonne de gauche sur ordinateur.",
       ...(lesDeux
         ? [
-            "  3. Ouvrez « Declarer un versement », choisissez ce que vous reglez —",
-            "     une cotisation ou une penalite —, puis indiquez le montant verse,",
-            "     la date et le moyen de paiement. Si un meme transfert couvre les",
-            "     deux, declarez chacun a part.",
+            "  3. Ouvrez « Déclarer un versement », choisissez ce que vous réglez",
+            "     (une cotisation ou une pénalité), puis indiquez le montant versé,",
+            "     la date et le moyen de paiement. Si un même transfert couvre les",
+            "     deux, déclarez chacun à part.",
           ]
         : doitUnePenalite
           ? [
-              "  3. Ouvrez « Declarer un versement », choisissez « une penalite »,",
-              "     puis indiquez le montant verse, la date et le moyen de paiement.",
+              "  3. Ouvrez « Déclarer un versement », choisissez « une pénalité »,",
+              "     puis indiquez le montant versé, la date et le moyen de paiement.",
             ]
           : [
-              "  3. Ouvrez « Declarer un versement » et indiquez le montant verse,",
+              "  3. Ouvrez « Déclarer un versement » et indiquez le montant versé,",
               "     la date et le moyen de paiement.",
             ]),
       /*
@@ -1047,16 +1047,16 @@ export function texteRelance(
         ? [
             `     ${lesDeux ? "Une cotisation" : "Votre versement"} s'impute sur ` +
               `${moisLong(arrieres[0])}, le plus ancien`,
-            "     mois ouvert, puis sur les suivants s'il le depasse.",
+            "     mois ouvert, puis sur les suivants s'il le dépasse.",
           ]
         : []),
       ...(doitUnePenalite
-        ? ["     Une penalite se regle entiere, de la plus ancienne a la plus recente."]
+        ? ["     Une pénalité se règle entière, de la plus ancienne à la plus récente."]
         : []),
-      "  4. Joignez la capture de votre transfert : elle epargne une question.",
+      "  4. Joignez la capture de votre transfert : elle épargne une question.",
       doitUneCotisation
-        ? "  5. Le tresorier valide, et votre mois se marque d'une coche."
-        : "  5. Le tresorier verifie l'encaissement et solde la penalite.",
+        ? "  5. Le trésorier valide, et votre mois se marque d'une coche."
+        : "  5. Le trésorier vérifie l'encaissement et solde la pénalité.",
     );
     if (doitUneCotisation) {
       lignes.push(
@@ -1065,17 +1065,17 @@ export function texteRelance(
          * UN PARAGRAPHE, UNE LIGNE. Coupe a la main, il se recoupait sur un
          * telephone : quatre lignes longues alternant avec quatre moignons.
          */
-        "Le tresorier est prevenu par courriel des que vous declarez, le president et " +
-          "vous-meme en copie : inutile d'ecrire en plus, et vous gardez la trace de ce " +
-          "que vous avez declare. Tant que la validation n'a pas eu lieu, votre " +
-          "declaration reste visible de tous, marquee « en attente » : rien ne se perd.",
+        "Le trésorier est prévenu par courriel dès que vous déclarez, le président et " +
+          "vous-même en copie : inutile d'écrire en plus, et vous gardez la trace de ce " +
+          "que vous avez déclaré. Tant que la validation n'a pas eu lieu, votre " +
+          "déclaration reste visible de tous, marquée « en attente » : rien ne se perd.",
       );
     }
     if (doitUnePenalite) {
       lignes.push(
         "",
-        "La penalite reste due jusqu'a cette verification : si une relance vous " +
-          "parvient entre-temps et la reclame encore, ce n'est pas une erreur.",
+        "La pénalité reste due jusqu'à cette vérification : si une relance vous " +
+          "parvient entre-temps et la réclame encore, ce n'est pas une erreur.",
       );
     }
   }
@@ -1083,6 +1083,6 @@ export function texteRelance(
     "",
     `${rienDu ? "Courrier" : "Relance"} du ${dateCourte(maintenant.toISOString().slice(0, 10))}.`,
   );
-  lignes.push("", `Le bureau — ${CLUB.nom}`);
+  lignes.push("", `Le bureau d'${CLUB.nom}`);
   return lignes.join("\n");
 }

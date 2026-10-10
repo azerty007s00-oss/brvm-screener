@@ -37,9 +37,9 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Administration" };
 
 const LIBELLE_REGLE: Record<string, string> = {
-  [REGLE_MEMBRE.cotisationParticuliere]: "cotisation particuliere",
-  [REGLE_MEMBRE.multiplicateurPenalite]: "penalites majorees",
-  [REGLE_MEMBRE.avanceMinimale]: "avance minimale exigee",
+  [REGLE_MEMBRE.cotisationParticuliere]: "cotisation particulière",
+  [REGLE_MEMBRE.multiplicateurPenalite]: "pénalités majorées",
+  [REGLE_MEMBRE.avanceMinimale]: "avance minimale exigée",
   [REGLE_MEMBRE.planRedressement]: "plan de redressement (R5)",
   [REGLE_MEMBRE.note]: "note",
 };
@@ -67,7 +67,7 @@ export default async function PageAdministration() {
   if (!peut(membre, "gererReglages")) {
     return (
       <Carte titre="Administration">
-        <Alerte ton="rouge">Cette page est reservee au president.</Alerte>
+        <Alerte ton="rouge">Cette page est réservée au président.</Alerte>
       </Carte>
     );
   }
@@ -115,8 +115,8 @@ export default async function PageAdministration() {
       return {
         id: j.id,
         quand: j.created_at,
-        adresse: d.email ?? "adresse non consignee",
-        issue: d.issue ?? "issue non consignee",
+        adresse: d.email ?? "adresse non consignée",
+        issue: d.issue ?? "issue non consignée",
         detail: d.detail ?? "",
         partie: d.issue === "avertis",
       };
@@ -173,7 +173,7 @@ export default async function PageAdministration() {
         detail={`${membre.nom} · ${ROLES[membre.role].toLowerCase()}`}
         marque={
           <span className="text-[13px]" style={{ color: "var(--ink-2)" }}>
-            Acces total
+            Accès total
           </span>
         }
       />
@@ -182,12 +182,12 @@ export default async function PageAdministration() {
         chiffres={[
           { libelle: "Membres", brut: situations.length },
           {
-            libelle: moisDecouverts > 1 ? "Mois decouverts" : "Mois decouvert",
+            libelle: moisDecouverts > 1 ? "Mois découverts" : "Mois découvert",
             brut: moisDecouverts,
 
           },
           {
-            libelle: penalitesDues > 1 ? "Penalites dues" : "Penalite due",
+            libelle: penalitesDues > 1 ? "Pénalités dues" : "Pénalité due",
             brut: penalitesDues,
 
           },
@@ -208,7 +208,7 @@ export default async function PageAdministration() {
             style={{ color: "var(--etat-manque)" }}
           >
             <Icone.alerte taille={17} />
-            {aRegler.length} point{aRegler.length > 1 ? "s" : ""} a regler
+            {aRegler.length} point{aRegler.length > 1 ? "s" : ""} à régler
           </p>
           {aRegler.map((c) => (
             <p
@@ -237,13 +237,13 @@ export default async function PageAdministration() {
       <Tuile
         icone={<Icone.courriel />}
         titre="Relances"
-        resume="Depart automatique le 7, le 9 et le 10, apres verification des paiements."
-        marque={<Badge ton={transport === "aucun" ? "rouge" : "vert"}>{transport === "aucun" ? "a l'arret" : "active"}</Badge>}
+        resume="Départ automatique le 7, le 9 et le 10, après vérification des paiements."
+        marque={<Badge ton={transport === "aucun" ? "rouge" : "vert"}>{transport === "aucun" ? "à l'arrêt" : "active"}</Badge>}
       >
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
           Le courrier part le 7, le 9 et le 10 de chaque mois aux membres qui n&apos;ont toujours
-          pas verse a cette date — chaque envoi reverifie qui a paye entre-temps. Sans
-          transport configure, les alertes restent visibles sur le site mais rien ne part — et
+          pas versé à cette date ; chaque envoi revérifie qui a payé entre-temps. Sans
+          transport configuré, les alertes restent visibles sur le site, mais rien ne part et
           cela ne se remarque pas.
         </p>
         <p className="mb-3 text-sm">
@@ -268,25 +268,25 @@ export default async function PageAdministration() {
           >
             <p className="font-medium" style={{ color: essaiReussi ? "var(--etat-ok)" : "var(--etat-manque)" }}>
               Dernier essai du {dateCourte(dernierEssai.created_at)} :{" "}
-              {essaiReussi ? "accepte par le serveur" : "refuse"}
+              {essaiReussi ? "accepté par le serveur" : "refusé"}
             </p>
-            {detailEssai.destinataire && <p>Remis a : {detailEssai.destinataire}</p>}
-            {detailEssai.detail && <p className="break-words">Reponse : {detailEssai.detail}</p>}
+            {detailEssai.destinataire && <p>Remis à : {detailEssai.destinataire}</p>}
+            {detailEssai.detail && <p className="break-words">Réponse : {detailEssai.detail}</p>}
           </div>
         )}
 
         {transport === "aucun" ? (
           <Alerte ton="ambre" titre="Rien ne partira, ni le 7, ni le 9, ni le 10">
             <p>
-              Voici ce que le serveur voit reellement. Les noms seulement : une valeur de mot de
-              passe ne s&apos;affiche pas, meme ici.
+              Voici ce que le serveur voit réellement. Les noms seulement : une valeur de mot de
+              passe ne s&apos;affiche pas, même ici.
             </p>
             <ul className="mt-2 space-y-0.5">
               {etatEnvoi.variables.map((v) => (
                 <li key={v.nom}>
-                  <code>{v.nom}</code> —{" "}
+                  <code>{v.nom}</code> :{" "}
                   <strong style={{ color: v.presente ? "var(--etat-ok)" : "var(--etat-manque)" }}>
-                    {v.presente ? "presente" : "absente"}
+                    {v.presente ? "présente" : "absente"}
                   </strong>
                 </li>
               ))}
@@ -296,30 +296,30 @@ export default async function PageAdministration() {
             </p>
             <p className="mt-2">
               {etatEnvoi.variables.every((v) => !v.presente)
-                ? "Aucune n'arrive : les variables sont enregistrees sur un autre projet, ou pour un autre environnement que celui indique ci-dessus, ou le formulaire n'a pas ete valide. Verifiez que le projet Vercel ouvert est bien celui qui sert cette adresse, et que la case correspondant a l'environnement ci-dessus est cochee."
-                : "Certaines arrivent et d'autres non : les manquantes portent vraisemblablement une faute de frappe dans leur nom, ou un espace avant ou apres. Le nom doit s'ecrire exactement comme ci-dessus, en majuscules."}
+                ? "Aucune n'arrive : les variables sont enregistrées sur un autre projet, ou pour un autre environnement que celui indiqué ci-dessus, ou le formulaire n'a pas été validé. Vérifiez que le projet Vercel ouvert est bien celui qui sert cette adresse, et que la case correspondant à l'environnement ci-dessus est cochée."
+                : "Certaines arrivent et d'autres non : les manquantes portent vraisemblablement une faute de frappe dans leur nom, ou un espace avant ou après. Le nom doit s'écrire exactement comme ci-dessus, en majuscules."}
             </p>
           </Alerte>
         ) : (
           <FormulaireAction action={envoyerCourrielEssai} libelle="Envoyer un courrier d'essai">
             <Selection
               nom="destination"
-              libelle="Envoyer a"
+              libelle="Envoyer à"
               valeur="moi"
               options={[
-                { valeur: "moi", libelle: `Mon adresse — ${membre.email}` },
+                { valeur: "moi", libelle: `Mon adresse (${membre.email})` },
                 ...(adresseClub
-                  ? [{ valeur: "club", libelle: `L'adresse du club — ${adresseClub}` }]
+                  ? [{ valeur: "club", libelle: `L'adresse du club (${adresseClub})` }]
                   : []),
               ]}
             />
           </FormulaireAction>
         )}
         <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
-          Seules ces deux adresses, deja connues du site, sont proposees : un formulaire qui
+          Seules ces deux adresses, déjà connues du site, sont proposées : un formulaire qui
           enverrait ou l&apos;on veut depuis l&apos;adresse du club serait un relais ouvert. Si
-          le courrier n&apos;arrive pas alors que le serveur l&apos;a accepte, il est dans les
-          indesirables : un premier message entre deux adresses qui n&apos;ont jamais
+          le courrier n&apos;arrive pas alors que le serveur l&apos;a accepté, il est dans les
+          indésirables : un premier message entre deux adresses qui n&apos;ont jamais
           correspondu y atterrit souvent.
         </p>
       </Tuile>
@@ -342,8 +342,8 @@ export default async function PageAdministration() {
         */}
       <Tuile
         icone={<Icone.bouclier />}
-        titre="Mots de passe oublies"
-        resume="Les demandes faites depuis la page de connexion, et ce que chacune a donne."
+        titre="Mots de passe oubliés"
+        resume="Les demandes faites depuis la page de connexion, et ce que chacune a donné."
         marque={
           <Badge ton={avertissables.length === 0 ? "rouge" : "vert"}>
             {avertissables.length === 0
@@ -356,22 +356,22 @@ export default async function PageAdministration() {
           <Alerte ton="rouge" titre="Aucun avis ne peut partir">
             <p>
               Le membre qui demande un nouveau mot de passe lit « le bureau vient d&apos;en
-              etre averti », et personne ne l&apos;est : le droit sur les membres
-              n&apos;appartient qu&apos;au president, et aucune fiche active ne porte ce role
-              avec une adresse. Verifiez la page Membres.
+              être averti », et personne ne l&apos;est : le droit sur les membres
+              n&apos;appartient qu&apos;au président, et aucune fiche active ne porte ce rôle
+              avec une adresse. Vérifiez la page Membres.
             </p>
           </Alerte>
         ) : (
           <p className="mb-3 text-sm">
-            Averti : {avertissables.map((a) => `${a.nom} — ${a.email}`).join(", ")}.
+            Averti : {avertissables.map((a) => `${a.nom} (${a.email})`).join(", ")}.
           </p>
         )}
 
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          Une adresse qui n&apos;est celle d&apos;aucun membre ne declenche aucun courrier, et
-          la page de connexion repond la meme chose dans tous les cas : dire « cette adresse
-          est inconnue » apprendrait a un inconnu qui est du club. La demande se lit ici, ou
-          vous etes seul a la lire.
+          Une adresse qui n&apos;est celle d&apos;aucun membre ne déclenche aucun courrier, et
+          la page de connexion répond la même chose dans tous les cas : dire « cette adresse
+          est inconnue » apprendrait à un inconnu qui est du club. La demande se lit ici, où
+          vous êtes seul à la lire.
         </p>
 
         {/*
@@ -384,36 +384,36 @@ export default async function PageAdministration() {
           * README la porte aussi, pour le jour ou cette page sera hors
           * d'atteinte.
           */}
-        <Depliant titre="Et si c'est vous qui perdez le votre ?">
+        <Depliant titre="Et si c'est vous qui perdez le vôtre ?">
           <p className="text-xs" style={{ color: "var(--discret)" }}>
-            Ce formulaire ne vous depannera pas : il vous avertit vous-meme, et vous renvoie a
-            la page Membres, qui demande d&apos;etre connecte. La porte de secours est la route
-            d&apos;amorcage, et elle se franchit depuis un telephone :
+            Ce formulaire ne vous dépannera pas : il vous avertit vous-même, et vous renvoie à
+            la page Membres, qui demande d&apos;être connecté. La porte de secours est la route
+            d&apos;amorçage, et elle se franchit depuis un téléphone :
           </p>
           <ol className="mt-2 space-y-1.5 text-xs" style={{ color: "var(--discret)" }}>
             <li>
               1. Sur Vercel, projet <code>ip12</code>, variables d&apos;environnement, ajouter
-              pour Production <code>SETUP_TOKEN</code> (une suite de caracteres connue de vous
+              pour Production <code>SETUP_TOKEN</code> (une suite de caractères connue de vous
               seul) et <code>BOOTSTRAP_EMAIL</code> (l&apos;adresse de votre compte).
             </li>
-            <li>2. Redeployer : une variable ajoutee ne vaut que pour les deploiements suivants.</li>
+            <li>2. Redéployer : une variable ajoutée ne vaut que pour les déploiements suivants.</li>
             <li>
-              3. Ouvrir <code>/api/bootstrap?token=…</code> avec ce jeton. La reponse contient
+              3. Ouvrir <code>/api/bootstrap?token=…</code> avec ce jeton. La réponse contient
               un mot de passe provisoire.
             </li>
-            <li>4. Se connecter, en changer aussitot — le site l&apos;exige.</li>
+            <li>4. Se connecter, puis en changer aussitôt : le site l&apos;exige.</li>
             <li>
-              5. <strong>Supprimer <code>SETUP_TOKEN</code></strong>, puis redeployer. Tant
-              qu&apos;il est la, qui le devine reprend votre compte — c&apos;est pourquoi son
-              absence est comptee plus haut comme le bon etat.
+              5. <strong>Supprimer <code>SETUP_TOKEN</code></strong>, puis redéployer. Tant
+              qu&apos;il est là, qui le devine reprend votre compte. C&apos;est pourquoi son
+              absence est comptée plus haut comme le bon état.
             </li>
           </ol>
           <p className="mt-2 text-xs" style={{ color: "var(--discret)" }}>
-            La meme marche a suivre figure dans le README du projet, lisible sans se connecter.
-            Pour n&apos;avoir jamais a en passer par la, l&apos;assemblee peut decider que le
-            vice-president detient aussi le droit sur les membres : il reinitialiserait alors
-            votre mot de passe depuis la page Membres. C&apos;est une decision de gouvernance,
-            non un reglage.
+            La même marche à suivre figure dans le README du projet, lisible sans se connecter.
+            Pour n&apos;avoir jamais à en passer par là, l&apos;assemblée peut décider que le
+            vice-président détient aussi le droit sur les membres : il réinitialiserait alors
+            votre mot de passe depuis la page Membres. C&apos;est une décision de gouvernance,
+            non un réglage.
           </p>
         </Depliant>
 
@@ -436,7 +436,7 @@ export default async function PageAdministration() {
                 <p style={{ color: "var(--discret)" }}>
                   {dateCourte(d.quand)} ·{" "}
                   <span style={{ color: d.partie ? "var(--etat-ok)" : "var(--etat-attente)" }}>
-                    {d.partie ? "avis envoye" : d.issue}
+                    {d.partie ? "avis envoyé" : d.issue}
                   </span>
                 </p>
                 {d.detail && (
@@ -454,15 +454,15 @@ export default async function PageAdministration() {
 
       <Tuile
         icone={<Icone.reglages />}
-        titre="Reglages du club"
-        resume="Cotisation, echeance, taux, doublement."
+        titre="Réglages du club"
+        resume="Cotisation, échéance, taux, doublement."
       >
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
           Ces valeurs viennent des statuts et sont inscrites dans le code. Les modifier ici les fait
-          primer, sans toucher au code, si l&apos;assemblee amende les articles 6, 8 ou 9. Laissez un
+          primer, sans toucher au code, si l&apos;assemblée amende les articles 6, 8 ou 9. Laissez un
           champ vide pour conserver la valeur en vigueur.
         </p>
-        <Depliant titre="Modifier les regles">
+        <Depliant titre="Modifier les règles">
           <FormulaireAction action={enregistrerReglages} libelle="Enregistrer">
             <Champ
               nom="cotisation"
@@ -475,7 +475,7 @@ export default async function PageAdministration() {
             />
             <Champ
               nom="jourEcheance"
-              libelle="Jour d'echeance"
+              libelle="Jour d'échéance"
               type="number"
               min={1}
               max={28}
@@ -485,7 +485,7 @@ export default async function PageAdministration() {
             />
             <Champ
               nom="tauxPenalite"
-              libelle="Taux de penalite"
+              libelle="Taux de pénalité"
               type="number"
               step="0.01"
               min={0.01}
@@ -500,20 +500,20 @@ export default async function PageAdministration() {
 
       <Tuile
         icone={<Icone.personnes />}
-        titre="Regles individuelles"
-        resume="Derogations au regime commun, votees en assemblee."
+        titre="Règles individuelles"
+        resume="Dérogations au régime commun, votées en assemblée."
         marque={regles.length > 0 ? <Badge ton="neutre">{regles.length}</Badge> : undefined}
       >
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          Les statuts valent pour tous. Le club peut neanmoins convenir d&apos;une cotisation
-          differente, majorer les penalites d&apos;un membre sous sanction, ou accorder le plan de
-          redressement que R5 reserve au retard declare. Ces accords se prenaient de memoire :
-          les inscrire les rend opposables et datables. Une regle levee n&apos;est pas effacee —
+          Les statuts valent pour tous. Le club peut néanmoins convenir d&apos;une cotisation
+          différente, majorer les pénalités d&apos;un membre sous sanction, ou accorder le plan de
+          redressement que R5 réserve au retard déclaré. Ces accords se prenaient de mémoire :
+          les inscrire les rend opposables et datables. Une règle levée n&apos;est pas effacée :
           elle a produit ses effets.
         </p>
 
         {regles.length === 0 ? (
-          <Vide>Aucune derogation : le regime commun s&apos;applique a tous.</Vide>
+          <Vide>Aucune dérogation : le régime commun s&apos;applique à tous.</Vide>
         ) : (
           <ul className="mb-4 divide-y" style={{ borderColor: "var(--bordure)" }}>
             {regles.map((r) => (
@@ -535,7 +535,7 @@ export default async function PageAdministration() {
                     )}
                   </p>
                   <p className="text-xs" style={{ color: "var(--discret)" }}>
-                    {r.debut ? `des le ${dateCourte(r.debut)}` : "sans date de debut"}
+                    {r.debut ? `dès le ${dateCourte(r.debut)}` : "sans date de début"}
                     {r.fin ? ` · jusqu'au ${dateCourte(r.fin)}` : " · sans terme"}
                     {r.note ? ` · ${r.note}` : ""}
                   </p>
@@ -545,7 +545,7 @@ export default async function PageAdministration() {
                   libelle="Lever"
                   variante="discret"
                   compact
-                  confirmation={`Lever cette regle pour ${r.membreNom} ?`}
+                  confirmation={`Lever cette règle pour ${r.membreNom} ?`}
                 >
                   <ChampCache nom="id" valeur={r.id} />
                 </FormulaireAction>
@@ -554,7 +554,7 @@ export default async function PageAdministration() {
           </ul>
         )}
 
-        <Depliant titre="Inscrire une regle">
+        <Depliant titre="Inscrire une règle">
           <FormulaireAction action={inscrireRegleMembre} libelle="Inscrire">
             <Selection
               nom="membre"
@@ -576,22 +576,22 @@ export default async function PageAdministration() {
               type="number"
               min={1}
               requis={false}
-              aide="Un montant en FCFA pour la cotisation ; un NOMBRE DE MOIS pour l'avance minimale ; un multiplicateur (2 = double) pour les penalites. Laisser vide pour un plan ou une note."
+              aide="Un montant en FCFA pour la cotisation ; un NOMBRE DE MOIS pour l'avance minimale ; un multiplicateur (2 = double) pour les pénalités. Laisser vide pour un plan ou une note."
             />
-            <Champ nom="debut" libelle="A compter du" type="date" requis={false} />
+            <Champ nom="debut" libelle="À compter du" type="date" requis={false} />
             <Champ
               nom="fin"
               libelle="Jusqu'au"
               type="date"
               requis={false}
-              aide="Sans terme, la derogation devient un regime parallele durable."
+              aide="Sans terme, la dérogation devient un régime parallèle durable."
             />
-            <Champ nom="note" libelle="Motif ou reference de la decision" requis={false} />
+            <Champ nom="note" libelle="Motif ou référence de la décision" requis={false} />
           </FormulaireAction>
         </Depliant>
       </Tuile>
 
-      <Rubrique>Controle</Rubrique>
+      <Rubrique>Contrôle</Rubrique>
 
       <Tuile
         icone={<Icone.journal />}
@@ -599,14 +599,14 @@ export default async function PageAdministration() {
         resume="Chaque validation y laisse une trace nominative."
       >
         {journal.length === 0 ? (
-          <Vide>Aucune operation enregistree.</Vide>
+          <Vide>Aucune opération enregistrée.</Vide>
         ) : (
           <ul className="divide-y text-xs" style={{ borderColor: "var(--bordure)" }}>
             {journal.map((j) => (
               <li key={j.id} className="py-2">
                 <div className="flex flex-wrap justify-between gap-2">
                   <span>
-                    <strong>{j.actor_name ?? "—"}</strong> &middot; {j.action.replace(/_/g, " ")}
+                    <strong>{j.actor_name ?? "Automatique"}</strong> &middot; {j.action.replace(/_/g, " ")}
                     {j.entity ? ` · ${j.entity}` : ""}
                   </span>
                   <span style={{ color: "var(--discret)" }}>{dateCourte(j.created_at)}</span>
@@ -640,9 +640,9 @@ export default async function PageAdministration() {
         resume="Ce que chaque membre emporterait en partant aujourd'hui."
       >
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          L&apos;art. 20 rembourse la part au cours de cession, diminuee de{" "}
+          L&apos;art. 20 rembourse la part au cours de cession, diminuée de{" "}
           {(REGLES.fraisCession * 100).toFixed(0)} % de frais, et l&apos;art. 9 veut que les
-          penalites dues restent acquises au club : elles se retranchent du versement. Le
+          pénalités dues restent acquises au club : elles se retranchent du versement. Le
           remboursement intervient sous {REGLES.delaiRemboursementMois} mois (R5). Une exclusion
           demande le vote des {(REGLES.majoriteExclusion * 100).toFixed(0)} %.
         </p>
@@ -672,11 +672,11 @@ export default async function PageAdministration() {
               </tbody>
             </table>
             <p className="mt-2 text-[11px]" style={{ color: "var(--discret)" }}>
-              Indicatif, sur l&apos;avoir connu du club — portefeuille et caisse. Les frais
-              reels de la SGI ne sont connus qu&apos;apres coup : ces chiffres ouvrent la
+              Indicatif, sur l&apos;avoir connu du club (portefeuille et caisse). Les frais
+              réels de la SGI ne sont connus qu&apos;après coup : ces chiffres ouvrent la
               discussion, ils ne la closent pas. L&apos;avance est rendue au nominal et
-              supporte donc aucun frais de cession ; les penalites dues sont deja
-              retranchees, leur deduction ayant lieu au calcul de la part.
+              ne supporte donc aucun frais de cession ; les pénalités dues sont déjà
+              retranchées, leur déduction ayant lieu au calcul de la part.
             </p>
           </div>
         )}
@@ -686,10 +686,10 @@ export default async function PageAdministration() {
             {sorties.map((s) => (
               <li key={s.id} className="py-2">
                 <p className="text-sm font-medium">
-                  {s.membreNom} &middot; {dateCourte(s.date)} &middot; {fcfa(s.netVerse)} verses
+                  {s.membreNom} &middot; {dateCourte(s.date)} &middot; {fcfa(s.netVerse)} versés
                 </p>
                 <p className="text-xs" style={{ color: "var(--discret)" }}>
-                  {s.motif ?? "motif non precise"} &middot; part {fcfa(s.valeurBrute)} &minus; frais{" "}
+                  {s.motif ?? "motif non précisé"} &middot; part {fcfa(s.valeurBrute)} &minus; frais{" "}
                   {fcfa(s.frais)} &minus; acquis au club {fcfa(s.acquisAuClub)}
                   {s.note ? ` · ${s.note}` : ""}
                 </p>
@@ -714,51 +714,51 @@ export default async function PageAdministration() {
             <Champ
               nom="motif"
               libelle="Motif"
-              aide="Demission, exclusion prononcee au vote, exclusion de plein droit (R5)…"
+              aide="Démission, exclusion prononcée au vote, exclusion de plein droit (R5)…"
             />
             <Champ
               nom="valeurBrute"
               libelle="Valeur de la part (FCFA)"
               type="number"
               min={0}
-              aide="Au cours de cession. Le tableau ci-dessus en donne l'estimation au dernier releve."
+              aide="Au cours de cession. Le tableau ci-dessus en donne l'estimation au dernier relevé."
             />
             <Champ
               nom="frais"
               libelle="Frais retenus (FCFA)"
               type="number"
               min={0}
-              aide={`${(REGLES.fraisCession * 100).toFixed(0)} % selon l'art. 20 ; saisir les frais reels s'ils different.`}
+              aide={`${(REGLES.fraisCession * 100).toFixed(0)} % selon l'art. 20 ; saisir les frais réels s'ils différent.`}
             />
             <Champ
               nom="acquisAuClub"
-              libelle="Penalites acquises au club (FCFA)"
+              libelle="Pénalités acquises au club (FCFA)"
               type="number"
               min={0}
               valeur={0}
-              aide="Art. 9 : les penalites dues ne se remboursent pas."
+              aide="Art. 9 : les pénalités dues ne se remboursent pas."
             />
-            <Champ nom="note" libelle="Reference de la decision" requis={false} />
+            <Champ nom="note" libelle="Référence de la décision" requis={false} />
           </FormulaireAction>
         </Depliant>
       </Tuile>
 
       <Tuile
         icone={<Icone.bouclier />}
-        titre="Securite"
-        resume="Les cles qui ouvrent le site sur l'exterieur."
+        titre="Sécurité"
+        resume="Les clés qui ouvrent le site sur l'extérieur."
         marque={<Badge ton={controles.every((c) => c.ok) ? "vert" : "rouge"}>{controles.every((c) => c.ok) ? "conforme" : `${controles.filter((c) => !c.ok).length} alertes`}</Badge>}
       >
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          Deux variables gouvernent des portes ouvertes sur l&apos;exterieur. Leur etat ne se lit
-          nulle part ailleurs : le voici, pour n&apos;avoir pas a s&apos;en souvenir.
+          Deux variables gouvernent des portes ouvertes sur l&apos;extérieur. Leur état ne se lit
+          nulle part ailleurs : le voici, pour n&apos;avoir pas à s&apos;en souvenir.
         </p>
         <ul className="space-y-2">
           {controles.map((c) => (
             <li key={c.cle} className="text-sm">
               <p className="flex flex-wrap items-center gap-1.5 font-medium">
                 <code>{c.cle}</code>
-                <Badge ton={c.ok ? "vert" : "rouge"}>{c.ok ? "Conforme" : "A corriger"}</Badge>
+                <Badge ton={c.ok ? "vert" : "rouge"}>{c.ok ? "Conforme" : "À corriger"}</Badge>
               </p>
               <p className="text-xs" style={{ color: "var(--discret)" }}>
                 {c.explication}
@@ -781,20 +781,20 @@ export default async function PageAdministration() {
       <Tuile
         icone={<Icone.plus />}
         titre="Reprise de l'historique"
-        resume="Marquer payes, en une fois, les mois anterieurs a l'outil."
+        resume="Marquer payés, en une fois, les mois antérieurs à l'outil."
       >
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          Marque payes, en une operation, tous les mois encore decouverts jusqu&apos;au mois choisi.
-          Chaque ligne est datee de l&apos;echeance du mois qu&apos;elle couvre, jamais
-          d&apos;aujourd&apos;hui : antidater au {reglages.jourEcheance} evite de creer des
-          penalites fictives sur du passe deja regle.
+          Marque payés, en une opération, tous les mois encore découverts jusqu&apos;au mois choisi.
+          Chaque ligne est datée de l&apos;échéance du mois qu&apos;elle couvre, jamais
+          d&apos;aujourd&apos;hui : antidater au {reglages.jourEcheance} évite de créer des
+          pénalités fictives sur du passé déjà réglé.
         </p>
         {moisDecouverts > 0 && (
           <div className="mb-3">
             <Alerte ton="ambre">
-              {moisDecouverts} mois sont actuellement decouverts, repartis sur{" "}
+              {moisDecouverts} mois sont actuellement découverts, répartis sur{" "}
               {situations.filter((s) => s.nbMoisRetard > 0).length} membres. Tant que
-              l&apos;historique n&apos;est pas repris, chacun apparait en retard depuis la creation
+              l&apos;historique n&apos;est pas repris, chacun apparaît en retard depuis la création
               du club.
             </Alerte>
           </div>
@@ -802,25 +802,25 @@ export default async function PageAdministration() {
         <Depliant titre="Reprendre l'historique">
           <FormulaireAction
             action={reprendreHistorique}
-            libelle="Marquer ces mois payes"
-            confirmation="Marquer payes tous les mois decouverts de la periode ? L'operation est rejouable et ne double jamais un mois deja couvert."
+            libelle="Marquer ces mois payés"
+            confirmation="Marquer payés tous les mois découverts de la période ? L'opération est rejouable et ne double jamais un mois déjà couvert."
           >
             <Champ
               nom="depuis"
               libelle="Premier mois du club"
               type="month"
               valeur={CLUB.dateCreation.slice(0, 7)}
-              aide="Le club a-t-il cotise des sa constitution, ou seulement a l'ouverture du compte ?"
+              aide="Le club a-t-il cotisé dès sa constitution, ou seulement à l'ouverture du compte ?"
             />
             <Champ
               nom="jusqua"
-              libelle="Dernier mois a jour"
+              libelle="Dernier mois à jour"
               type="month"
               valeur={defautJusqua}
               aide={
                 premierDecouvert
-                  ? `Propose : le mois precedant le premier decouvert (${moisLong(premierDecouvert)}). Les mois suivants resteront des retards.`
-                  : "Le dernier mois ou tout le monde etait a jour."
+                  ? `Proposé : le mois précédant le premier découvert (${moisLong(premierDecouvert)}). Les mois suivants resteront des retards.`
+                  : "Le dernier mois où tout le monde était à jour."
               }
             />
             <Champ
@@ -846,10 +846,10 @@ export default async function PageAdministration() {
                     strokeLinejoin="round"
                   />
                 </svg>
-                Une borne differente pour certains membres
+                Une borne différente pour certains membres
               </summary>
               <p className="mt-2 text-xs" style={{ color: "var(--discret)" }}>
-                Tous ne sont pas a jour au meme mois. Laissez vide pour appliquer la borne commune.
+                Tous ne sont pas à jour au même mois. Laissez vide pour appliquer la borne commune.
               </p>
               {membres.map((m) => (
                 <Champ
@@ -867,24 +867,24 @@ export default async function PageAdministration() {
 
       <Tuile
         icone={<Icone.horloge />}
-        titre="Reprise des penalites"
-        resume="Le decompte que le tresorier tenait a la main."
+        titre="Reprise des pénalités"
+        resume="Le décompte que le trésorier tenait à la main."
       >
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          Les penalites anterieures ne peuvent pas naitre du calcul : une fois l&apos;historique
-          repris, tous les mois passes portent la date de leur echeance, donc sont a l&apos;heure.
-          Le retard reel de l&apos;epoque n&apos;est connu que du tresorier, qui l&apos;a suivi a la
-          main. Saisissez ici le nombre de mois qu&apos;il annonce pour chacun — a{" "}
+          Les pénalités antérieures ne peuvent pas naître du calcul : une fois l&apos;historique
+          repris, tous les mois passés portent la date de leur échéance, donc sont à l&apos;heure.
+          Le retard réel de l&apos;époque n&apos;est connu que du trésorier, qui l&apos;a suivi à la
+          main. Saisissez ici le nombre de mois qu&apos;il annonce pour chacun, à{" "}
           {fcfa(Math.round(reglages.cotisationMensuelle * reglages.tauxPenalite))} le mois.
         </p>
-        <Depliant titre="Saisir les mois de penalite par membre">
+        <Depliant titre="Saisir les mois de pénalité par membre">
           <FormulaireAction action={reprendrePenalites} libelle="Porter au registre">
             <Champ
               nom="jusqua"
-              libelle="Decompte arrete a"
+              libelle="Décompte arrêté à"
               type="month"
               valeur={moisCourant}
-              aide="Le dernier mois couvert par le decompte du tresorier. Au-dela, le site prend le relais et ne recompte rien en deca."
+              aide="Le dernier mois couvert par le décompte du trésorier. Au-delà, le site prend le relais et ne recompte rien en deçà."
             />
             {membres.map((m) => (
               <Champ
@@ -901,16 +901,16 @@ export default async function PageAdministration() {
           </FormulaireAction>
         </Depliant>
         <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
-          Rejouable : la ligne d&apos;un membre est remplacee tant qu&apos;elle n&apos;a pas ete
-          soldee, jamais dupliquee. Laissez a zero ceux qui ne doivent rien. Le mois
-          d&apos;arret compte : le constat automatique ne produira plus rien en deca, ce qui evite
-          de compter deux fois les memes retards.
+          Rejouable : la ligne d&apos;un membre est remplacée tant qu&apos;elle n&apos;a pas été
+          soldée, jamais dupliquée. Laissez à zéro ceux qui ne doivent rien. Le mois
+          d&apos;arrêt compte : le constat automatique ne produira plus rien en deçà, ce qui évite
+          de compter deux fois les mêmes retards.
         </p>
       </Tuile>
 
 
       <p className="text-center text-[11px]" style={{ color: "var(--discret)" }}>
-        {CLUB.nom} &middot; fonde le {dateCourte(CLUB.dateCreation)} &middot; premier mois repris :{" "}
+        {CLUB.nom} &middot; fondé le {dateCourte(CLUB.dateCreation)} &middot; premier mois repris :{" "}
         {moisLong(`${CLUB.dateCreation.slice(0, 8)}01`)}
       </p>
     </>

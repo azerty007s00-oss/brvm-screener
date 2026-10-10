@@ -60,7 +60,7 @@ export function TetePortefeuille({
     <>
       {vise.actions !== undefined && vise.liquidites !== undefined ? (
         <>
-          Actions {nombre(vise.actions)} &middot; liquidites {nombre(vise.liquidites)} &middot;{" "}
+          Actions {nombre(vise.actions)} &middot; liquidités {nombre(vise.liquidites)} &middot;{" "}
         </>
       ) : null}
       <span className="font-medium" style={{ color: couleurSigne(vise.valeur - vise.netPlace) }}>
@@ -78,7 +78,7 @@ export function TetePortefeuille({
           {ecart >= 0 ? "+" : "−"}
           {nombre(Math.abs(ecart))} FCFA ({pourcent(variation)})
         </span>{" "}
-        depuis le releve du {dateCourte(precedente.date)}.
+        depuis le relevé du {dateCourte(precedente.date)}.
       </>
     ) : (
       `Compte-titres tenu chez ${sgi}.`
@@ -91,10 +91,10 @@ export function TetePortefeuille({
           titre="Valeur du portefeuille"
           sous={
             vise
-              ? `au releve du ${dateCourte(vise.date)}`
+              ? `au relevé du ${dateCourte(vise.date)}`
               : derniere
                 ? `au ${dateCourte(derniere.date)}`
-                : "— aucun releve saisi"
+                : "aucun relevé saisi"
           }
           chiffre={vise || derniere ? undefined : "--"}
           brut={vise ? vise.valeur : (derniere?.total ?? undefined)}
@@ -106,7 +106,7 @@ export function TetePortefeuille({
 
       {enfants}
 
-      <Carte titre="Valeur relevee" action={actionCarte}>
+      <Carte titre="Valeur relevée" action={actionCarte}>
         <CourbePortefeuille
           points={points}
           gainExercice={gainExercice}

@@ -39,9 +39,9 @@ export type IssueConstat = {
 
 /** Motif lisible, qui dit pourquoi la penalite est due et a quel titre. */
 export function motifPenalite(p: { mois: string; doublee: boolean; figee: boolean }): string {
-  const base = `Retard de versement — ${moisLong(p.mois)}`;
-  if (p.figee) return `${base} (regle apres l'echeance, penalite acquise, art. 9)`;
-  return p.doublee ? `${base} (doublee, R4)` : base;
+  const base = `Retard de versement, ${moisLong(p.mois)}`;
+  if (p.figee) return `${base} (réglé après l'échéance, pénalité acquise, art. 9)`;
+  return p.doublee ? `${base} (doublée, R4)` : base;
 }
 
 /**
@@ -175,20 +175,20 @@ export async function penalitesNonInscrites(
 export function resumeConstat({ creees, reajustees, intactes, couvertes }: IssueConstat): string {
   const sousReprise =
     couvertes > 0
-      ? ` ${couvertes} mois relevent de la reprise du tresorier et ne sont pas recomptes.`
+      ? ` ${couvertes} mois relèvent de la reprise du trésorier et ne sont pas recomptés.`
       : "";
   if (creees === 0 && reajustees === 0) {
-    return `Le registre est deja a jour, rien a constater.${sousReprise}`;
+    return `Le registre est déjà à jour, rien à constater.${sousReprise}`;
   }
   const parts: string[] = [];
   if (creees > 0) {
-    parts.push(`${creees} penalite${creees > 1 ? "s" : ""} constatee${creees > 1 ? "s" : ""}`);
+    parts.push(`${creees} pénalité${creees > 1 ? "s" : ""} constatée${creees > 1 ? "s" : ""}`);
   }
-  if (reajustees > 0) parts.push(`${reajustees} reajustee${reajustees > 1 ? "s" : ""} (R4)`);
+  if (reajustees > 0) parts.push(`${reajustees} réajustée${reajustees > 1 ? "s" : ""} (R4)`);
   if (intactes > 0) {
     parts.push(
-      `${intactes} deja reglee${intactes > 1 ? "s" : ""} ou annulee${intactes > 1 ? "s" : ""}, ` +
-        `laissee${intactes > 1 ? "s" : ""} intacte${intactes > 1 ? "s" : ""}`,
+      `${intactes} déjà réglée${intactes > 1 ? "s" : ""} ou annulée${intactes > 1 ? "s" : ""}, ` +
+        `laissée${intactes > 1 ? "s" : ""} intacte${intactes > 1 ? "s" : ""}`,
     );
   }
   return `${parts.join(", ")}.${sousReprise}`;

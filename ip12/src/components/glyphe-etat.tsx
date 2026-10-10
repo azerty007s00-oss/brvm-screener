@@ -191,7 +191,7 @@ export function Frise({
         <span
           key={c.mois}
           className="flex justify-center"
-          title={`${moisLong(c.mois)} — ${LIBELLE_STATUT[c.statut]}`}
+          title={`${moisLong(c.mois)} : ${LIBELLE_STATUT[c.statut]}`}
         >
           <GlypheEtat statut={c.statut} taille={taille} />
         </span>

@@ -40,18 +40,18 @@ import {
 } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Penalites" };
+export const metadata = { title: "Pénalités" };
 
 /** Ce que R5 emporte, en trois mots, avant le detail. */
 const LIBELLE_VOIE: Record<string, string> = {
   exclusion_plein_droit: "Exclusion de plein droit",
   plan_redressement: "Plan de redressement",
-  vote_art20: "Vote de l'assemblee (art. 20)",
+  vote_art20: "Vote de l'assemblée (art. 20)",
 };
 
 const LIBELLE_NATURE: Record<string, string> = {
   [KIND_PENALITE.retard]: "Retard de versement",
-  [KIND_PENALITE.absence]: "Absence en reunion",
+  [KIND_PENALITE.absence]: "Absence en réunion",
   [KIND_PENALITE.autre]: "Autre",
 };
 
@@ -216,9 +216,9 @@ export default async function PagePenalites() {
 
   const saisie = gere ? (
     <Panneau
-      libelle="Saisir une penalite"
-      titre="Penalite manuelle"
-      introduction="Pour une absence en reunion ou tout motif que le calcul automatique ne couvre pas."
+      libelle="Saisir une pénalité"
+      titre="Pénalité manuelle"
+      introduction="Pour une absence en réunion ou tout motif que le calcul automatique ne couvre pas."
     >
         <FormulaireAction action={ajouterPenalite} libelle="Enregistrer">
           <Selection
@@ -248,7 +248,7 @@ export default async function PagePenalites() {
           />
           <Champ
             nom="quantite"
-            libelle="Quantite"
+            libelle="Quantité"
             type="number"
             min={1}
             valeur={1}
@@ -268,19 +268,19 @@ export default async function PagePenalites() {
     <>
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <EnTeteEcran
-          titre="Penalites dues"
-          sous="a ce jour"
+          titre="Pénalités dues"
+          sous="à ce jour"
           brut={total(STATUT_PENALITE.due)}
           unite="FCFA"
-          detail="Art. 9 : la penalite reste acquise au club, meme apres regularisation du mois."
+          detail="Art. 9 : la pénalité reste acquise au club, même après régularisation du mois."
         />
         <div className="sans-impression">{saisie}</div>
       </div>
 
       <CarteEtat
         chiffres={[
-          { libelle: "Reglees", brut: total(STATUT_PENALITE.payee), unite: "FCFA" },
-          { libelle: "Annulees", brut: total(STATUT_PENALITE.annulee), unite: "FCFA" },
+          { libelle: "Réglées", brut: total(STATUT_PENALITE.payee), unite: "FCFA" },
+          { libelle: "Annulées", brut: total(STATUT_PENALITE.annulee), unite: "FCFA" },
         ]}
       />
 
@@ -290,23 +290,23 @@ export default async function PagePenalites() {
           titre={
             regleEnVigueur
               ? `${exposes.length} membre(s) exclus de plein droit`
-              : `${exposes.length} membre(s) exposes a compter du ${dateEffet}`
+              : `${exposes.length} membre(s) exposés à compter du ${dateEffet}`
           }
         >
           <p>
-            Les penalites sont indissociables des cotisations :{" "}
-            {REGLES.penalitesImpayeesAvantExclusion} penalites de retard
-            impayees emportent l&apos;exclusion (R5), meme si les cotisations
-            sont a jour.
-            {regleEnVigueur ? "" : ` La regle prend effet le ${dateEffet}.`}
+            Les pénalités sont indissociables des cotisations :{" "}
+            {REGLES.penalitesImpayeesAvantExclusion} pénalités de retard
+            impayées emportent l&apos;exclusion (R5), même si les cotisations
+            sont à jour.
+            {regleEnVigueur ? "" : ` La règle prend effet le ${dateEffet}.`}
           </p>
           <ul className="mt-1 space-y-0.5">
             {exposes.map((x) => (
               <li key={x.membreId}>
-                {x.nom} &middot; {x.nbPenalitesImpayees} penalites impayees
+                {x.nom} &middot; {x.nbPenalitesImpayees} pénalités impayées
                 {x.issue.applicable && (
                   <span className="block text-xs" style={{ color: "var(--discret)" }}>
-                    {LIBELLE_VOIE[x.issue.voie ?? ""] ?? ""} &mdash; {x.issue.texte}
+                    {LIBELLE_VOIE[x.issue.voie ?? ""] ?? ""} : {x.issue.texte}
                   </span>
                 )}
               </li>
@@ -316,11 +316,11 @@ export default async function PagePenalites() {
       )}
 
       {avances.length > 0 && (
-        <Carte titre="Avances imposees">
+        <Carte titre="Avances imposées">
           <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            Mesure disciplinaire : le membre doit detenir en permanence
-            l&apos;avance indiquee. Elle s&apos;exprime en mois, pour
-            qu&apos;une cotisation revue en assemblee ne l&apos;allege pas sans
+            Mesure disciplinaire : le membre doit détenir en permanence
+            l&apos;avance indiquée. Elle s&apos;exprime en mois, pour
+            qu&apos;une cotisation revue en assemblée ne l&apos;allège pas sans
             qu&apos;on l&apos;ait voulu.
           </p>
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
@@ -333,7 +333,7 @@ export default async function PagePenalites() {
                   <p className="flex items-center gap-1.5 text-sm font-medium">
                     {a.membreNom}
                     <Badge ton={a.respectee ? "vert" : "rouge"}>
-                      {a.respectee ? "Respectee" : "Non respectee"}
+                      {a.respectee ? "Respectée" : "Non respectée"}
                     </Badge>
                   </p>
                   <p className="text-xs" style={{ color: "var(--discret)" }}>
@@ -342,10 +342,10 @@ export default async function PagePenalites() {
                       * restent : « 3 mois exiges, soit 10 000 » se contredirait.
                       */}
                     {a.moisRequis < a.mois
-                      ? `${a.moisRequis} mois restant${a.moisRequis > 1 ? "s" : ""} exige${a.moisRequis > 1 ? "s" : ""} sur ${a.mois}`
-                      : `${a.mois} mois exiges`}
+                      ? `${a.moisRequis} mois restant${a.moisRequis > 1 ? "s" : ""} exigé${a.moisRequis > 1 ? "s" : ""} sur ${a.mois}`
+                      : `${a.mois} mois exigés`}
                     , soit {fcfa(a.montantExige)} &middot;
-                    detenu {fcfa(a.avanceDetenue)}
+                    détenu {fcfa(a.avanceDetenue)}
                     {a.fin ? ` · jusqu'au ${dateCourte(a.fin)}` : ""}
                   </p>
                 </div>
@@ -370,22 +370,22 @@ export default async function PagePenalites() {
        */}
       {circuitPret && mesLignesDues.length > 0 && (
         <div className="sans-impression">
-          <Carte titre="Regler vos penalites">
+          <Carte titre="Régler vos pénalités">
             <p className="mb-4 text-[13px]" style={{ color: "var(--ink-2)" }}>
-              Le reglement se declare depuis Versements : choisissez « une penalite », puis
-              indiquez le montant verse. Il solde vos penalites de la plus ancienne a la plus
-              recente, et part au tresorier, qui le valide.
+              Le règlement se déclare depuis Versements : choisissez « une pénalité », puis
+              indiquez le montant versé. Il solde vos pénalités de la plus ancienne à la plus
+              récente, et part au trésorier, qui le valide.
             </p>
-            <LienBouton href="/versements">Declarer un reglement</LienBouton>
+            <LienBouton href="/versements">Déclarer un règlement</LienBouton>
           </Carte>
         </div>
       )}
 
       {/* Vide, elle disait « aucun reglement en attente » : l'accueil compte deja cette file. */}
       {gere && circuitPret && lotsAExaminer.length > 0 && (
-        <Carte titre={`Reglements declares, a verifier (${lotsAExaminer.length})`}>
+        <Carte titre={`Règlements déclarés, à vérifier (${lotsAExaminer.length})`}>
           {lotsAExaminer.length === 0 ? (
-            <Vide>Aucun reglement declare en attente.</Vide>
+            <Vide>Aucun règlement déclaré en attente.</Vide>
           ) : (
             <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
               {lotsAExaminer.map(({ cle, parLot, premiere: r, lignes, montant, quantite }) => (
@@ -397,24 +397,24 @@ export default async function PagePenalites() {
                         {quantite > 1 && (
                           <span className="font-normal" style={{ color: "var(--discret)" }}>
                             {" "}
-                            ({quantite} penalites)
+                            ({quantite} pénalités)
                           </span>
                         )}
                       </p>
                       <p className="text-xs" style={{ color: "var(--discret)" }}>
-                        Paye le {dateCourte(r.date_paiement)} &middot; {libelleMode(r.mode)}
-                        {r.reference ? ` · ref. ${r.reference}` : ""}
+                        Payé le {dateCourte(r.date_paiement)} &middot; {libelleMode(r.mode)}
+                        {r.reference ? ` · réf. ${r.reference}` : ""}
                       </p>
                       <ul className="mt-1 space-y-0.5">
                         {lignes.map((l) => (
                           <li key={l.id} className="text-xs" style={{ color: "var(--discret)" }}>
-                            {LIBELLE_NATURE[l.nature] ?? l.nature} constatee le{" "}
+                            {LIBELLE_NATURE[l.nature] ?? l.nature} constatée le{" "}
                             {dateCourte(l.date_constat)} &middot; {l.quantite} ×{" "}
                             {fcfa(l.montant_unitaire)}
                             {l.quantite < l.quantite_ligne && (
                               <span style={{ color: "var(--etat-attente)" }}>
                                 {" "}
-                                — partiel : {l.quantite} sur {l.quantite_ligne}, le reste restera dû
+                                (partiel : {l.quantite} sur {l.quantite_ligne}, le reste restera dû)
                               </span>
                             )}
                           </li>
@@ -440,13 +440,13 @@ export default async function PagePenalites() {
                                   color: "var(--etat-ok)",
                                 }}
                               >
-                                {j.mime === "application/pdf" ? "Bordereau PDF" : "Voir le recu"}
+                                {j.mime === "application/pdf" ? "Bordereau PDF" : "Voir le reçu"}
                               </a>
                             ))}
                           </span>
                         ) : (
                           <span className="text-xs" style={{ color: "var(--etat-attente)" }}>
-                            Aucun justificatif joint — a verifier avant de valider.
+                            Aucun justificatif joint : à vérifier avant de valider.
                           </span>
                         )}
                       </div>
@@ -458,8 +458,8 @@ export default async function PagePenalites() {
                         compact
                         confirmation={
                           lignes.length > 1
-                            ? `Valider ce reglement de ${fcfa(montant)} ? Les ${lignes.length} penalites seront soldees.`
-                            : "Valider ce reglement ? La penalite sera soldee."
+                            ? `Valider ce règlement de ${fcfa(montant)} ? Les ${lignes.length} pénalités seront soldées.`
+                            : "Valider ce règlement ? La pénalité sera soldée."
                         }
                       >
                         <ChampCache nom={parLot ? "lot" : "id"} valeur={cle} />
@@ -471,8 +471,8 @@ export default async function PagePenalites() {
                         compact
                         confirmation={
                           lignes.length > 1
-                            ? `Refuser ce reglement ? Les ${lignes.length} penalites resteront dues.`
-                            : "Refuser ce reglement ? La penalite restera due."
+                            ? `Refuser ce règlement ? Les ${lignes.length} pénalités resteront dues.`
+                            : "Refuser ce règlement ? La pénalité restera due."
                         }
                       >
                         <ChampCache nom={parLot ? "lot" : "id"} valeur={cle} />
@@ -498,7 +498,7 @@ export default async function PagePenalites() {
       )}
 
       {!gere && mesDeclarations.length > 0 && (
-        <Carte titre={`Mes reglements declares (${mesDeclarations.length})`}>
+        <Carte titre={`Mes règlements déclarés (${mesDeclarations.length})`}>
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {mesDeclarations.map((r) => (
               <li key={r.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
@@ -513,8 +513,8 @@ export default async function PagePenalites() {
                     )}
                   </p>
                   <p className="text-xs" style={{ color: "var(--discret)" }}>
-                    {LIBELLE_NATURE[r.nature] ?? r.nature} &middot; declare le{" "}
-                    {dateCourte(r.cree_le)} &middot; paye le {dateCourte(r.date_paiement)}
+                    {LIBELLE_NATURE[r.nature] ?? r.nature} &middot; déclaré le{" "}
+                    {dateCourte(r.cree_le)} &middot; payé le {dateCourte(r.date_paiement)}
                   </p>
                   {r.motif_refus && (
                     <p className="mt-0.5 text-xs italic" style={{ color: "var(--perte)" }}>
@@ -532,9 +532,9 @@ export default async function PagePenalites() {
                   }
                 >
                   {r.statut === STATUT_REGLEMENT.validee
-                    ? "Valide"
+                    ? "Validé"
                     : r.statut === STATUT_REGLEMENT.rejetee
-                      ? "Refuse"
+                      ? "Refusé"
                       : "En attente"}
                 </Badge>
               </li>
@@ -547,11 +547,11 @@ export default async function PagePenalites() {
         titre={
           gere
             ? `Registre (${penalites.length})`
-            : `Mes penalites (${penalites.length})`
+            : `Mes pénalités (${penalites.length})`
         }
       >
         {penalites.length === 0 ? (
-          <Vide>Aucune penalite enregistree.</Vide>
+          <Vide>Aucune pénalité enregistrée.</Vide>
         ) : (
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {penalites.map((p) => (
@@ -581,16 +581,16 @@ export default async function PagePenalites() {
                         {p.statut === STATUT_PENALITE.due
                           ? "Due"
                           : p.statut === STATUT_PENALITE.payee
-                            ? "Reglee"
-                            : "Annulee"}
+                            ? "Réglée"
+                            : "Annulée"}
                       </Badge>
                       {!p.auto && <Badge ton="ambre">Saisie</Badge>}
                     </p>
                     <p className="text-xs" style={{ color: "var(--discret)" }}>
-                      {LIBELLE_NATURE[p.nature] ?? p.nature} &middot; constatee
+                      {LIBELLE_NATURE[p.nature] ?? p.nature} &middot; constatée
                       le {dateCourte(p.date_constat)}
                       {p.date_reglement
-                        ? ` · soldee le ${dateCourte(p.date_reglement)}`
+                        ? ` · soldée le ${dateCourte(p.date_reglement)}`
                         : ""}
                     </p>
                     {p.motif && (
@@ -620,12 +620,12 @@ export default async function PagePenalites() {
                    */}
                   {gere && (
                     <MenuLigne
-                      etiquette={`Actions sur la penalite de ${p.membre_nom} du ${dateCourte(p.date_constat)}`}
+                      etiquette={`Actions sur la pénalité de ${p.membre_nom} du ${dateCourte(p.date_constat)}`}
                       actions={
                         p.statut === STATUT_PENALITE.due
                           ? [
                               {
-                                libelle: "Marquer reglee",
+                                libelle: "Marquer réglée",
                                 action: reglerPenalite,
                                 champs: (
                                   <>
@@ -633,7 +633,7 @@ export default async function PagePenalites() {
                                     {p.quantite > 1 && (
                                       <ChampMenu
                                         nom="quantite"
-                                        libelle={`Mois regles, sur ${p.quantite}`}
+                                        libelle={`Mois réglés, sur ${p.quantite}`}
                                         type="number"
                                         min={1}
                                         max={p.quantite}
@@ -645,12 +645,12 @@ export default async function PagePenalites() {
                                 ),
                                 confirmation:
                                   p.quantite > 1
-                                    ? `Combien des ${p.quantite} mois sont regles ? Laissez vide pour tout solder.`
-                                    : "Marquer cette penalite comme reglee ?",
-                                confirmer: "Marquer reglee",
+                                    ? `Combien des ${p.quantite} mois sont réglés ? Laissez vide pour tout solder.`
+                                    : "Marquer cette pénalité comme réglée ?",
+                                confirmer: "Marquer réglée",
                               },
                               {
-                                libelle: "Annuler la penalite",
+                                libelle: "Annuler la pénalité",
                                 action: annulerPenalite,
                                 champs: (
                                   <>
@@ -658,17 +658,17 @@ export default async function PagePenalites() {
                                     <ChampMenu
                                       nom="motif"
                                       libelle="Motif de l'annulation"
-                                      indication="Derogation, erreur de constat..."
+                                      indication="Dérogation, erreur de constat..."
                                     />
                                   </>
                                 ),
-                                confirmation: "Annuler cette penalite ?",
-                                confirmer: "Annuler la penalite",
+                                confirmation: "Annuler cette pénalité ?",
+                                confirmer: "Annuler la pénalité",
                               },
                             ]
                           : [
                               {
-                                libelle: "Remettre en du",
+                                libelle: "Remettre en dû",
                                 action: rouvrirPenalite,
                                 champs: (
                                   <>
@@ -676,12 +676,12 @@ export default async function PagePenalites() {
                                     <ChampMenu
                                       nom="motif"
                                       libelle="Motif de la reprise"
-                                      indication="Reglement annule, erreur..."
+                                      indication="Règlement annulé, erreur..."
                                     />
                                   </>
                                 ),
-                                confirmation: "Remettre cette penalite en du ?",
-                                confirmer: "Remettre en du",
+                                confirmation: "Remettre cette pénalité en du ?",
+                                confirmer: "Remettre en dû",
                               },
                             ]
                       }
@@ -708,28 +708,28 @@ export default async function PagePenalites() {
       {gere && aConstater.length > 0 && (
         <Carte titre="Constater les retards">
           <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            Le site calcule ce que les statuts prevoient ; c&apos;est le bureau
-            qui le porte au registre. Cette action est rejouable : une penalite
-            deja reglee ou annulee n&apos;est jamais retouchee, seules celles
-            encore dues voient leur montant reajuste si R4 vient a
+            Le site calcule ce que les statuts prévoient ; c&apos;est le bureau
+            qui le porte au registre. Cette action est rejouable : une pénalité
+            déjà réglée ou annulée n&apos;est jamais retouchée, seules celles
+            encore dues voient leur montant réajusté si R4 vient à
             s&apos;appliquer.
           </p>
           {aConstater.length === 0 ? (
             <Alerte ton="vert">
-              Le registre est a jour : rien de nouveau a constater.
+              Le registre est à jour : rien de nouveau à constater.
             </Alerte>
           ) : (
             <>
               <Alerte
                 ton="ambre"
-                titre={`${aConstater.length} penalite${aConstater.length > 1 ? "s" : ""} a constater`}
+                titre={`${aConstater.length} pénalité${aConstater.length > 1 ? "s" : ""} à constater`}
               >
                 <ul className="mt-1 space-y-0.5">
                   {aConstater.slice(0, 8).map((p, i) => (
                     <li key={`${p.nom}-${p.mois}-${i}`}>
                       {p.nom} &middot; {moisLong(p.mois)} &middot;{" "}
                       {fcfa(p.montant)}
-                      {p.doublee ? " (doublee, R4)" : ""}
+                      {p.doublee ? " (doublée, R4)" : ""}
                     </li>
                   ))}
                   {aConstater.length > 8 && (
@@ -748,7 +748,7 @@ export default async function PagePenalites() {
                 action={constaterPenalitesRetard}
                 libelle="Porter au registre"
                 variante="discret"
-                confirmation={`Constater ${aConstater.length} penalite(s) de retard ?`}
+                confirmation={`Constater ${aConstater.length} pénalité(s) de retard ?`}
               />
             </>
           )}
@@ -759,14 +759,14 @@ export default async function PagePenalites() {
         <Carte titre="Constater les absences">
           <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
             {fcfa(REGLES.penaliteAbsence)} par tranche de{" "}
-            {REGLES.absencesParTranche} absences injustifiees. Le club
-            sanctionne la repetition, non l&apos;empechement ponctuel : une
-            absence isolee ne coute rien. Pour en justifier une, le secretaire
-            la passe en &laquo;&nbsp;Excuse&nbsp;&raquo; sur la seance, depuis
-            la page Reunions — elle sort alors du compte.
+            {REGLES.absencesParTranche} absences injustifiées. Le club
+            sanctionne la répétition, non l&apos;empêchement ponctuel : une
+            absence isolée ne coûte rien. Pour en justifier une, le secrétaire
+            la passe en &laquo;&nbsp;Excusé&nbsp;&raquo; sur la séance, depuis
+            la page Réunions : elle sort alors du compte.
           </p>
           {absences.length === 0 ? (
-            <Vide>Aucune feuille de presence pointee.</Vide>
+            <Vide>Aucune feuille de présence pointée.</Vide>
           ) : (
             <>
               <ul
@@ -782,10 +782,10 @@ export default async function PagePenalites() {
                     >
                       <span>{a.nom}</span>
                       <span style={{ color: "var(--discret)" }}>
-                        {a.injustifiees} injustifiee
+                        {a.injustifiees} injustifiée
                         {a.injustifiees > 1 ? "s" : ""}
                         {a.excusees > 0
-                          ? ` · ${a.excusees} excusee${a.excusees > 1 ? "s" : ""}`
+                          ? ` · ${a.excusees} excusée${a.excusees > 1 ? "s" : ""}`
                           : ""}
                       </span>
                     </li>
@@ -793,14 +793,14 @@ export default async function PagePenalites() {
               </ul>
               {absencesAConstater.length === 0 ? (
                 <Alerte ton="vert">
-                  Le registre est a jour : aucune tranche d&apos;absences a
+                  Le registre est à jour : aucune tranche d&apos;absences à
                   porter.
                 </Alerte>
               ) : (
                 <>
                   <Alerte
                     ton="ambre"
-                    titre={`${absencesAConstater.length} tranche${absencesAConstater.length > 1 ? "s" : ""} a constater`}
+                    titre={`${absencesAConstater.length} tranche${absencesAConstater.length > 1 ? "s" : ""} à constater`}
                   >
                     <ul className="mt-1 space-y-0.5">
                       {absencesAConstater.map((t, i) => (
@@ -816,7 +816,7 @@ export default async function PagePenalites() {
                     action={constaterPenalitesAbsence}
                     libelle="Porter au registre"
                     variante="discret"
-                    confirmation={`Constater ${absencesAConstater.length} penalite(s) d'absence ?`}
+                    confirmation={`Constater ${absencesAConstater.length} pénalité(s) d'absence ?`}
                   />
                 </>
               )}

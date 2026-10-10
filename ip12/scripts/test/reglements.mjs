@@ -307,7 +307,7 @@ r = await actions.declarerReglementPenalite(
   {},
   formulaire({ montant: 1000, datePaiement: AUJOURDHUI, mode: "especes" }),
 );
-verifier(!r.ok && /deja une declaration en attente/.test(r.erreur ?? ""),
+verifier(!r.ok && /déjà une déclaration en attente/.test(r.erreur ?? ""),
   "une ligne deja declaree est enjambee, et s'il n'en reste pas d'autre le refus le dit");
 
 /* ------------------------------------- personne ne declare pour un autre */
@@ -331,7 +331,7 @@ r = await actions.declarerReglementPenalite(
   {},
   formulaire({ montant: 1500, datePaiement: AUJOURDHUI, mode: "especes" }),
 );
-verifier(!r.ok && /se regle entiere/.test(r.erreur ?? ""),
+verifier(!r.ok && /se règle entière/.test(r.erreur ?? ""),
   "declarer plus que ce qui peut s'imputer doit etre refuse, en nommant la part declarable");
 
 r = await actions.declarerReglementPenalite(
@@ -383,7 +383,7 @@ r = await actions.declarerReglementPenalite(
 verifier(r.ok, `le tresorier doit pouvoir declarer pour lui-meme : ${r.erreur ?? ""}`);
 const laSienne = lire(`select id from penalty_settlements where penalty_id='${sienne}';`);
 r = await actions.validerReglementPenalite({}, formulaire({ id: laSienne }));
-verifier(!r.ok && /votre propre declaration/.test(r.erreur ?? ""),
+verifier(!r.ok && /votre propre déclaration/.test(r.erreur ?? ""),
   "nul ne valide sa propre declaration, fut-il tresorier");
 egal(lire(`select status from penalties where id='${sienne}';`), "due",
   "la penalite du tresorier reste due tant que le president n'a pas tranche");
@@ -516,7 +516,7 @@ verifier(r.ok, `le tresorier declare pour lui-meme : ${r.erreur ?? ""}`);
 const lotTresorier = lire(`select batch_id from penalty_settlements
                            where penalty_id='${t1}' and status='en_attente';`);
 r = await actions.validerReglementPenalite({}, formulaire({ lot: lotTresorier }));
-verifier(!r.ok && /votre propre declaration/.test(r.erreur ?? ""),
+verifier(!r.ok && /votre propre déclaration/.test(r.erreur ?? ""),
   "un lot declare par le tresorier ne se valide pas par lui");
 egal(lire(`select count(*) from penalty_settlements
            where batch_id='${lotTresorier}' and status='en_attente';`), "2",

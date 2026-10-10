@@ -39,13 +39,13 @@ export default async function PageConnexion() {
           {CLUB.nom}
         </p>
         <p className="mt-1 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-          Club d&apos;investissement &middot; {CLUB.ville}, Cote d&apos;Ivoire
+          Club d&apos;investissement &middot; {CLUB.ville}, Côte d&apos;Ivoire
         </p>
       </div>
 
       {!baseConfiguree() ? (
-        <Alerte ton="rouge" titre="Base de donnees non configuree">
-          La variable <code>DATABASE_URL</code> n&apos;est pas renseignee. Ajoutez-la dans les
+        <Alerte ton="rouge" titre="Base de données non configurée">
+          La variable <code>DATABASE_URL</code> n&apos;est pas renseignée. Ajoutez-la dans les
           variables d&apos;environnement du projet, puis rechargez cette page.
         </Alerte>
       ) : (
@@ -75,13 +75,13 @@ export default async function PageConnexion() {
             * l'ecran de connexion, et ne s'impose a personne.
             */}
           <div className="mt-4">
-            <Depliant titre="Mot de passe oublie ?">
+            <Depliant titre="Mot de passe oublié ?">
               <p className="mb-3 text-[12.5px]" style={{ color: "var(--ink-2)" }}>
-                Indiquez l&apos;adresse avec laquelle vous vous connectez. Le president en
+                Indiquez l&apos;adresse avec laquelle vous vous connectez. Le président en
                 sera averti et vous donnera un mot de passe provisoire. Aucun mot de passe
                 ne circule par courriel.
               </p>
-              <FormulaireAction action={demanderReinitialisation} libelle="Prevenir le president">
+              <FormulaireAction action={demanderReinitialisation} libelle="Prévenir le président">
                 <Champ nom="email" libelle="Votre e-mail" type="email" autoComplete="email" />
               </FormulaireAction>
             </Depliant>

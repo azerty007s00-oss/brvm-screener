@@ -190,14 +190,14 @@ export default async function TableauDeBord() {
       <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5">
         <EnTeteEcran
           titre="Ma part"
-          sous={s.valorisation ? `au ${dateCourte(s.valorisation.date_valo)}` : "— aucun releve saisi"}
+          sous={s.valorisation ? `au ${dateCourte(s.valorisation.date_valo)}` : "aucun relevé saisi"}
           chiffre={maPart && s.valorisation ? undefined : "--"}
           brut={maPart && s.valorisation ? maPart.valeur : undefined}
           unite={maPart && s.valorisation ? "FCFA" : undefined}
           detail={
             maPart
-              ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % du portefeuille, au prorata de mes versements valides.`
-              : "Votre part se calcule des votre premier versement valide."
+              ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % du portefeuille, au prorata de mes versements validés.`
+              : "Votre part se calcule dès votre premier versement validé."
           }
         />
         {/*
@@ -234,11 +234,11 @@ export default async function TableauDeBord() {
           */}
         <div className="flex flex-col gap-11 xl:order-2">
           {maSituation && (
-            <Carte titre={aFaire ? "A faire" : "Rien a faire"}>
+            <Carte titre={aFaire ? "À faire" : "Rien à faire"}>
               {!aFaire ? (
                 <p className="flex items-center gap-2.5 text-[13px]" style={{ color: "var(--ink-2)" }}>
                   <GlypheEtat statut="paye" taille={18} />
-                  Vous etes a jour. Prochaine echeance le {REGLES.jourEcheance} du mois.
+                  Vous êtes à jour. Prochaine échéance le {REGLES.jourEcheance} du mois.
                 </p>
               ) : (
                 <>
@@ -250,14 +250,14 @@ export default async function TableauDeBord() {
                       <p className="text-[14px] font-medium" style={{ color: "var(--etat-manque)" }}>
                         {maSituation.nbMoisRetard > 0
                           ? `${maSituation.nbMoisRetard} mois de cotisation en retard`
-                          : "Penalites de retard a regler"}
+                          : "Pénalités de retard à régler"}
                       </p>
                       <p className="mt-1 text-[13px] leading-relaxed" style={{ color: "var(--ink-2)" }}>
                         {maSituation.moisEnRetard.length > 0
                           ? `${maSituation.moisEnRetard.map((m) => moisLong(m)).join(", ")}. `
                           : ""}
-                        La penalite de l&apos;art. 9 reste acquise au club, meme apres
-                        regularisation.
+                        La pénalité de l&apos;art. 9 reste acquise au club, même après
+                        régularisation.
                       </p>
                     </div>
                   </div>
@@ -273,7 +273,7 @@ export default async function TableauDeBord() {
                            * tout ce qu'il faut verser pour etre a jour -- le
                            * meme calcul que le courrier de relance.
                            */
-                          libelle: "Cotisations a regler",
+                          libelle: "Cotisations à régler",
                           brut: cotisationsARegler(maSituation.cellules).total,
                         },
                         {
@@ -284,7 +284,7 @@ export default async function TableauDeBord() {
                            * retard. Elle porte maintenant la dette entiere, et le
                            * dit.
                            */
-                          libelle: "Penalites dues",
+                          libelle: "Pénalités dues",
                           brut: maDette,
                         },
                       ]}
@@ -292,21 +292,21 @@ export default async function TableauDeBord() {
                   </div>
 
                   <div className="mt-5">
-                    <LienBouton href="/versements">Declarer mon versement</LienBouton>
+                    <LienBouton href="/versements">Déclarer mon versement</LienBouton>
                   </div>
                 </>
               )}
 
               {maSituation.voteSuspendu && (
                 <p className="mt-4 text-[12.5px]" style={{ color: "var(--etat-manque)" }}>
-                  R2 : votre droit de vote est suspendu au-dela de{" "}
-                  {REGLES.suspensionVoteApresJours} jours de retard, jusqu&apos;a regularisation
-                  complete.
+                  R2 : votre droit de vote est suspendu au-delà de{" "}
+                  {REGLES.suspensionVoteApresJours} jours de retard, jusqu&apos;à régularisation
+                  complète.
                 </p>
               )}
               {maSituation.declarationRequise && (
                 <p className="mt-2 text-[12.5px]" style={{ color: "var(--etat-attente)" }}>
-                  R3 : vous devez declarer ce retard sur le groupe WhatsApp du club en taguant tous
+                  R3 : vous devez déclarer ce retard sur le groupe WhatsApp du club en taguant tous
                   les membres, puis l&apos;enregistrer depuis la page{" "}
                   <Link href="/versements" className="underline">
                     Versements
@@ -329,20 +329,20 @@ export default async function TableauDeBord() {
             (s.enAttenteValidation > 0 ||
               reglementsEnAttente.length > 0 ||
               mouvementsEnAttente.length > 0) && (
-            <Carte titre="A traiter">
+            <Carte titre="À traiter">
               <ul>
                 {s.enAttenteValidation > 0 && (
                   <LigneATraiter
                     compte={s.enAttenteValidation}
-                    titre={`Versement${s.enAttenteValidation > 1 ? "s" : ""} a valider`}
-                    detail="Declares par les membres, en attente de votre visa"
+                    titre={`Versement${s.enAttenteValidation > 1 ? "s" : ""} à valider`}
+                    detail="Déclarés par les membres, en attente de votre visa"
                     href="/versements"
                   />
                 )}
                 {reglementsEnAttente.length > 0 && (
                   <LigneATraiter
                     compte={reglementsEnAttente.length}
-                    titre={`Reglement${reglementsEnAttente.length > 1 ? "s" : ""} de penalite a valider`}
+                    titre={`Règlement${reglementsEnAttente.length > 1 ? "s" : ""} de pénalité à valider`}
                     detail={[...new Set(reglementsEnAttente.map((r) => r.membre_nom))].join(", ")}
                     href="/penalites"
                   />
@@ -350,7 +350,7 @@ export default async function TableauDeBord() {
                 {mouvementsEnAttente.length > 0 && (
                   <LigneATraiter
                     compte={mouvementsEnAttente.length}
-                    titre={`Mouvement${mouvementsEnAttente.length > 1 ? "s" : ""} de caisse a valider`}
+                    titre={`Mouvement${mouvementsEnAttente.length > 1 ? "s" : ""} de caisse à valider`}
                     detail="Saisis, en attente de votre visa"
                     href="/caisse"
                   />
@@ -361,7 +361,7 @@ export default async function TableauDeBord() {
 
           <Carte titre={`Retardataires (${retardataires.length})`}>
             {retardataires.length === 0 ? (
-              <Vide>Aucun retard : les {situations.length} membres sont a jour.</Vide>
+              <Vide>Aucun retard : les {situations.length} membres sont à jour.</Vide>
             ) : (
               <ul>
                 {retardataires.map((r) => (
@@ -387,9 +387,9 @@ export default async function TableauDeBord() {
                   .filter((r) => r.voteSuspendu || r.declarationRequise)
                   .map(
                     (r) =>
-                      `${r.nom} : ${[r.voteSuspendu ? "vote suspendu" : null, r.declarationRequise ? "R3 a declarer" : null].filter(Boolean).join(" · ")}`,
+                      `${r.nom} : ${[r.voteSuspendu ? "vote suspendu" : null, r.declarationRequise ? "R3 à déclarer" : null].filter(Boolean).join(" · ")}`,
                   )
-                  .join(" — ")}
+                  .join(" ; ")}
               </p>
             )}
           </Carte>
@@ -418,8 +418,8 @@ export default async function TableauDeBord() {
               <div className="mt-5">
                 <Couple
                   chiffres={[
-                    { libelle: "Versements valides", brut: maSituation.verse },
-                    { libelle: "Penalites dues", brut: maDette },
+                    { libelle: "Versements validés", brut: maSituation.verse },
+                    { libelle: "Pénalités dues", brut: maDette },
                   ]}
                 />
               </div>
@@ -430,12 +430,12 @@ export default async function TableauDeBord() {
             titre={`Le club en ${moisLong(moisCourant)}`}
             action={
               <span className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-                {payesCeMois} sur {moisDuClub.length} payees
+                {payesCeMois} sur {moisDuClub.length} payées
               </span>
             }
           >
             {moisDuClub.length === 0 ? (
-              <Vide>Aucun mois en cours a suivre.</Vide>
+              <Vide>Aucun mois en cours à suivre.</Vide>
             ) : (
               <>
                 <div
@@ -463,7 +463,7 @@ export default async function TableauDeBord() {
             <CarteEtat
               colonnes={2}
               chiffres={[
-                { libelle: "Verse par le club", brut: s.totalVerse, unite: "FCFA" },
+                { libelle: "Versé par le club", brut: s.totalVerse, unite: "FCFA" },
                 { libelle: "Place en bourse", brut: s.totalApports, unite: "FCFA" },
                 { libelle: "En caisse", brut: s.totalEnCaisse, unite: "FCFA" },
                 { libelle: "Membres", brut: situations.length },
@@ -503,25 +503,25 @@ export default async function TableauDeBord() {
                     strokeLinejoin="round"
                   />
                 </svg>
-                Comment la performance est calculee
+                Comment la performance est calculée
               </summary>
               <div
                 className="contenu-depliant space-y-2 pt-1 pb-2 pl-8 text-[13px] leading-relaxed"
                 style={{ color: "var(--ink-2)" }}
               >
                 <p>
-                  Le taux annualise porte sur les dates reelles de virement au compte-titres.
+                  Le taux annualisé porte sur les dates réelles de virement au compte-titres.
                   {s.triPeriode && (
                     <>
                       {" "}
                       Il couvre {dureeEnClair(s.triPeriode.annees)} de placement, du{" "}
                       {dateCourte(s.triPeriode.debut)} au {dateCourte(s.triPeriode.fin)}, date du
-                      dernier releve.
+                      dernier relevé.
                       {s.triPeriode.debut === CLUB.ouvertureCompteTitres && (
                         <>
                           {" "}
-                          La periode part de l&apos;ouverture du compte chez {CLUB.sgi} : les
-                          virements anterieurs avaient quitte la caisse, mais n&apos;etaient pas
+                          La période part de l&apos;ouverture du compte chez {CLUB.sgi} : les
+                          virements antérieurs avaient quitté la caisse, mais n&apos;étaient pas
                           encore places.
                         </>
                       )}
@@ -530,7 +530,7 @@ export default async function TableauDeBord() {
                 </p>
                 {s.exercice?.rendement != null && (
                   <p>
-                    L&apos;exercice en cours suit la methode Dietz modifiee : gain de gestion{" "}
+                    L&apos;exercice en cours suit la méthode Dietz modifiée : gain de gestion{" "}
                     {fcfa(s.exercice.gain)} sur un capital moyen de {fcfa(s.exercice.capitalMoyen)}.
                   </p>
                 )}
@@ -542,7 +542,7 @@ export default async function TableauDeBord() {
 
       <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
         Cotisation statutaire : {fcfa(REGLES.cotisationMensuelle)} par mois et par membre, exigible
-        le {REGLES.jourEcheance} (art. 8). Club fonde le {dateCourte(CLUB.dateCreation)}.
+        le {REGLES.jourEcheance} (art. 8). Club fondé le {dateCourte(CLUB.dateCreation)}.
       </p>
     </>
   );

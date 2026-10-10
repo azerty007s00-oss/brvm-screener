@@ -34,7 +34,7 @@ export function ChampJustificatif() {
       return;
     }
     if (!MIMES.includes(fichier.type)) {
-      setErreur("Formats acceptes : photo (JPEG, PNG, WebP) ou PDF.");
+      setErreur("Formats acceptés : photo (JPEG, PNG, WebP) ou PDF.");
       return;
     }
 
@@ -79,7 +79,7 @@ export function ChampJustificatif() {
 
       {enCours && (
         <span className="mt-1 block text-xs" style={{ color: "var(--discret)" }}>
-          Preparation du fichier…
+          Préparation du fichier…
         </span>
       )}
       {erreur && (
@@ -89,12 +89,12 @@ export function ChampJustificatif() {
       )}
       {etat && !erreur && (
         <span className="mt-1 block text-xs" style={{ color: "var(--etat-ok)" }}>
-          {etat.nom} — {enKo(etat.taille)}
-          {etat.origine > etat.taille * 1.2 && ` (reduit depuis ${enKo(etat.origine)})`}
+          {etat.nom} ({enKo(etat.taille)})
+          {etat.origine > etat.taille * 1.2 && ` (réduit depuis ${enKo(etat.origine)})`}
         </span>
       )}
       <span className="mt-1 block text-xs" style={{ color: "var(--discret)" }}>
-        Photo du recu, capture du transfert mobile money, ou bordereau. Visible de tous les membres.
+        Photo du reçu, capture du transfert mobile money, ou bordereau. Visible de tous les membres.
       </span>
     </label>
   );

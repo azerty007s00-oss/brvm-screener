@@ -84,13 +84,13 @@ export default async function PagePortefeuille() {
       </span>
       {peutSaisir && (
         <MenuLigne
-          etiquette={`Actions sur le releve du ${dateCourte(v.date_valo)}`}
+          etiquette={`Actions sur le relevé du ${dateCourte(v.date_valo)}`}
           actions={[
             {
-              libelle: "Supprimer ce releve",
+              libelle: "Supprimer ce relevé",
               action: supprimerValorisation,
               champs: <ChampCache nom="id" valeur={v.id} />,
-              confirmation: `Supprimer le releve du ${dateCourte(v.date_valo)} ?`,
+              confirmation: `Supprimer le relevé du ${dateCourte(v.date_valo)} ?`,
               confirmer: "Supprimer",
             },
           ]}
@@ -102,25 +102,25 @@ export default async function PagePortefeuille() {
   /* Le meme formulaire, sorti du chemin de lecture. */
   const saisie = peutSaisir ? (
     <Panneau
-      libelle="Nouveau releve"
-      titre="Nouveau releve"
+      libelle="Nouveau relevé"
+      titre="Nouveau relevé"
       introduction={
         <>
-          A relever tous les {REGLES.periodiciteValorisationMois} mois sur le compte-titres, par le
-          president ou le vice-president. Une seconde saisie a la meme date remplace la precedente.
+          À relever tous les {REGLES.periodiciteValorisationMois} mois sur le compte-titres, par le
+          président ou le vice-président. Une seconde saisie à la même date remplace la précédente.
           {derniere ? (
             <>
               {" "}
-              Dernier releve : {fcfa(derniere.total)} le {dateCourte(derniere.date_valo)}.
+              Dernier relevé : {fcfa(derniere.total)} le {dateCourte(derniere.date_valo)}.
             </>
           ) : null}
         </>
       }
     >
-      <FormulaireAction action={enregistrerValorisation} libelle="Enregistrer le releve">
+      <FormulaireAction action={enregistrerValorisation} libelle="Enregistrer le relevé">
         <Champ
           nom="dateValo"
-          libelle="Date du releve"
+          libelle="Date du relevé"
           type="date"
           valeur={new Date().toISOString().slice(0, 10)}
         />
@@ -129,15 +129,15 @@ export default async function PagePortefeuille() {
           libelle="Valeur totale du compte (FCFA)"
           type="number"
           min={1}
-          aide="Le montant global du releve, liquidites comprises."
+          aide="Le montant global du relevé, liquidités comprises."
         />
         <Champ
           nom="liquidites"
-          libelle="Dont liquidites (FCFA)"
+          libelle="Dont liquidités (FCFA)"
           type="number"
           min={0}
           valeur={0}
-          aide="La part non investie. La valeur des titres s'en deduit."
+          aide="La part non investie. La valeur des titres s'en déduit."
         />
         <Champ nom="note" libelle="Note (facultatif)" requis={false} />
       </FormulaireAction>
@@ -170,7 +170,7 @@ export default async function PagePortefeuille() {
         saisie={saisie}
         actionCarte={
           <span className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-            {valos.length} releve{valos.length > 1 ? "s" : ""}
+            {valos.length} relevé{valos.length > 1 ? "s" : ""}
             {valos[0] ? ` depuis le ${dateCourte(valos[0].date_valo)}` : ""}
           </span>
         }
@@ -188,7 +188,7 @@ export default async function PagePortefeuille() {
                     : undefined,
               },
               {
-                libelle: "Liquidites",
+                libelle: "Liquidités",
                 valeur: derniere ? undefined : "--",
                 brut: derniere ? derniere.liquidites : undefined,
                 unite: derniere ? "FCFA" : undefined,
@@ -208,7 +208,7 @@ export default async function PagePortefeuille() {
                 valeur: s.exercice?.rendement != null ? pourcent(s.exercice.rendement) : "--",
                 encre: couleurSigne(s.exercice?.rendement),
                 contexte:
-                  s.exercice?.gain != null ? `Dietz modifie · gain ${nombre(s.exercice.gain)}` : undefined,
+                  s.exercice?.gain != null ? `Dietz modifié · gain ${nombre(s.exercice.gain)}` : undefined,
               },
             ]}
           />
@@ -223,15 +223,15 @@ export default async function PagePortefeuille() {
         */}
       <div className="grid grid-cols-1 gap-11 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)] xl:items-start">
         <Carte
-          titre="Repartition des parts"
+          titre="Répartition des parts"
           action={
             <span className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-              Compte-titres et caisse reunis
+              Compte-titres et caisse réunis
             </span>
           }
         >
           {s.parts.length === 0 || !derniere ? (
-            <Vide>Les parts s&apos;afficheront des qu&apos;un releve sera saisi.</Vide>
+            <Vide>Les parts s&apos;afficheront des qu&apos;un relevé sera saisi.</Vide>
           ) : (
             <>
               {/*
@@ -327,22 +327,22 @@ export default async function PagePortefeuille() {
                       strokeLinejoin="round"
                     />
                   </svg>
-                  Comment la part est calculee
+                  Comment la part est calculée
                 </summary>
                 <div
                   className="contenu-depliant space-y-2 pt-1 pb-2 pl-8 text-[13px] leading-relaxed"
                   style={{ color: "var(--ink-2)" }}
                 >
                   <p>
-                    La quote-part se calcule sur le capital echu de chacun, diminue des penalites
+                    La quote-part se calcule sur le capital échu de chacun, diminué des pénalités
                     dues (art. 9). Une avance ne donne aucun droit tant que le mois qu&apos;elle
-                    couvre n&apos;est pas venu : elle est volontaire, donc ni remuneree ni
-                    penalisee, et figure a part, rendue au nominal.
+                    couvre n&apos;est pas venu : elle est volontaire, donc ni rémunérée ni
+                    pénalisée, et figure à part, rendue au nominal.
                   </p>
                   <p>
-                    Art. 12 : les droits de vote sont proportionnels aux parts, elles-memes
-                    proportionnelles aux versements valides. La repartition porte sur l&apos;avoir
-                    du club, compte-titres et caisse reunis.
+                    Art. 12 : les droits de vote sont proportionnels aux parts, elles-mêmes
+                    proportionnelles aux versements validés. La répartition porte sur l&apos;avoir
+                    du club, compte-titres et caisse réunis.
                   </p>
                 </div>
               </details>
@@ -351,7 +351,7 @@ export default async function PagePortefeuille() {
         </Carte>
 
         <Carte
-          titre="Releves"
+          titre="Relevés"
           action={
             <span className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
               {valos.length} au total
@@ -359,7 +359,7 @@ export default async function PagePortefeuille() {
           }
         >
           {valos.length === 0 ? (
-            <Vide>Aucun releve saisi.</Vide>
+            <Vide>Aucun relevé saisi.</Vide>
           ) : (
             <>
               <ul>{recents.map(ligneReleve)}</ul>
@@ -394,7 +394,7 @@ export default async function PagePortefeuille() {
                         strokeLinejoin="round"
                       />
                     </svg>
-                    Afficher les {anciens.length} releves plus anciens
+                    Afficher les {anciens.length} relevés plus anciens
                   </summary>
                   <ul className="contenu-depliant">{anciens.map(ligneReleve)}</ul>
                 </details>
@@ -403,8 +403,8 @@ export default async function PagePortefeuille() {
           )}
           {peutSaisir && (
             <p className="mt-3 text-[12.5px] leading-relaxed" style={{ color: "var(--ink-3)" }}>
-              Un releve tous les {REGLES.periodiciteValorisationMois} mois, saisi par le president
-              ou le vice-president. Une seconde saisie a la meme date remplace la precedente.
+              Un relevé tous les {REGLES.periodiciteValorisationMois} mois, saisi par le président
+              ou le vice-président. Une seconde saisie à la même date remplace la précédente.
             </p>
           )}
         </Carte>

@@ -59,8 +59,8 @@ export function tracable(releves: Releve[], horizon: Horizon): boolean {
 /* ------------------------------------------------------- reperes de temps */
 
 const MOIS_COURTS = [
-  "janv.", "fevr.", "mars", "avr.", "mai", "juin",
-  "juil.", "aout", "sept.", "oct.", "nov.", "dec.",
+  "janv.", "févr.", "mars", "avr.", "mai", "juin",
+  "juil.", "août", "sept.", "oct.", "nov.", "déc.",
 ];
 
 export type Repere = { iso: string; libelle: string };

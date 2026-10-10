@@ -49,12 +49,12 @@ export async function reprendreHistorique(
   const montant = Number(donnees.get("montant") ?? reglages.cotisationMensuelle);
 
   if (!/^\d{4}-\d{2}$/.test(jusqua)) return { ok: false, erreur: "Mois de fin invalide." };
-  if (!/^\d{4}-\d{2}$/.test(depuis)) return { ok: false, erreur: "Mois de debut invalide." };
+  if (!/^\d{4}-\d{2}$/.test(depuis)) return { ok: false, erreur: "Mois de début invalide." };
   if (!Number.isFinite(montant) || montant <= 0) return { ok: false, erreur: "Montant invalide." };
 
   const moisDebut = `${depuis}-01`;
   const moisFin = `${jusqua}-01`;
-  if (moisFin < moisDebut) return { ok: false, erreur: "Le mois de fin precede le mois de debut." };
+  if (moisFin < moisDebut) return { ok: false, erreur: "Le mois de fin précède le mois de début." };
   if (moisFin > debutMois()) return { ok: false, erreur: "On ne reprend pas l'avenir." };
 
   const membres = await listerMembres();
@@ -76,7 +76,7 @@ export async function reprendreHistorique(
       return { ok: false, erreur: `La borne de ${m.nom} est dans l'avenir.` };
     }
     if (finMembre < moisDebut) {
-      return { ok: false, erreur: `La borne de ${m.nom} precede le premier mois du club.` };
+      return { ok: false, erreur: `La borne de ${m.nom} précède le premier mois du club.` };
     }
 
     const debutMembre = `${m.date_adhesion.slice(0, 8)}01`;
@@ -88,9 +88,9 @@ export async function reprendreHistorique(
       mois = decalerMois(mois, 1);
       compte++;
     }
-    if (compte > 0) bornes.push(`${m.nom} jusqu'a ${moisLong(finMembre)}`);
+    if (compte > 0) bornes.push(`${m.nom} jusqu'à ${moisLong(finMembre)}`);
   }
-  if (idsMembres.length === 0) return { ok: false, erreur: "Aucun mois a reprendre sur cette periode." };
+  if (idsMembres.length === 0) return { ok: false, erreur: "Aucun mois à reprendre sur cette période." };
 
   const lot = randomUUID();
   const sql = db();
@@ -125,14 +125,14 @@ export async function reprendreHistorique(
   if (crees.length === 0) {
     return {
       ok: true,
-      message: `Rien a reprendre : tous les mois jusqu'a ${moisLong(moisFin)} sont deja couverts.`,
+      message: `Rien à reprendre : tous les mois jusqu'à ${moisLong(moisFin)} sont déjà couverts.`,
     };
   }
   return {
     ok: true,
     message:
-      `${crees.length} mois marques payes jusqu'a ${moisLong(moisFin)}, ` +
-      `dates a l'echeance du ${reglages.jourEcheance} pour n'engendrer aucune penalite.`,
+      `${crees.length} mois marqués payés jusqu'à ${moisLong(moisFin)}, ` +
+      `dates à l'échéance du ${reglages.jourEcheance} pour n'engendrer aucune pénalité.`,
   };
 }
 
@@ -154,10 +154,10 @@ export async function enregistrerReglages(
     const valeur = Number(brut);
     if (!brut || !Number.isFinite(valeur) || valeur <= 0) continue;
     if (cle === "jour_echeance" && (valeur < 1 || valeur > 28)) {
-      return { ok: false, erreur: "Le jour d'echeance doit tomber entre le 1 et le 28." };
+      return { ok: false, erreur: "Le jour d'échéance doit tomber entre le 1 et le 28." };
     }
     if (cle === "taux_penalite" && valeur > 1) {
-      return { ok: false, erreur: "Le taux de penalite s'exprime en fraction : 0,1 pour 10 %." };
+      return { ok: false, erreur: "Le taux de pénalité s'exprime en fraction : 0,1 pour 10 %." };
     }
     // Pas d'`on conflict` : la cle primaire de `settings` n'est pas connue avec
     // certitude, et un test explicite donne le meme resultat sans rien supposer.
@@ -181,7 +181,7 @@ export async function enregistrerReglages(
   return {
     ok: true,
     message:
-      "Reglages enregistres. Ils priment desormais sur les valeurs des statuts inscrites dans le code.",
+      "Réglages enregistrés. Ils priment désormais sur les valeurs des statuts inscrites dans le code.",
   };
 }
 
@@ -203,7 +203,7 @@ export async function reprendrePenalites(
   const auteur = await exigerDroit("gererPenalites");
   const jusqua = String(donnees.get("jusqua") ?? "");
   if (!/^\d{4}-\d{2}$/.test(jusqua)) {
-    return { ok: false, erreur: "Indiquez jusqu'a quel mois le decompte du tresorier s'arrete." };
+    return { ok: false, erreur: "Indiquez jusqu'à quel mois le décompte du trésorier s'arrête." };
   }
   if (`${jusqua}-01` > debutMois()) return { ok: false, erreur: "On ne reprend pas l'avenir." };
 
@@ -226,7 +226,7 @@ export async function reprendrePenalites(
 
     const cle = `reprise_penalites:${m.id}`;
     const motif =
-      `Penalites constatees par le tresorier — ${mois} mois, arretees a ${moisLong(`${jusqua}-01`)}`;
+      `Pénalités constatées par le trésorier : ${mois} mois, arrêtées à ${moisLong(`${jusqua}-01`)}`;
     const existante = await sql`
       select id, status from penalties where source_key = ${cle} limit 1
     `;
@@ -254,7 +254,7 @@ export async function reprendrePenalites(
   }
 
   if (inscrites === 0 && remplacees === 0) {
-    return { ok: false, erreur: "Aucun nombre de mois renseigne." };
+    return { ok: false, erreur: "Aucun nombre de mois renseigné." };
   }
 
   await journaliser(
@@ -267,10 +267,10 @@ export async function reprendrePenalites(
   return {
     ok: true,
     message:
-      `${inscrites + remplacees} membre(s) — ${total.toLocaleString("fr-FR")} FCFA de penalites ` +
-      `au registre, arretees a ${moisLong(`${jusqua}-01`)}` +
-      `${remplacees > 0 ? `, dont ${remplacees} mise(s) a jour` : ""}. ` +
-      `Le constat automatique ne recomptera aucun mois anterieur.`,
+      `${inscrites + remplacees} membre(s), ${total.toLocaleString("fr-FR")} FCFA de pénalités ` +
+      `au registre, arrêtées à ${moisLong(`${jusqua}-01`)}` +
+      `${remplacees > 0 ? `, dont ${remplacees} mise(s) à jour` : ""}. ` +
+      `Le constat automatique ne recomptera aucun mois antérieur.`,
   };
 }
 
@@ -310,17 +310,17 @@ export async function inscrireRegleMembre(
   const note = String(donnees.get("note") ?? "").trim();
 
   if (!membreId) return { ok: false, erreur: "Choisissez un membre." };
-  if (!NATURES_REGLE.includes(nature)) return { ok: false, erreur: "Nature de regle inconnue." };
+  if (!NATURES_REGLE.includes(nature)) return { ok: false, erreur: "Nature de règle inconnue." };
 
   let valeur: number | null = null;
   if (NATURES_CHIFFREES.includes(nature)) {
     valeur = Number(valeurBrute);
     if (!Number.isFinite(valeur) || valeur <= 0) {
-      return { ok: false, erreur: "Cette regle demande une valeur positive." };
+      return { ok: false, erreur: "Cette règle demande une valeur positive." };
     }
   }
   if (fin && debut && fin < debut) {
-    return { ok: false, erreur: "La fin ne peut preceder le debut." };
+    return { ok: false, erreur: "La fin ne peut précéder le début." };
   }
 
   const sql = db();
@@ -338,7 +338,7 @@ export async function inscrireRegleMembre(
     { nature, valeur, debut: debut || null, fin: fin || null, note: note || null },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Regle inscrite." };
+  return { ok: true, message: "Règle inscrite." };
 }
 
 /**
@@ -351,7 +351,7 @@ export async function leverRegleMembre(
 ): Promise<EtatFormulaire> {
   const auteur = await exigerDroit("gererSorties");
   const id = String(donnees.get("id") ?? "");
-  if (!id) return { ok: false, erreur: "Regle introuvable." };
+  if (!id) return { ok: false, erreur: "Règle introuvable." };
 
   const sql = db();
   await sql`update member_rules set is_active = false where id = ${id}::uuid`;
@@ -360,7 +360,7 @@ export async function leverRegleMembre(
     id,
   });
   revalidatePath("/", "layout");
-  return { ok: true, message: "Regle levee : le regime commun s'applique a nouveau." };
+  return { ok: true, message: "Règle levée : le régime commun s'applique à nouveau." };
 }
 
 /* --------------------------------------------------------- sorties (art. 20) */
@@ -402,19 +402,19 @@ export async function enregistrerSortie(
     ["Les frais", frais],
     ["Le montant acquis au club", acquis],
   ] as const) {
-    if (!Number.isFinite(v) || v < 0) return { ok: false, erreur: `${libelle} doit etre positif ou nul.` };
+    if (!Number.isFinite(v) || v < 0) return { ok: false, erreur: `${libelle} doit être positif ou nul.` };
   }
   if (frais + acquis > brut) {
     return {
       ok: false,
-      erreur: "Frais et penalites depassent la valeur de la part : le club ne peut reclamer au sortant.",
+      erreur: "Frais et pénalités dépassent la valeur de la part : le club ne peut réclamer au sortant.",
     };
   }
 
   const sql = db();
   const membre = await sql`select full_name, is_active from members where id = ${membreId}::uuid`;
   if (!membre[0]) return { ok: false, erreur: "Membre introuvable." };
-  if (!membre[0].is_active) return { ok: false, erreur: "Ce membre est deja sorti." };
+  if (!membre[0].is_active) return { ok: false, erreur: "Ce membre est déjà sorti." };
 
   const net = brut - frais - acquis;
 
@@ -435,7 +435,7 @@ export async function enregistrerSortie(
   revalidatePath("/", "layout");
   return {
     ok: true,
-    message: `Sortie enregistree : ${fcfa(net)} a verser a ${membre[0].full_name}, sous ${REGLES.delaiRemboursementMois} mois (R5).`,
+    message: `Sortie enregistrée : ${fcfa(net)} à verser à ${membre[0].full_name}, sous ${REGLES.delaiRemboursementMois} mois (R5).`,
   };
 }
 
@@ -461,8 +461,8 @@ export async function envoyerCourrielEssai(
     return {
       ok: false,
       erreur:
-        "Aucun transport configure. Renseignez SMTP_HOST, SMTP_PORT, SMTP_USER et SMTP_PASS " +
-        "dans les variables d'environnement, puis redeployez.",
+        "Aucun transport configuré. Renseignez SMTP_HOST, SMTP_PORT, SMTP_USER et SMTP_PASS " +
+        "dans les variables d'environnement, puis redéployez.",
     };
   }
 
@@ -481,7 +481,7 @@ export async function envoyerCourrielEssai(
 
   const { ok: parti, detail } = await envoyerCourriel({
     destinataire,
-    sujet: `${CLUB.sigle} — essai de configuration`,
+    sujet: `${CLUB.sigle} : essai de configuration`,
     texte: [
       `Bonjour ${auteur.nom},`,
       "",
@@ -494,10 +494,10 @@ export async function envoyerCourrielEssai(
        * precedents masque », et le second parait vide. Ce qui distingue les
        * messages doit donc figurer dans le corps, pas seulement dans l'en-tete.
        */
-      `Essai demande le ${new Date().toISOString().slice(0, 19).replace("T", " a ")} UTC.`,
+      `Essai demandé le ${new Date().toISOString().slice(0, 19).replace("T", " à ")} UTC.`,
       `Version en ligne : ${versionDeployee().revision ?? "inconnue"}.`,
       "",
-      `Le bureau — ${CLUB.nom}`,
+      `Le bureau d'${CLUB.nom}`,
     ].join("\n"),
   });
 
@@ -512,9 +512,9 @@ export async function envoyerCourrielEssai(
     return {
       ok: false,
       erreur:
-        `Envoi refuse. Reponse du serveur : ${detail}. Avec Gmail, la cause la plus frequente ` +
-        "est un mot de passe ordinaire la ou un mot de passe d'application est exige, " +
-        "ou le port 587 declare en 465.",
+        `Envoi refusé. Réponse du serveur : ${detail}. Avec Gmail, la cause la plus fréquente ` +
+        "est un mot de passe ordinaire là où un mot de passe d'application est exigé, " +
+        "ou le port 587 déclaré en 465.",
     };
   }
   /*
@@ -524,8 +524,8 @@ export async function envoyerCourrielEssai(
   return {
     ok: true,
     message:
-      `Courrier remis a ${destinataire} — verifiez cette boite, et son dossier Spam. ` +
-      `Reponse du serveur : ${detail}`,
+      `Courrier remis à ${destinataire}. Vérifiez cette boîte, et son dossier Spam. ` +
+      `Réponse du serveur : ${detail}`,
   };
 }
 
@@ -551,7 +551,7 @@ export async function relancerMaintenant(
   const auteur = await exigerDroit("relancer");
 
   if (transportConfigure() === "aucun") {
-    return { ok: false, erreur: "Aucun transport configure : aucun courrier ne peut partir." };
+    return { ok: false, erreur: "Aucun transport configuré : aucun courrier ne peut partir." };
   }
 
   const maintenant = new Date();
@@ -577,7 +577,7 @@ export async function relancerMaintenant(
 
   const destinataires = await destinatairesDuJour(maintenant);
   if (destinataires.length === 0) {
-    return { ok: true, message: "Personne a relancer : tout le monde est a jour." };
+    return { ok: true, message: "Personne à relancer : tout le monde est à jour." };
   }
 
   /*
@@ -602,20 +602,20 @@ export async function relancerMaintenant(
   );
   revalidatePath("/", "layout");
 
-  const reste = echecs.length > 0 ? ` ${echecs.length} envoi(s) ont echoue.` : "";
+  const reste = echecs.length > 0 ? ` ${echecs.length} envoi(s) ont échoué.` : "";
   const doublon =
     dejaTouches > 0
-      ? ` ${dejaTouches} d'entre eux avaient deja recu la relance automatique aujourd'hui : ` +
-        "pour ceux-la, c'est un second courrier."
+      ? ` ${dejaTouches} d'entre eux avaient déjà reçu la relance automatique aujourd'hui : ` +
+        "pour ceux-là, c'est un second courrier."
       : "";
   /* Ce que le constat vient d'inscrire : le tresorier doit le savoir tout de suite. */
   const porte =
     constat && (constat.creees > 0 || constat.reajustees > 0)
-      ? ` Registre mis a jour au passage : ${resumeConstat(constat)}`
+      ? ` Registre mis à jour au passage : ${resumeConstat(constat)}`
       : "";
   return {
     ok: echecs.length === 0,
-    message: `${envoyes.length} relance(s) envoyee(s) sur ${destinataires.length} membre(s) concerne(s).${reste}${doublon}${porte}`,
-    erreur: echecs.length > 0 ? `${echecs.length} envoi(s) ont echoue.` : undefined,
+    message: `${envoyes.length} relance(s) envoyée(s) sur ${destinataires.length} membre(s) concerné(s).${reste}${doublon}${porte}`,
+    erreur: echecs.length > 0 ? `${echecs.length} envoi(s) ont échoué.` : undefined,
   };
 }

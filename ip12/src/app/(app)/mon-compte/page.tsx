@@ -67,7 +67,7 @@ export default async function PageMonCompte() {
           className="rounded-lg px-3 py-1.5 text-xs font-medium"
           style={{ background: "var(--page)", color: "var(--ink)", border: "1px solid var(--line-2)" }}
         >
-          Editer mon releve
+          Éditer mon relevé
         </Link>
       </div>
 
@@ -78,21 +78,21 @@ export default async function PageMonCompte() {
         unite={maPart ? "FCFA" : undefined}
         detail={
           maPart
-            ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % au prorata du capital echu${
-                maPart.dues > 0 ? ` \u00b7 capital diminue de ${fcfa(maPart.dues)} de penalites dues` : ""
+            ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % au prorata du capital échu${
+                maPart.dues > 0 ? ` \u00b7 capital diminué de ${fcfa(maPart.dues)} de pénalités dues` : ""
               }`
-            : "Votre part se calcule des votre premier versement valide."
+            : "Votre part se calcule dès votre premier versement validé."
         }
       />
 
       <CarteEtat
         chiffres={[
           {
-            libelle: "J'ai verse",
+            libelle: "J'ai versé",
             brut: maPart?.verse ?? 0,
             unite: "FCFA",
             contexte:
-              maPart && maPart.avance > 0 ? `dont ${fcfa(maPart.avance)} d'avance, en depot` : undefined,
+              maPart && maPart.avance > 0 ? `dont ${fcfa(maPart.avance)} d'avance, en dépôt` : undefined,
           },
           /*
            * Le pourcentage est deja dit sous le montant : cette case le
@@ -106,7 +106,7 @@ export default async function PageMonCompte() {
               : "--",
             unite: maPart ? "FCFA" : undefined,
             encre: maPart ? couleurSigne(maPart.plusValue) : undefined,
-            contexte: "valeur de ma part moins ce que j'ai verse",
+            contexte: "valeur de ma part moins ce que j'ai versé",
           },
         ]}
       />
@@ -122,11 +122,11 @@ export default async function PageMonCompte() {
             <dd className="break-all">{membre.email}</dd>
           </div>
           <div>
-            <dt className="text-xs" style={{ color: "var(--discret)" }}>Role</dt>
+            <dt className="text-xs" style={{ color: "var(--discret)" }}>Rôle</dt>
             <dd>{ROLES[membre.role]}</dd>
           </div>
           <div>
-            <dt className="text-xs" style={{ color: "var(--discret)" }}>Adhesion</dt>
+            <dt className="text-xs" style={{ color: "var(--discret)" }}>Adhésion</dt>
             <dd>{dateCourte(membre.date_adhesion)}</dd>
           </div>
         </dl>
@@ -137,11 +137,11 @@ export default async function PageMonCompte() {
           <div className="mb-3">
             <Alerte ton="ambre">
               Votre mot de passe actuel est provisoire. Choisissez-en un nouveau : l&apos;ancien ne vous
-              sera pas demande.
+              sera pas demandé.
             </Alerte>
           </div>
         )}
-        <FormulaireAction action={changerMotDePasse} libelle="Mettre a jour">
+        <FormulaireAction action={changerMotDePasse} libelle="Mettre à jour">
           {!membre.must_change_password && (
             <Champ nom="actuel" libelle="Mot de passe actuel" type="password" autoComplete="current-password" />
           )}
@@ -150,7 +150,7 @@ export default async function PageMonCompte() {
             libelle="Nouveau mot de passe"
             type="password"
             autoComplete="new-password"
-            aide="8 caracteres minimum."
+            aide="8 caractères minimum."
           />
           <Champ nom="confirmation" libelle="Confirmer" type="password" autoComplete="new-password" />
         </FormulaireAction>
@@ -174,12 +174,12 @@ export default async function PageMonCompte() {
                   {maDette > 0 ? " · " : "."}
                 </>
               )}
-              {maDette > 0 && <>penalites dues {fcfa(maDette)}.</>}
+              {maDette > 0 && <>pénalités dues {fcfa(maDette)}.</>}
             </Alerte>
           </div>
         )}
         {mesVersements.length === 0 ? (
-          <Vide>Aucun versement enregistre.</Vide>
+          <Vide>Aucun versement enregistré.</Vide>
         ) : (
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {mesVersements.map((v) => (
@@ -189,7 +189,7 @@ export default async function PageMonCompte() {
                     {moisLong(v.mois)} &middot; {fcfa(v.montant)}
                   </p>
                   <p className="text-xs" style={{ color: "var(--discret)" }}>
-                    Verse le {dateCourte(v.date_versement)} &middot; {libelleMode(v.mode)}
+                    Versé le {dateCourte(v.date_versement)} &middot; {libelleMode(v.mode)}
                     {v.motif_rejet ? ` · rejet : ${v.motif_rejet}` : ""}
                   </p>
                 </div>
@@ -197,7 +197,7 @@ export default async function PageMonCompte() {
                   <Badge
                     ton={v.statut === "valide" ? "vert" : v.statut === "en_attente" ? "ambre" : "rouge"}
                   >
-                    {v.statut === "valide" ? "Valide" : v.statut === "en_attente" ? "En attente" : "Rejete"}
+                    {v.statut === "valide" ? "Validé" : v.statut === "en_attente" ? "En attente" : "Rejeté"}
                   </Badge>
                   {(pieces.get(v.lot) ?? []).map((j) => (
                     <a
@@ -208,7 +208,7 @@ export default async function PageMonCompte() {
                       className="text-xs underline"
                       style={{ color: "var(--etat-ok)" }}
                     >
-                      {j.mime === "application/pdf" ? "Bordereau" : "Recu"}
+                      {j.mime === "application/pdf" ? "Bordereau" : "Reçu"}
                     </a>
                   ))}
                 </div>
@@ -218,7 +218,7 @@ export default async function PageMonCompte() {
         )}
         {lotsSansPiece.length > 0 && (
           <div className="mt-4">
-            <Depliant titre={`Joindre un justificatif (${lotsSansPiece.length} versement(s) sans piece)`}>
+            <Depliant titre={`Joindre un justificatif (${lotsSansPiece.length} versement(s) sans pièce)`}>
               {lotsSansPiece.map((lot) => (
                 <div key={lot.lot} className="mt-3 border-t pt-3" style={{ borderColor: "var(--bordure)" }}>
                   <p className="text-xs font-medium">
@@ -245,7 +245,7 @@ export default async function PageMonCompte() {
         */}
       <form action={seDeconnecter} className="sans-impression pt-2">
         <Bouton type="submit" variante="secondaire">
-          Se deconnecter
+          Se déconnecter
         </Bouton>
       </form>
     </>

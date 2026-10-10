@@ -38,12 +38,12 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
   const sien = membreId === lecteur.id;
   if (!sien && !peut(lecteur, "validerVersement") && !peut(lecteur, "gererReglages")) {
     return (
-      <Carte titre="Releve">
+      <Carte titre="Relevé">
         <Alerte ton="rouge">
-          Vous pouvez editer votre propre releve. Celui d&apos;un autre membre revient au bureau.
+          Vous pouvez éditer votre propre relevé. Celui d&apos;un autre membre revient au bureau.
         </Alerte>
         <Link href={`/releve/${lecteur.id}`} className="text-sm underline">
-          Voir mon releve
+          Voir mon relevé
         </Link>
       </Carte>
     );
@@ -68,7 +68,7 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
   const part = s.parts.find((p) => p.membreId === membreId);
   if (!membre) {
     return (
-      <Carte titre="Releve">
+      <Carte titre="Relevé">
         <Alerte ton="rouge">Membre introuvable.</Alerte>
       </Carte>
     );
@@ -113,7 +113,7 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
         <Link href="/mon-compte" className="text-xs underline" style={{ color: "var(--discret)" }}>
           Retour
         </Link>
-        <BoutonImprimer libelle="Imprimer ce releve" />
+        <BoutonImprimer libelle="Imprimer ce relevé" />
       </div>
 
       <div className="a-imprimer impression-encadre rounded-xl border p-5"
@@ -123,14 +123,14 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
           <p className="text-xs" style={{ color: "var(--discret)" }}>
             {CLUB.nom} &middot; {CLUB.ville}
           </p>
-          <h1 className="mt-1 text-xl font-semibold">Releve individuel</h1>
+          <h1 className="mt-1 text-xl font-semibold">Relevé individuel</h1>
           <p className="mt-1 text-sm">
             {membre.nom} &middot; {ROLES[membre.role]}
             {membre.date_adhesion ? ` · membre depuis le ${dateCourte(membre.date_adhesion)}` : ""}
           </p>
           <p className="text-xs" style={{ color: "var(--discret)" }}>
-            Edite le {dateCourte(edite)}
-            {s.valorisation ? ` · arrete au dernier releve du ${dateCourte(s.valorisation.date_valo)}` : ""}
+            Édité le {dateCourte(edite)}
+            {s.valorisation ? ` · arrêté au dernier relevé du ${dateCourte(s.valorisation.date_valo)}` : ""}
           </p>
         </header>
 
@@ -138,8 +138,8 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
           <div>
             <h2 className="mb-1 text-sm font-semibold">Versements</h2>
             <ul className="text-sm">
-              {ligne("Mois regles", String(regles.length))}
-              {ligne("Total verse", fcfa(totalVerse))}
+              {ligne("Mois réglés", String(regles.length))}
+              {ligne("Total versé", fcfa(totalVerse))}
               {ligne("Mois en retard", String(situation?.nbMoisRetard ?? 0))}
             </ul>
           </div>
@@ -147,8 +147,8 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
             <h2 className="mb-1 text-sm font-semibold">Part au capital (art. 12)</h2>
             <ul className="text-sm">
               {ligne("Capital acquis", part ? fcfa(part.acquis) : "--")}
-              {part && part.avance > 0 ? ligne("Avance en depot", fcfa(part.avance)) : null}
-              {part && part.dues > 0 ? ligne("Penalites deduites", `- ${fcfa(part.dues)}`) : null}
+              {part && part.avance > 0 ? ligne("Avance en dépôt", fcfa(part.avance)) : null}
+              {part && part.dues > 0 ? ligne("Pénalités déduites", `- ${fcfa(part.dues)}`) : null}
               {ligne("Quote-part", part ? pourcent(part.part, 2).replace("+", "") : "--")}
               {ligne("Valeur de la part", part ? fcfa(part.valeur) : "--")}
               {ligne("Plus-value", part ? fcfa(part.plusValue) : "--")}
@@ -194,14 +194,14 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
         )}
 
         <section className="mt-4">
-          <h2 className="mb-1 text-sm font-semibold">Penalites (art. 9)</h2>
+          <h2 className="mb-1 text-sm font-semibold">Pénalités (art. 9)</h2>
           <ul className="text-sm">
-            {ligne("Inscrites, dues a ce jour", fcfa(totalDu))}
+            {ligne("Inscrites, dues à ce jour", fcfa(totalDu))}
             {courant.montant > 0
               ? ligne("Courues, pas encore inscrites", fcfa(courant.montant))
               : null}
             {courant.montant > 0 ? ligne("Total dû", fcfa(totalDu + courant.montant)) : null}
-            {ligne("Deja reglees", fcfa(penalitesReglees.reduce((t, p) => t + p.montant, 0)))}
+            {ligne("Déjà réglées", fcfa(penalitesReglees.reduce((t, p) => t + p.montant, 0)))}
           </ul>
           {penalitesDues.length > 0 && (
             <ul className="mt-2 text-xs" style={{ color: "var(--discret)" }}>
@@ -215,10 +215,10 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
         </section>
 
         <section className="mt-4">
-          <h2 className="mb-1 text-sm font-semibold">Detail des versements</h2>
+          <h2 className="mb-1 text-sm font-semibold">Détail des versements</h2>
           {versements.length === 0 ? (
             <p className="text-sm" style={{ color: "var(--discret)" }}>
-              Aucun versement enregistre.
+              Aucun versement enregistré.
             </p>
           ) : (
             <div className="defilement-x">
@@ -227,9 +227,9 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
                   <tr style={{ color: "var(--discret)" }}>
                     <th className="py-1 text-left font-medium">Mois</th>
                     <th className="py-1 text-right font-medium">Montant</th>
-                    <th className="py-1 text-left font-medium">Verse le</th>
+                    <th className="py-1 text-left font-medium">Versé le</th>
                     <th className="py-1 text-left font-medium">Mode</th>
-                    <th className="py-1 text-left font-medium">Etat</th>
+                    <th className="py-1 text-left font-medium">État</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -241,9 +241,9 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
                       <td className="py-1">{libelleMode(v.mode)}</td>
                       <td className="py-1">
                         {v.statut === STATUT_VERSEMENT.valide
-                          ? "Valide"
+                          ? "Validé"
                           : v.statut === STATUT_VERSEMENT.rejete
-                            ? "Annule"
+                            ? "Annulé"
                             : "En attente"}
                       </td>
                     </tr>
@@ -272,18 +272,18 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
               )}
               {totalDu + courant.montant > 0 && (
                 <li>
-                  {fcfa(totalDu + courant.montant)} de penalites dues, indissociables des
+                  {fcfa(totalDu + courant.montant)} de pénalités dues, indissociables des
                   cotisations.
                 </li>
               )}
               {situation.voteSuspendu && (
                 <li>
-                  Droit de vote suspendu (R2, au-dela de {REGLES.suspensionVoteApresJours} jours),
-                  jusqu&apos;a regularisation complete.
+                  Droit de vote suspendu (R2, au-delà de {REGLES.suspensionVoteApresJours} jours),
+                  jusqu&apos;à régularisation complète.
                 </li>
               )}
               {situation.declarationRequise && (
-                <li>Declaration au groupe exigee par R3, et non encore enregistree.</li>
+                <li>Déclaration au groupe exigée par R3, et non encore enregistrée.</li>
               )}
               {situation.exclusionEncourue && (
                 <li>Exclusion encourue au titre de l&apos;art. 20 et de R5.</li>
@@ -302,7 +302,7 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
          * cocher.
          */}
         <section className="a-imprimer mt-5 grid grid-cols-2 gap-3">
-          {["Le tresorier", "Le president"].map((qui) => (
+          {["Le trésorier", "Le président"].map((qui) => (
             <div
               key={qui}
               className="rounded-lg border p-2"
@@ -318,11 +318,11 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
         </section>
 
         <footer className="mt-5 border-t pt-3 text-[11px]" style={{ borderColor: "var(--bordure)", color: "var(--discret)" }}>
-          Piece editee par l&apos;outil de suivi du club, sur les ecritures validees a la date
-          d&apos;edition. La quote-part se calcule sur le capital echu, diminue des penalites
-          dues : une avance est un depot, rendu au nominal, qui ne produit rien jusqu&apos;au
-          mois qu&apos;il couvre. La valeur suit l&apos;avoir du club — compte-titres tenu chez{" "}
-          {CLUB.sgi} et caisse — et varie avec le marche.
+          Pièce éditée par l&apos;outil de suivi du club, sur les écritures validées à la date
+          d&apos;édition. La quote-part se calcule sur le capital échu, diminué des pénalités
+          dues : une avance est un dépôt, rendu au nominal, qui ne produit rien jusqu&apos;au
+          mois qu&apos;il couvre. La valeur suit l&apos;avoir du club (compte-titres tenu chez{" "}
+          {CLUB.sgi}, et caisse) et varie avec le marché.
         </footer>
       </div>
     </>

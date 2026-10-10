@@ -45,7 +45,7 @@ export async function enregistrerJustificatif(
   const nom = String(donnees.get("justificatif_nom") ?? "justificatif").slice(0, 200);
   const mime = String(donnees.get("justificatif_mime") ?? "");
   if (!MIMES_JUSTIFICATIF.includes(mime as (typeof MIMES_JUSTIFICATIF)[number])) {
-    return { joint: false, motif: "format non accepte" };
+    return { joint: false, motif: "format non accepté" };
   }
 
   // Longueur reelle des octets, deduite de l'encodage base64.

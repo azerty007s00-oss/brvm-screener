@@ -83,7 +83,7 @@ export function verifierMotDePasse(motDePasse: string, hash: string | null): boo
 function secret(): string {
   const s = process.env.SESSION_SECRET;
   if (!s || s.length < 16) {
-    throw new Error("SESSION_SECRET absente ou trop courte (32 caracteres minimum).");
+    throw new Error("SESSION_SECRET absente ou trop courte (32 caractères minimum).");
   }
   return s;
 }
@@ -164,7 +164,7 @@ export async function membreParEmail(email: string) {
 /* ------------------------------------------------------------------ garde-fous */
 
 export class AccesRefuse extends Error {
-  constructor(message = "Acces refuse.") {
+  constructor(message = "Accès refusé.") {
     super(message);
     this.name = "AccesRefuse";
   }
@@ -172,14 +172,14 @@ export class AccesRefuse extends Error {
 
 export async function exigerMembre(): Promise<Membre> {
   const m = await membreCourant();
-  if (!m) throw new AccesRefuse("Vous devez etre connecte.");
+  if (!m) throw new AccesRefuse("Vous devez être connecté.");
   return m;
 }
 
 export async function exigerRole(...roles: Role[]): Promise<Membre> {
   const m = await exigerMembre();
   if (!roles.includes(m.role)) {
-    throw new AccesRefuse("Cette action est reservee au bureau du club.");
+    throw new AccesRefuse("Cette action est réservée au bureau du club.");
   }
   return m;
 }
@@ -191,7 +191,7 @@ export async function exigerRole(...roles: Role[]): Promise<Membre> {
 export async function exigerDroit(droit: Droit): Promise<Membre> {
   const m = await exigerMembre();
   if (!peut(m, droit)) {
-    throw new AccesRefuse(`Cette action est reservee ${titulaires(droit, ROLES)}.`);
+    throw new AccesRefuse(`Cette action est réservée ${titulaires(droit, ROLES)}.`);
   }
   return m;
 }

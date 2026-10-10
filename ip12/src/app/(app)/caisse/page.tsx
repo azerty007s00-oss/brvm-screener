@@ -101,19 +101,19 @@ export default async function PageCaisse() {
   const saisies = gere ? (
     <>
       <Panneau
-        libelle="Aligner sur le solde reel"
-        titre="Regulariser la caisse"
+        libelle="Aligner sur le solde réel"
+        titre="Régulariser la caisse"
         variante="secondaire"
-        introduction={`Quand la caisse reelle ne correspond pas au calcul -- des penalites anciennes encaissees sans trace nominative, le plus souvent -- annoncez le solde que vous constatez. L'outil ecrit l'ecart dans le bon sens et en garde le motif. Solde calcule a cet instant : ${fcfa(s.totalEnCaisse)}.`}
+        introduction={`Quand la caisse réelle ne correspond pas au calcul (le plus souvent, des pénalités anciennes encaissées sans trace nominative), annoncez le solde que vous constatez. L'outil écrit l'écart dans le bon sens et en garde le motif. Solde calculé à cet instant : ${fcfa(s.totalEnCaisse)}.`}
       >
-        <FormulaireAction action={regulariserCaisse} libelle="Inscrire l'ecart">
+        <FormulaireAction action={regulariserCaisse} libelle="Inscrire l'écart">
           <Champ
             nom="soldeReel"
-            libelle="Solde reellement constate (FCFA)"
+            libelle="Solde réellement constaté (FCFA)"
             type="number"
             min={0}
             valeur={Math.max(0, Math.round(s.totalEnCaisse))}
-            aide="Ce que vous comptez en caisse, ou ce qu'affiche votre releve."
+            aide="Ce que vous comptez en caisse, ou ce qu'affiche votre relevé."
           />
           <Champ nom="motif" libelle="Motif" aide="Restera inscrit au journal." />
         </FormulaireAction>
@@ -124,14 +124,14 @@ export default async function PageCaisse() {
           sens: SENS_CAISSE.recette,
           titre: "Enregistrer une recette",
           categories: CATEGORIES_RECETTE,
-          aide: "Ce que vous voudrez relire dans six mois : d'ou vient cet argent.",
+          aide: "Ce que vous voudrez relire dans six mois : d'où vient cet argent.",
           variante: "secondaire" as const,
         },
         {
           sens: SENS_CAISSE.depense,
-          titre: "Enregistrer une depense",
+          titre: "Enregistrer une dépense",
           categories: CATEGORIES_DEPENSE,
-          aide: "Ce que vous voudrez relire dans six mois : a quoi cet argent a servi.",
+          aide: "Ce que vous voudrez relire dans six mois : à quoi cet argent a servi.",
           variante: "principal" as const,
         },
       ].map((f) => (
@@ -140,11 +140,11 @@ export default async function PageCaisse() {
           libelle={f.titre}
           titre={f.titre}
           variante={f.variante}
-          introduction="Votre saisie vaut validation : vous tenez la caisse, vous constatez ce qui en sort et ce qui y entre. Une ecriture fautive s'annule depuis le journal, motif a l'appui. Pour une somme dont le detail est perdu, choisissez la categorie la plus proche et decrivez-la dans le motif : le solde tombera juste, et la provenance restera lisible."
+          introduction="Votre saisie vaut validation : vous tenez la caisse, vous constatez ce qui en sort et ce qui y entre. Une écriture fautive s'annule depuis le journal, motif à l'appui. Pour une somme dont le détail est perdu, choisissez la catégorie la plus proche et décrivez-la dans le motif : le solde tombera juste, et la provenance restera lisible."
         >
           <FormulaireAction action={enregistrerMouvement} libelle="Enregistrer">
             <ChampCache nom="sens" valeur={f.sens} />
-            <Selection nom="categorie" libelle="Categorie" options={f.categories} />
+            <Selection nom="categorie" libelle="Catégorie" options={f.categories} />
             <Champ nom="montant" libelle="Montant (FCFA)" type="number" min={1} />
             <Champ nom="date" libelle="Date" type="date" valeur={new Date().toISOString().slice(0, 10)} />
             <Champ nom="note" libelle="Motif" requis={false} aide={f.aide} />
@@ -159,10 +159,10 @@ export default async function PageCaisse() {
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <EnTeteEcran
           titre="Solde en caisse"
-          sous={`arrete au ${dateCourte(new Date().toISOString().slice(0, 10))}`}
+          sous={`arrêté au ${dateCourte(new Date().toISOString().slice(0, 10))}`}
           brut={s.totalEnCaisse}
           unite="FCFA"
-          detail="Hors cotisations placees en bourse. Comparez-le a votre releve : ce qui manque se voit la."
+          detail="Hors cotisations placées en bourse. Comparez-le à votre relevé : ce qui manque se voit là."
         />
         <div className="sans-impression flex flex-wrap gap-2.5">{saisies}</div>
       </div>
@@ -170,12 +170,12 @@ export default async function PageCaisse() {
       <CarteEtat
         chiffres={[
           { libelle: "Recettes", brut: s.recettes, unite: "FCFA" },
-          { libelle: "Depenses", brut: s.depenses, unite: "FCFA" },
+          { libelle: "Dépenses", brut: s.depenses, unite: "FCFA" },
           {
-            libelle: "Penalites encaissees",
+            libelle: "Pénalités encaissées",
             brut: s.penalitesEncaissees,
             unite: "FCFA",
-            contexte: "comptees dans le solde",
+            contexte: "comptées dans le solde",
           },
         ]}
       />
@@ -183,11 +183,11 @@ export default async function PageCaisse() {
       <Carte titre="Composition du solde">
         <ul className="space-y-1 text-sm">
           {[
-            ["Cotisations validees", s.totalVerse, "+"],
-            ["Penalites encaissees", s.penalitesEncaissees, "+"],
+            ["Cotisations validées", s.totalVerse, "+"],
+            ["Pénalités encaissées", s.penalitesEncaissees, "+"],
             ["Recettes exceptionnelles", s.recettes, "+"],
-            ["Depenses de fonctionnement", s.depenses, "−"],
-            ["Net vire au compte-titres", s.totalApports, "−"],
+            ["Dépenses de fonctionnement", s.depenses, "−"],
+            ["Net viré au compte-titres", s.totalApports, "−"],
           ].map(([libelle, montant, signe]) => (
             <li key={String(libelle)} className="flex justify-between gap-2">
               <span style={{ color: "var(--discret)" }}>
@@ -209,14 +209,14 @@ export default async function PageCaisse() {
           </li>
         </ul>
         <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
-          Un retrait depuis la SGI revient en caisse : le net vire tient compte
-          des deux sens. Comparez ce solde a votre releve pour verifier que rien
+          Un retrait depuis la SGI revient en caisse : le net viré tient compte
+          des deux sens. Comparez ce solde à votre relevé pour vérifier que rien
           ne manque.
         </p>
       </Carte>
 
       {valide && enAttente.length > 0 && (
-        <Carte titre={`A valider (${enAttente.length})`}>
+        <Carte titre={`À valider (${enAttente.length})`}>
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {enAttente.map((m) => (
               <li
@@ -271,7 +271,7 @@ export default async function PageCaisse() {
 
       <Carte titre={`Journal de caisse (${mouvements.length})`}>
         {mouvements.length === 0 ? (
-          <Vide>Aucun mouvement enregistre.</Vide>
+          <Vide>Aucun mouvement enregistré.</Vide>
         ) : (
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {groupes.map(({ cle, libelle, lignes, total, depuis, jusqua }) => (
@@ -280,7 +280,7 @@ export default async function PageCaisse() {
                   libelle={libelle}
                   nombre={lignes.length}
                   detail={
-                    depuis === jusqua ? depuis : `de ${depuis} a ${jusqua}`
+                    depuis === jusqua ? depuis : `de ${depuis} à ${jusqua}`
                   }
                   /*
                    * LE SIGNE DIT LE SENS, non la couleur.
@@ -317,7 +317,7 @@ export default async function PageCaisse() {
                                 <Badge ton="ambre">En attente</Badge>
                               )}
                               {m.statut === STATUT_CAISSE.rejete && (
-                                <Badge ton="rouge">Rejete</Badge>
+                                <Badge ton="rouge">Rejeté</Badge>
                               )}
                             </p>
                             <p
@@ -327,7 +327,7 @@ export default async function PageCaisse() {
                               {libelleCategorie(m.categorie)} &middot;{" "}
                               {dateCourte(m.date_mouvement)}
                               {m.valide_par
-                                ? ` · valide par ${m.valide_par}`
+                                ? ` · validé par ${m.valide_par}`
                                 : ""}
                             </p>
                             {m.note && (
@@ -356,7 +356,7 @@ export default async function PageCaisse() {
                            */}
                           {gere && m.statut === STATUT_CAISSE.valide && (
                             <MenuLigne
-                              etiquette={`Actions sur l'ecriture du ${dateCourte(m.date_mouvement)}`}
+                              etiquette={`Actions sur l'écriture du ${dateCourte(m.date_mouvement)}`}
                               actions={[
                                 {
                                   libelle: "Annuler ce mouvement",
@@ -372,7 +372,7 @@ export default async function PageCaisse() {
                                     </>
                                   ),
                                   confirmation:
-                                    "Annuler ce mouvement deja valide ? Il cessera de compter dans la caisse, et l'operation restera au journal.",
+                                    "Annuler ce mouvement déjà validé ? Il cessera de compter dans la caisse, et l'opération restera au journal.",
                                   confirmer: "Annuler le mouvement",
                                 },
                               ]}

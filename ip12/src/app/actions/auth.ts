@@ -34,7 +34,7 @@ export async function seConnecter(
   if (await tropDeTentatives(email)) {
     return {
       ok: false,
-      erreur: "Trop de tentatives infructueuses. Reessayez dans un quart d'heure.",
+      erreur: "Trop de tentatives infructueuses. Réessayez dans un quart d'heure.",
     };
   }
 
@@ -42,7 +42,7 @@ export async function seConnecter(
   try {
     membre = await membreParEmail(email);
   } catch {
-    return { ok: false, erreur: "La base de donnees n'est pas joignable. Reessayez dans un instant." };
+    return { ok: false, erreur: "La base de données n'est pas joignable. Réessayez dans un instant." };
   }
 
   // Message identique dans les trois cas : ne pas reveler quels e-mails existent.
@@ -73,7 +73,7 @@ export async function changerMotDePasse(
   const confirmation = String(donnees.get("confirmation") ?? "");
 
   if (nouveau.length < 8) {
-    return { ok: false, erreur: "Le nouveau mot de passe doit faire au moins 8 caracteres." };
+    return { ok: false, erreur: "Le nouveau mot de passe doit faire au moins 8 caractères." };
   }
   if (nouveau !== confirmation) {
     return { ok: false, erreur: "Les deux saisies ne correspondent pas." };
@@ -94,7 +94,7 @@ export async function changerMotDePasse(
   `;
   await journaliser({ id: membre.id, nom: membre.nom }, "changement_mot_de_passe");
   revalidatePath("/", "layout");
-  return { ok: true, message: "Mot de passe mis a jour." };
+  return { ok: true, message: "Mot de passe mis à jour." };
 }
 
 /* --------------------------------- mot de passe oublie */
@@ -135,7 +135,7 @@ export async function demanderReinitialisation(
   const reponse = {
     ok: true as const,
     message:
-      "Si cette adresse est celle d'un membre, le bureau vient d'en etre averti. " +
+      "Si cette adresse est celle d'un membre, le bureau vient d'en être averti. " +
       "Vous recevrez un mot de passe provisoire.",
   };
 
@@ -156,7 +156,7 @@ export async function demanderReinitialisation(
     });
 
   if (await tropDeDemandes(email)) {
-    await tracer("plafond atteint, rien n'est reparti");
+    await tracer("plafond atteint, rien n'est réparti");
     return reponse;
   }
   await tracerDemande(email);
@@ -166,10 +166,10 @@ export async function demanderReinitialisation(
     membre = await membreParEmail(email);
   } catch (e) {
     await tracer("base injoignable", String(e));
-    return { ok: false, erreur: "La base de donnees n'est pas joignable. Reessayez dans un instant." };
+    return { ok: false, erreur: "La base de données n'est pas joignable. Réessayez dans un instant." };
   }
   if (!membre) {
-    await tracer("aucun membre a cette adresse");
+    await tracer("aucun membre à cette adresse");
     return reponse;
   }
   if (!membre.actif) {
@@ -186,7 +186,7 @@ export async function demanderReinitialisation(
     { id: membre.id, nom: membre.nom },
     "demande_reinitialisation",
     { entite: "members", id: membre.id },
-    { email, issue: envoi.partis > 0 ? "avertis" : "aucun avis envoye", detail: envoi.detail },
+    { email, issue: envoi.partis > 0 ? "avertis" : "aucun avis envoyé", detail: envoi.detail },
   );
   return reponse;
 }

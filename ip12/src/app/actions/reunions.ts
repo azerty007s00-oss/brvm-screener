@@ -35,7 +35,7 @@ export async function creerReunion(
     { date, titre },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Reunion creee. Vous pouvez pointer les presences." };
+  return { ok: true, message: "Réunion créée. Vous pouvez pointer les présences." };
 }
 
 /**
@@ -51,7 +51,7 @@ export async function enregistrerPresences(
 ): Promise<EtatFormulaire> {
   const auteur = await exigerDroit("gererReunions");
   const reunionId = String(donnees.get("reunionId") ?? "");
-  if (!reunionId) return { ok: false, erreur: "Reunion introuvable." };
+  if (!reunionId) return { ok: false, erreur: "Réunion introuvable." };
 
   const pointes: { membreId: string; statut: string }[] = [];
   for (const [cle, valeur] of donnees.entries()) {
@@ -123,10 +123,10 @@ export async function enregistrerPresences(
     ok: true,
     message:
       absents > 0
-        ? `Feuille enregistree. ${absents} absence${absents > 1 ? "s" : ""} — ` +
+        ? `Feuille enregistrée. ${absents} absence${absents > 1 ? "s" : ""}. ` +
           `${avertis > 0 ? `${avertis} membre(s) averti(s) par courriel. ` : ""}` +
-          "Vous pouvez les sanctionner depuis la page Penalites."
-        : "Feuille enregistree.",
+          "Vous pouvez les sanctionner depuis la page Pénalités."
+        : "Feuille enregistrée.",
   };
 }
 
@@ -144,5 +144,5 @@ export async function supprimerReunion(
     id,
   });
   revalidatePath("/", "layout");
-  return { ok: true, message: "Reunion supprimee." };
+  return { ok: true, message: "Réunion supprimée." };
 }

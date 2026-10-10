@@ -6,7 +6,7 @@
 export const CLUB = {
   nom: "Investment Pioneers",
   sigle: "IP12",
-  ville: "Abidjan, Cote d'Ivoire",
+  ville: "Abidjan, Côte d'Ivoire",
   sgi: "Phoenix Capital Management",
   dateCreation: "2023-05-22",
   /*
@@ -142,10 +142,10 @@ export function lienDuSite(): string {
 export type Role = "president" | "vice_president" | "tresorier" | "secretaire" | "membre";
 
 export const ROLES: Record<Role, string> = {
-  president: "President",
-  vice_president: "Vice-president",
-  tresorier: "Tresorier",
-  secretaire: "Secretaire",
+  president: "Président",
+  vice_president: "Vice-président",
+  tresorier: "Trésorier",
+  secretaire: "Secrétaire",
   membre: "Membre",
 };
 

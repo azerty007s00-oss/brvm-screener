@@ -117,14 +117,14 @@ function avecLiens(t: string): string {
 }
 
 /**
- * Un titre de section : tout ce qui precede un tiret cadratin est en capitales.
+ * Un titre de section : tout ce qui precede le deux-points est en capitales.
  *
- * « MESURE DISCIPLINAIRE — plan de redressement (R5). » est un titre dont la
+ * « MESURE DISCIPLINAIRE : plan de redressement (R5). » est un titre dont la
  * precision ne l'est pas. On ne teste donc pas la ligne entiere, sans quoi la
  * moitie des titres du courrier passerait pour un paragraphe.
  */
 function titreEtSuite(ligne: string): { titre: string; suite: string } | null {
-  const coupe = ligne.indexOf(" — ");
+  const coupe = ligne.indexOf(" : ");
   const tete = coupe === -1 ? ligne : ligne.slice(0, coupe);
   const lettres = tete.replace(/[^A-Za-zÀ-ÿ]/g, "");
   if (lettres.length < 4 || tete !== tete.toUpperCase()) return null;
@@ -219,7 +219,7 @@ function enHtml(texte: string): string {
     viderParagraphe();
     paragraphe.push(nue);
     const estPied =
-      /^(Relance|Courrier) du \d/.test(nue) || /^Le (bureau|suivi du club) — /.test(nue);
+      /^(Relance|Courrier) du \d/.test(nue) || /^Le (bureau|suivi du club) /.test(nue);
     if (estPied) {
       if (morceaux.length > 0 && !pied) {
         morceaux.push(`<div style="height:10px;border-top:1px solid ${FILET};margin-top:18px"></div>`);
@@ -293,27 +293,27 @@ export function controlesOuverture(): { cle: string; ok: boolean; explication: s
       cle: "CRON_SECRET",
       ok: variable("CRON_SECRET", "") !== "",
       explication:
-        "Protege la route de relance. Absente, la relance est desactivee : sans elle, " +
-        "n'importe qui connaissant l'adresse pourrait ecrire a tous les membres.",
+        "Protège la route de relance. Absente, la relance est désactivée : sans elle, " +
+        "n'importe qui connaissant l'adresse pourrait écrire à tous les membres.",
     },
     {
       cle: "NEXT_PUBLIC_SITE_URL",
       ok: lienDuSite() !== "",
       explication:
         lienDuSite() !== ""
-          ? `Adresse portee par les courriers : ${lienDuSite()}. Verifiez que c'est bien ` +
-            "l'adresse de production, non celle d'un apercu : un membre qui l'ouvrirait " +
-            "tomberait sur une version figee."
-          : "Absente : les courriers d'acces et de relance partent sans le lien du site, " +
-            "et le membre ne sait pas ou aller. Renseignez-la, puis redeployez.",
+          ? `Adresse portée par les courriers : ${lienDuSite()}. Vérifiez que c'est bien ` +
+            "l'adresse de production, non celle d'un aperçu : un membre qui l'ouvrirait " +
+            "tomberait sur une version figée."
+          : "Absente : les courriers d'accès et de relance partent sans le lien du site, " +
+            "et le membre ne sait pas où aller. Renseignez-la, puis redéployez.",
     },
     {
       cle: "SETUP_TOKEN",
       // Ici, l'absence est le bon etat : c'est une porte d'amorcage.
       ok: variable("SETUP_TOKEN", "") === "",
       explication:
-        "Jeton d'amorcage : il permet de reinitialiser le mot de passe du president. " +
-        "Il ne sert qu'une fois, et doit etre supprime des variables d'environnement.",
+        "Jeton d'amorçage : il permet de réinitialiser le mot de passe du président. " +
+        "Il ne sert qu'une fois, et doit être supprimé des variables d'environnement.",
     },
   ];
 }
@@ -327,11 +327,11 @@ export function adresseDuCompte(): string {
 export function descriptionTransport(): string {
   switch (transportConfigure()) {
     case "smtp":
-      return `SMTP ${variable("SMTP_HOST", "")}:${variable("SMTP_PORT", "465")}, compte ${variable("SMTP_USER", "(non renseigne)")}`;
+      return `SMTP ${variable("SMTP_HOST", "")}:${variable("SMTP_PORT", "465")}, compte ${variable("SMTP_USER", "(non renseigné)")}`;
     case "resend":
       return `Resend, expediteur ${expediteur()}`;
     default:
-      return "aucun transport configure";
+      return "aucun transport configuré";
   }
 }
 
@@ -374,9 +374,9 @@ export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi
        * probleme qui est ici.
        */
       if ((info.accepted ?? []).length === 0) {
-        return { ok: false, detail: `aucun destinataire accepte — ${info.response ?? "sans reponse"}` };
+        return { ok: false, detail: `aucun destinataire accepté (${info.response ?? "sans réponse"})` };
       }
-      return { ok: true, detail: String(info.response ?? "accepte") };
+      return { ok: true, detail: String(info.response ?? "accepté") };
     }
 
     if (transport === "resend") {
@@ -394,8 +394,8 @@ export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi
        * Resend rend l'erreur plutot que de la lever : sans ce test, un refus du
        * fournisseur serait consigne comme un envoi reussi.
        */
-      if (error) return { ok: false, detail: `${error.name} — ${error.message}` };
-      return { ok: true, detail: `accepte (identifiant ${data?.id ?? "inconnu"})` };
+      if (error) return { ok: false, detail: `${error.name} : ${error.message}` };
+      return { ok: true, detail: `accepté (identifiant ${data?.id ?? "inconnu"})` };
     }
   } catch (e) {
     // Le code SMTP nomme la cause bien mieux que le message : EAUTH, ECONNECTION…
@@ -404,5 +404,5 @@ export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi
     const reponse = err.responseCode ? `(${err.responseCode}) ` : "";
     return { ok: false, detail: `${code}${reponse}${err.message ?? String(e)}` };
   }
-  return { ok: false, detail: "aucun transport configure" };
+  return { ok: false, detail: "aucun transport configuré" };
 }

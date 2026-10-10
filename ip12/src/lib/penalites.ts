@@ -619,8 +619,8 @@ export function issueR5(
       applicable: true,
       voie: "exclusion_plein_droit",
       texte:
-        `${nbPenalitesImpayees} penalites de retard impayees, alors que les cotisations ` +
-        "sont a jour. Les penalites etant indissociables des cotisations depuis le " +
+        `${nbPenalitesImpayees} pénalités de retard impayées, alors que les cotisations ` +
+        "sont à jour. Les pénalités étant indissociables des cotisations depuis le " +
         `${EFFET.penalitesIndissociables.split("-").reverse().join("/")}, l'exclusion est ` +
         "acquise de plein droit (R5).",
     };
@@ -630,9 +630,9 @@ export function issueR5(
       applicable: true,
       voie: "exclusion_plein_droit",
       texte:
-        `Retard de ${nbMoisRetard} mois non declare au groupe (R3 non respectee) : ` +
+        `Retard de ${nbMoisRetard} mois non déclaré au groupe (R3 non respectée) : ` +
         `exclusion de plein droit, remboursement sous ${REGLES.delaiRemboursementMois} mois ` +
-        `au cours de cession diminue de ${(REGLES.fraisCession * 100).toFixed(0)} % de frais.`,
+        `au cours de cession diminué de ${(REGLES.fraisCession * 100).toFixed(0)} % de frais.`,
     };
   }
   if (planDejaUtilise) {
@@ -640,7 +640,7 @@ export function issueR5(
       applicable: true,
       voie: "vote_art20",
       texte:
-        "Le plan de redressement a deja ete accorde a ce membre. " +
+        "Le plan de redressement a déjà été accordé à ce membre. " +
         `Exclusion soumise au vote des ${(REGLES.majoriteExclusion * 100).toFixed(0)} % (art. 20).`,
     };
   }
@@ -648,11 +648,11 @@ export function issueR5(
     applicable: true,
     voie: "plan_redressement",
     texte:
-      "Retard declare au groupe : le membre garde le benefice d'un plan de redressement, " +
-      "accordable une seule fois sur la duree du club." +
+      "Retard déclaré au groupe : le membre garde le bénéfice d'un plan de redressement, " +
+      "accordable une seule fois sur la durée du club." +
       (parPenalites
-        ? ` Le plan porte sur l'ensemble de sa dette : ses ${nbPenalitesImpayees} penalites ` +
-          "impayees en font partie, celles-ci etant indissociables des cotisations."
+        ? ` Le plan porte sur l'ensemble de sa dette : ses ${nbPenalitesImpayees} pénalités ` +
+          "impayées en font partie, celles-ci étant indissociables des cotisations."
         : ""),
   };
 }

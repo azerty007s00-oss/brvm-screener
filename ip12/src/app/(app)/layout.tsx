@@ -39,7 +39,7 @@ const RUBRIQUES: Modele[] = [
       { href: "/portefeuille", libelle: "Portefeuille", icone: "graphique" },
       { href: "/caisse", libelle: "Caisse", icone: "coffre" },
       { href: "/compte-titres", libelle: "Titres", icone: "echange" },
-      { href: "/penalites", libelle: "Penalites", icone: "alerte" },
+      { href: "/penalites", libelle: "Pénalités", icone: "alerte" },
     ],
   },
   {
@@ -47,7 +47,7 @@ const RUBRIQUES: Modele[] = [
     libelle: "Club",
     icone: "personnes",
     pages: [
-      { href: "/reunions", libelle: "Reunions", icone: "calendrier" },
+      { href: "/reunions", libelle: "Réunions", icone: "calendrier" },
       { href: "/membres", libelle: "Membres", icone: "personnes" },
     ],
   },

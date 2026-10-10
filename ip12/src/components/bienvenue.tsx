@@ -45,9 +45,9 @@ export function Bienvenue({ membre }: { membre: Membre }) {
         </p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Bienvenue, {prenom}.</h1>
         <p className="mt-2 text-sm leading-relaxed" style={{ color: "var(--discret)" }}>
-          Ce site remplace le cahier du tresorier et les comptes envoyes au groupe. Vous y voyez a
-          tout moment ce que vous avez verse, ce que vous devez, et ce que vaut votre part du
-          portefeuille. Les comptes sont ouverts a tous les membres : c&apos;est le principe de
+          Ce site remplace le cahier du trésorier et les comptes envoyés au groupe. Vous y voyez à
+          tout moment ce que vous avez versé, ce que vous devez, et ce que vaut votre part du
+          portefeuille. Les comptes sont ouverts à tous les membres : c&apos;est le principe de
           l&apos;article 12.
         </p>
       </div>
@@ -67,8 +67,8 @@ export function Bienvenue({ membre }: { membre: Membre }) {
             <p className="text-sm font-semibold">Votre adresse</p>
             <p className="mt-0.5 text-sm break-words">{membre.email}</p>
             <p className="mt-1.5 text-[11.5px] leading-snug" style={{ color: "var(--discret)" }}>
-              C&apos;est a cette adresse que partiront les rappels avant le 10. Si ce n&apos;est pas
-              la votre, signalez-le au president avant de continuer : personne d&apos;autre ne peut
+              C&apos;est à cette adresse que partiront les rappels avant le 10. Si ce n&apos;est pas
+              la vôtre, signalez-le au président avant de continuer : personne d&apos;autre ne peut
               la corriger.
             </p>
           </div>
@@ -93,9 +93,9 @@ export function Bienvenue({ membre }: { membre: Membre }) {
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">Choisissez votre mot de passe</p>
             <p className="mt-0.5 text-[11.5px] leading-snug" style={{ color: "var(--discret)" }}>
-              Celui que vous avez recu a transite par un message : il ne protege rien. Le nouveau
-              n&apos;est connu de personne, pas meme du president. Le site s&apos;ouvre des
-              qu&apos;il est enregistre.
+              Celui que vous avez reçu à transité par un message : il ne protège rien. Le nouveau
+              n&apos;est connu de personne, pas même du président. Le site s&apos;ouvre des
+              qu&apos;il est enregistré.
             </p>
           </div>
         </div>
@@ -105,7 +105,7 @@ export function Bienvenue({ membre }: { membre: Membre }) {
             libelle="Nouveau mot de passe"
             type="password"
             autoComplete="new-password"
-            aide="8 caracteres minimum."
+            aide="8 caractères minimum."
           />
           <Champ nom="confirmation" libelle="Confirmer" type="password" autoComplete="new-password" />
         </FormulaireAction>
@@ -132,7 +132,7 @@ export function Bienvenue({ membre }: { membre: Membre }) {
               {(REGLES.tauxPenalite * 100).toFixed(0)} %
             </span>
             <span style={{ color: "var(--discret)" }}>
-              de penalite par mois de retard, definitivement acquise au club (art. 9).
+              de pénalité par mois de retard, définitivement acquise au club (art. 9).
             </span>
           </li>
           <li className="flex gap-2.5">
@@ -140,15 +140,15 @@ export function Bienvenue({ membre }: { membre: Membre }) {
               R3
             </span>
             <span style={{ color: "var(--discret)" }}>
-              au-dela d&apos;un mois de retard, prevenez le groupe : la declaration change ce qui
-              vous attend en cas de retard prolonge.
+              au-delà d&apos;un mois de retard, prévenez le groupe : la déclaration change ce qui
+              vous attend en cas de retard prolongé.
             </span>
           </li>
         </ul>
         <p className="mt-3 text-[11.5px] leading-snug" style={{ color: "var(--discret)" }}>
-          Vous etes inscrit comme {ROLES[membre.role].toLowerCase()}. Declarer un versement se fait
-          depuis l&apos;onglet Versements ; le tresorier en est prevenu par courriel, vous et le
-          president en copie, et il valide ensuite — inutile de lui ecrire en plus. Personne ne
+          Vous êtes inscrit comme {ROLES[membre.role].toLowerCase()}. Déclarer un versement se fait
+          depuis l&apos;onglet Versements ; le trésorier en est prévenu par courriel, vous et le
+          président en copie, et il valide ensuite. Inutile de lui écrire en plus. Personne ne
           valide le sien.
         </p>
       </div>

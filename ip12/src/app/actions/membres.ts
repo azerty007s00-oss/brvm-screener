@@ -19,7 +19,7 @@ const ROLES_VALIDES = Object.keys(ROLES) as Role[];
  */
 function lienManquant(): string {
   return lienDuSite() === ""
-    ? " Attention : NEXT_PUBLIC_SITE_URL n'est pas renseignee dans Vercel, le courrier part sans l'adresse du site."
+    ? " Attention : NEXT_PUBLIC_SITE_URL n'est pas renseignée dans Vercel, le courrier part sans l'adresse du site."
     : "";
 }
 
@@ -38,13 +38,13 @@ export async function creerMembre(
   if (nom.length < 2) return { ok: false, erreur: "Nom trop court." };
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, erreur: "E-mail invalide." };
   if (!ROLES_VALIDES.includes(role as Role)) {
-    return { ok: false, erreur: "Role inconnu." };
+    return { ok: false, erreur: "Rôle inconnu." };
   }
 
   const sql = db();
   const effectif = await sql`select count(*)::int as c from members where is_active = true`;
   if (Number(effectif[0]?.c ?? 0) >= CLUB.membresMax) {
-    return { ok: false, erreur: `Le club est plafonne a ${CLUB.membresMax} membres (statuts).` };
+    return { ok: false, erreur: `Le club est plafonné à ${CLUB.membresMax} membres (statuts).` };
   }
 
   // Poste de bureau : un seul titulaire, le precedent repasse simple membre.
@@ -61,7 +61,7 @@ export async function creerMembre(
               ${hacherMotDePasse(provisoire)}, true, ${dateAdhesion}::date)
     `;
   } catch {
-    return { ok: false, erreur: "Cet e-mail est deja utilise par un membre." };
+    return { ok: false, erreur: "Cet e-mail est déjà utilisé par un membre." };
   }
 
   /* Meme courrier qu'a la reinitialisation : le nouveau venu recoit ses acces. */
@@ -74,16 +74,16 @@ export async function creerMembre(
     { id: auteur.id, nom: auteur.nom },
     "creation_membre",
     { entite: "members" },
-    { nom, email, role, courriel: envoi.ok ? "remis" : `echec : ${envoi.detail}` },
+    { nom, email, role, courriel: envoi.ok ? "remis" : `échec : ${envoi.detail}` },
   );
   revalidatePath("/", "layout");
 
-  const rappel = `Mot de passe provisoire : ${provisoire} — il lui sera demande de le changer a la premiere connexion.`;
+  const rappel = `Mot de passe provisoire : ${provisoire}. Il lui sera demandé de le changer à la première connexion.`;
   return {
     ok: true,
     message: envoi.ok
-      ? `${nom} est cree, ses acces sont partis a ${email}. ${rappel}${lienManquant()}`
-      : `${nom} est cree. Le courrier n'est pas parti (${envoi.detail}) : transmettez-lui vous-meme. ${rappel}`,
+      ? `${nom} est créé, ses accès sont partis à ${email}. ${rappel}${lienManquant()}`
+      : `${nom} est créé. Le courrier n'est pas parti (${envoi.detail}) : transmettez-lui vous-même. ${rappel}`,
   };
 }
 
@@ -102,7 +102,7 @@ export async function modifierMembre(
   if (!id) return { ok: false, erreur: "Membre introuvable." };
   if (nom.length < 2) return { ok: false, erreur: "Nom trop court." };
   if (!ROLES_VALIDES.includes(role as Role)) {
-    return { ok: false, erreur: "Role inconnu." };
+    return { ok: false, erreur: "Rôle inconnu." };
   }
 
   const sql = db();
@@ -121,7 +121,7 @@ export async function modifierMembre(
     { nom, role },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Membre mis a jour." };
+  return { ok: true, message: "Membre mis à jour." };
 }
 
 export async function reinitialiserMotDePasse(
@@ -160,7 +160,7 @@ export async function reinitialiserMotDePasse(
     { id: auteur.id, nom: auteur.nom },
     "reinitialisation_mot_de_passe",
     { entite: "members", id },
-    { courriel: envoi.ok ? "remis" : `echec : ${envoi.detail}` },
+    { courriel: envoi.ok ? "remis" : `échec : ${envoi.detail}` },
   );
   revalidatePath("/", "layout");
 
@@ -168,11 +168,11 @@ export async function reinitialiserMotDePasse(
   return envoi.ok
     ? {
         ok: true,
-        message: `Acces envoyes a ${rows[0].email}. ${rappel} — a garder sous la main tant qu'il n'a pas confirme.${lienManquant()}`,
+        message: `Accès envoyés à ${rows[0].email}. ${rappel} À garder sous la main tant qu'il n'a pas confirmé.${lienManquant()}`,
       }
     : {
         ok: true,
-        message: `${rappel}. Le courrier n'est pas parti (${envoi.detail}) : transmettez-le vous-meme.`,
+        message: `${rappel}. Le courrier n'est pas parti (${envoi.detail}) : transmettez-le vous-même.`,
       };
 }
 
@@ -182,7 +182,7 @@ export async function basculerActivite(
 ): Promise<EtatFormulaire> {
   const auteur = await exigerRole("president");
   const id = String(donnees.get("id") ?? "");
-  if (id === auteur.id) return { ok: false, erreur: "Vous ne pouvez pas vous desactiver vous-meme." };
+  if (id === auteur.id) return { ok: false, erreur: "Vous ne pouvez pas vous désactiver vous-même." };
 
   const sql = db();
   const rows = await sql`
@@ -199,6 +199,6 @@ export async function basculerActivite(
   revalidatePath("/", "layout");
   return {
     ok: true,
-    message: `${rows[0].full_name} est desormais ${rows[0].is_active ? "actif" : "inactif"}.`,
+    message: `${rows[0].full_name} est désormais ${rows[0].is_active ? "actif" : "inactif"}.`,
   };
 }

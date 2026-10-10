@@ -56,22 +56,22 @@ export const metadata = { title: "Versements" };
  * quoi que ce soit -- tout vient de la cellule.
  */
 function detailDuMois(c: CelluleMois): string {
-  const verse = c.dateVersement ? `Verse le ${dateCourte(c.dateVersement)}.` : null;
+  const verse = c.dateVersement ? `Versé le ${dateCourte(c.dateVersement)}.` : null;
   switch (c.statut) {
     case "paye":
-      return verse ?? "Mois solde.";
+      return verse ?? "Mois soldé.";
     case "paye_en_retard":
-      return `${verse ?? "Mois solde"} La penalite reste due (art. 9).`;
+      return `${verse ?? "Mois soldé"} La pénalité reste due (art. 9).`;
     case "en_attente":
-      return "Declare, en attente de validation par le tresorier.";
+      return "Déclaré, en attente de validation par le trésorier.";
     case "partiel":
       return `${verse ? `${verse} ` : ""}Il manque ${fcfa(c.manque)}.`;
     case "retard":
-      return `Rien de verse : ${fcfa(c.manque > 0 ? c.manque : c.requis)} dus depuis le ${REGLES.jourEcheance}.`;
+      return `Rien de versé : ${fcfa(c.manque > 0 ? c.manque : c.requis)} dus depuis le ${REGLES.jourEcheance}.`;
     case "a_venir":
       return verse
-        ? `${verse} Mois paye d'avance.`
-        : `Pas encore du : echeance au ${REGLES.jourEcheance}.`;
+        ? `${verse} Mois payé d'avance.`
+        : `Pas encore dû : échéance au ${REGLES.jourEcheance}.`;
     case "hors_periode":
       return "";
   }
@@ -209,8 +209,8 @@ export default async function PageVersements({
           }
           detail={
             enAttente.length > 0
-              ? `${enAttente.length} declaration${enAttente.length > 1 ? "s" : ""} en attente de validation.`
-              : "Aucune declaration en attente."
+              ? `${enAttente.length} déclaration${enAttente.length > 1 ? "s" : ""} en attente de validation.`
+              : "Aucune déclaration en attente."
           }
         />
         <div className="sans-impression flex flex-wrap gap-2.5">
@@ -219,21 +219,21 @@ export default async function PageVersements({
               libelle="Relancer maintenant"
               titre="Relancer les retardataires"
               variante="secondaire"
-              introduction="La relance part d'elle-meme le 10 de chaque mois. Entre deux, vous pouvez l'envoyer a la main : c'est exactement le meme courrier -- mois manquants, penalites, rappels R2, R3 et R4, mesures disciplinaires. Seuls les membres concernes le recoivent ; ceux qui sont a jour ne sont jamais ecrits."
+              introduction="La relance part d'elle-même le 10 de chaque mois. Entre deux, vous pouvez l'envoyer à la main : c'est exactement le même courrier (mois manquants, pénalités, rappels R2, R3 et R4, mesures disciplinaires). Seuls les membres concernés le reçoivent ; ceux qui sont à jour n'en reçoivent jamais."
             >
               <FormulaireAction action={relancerMaintenant} libelle="Relancer maintenant" />
             </Panneau>
           )}
           <Panneau
-            libelle={saisieDirecte ? "Enregistrer un versement" : "Declarer un versement"}
-            titre={saisieDirecte ? "Enregistrer un versement" : "Declarer un versement"}
+            libelle={saisieDirecte ? "Enregistrer un versement" : "Déclarer un versement"}
+            titre={saisieDirecte ? "Enregistrer un versement" : "Déclarer un versement"}
             introduction={
               saisieDirecte
                 ? "Votre saisie vaut validation : vous constatez un encaissement, pour vous ou pour un autre membre."
-                : "Votre declaration est visible de tous immediatement, et reste en attente jusqu'a la validation du tresorier qui tient la caisse. Il en est prevenu par courriel, vous et le president en copie."
+                : "Votre déclaration est visible de tous immédiatement, et reste en attente jusqu'à la validation du trésorier qui tient la caisse. Il en est prévenu par courriel, vous et le président en copie."
             }
           >
-            <FormulaireAction action={declarerVersement} libelle="Declarer">
+            <FormulaireAction action={declarerVersement} libelle="Déclarer">
               {saisieDirecte && (
                 <Selection
                   nom="membreId"
@@ -254,11 +254,11 @@ export default async function PageVersements({
                 */}
               <Selection
                 nom="nature"
-                libelle="Ce que vous reglez"
+                libelle="Ce que vous réglez"
                 valeur="cotisation"
                 options={[
                   { valeur: "cotisation", libelle: "Une cotisation mensuelle" },
-                  { valeur: "penalite", libelle: "Une penalite" },
+                  { valeur: "penalite", libelle: "Une pénalité" },
                 ]}
               />
               {/*
@@ -277,19 +277,19 @@ export default async function PageVersements({
                 */}
               <Champ
                 nom="montant"
-                libelle="Montant verse (FCFA)"
+                libelle="Montant versé (FCFA)"
                 type="number"
                 valeur={aRegler?.reste ?? REGLES.cotisationMensuelle}
                 min={1}
                 aide={
                   (aRegler === null
-                    ? "Cotisation : votre versement couvre les mois dans l'ordre, du plus ancien au plus recent."
+                    ? "Cotisation : votre versement couvre les mois dans l'ordre, du plus ancien au plus récent."
                     : enAvance
-                      ? `Cotisation : ce versement ira sur ${moisLong(aRegler.mois)}, puis sur les mois suivants s'il les depasse.`
-                      : `Cotisation : ce versement ira sur ${moisLong(aRegler.mois)}, le plus ancien mois ouvert, puis sur les suivants s'il le depasse.`) +
-                  " Penalite : il solde les plus anciennes d'abord, et une penalite se regle entiere." +
+                      ? `Cotisation : ce versement ira sur ${moisLong(aRegler.mois)}, puis sur les mois suivants s'il les dépasse.`
+                      : `Cotisation : ce versement ira sur ${moisLong(aRegler.mois)}, le plus ancien mois ouvert, puis sur les suivants s'il le dépasse.`) +
+                  " Pénalité : il solde les plus anciennes d'abord, et une pénalité se règle entière." +
                   (saisieDirecte
-                    ? " Pour un autre membre, c'est sa propre situation qui s'applique ; une penalite, elle, se solde depuis la page Penalites."
+                    ? " Pour un autre membre, c'est sa propre situation qui s'applique ; une pénalité, elle, se solde depuis la page Pénalités."
                     : "")
                 }
               />
@@ -306,10 +306,10 @@ export default async function PageVersements({
                 */}
               {(maSituation?.nbPenalitesImpayees ?? 0) > 0 && (
                 <p className="mt-3 text-[12px]" style={{ color: "var(--discret)" }}>
-                  Vous avez aussi des penalites dues : choisissez « une penalite » ci-dessus
-                  pour en declarer le reglement. Le detail de chaque ligne se lit sur{" "}
+                  Vous avez aussi des pénalités dues : choisissez « une pénalité » ci-dessus
+                  pour en déclarer le règlement. Le détail de chaque ligne se lit sur{" "}
                   <Link href="/penalites" className="underline">
-                    Penalites
+                    Pénalités
                   </Link>
                   .
                 </p>
@@ -321,7 +321,7 @@ export default async function PageVersements({
                 valeur={new Date().toISOString().slice(0, 10)}
               />
               <Selection nom="mode" libelle="Mode" options={MODES_AFFICHES} />
-              <Champ nom="reference" libelle="Reference du paiement (facultatif)" requis={false} />
+              <Champ nom="reference" libelle="Référence du paiement (facultatif)" requis={false} />
               <Champ nom="note" libelle="Note (facultatif)" requis={false} />
               <ChampJustificatif />
             </FormulaireAction>
@@ -337,7 +337,7 @@ export default async function PageVersements({
       {peutValider && enAttente.length > 0 && (
         <Carte titre={`En attente de validation (${enAttente.length})`}>
           {enAttente.length === 0 ? (
-            <Vide>Rien a valider.</Vide>
+            <Vide>Rien à valider.</Vide>
           ) : (
             <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
               {enAttente.map((v) => (
@@ -351,7 +351,7 @@ export default async function PageVersements({
                         className="text-xs"
                         style={{ color: "var(--discret)" }}
                       >
-                        {moisLong(v.mois)} &middot; verse le{" "}
+                        {moisLong(v.mois)} &middot; versé le{" "}
                         {dateCourte(v.date_versement)} &middot;{" "}
                         {libelleMode(v.mode)}
                         {v.saisi_par_nom && v.saisi_par_nom !== v.membre_nom
@@ -383,7 +383,7 @@ export default async function PageVersements({
                               >
                                 {j.mime === "application/pdf"
                                   ? "Bordereau PDF"
-                                  : "Voir le recu"}
+                                  : "Voir le reçu"}
                               </a>
                             ))}
                           </span>
@@ -392,7 +392,7 @@ export default async function PageVersements({
                             className="text-xs"
                             style={{ color: "var(--etat-attente)" }}
                           >
-                            Aucun justificatif joint — a verifier avant de
+                            Aucun justificatif joint : à vérifier avant de
                             valider.
                           </span>
                         )}
@@ -610,7 +610,7 @@ export default async function PageVersements({
                         })}
                     </ul>
                     <p className="mt-3 text-[12px]" style={{ color: "var(--discret)" }}>
-                      Verse depuis le debut :{" "}
+                      Versé depuis le début :{" "}
                       <span className="font-semibold tabular-nums" style={{ color: "var(--texte)" }}>
                         {fcfa(s.verse)}
                       </span>
@@ -624,21 +624,21 @@ export default async function PageVersements({
       </Carte>
 
       {maSituation && maSituation.moisEnRetard.length > 0 && (
-        <Carte titre="Declarer un retard (R3)">
+        <Carte titre="Déclarer un retard (R3)">
           <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            La resolution R3 impose de signaler son retard sur le groupe
+            La résolution R3 impose de signaler son retard sur le groupe
             WhatsApp, en taguant tous les membres, au plus tard le lendemain de
-            l&apos;entree dans le 2e mois. Enregistrez ici la declaration faite
-            : elle preserve votre droit au plan de redressement prevu par R5.
+            l&apos;entrée dans le 2e mois. Enregistrez ici la déclaration faite
+            : elle préserve votre droit au plan de redressement prévu par R5.
           </p>
-          <Depliant titre="Enregistrer ma declaration">
+          <Depliant titre="Enregistrer ma déclaration">
             <FormulaireAction
               action={declarerRetard}
-              libelle="Enregistrer la declaration"
+              libelle="Enregistrer la déclaration"
             >
               <Selection
                 nom="mois"
-                libelle="Mois concerne"
+                libelle="Mois concerné"
                 options={maSituation.moisEnRetard.map((m) => ({
                   valeur: m,
                   libelle: moisLong(m),
@@ -646,7 +646,7 @@ export default async function PageVersements({
               />
               <Champ
                 nom="note"
-                libelle="Precision (facultatif)"
+                libelle="Précision (facultatif)"
                 requis={false}
               />
             </FormulaireAction>
@@ -672,18 +672,18 @@ export default async function PageVersements({
        * geste.
        */}
       {corrigibles.length > 0 && (
-        <Carte titre="Derniers versements enregistres">
+        <Carte titre="Derniers versements enregistrés">
           <Depliant
             titre={
               peutCorriger
-                ? `Afficher les ${corrigibles.length} dernieres saisies, pour verifier ou corriger`
-                : `Afficher les ${corrigibles.length} dernieres saisies`
+                ? `Afficher les ${corrigibles.length} dernières saisies, pour vérifier ou corriger`
+                : `Afficher les ${corrigibles.length} dernières saisies`
             }
           >
           <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
             {peutCorriger
-              ? "Les saisies les plus recentes, justificatifs compris. Une erreur n'est pas definitive : la correction ne remplace pas en silence, l'etat anterieur reste inscrit sur la ligne et au journal, et le motif est obligatoire."
-              : "Les saisies les plus recentes, justificatifs compris. Chacun peut verifier ce qui a ete encaisse, pour lui comme pour les autres : les comptes du club sont ouverts a tous ses membres (art. 12)."}
+              ? "Les saisies les plus récentes, justificatifs compris. Une erreur n'est pas définitive : la correction ne remplace pas en silence, l'état antérieur reste inscrit sur la ligne et au journal, et le motif est obligatoire."
+              : "Les saisies les plus récentes, justificatifs compris. Chacun peut vérifier ce qui a été encaissé, pour lui comme pour les autres : les comptes du club sont ouverts à tous ses membres (art. 12)."}
           </p>
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {corrigibles.map((v) => (
@@ -695,11 +695,11 @@ export default async function PageVersements({
                     className="mb-3 text-xs"
                     style={{ color: "var(--discret)" }}
                   >
-                    Verse le {dateCourte(v.date_versement)} &middot;{" "}
+                    Versé le {dateCourte(v.date_versement)} &middot;{" "}
                     {libelleMode(v.mode)}
                     {v.reference ? ` · ${v.reference}` : ""}
                     {v.valide_par_nom
-                      ? ` · valide par ${v.valide_par_nom}`
+                      ? ` · validé par ${v.valide_par_nom}`
                       : ""}
                   </p>
                   {v.motif_rejet && (
@@ -770,7 +770,7 @@ export default async function PageVersements({
                           libelle="Mois couvert"
                           type="date"
                           valeur={v.mois}
-                          aide="Le premier du mois. Un mois deja couvert pour ce membre est refuse."
+                          aide="Le premier du mois. Un mois déjà couvert pour ce membre est refusé."
                         />
                         <Selection
                           nom="mode"
@@ -780,7 +780,7 @@ export default async function PageVersements({
                         />
                         <Champ
                           nom="reference"
-                          libelle="Reference"
+                          libelle="Référence"
                           requis={false}
                           valeur={v.reference ?? ""}
                         />
@@ -799,7 +799,7 @@ export default async function PageVersements({
                           style={{ color: "var(--discret)" }}
                         >
                           Si l&apos;encaissement n&apos;a jamais eu lieu, ou a
-                          ete compte deux fois : l&apos;annulation libere le
+                          été compté deux fois : l&apos;annulation libère le
                           mois.
                         </p>
                         <FormulaireAction

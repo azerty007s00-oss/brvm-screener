@@ -143,7 +143,7 @@ export function CourbePortefeuille({
   if (points.length < 2) {
     return (
       <p className="py-6 text-center text-sm" style={{ color: "var(--ink-2)" }}>
-        Au moins deux releves sont necessaires pour tracer l&apos;evolution.
+        Au moins deux relevés sont nécessaires pour tracer l&apos;évolution.
       </p>
     );
   }
@@ -163,7 +163,7 @@ export function CourbePortefeuille({
   const choix = horizons.map((h) => ({
     ...h,
     possible: tracable(points, h.cle),
-    raison: "Moins de deux releves sur cette periode.",
+    raison: "Moins de deux relevés sur cette période.",
   }));
   const actif = choix.find((h) => h.cle === horizon)?.possible
     ? horizon
@@ -370,7 +370,7 @@ export function CourbePortefeuille({
       <div className="sans-impression mb-4 flex flex-wrap items-center justify-between gap-3">
         <Legende />
         <Selecteur
-          etiquette="Periode du graphique"
+          etiquette="Période du graphique"
           options={choix}
           valeur={actif}
           surChoix={(h) => {
@@ -420,7 +420,7 @@ export function CourbePortefeuille({
           className="block w-full"
           style={{ aspectRatio: `${L} / ${H}`, maxHeight: H }}
           role="img"
-          aria-label={`Valeur du compte-titres et net place en bourse, ${traces.length} releves du ${dateCourte(premier.date)} au ${dateCourte(dernier.date)} : de ${nombre(min)} a ${nombre(max)} FCFA`}
+          aria-label={`Valeur du compte-titres et net place en bourse, ${traces.length} relevés du ${dateCourte(premier.date)} au ${dateCourte(dernier.date)} : de ${nombre(min)} à ${nombre(max)} FCFA`}
         >
           {paliers.map((v) => (
             <line
@@ -533,7 +533,7 @@ export function CourbePortefeuille({
             fill="transparent"
             tabIndex={0}
             role="application"
-            aria-label="Parcourir les releves : fleches, Debut, Fin, Echap"
+            aria-label="Parcourir les relevés : flèches, Début, Fin, Echap"
             style={{ cursor: "crosshair", touchAction: "pan-y", outlineOffset: -2 }}
             onPointerMove={viser}
             onPointerDown={viser}
@@ -677,7 +677,7 @@ export function CourbePortefeuille({
       <figcaption className="mt-3 flex flex-col gap-1 text-[12.5px]" style={{ color: "var(--ink-2)" }}>
         <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
         <span style={{ color: "var(--ink-3)" }}>
-          {point ? `Au releve du ${dateCourte(point.date)}` : nomPeriode}
+          {point ? `Au relevé du ${dateCourte(point.date)}` : nomPeriode}
         </span>
         {point && epingle && (
           /*
@@ -693,7 +693,7 @@ export function CourbePortefeuille({
               choisir(null);
             }}
           >
-            Revenir a la periode
+            Revenir à la période
           </button>
         )}
         {point ? (
@@ -710,7 +710,7 @@ export function CourbePortefeuille({
                 <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
                   {nombre(point.actions)}
                 </span>{" "}
-                &middot; liquidites{" "}
+                &middot; liquidités{" "}
                 <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
                   {nombre(point.liquidites)}
                 </span>
@@ -765,7 +765,7 @@ export function CourbePortefeuille({
         {marche && precedent && (
           <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
             <span style={{ color: "var(--ink-3)" }}>
-              Depuis le releve du {dateCourte(precedent.date)}
+              Depuis le relevé du {dateCourte(precedent.date)}
             </span>
             <Poste libelle="Apports nets" montant={marche.apportsNets} />
             <Poste libelle="Gain de gestion" montant={marche.gain} performance />
@@ -825,7 +825,7 @@ function Legende() {
           className="block flex-none"
           style={{ width: 16, height: 2, background: "var(--gold)", borderRadius: 2 }}
         />
-        Valeur relevee
+        Valeur relevée
       </span>
       <span className="flex items-center gap-1.5">
         <svg width="16" height="2" viewBox="0 0 16 2" aria-hidden="true" className="flex-none">

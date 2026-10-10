@@ -69,16 +69,16 @@ export async function declarerVersement(
   if (membreCible !== auteur.id && !saisieDirecte) {
     return {
       ok: false,
-      erreur: "Seuls le tresorier et le president peuvent enregistrer un versement pour autrui.",
+      erreur: "Seuls le trésorier et le président peuvent enregistrer un versement pour autrui.",
     };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVersement)) return { ok: false, erreur: "Date de versement invalide." };
   if (!Number.isFinite(montant) || montant <= 0) {
-    return { ok: false, erreur: "Indiquez le montant verse." };
+    return { ok: false, erreur: "Indiquez le montant versé." };
   }
   if (!METHODES.includes(mode)) return { ok: false, erreur: "Mode de paiement inconnu." };
   if (nature !== "cotisation" && nature !== "penalite") {
-    return { ok: false, erreur: "Precisez s'il s'agit d'une cotisation ou d'une penalite." };
+    return { ok: false, erreur: "Précisez s'il s'agit d'une cotisation ou d'une pénalité." };
   }
 
   /*
@@ -133,7 +133,7 @@ export async function declarerVersement(
 
   const imputations = imputer(montant, situation.cellules, porte, requis);
   if (imputations.length === 0) {
-    return { ok: false, erreur: "Il n'y a aucun mois a regler : tout est deja solde." };
+    return { ok: false, erreur: "Il n'y a aucun mois à régler : tout est déjà soldé." };
   }
   /*
    * Un montant que 24 mois n'absorbent pas ne doit pas etre tronque en
@@ -144,7 +144,7 @@ export async function declarerVersement(
     return {
       ok: false,
       erreur:
-        `Ce montant couvre plus de 24 mois. Declarez ${fcfa(impute)} maintenant, ` +
+        `Ce montant couvre plus de 24 mois. Déclarez ${fcfa(impute)} maintenant, ` +
         "puis le reste en une seconde fois.",
     };
   }
@@ -207,12 +207,12 @@ export async function declarerVersement(
   const detail = imputations
     .map((i) => `${fcfa(i.montant)} sur ${moisLong(i.mois)}`)
     .join(", ");
-  const objet = `Versement de ${fcfa(montant)} — ${detail}`;
+  const objet = `Versement de ${fcfa(montant)} : ${detail}`;
   return {
     ok: true,
     message: saisieDirecte
-      ? `${objet}. Enregistre et valide.`
-      : `${objet}. En attente de validation par le tresorier.`,
+      ? `${objet}. Enregistré et validé.`
+      : `${objet}. En attente de validation par le trésorier.`,
   };
 }
 
@@ -234,7 +234,7 @@ export async function validerVersement(
   const v = rows[0];
   if (!v) return { ok: false, erreur: "Versement introuvable." };
   if (v.status !== STATUT_VERSEMENT.enAttente) {
-    return { ok: false, erreur: "Ce versement est deja traite." };
+    return { ok: false, erreur: "Ce versement est déjà traité." };
   }
 
   await sql`
@@ -248,7 +248,7 @@ export async function validerVersement(
     id,
   });
   revalidatePath("/", "layout");
-  return { ok: true, message: "Versement valide." };
+  return { ok: true, message: "Versement validé." };
 }
 
 export async function rejeterVersement(
@@ -277,7 +277,7 @@ export async function rejeterVersement(
     { motif },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Versement rejete. Le mois redevient disponible." };
+  return { ok: true, message: "Versement rejeté. Le mois redevient disponible." };
 }
 
 /**
@@ -300,12 +300,12 @@ export async function joindreJustificatif(
 
   const membreCible = String(rows[0].member_id);
   if (membreCible !== auteur.id && !peut(auteur, "saisirVersementValide")) {
-    return { ok: false, erreur: "Vous ne pouvez joindre une piece qu'a vos propres versements." };
+    return { ok: false, erreur: "Vous ne pouvez joindre une pièce qu'à vos propres versements." };
   }
 
   const resultat = await enregistrerJustificatif(donnees, lot, membreCible, auteur.id);
   if (!resultat.joint) {
-    return { ok: false, erreur: `Justificatif non enregistre : ${resultat.motif ?? "aucun fichier"}.` };
+    return { ok: false, erreur: `Justificatif non enregistré : ${resultat.motif ?? "aucun fichier"}.` };
   }
 
   await journaliser(
@@ -329,7 +329,7 @@ export async function declarerRetard(
   const note = String(donnees.get("note") ?? "").trim() || null;
 
   if (membreCible !== auteur.id && auteur.role !== "president") {
-    return { ok: false, erreur: "Seul le president peut enregistrer la declaration d'un autre membre." };
+    return { ok: false, erreur: "Seul le président peut enregistrer la déclaration d'un autre membre." };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(mois)) return { ok: false, erreur: "Mois invalide." };
 
@@ -344,7 +344,7 @@ export async function declarerRetard(
     return {
       ok: false,
       erreur:
-        "La table des declarations n'existe pas encore. Executez scripts/migration-r3.sql dans la console Neon.",
+        "La table des déclarations n'existe pas encore. Exécutez scripts/migration-r3.sql dans la console Neon.",
     };
   }
 
@@ -355,7 +355,7 @@ export async function declarerRetard(
     { membreCible, mois },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Retard declare. Le benefice du plan de redressement (R5) est preserve." };
+  return { ok: true, message: "Retard déclaré. Le bénéfice du plan de redressement (R5) est préservé." };
 }
 
 /* ------------------------------------------------- reprise d'une ligne close */
@@ -386,7 +386,7 @@ export async function corrigerVersement(
 ): Promise<EtatFormulaire> {
   const auteur = await exigerMembre();
   if (!peut(auteur, "corrigerVersement")) {
-    return { ok: false, erreur: "La correction d'un versement revient au tresorier et au president." };
+    return { ok: false, erreur: "La correction d'un versement revient au trésorier et au président." };
   }
 
   const id = String(donnees.get("id") ?? "");
@@ -405,7 +405,7 @@ export async function corrigerVersement(
   const v = rows[0];
   if (!v) return { ok: false, erreur: "Versement introuvable." };
   if (v.status === STATUT_VERSEMENT.rejete) {
-    return { ok: false, erreur: "Cette ligne est rejetee : le mois est libre, saisissez-la a nouveau." };
+    return { ok: false, erreur: "Cette ligne est rejetée : le mois est libre, saisissez-la à nouveau." };
   }
 
   const montant = Math.round(Number(donnees.get("montant") ?? 0));
@@ -415,7 +415,7 @@ export async function corrigerVersement(
   const reference = String(donnees.get("reference") ?? "").trim();
 
   if (!Number.isFinite(montant) || montant <= 0) {
-    return { ok: false, erreur: "Le montant doit etre positif." };
+    return { ok: false, erreur: "Le montant doit être positif." };
   }
   if (!dateVersement || !mois) return { ok: false, erreur: "Date et mois sont requis." };
   if (!METHODES.includes(mode)) return { ok: false, erreur: "Mode de paiement inconnu." };
@@ -434,7 +434,7 @@ export async function corrigerVersement(
       limit 1
     `;
     if (occupe.length > 0) {
-      return { ok: false, erreur: `${moisLong(mois)} est deja couvert pour ce membre.` };
+      return { ok: false, erreur: `${moisLong(mois)} est déjà couvert pour ce membre.` };
     }
   }
 
@@ -451,10 +451,10 @@ export async function corrigerVersement(
     (c) => `${c.libelle} ${avant[c.nom] || "(vide)"} → ${apres[c.nom] || "(vide)"}`,
   );
   if (changements.length === 0) {
-    return { ok: false, erreur: "Aucun changement : les valeurs proposees sont celles enregistrees." };
+    return { ok: false, erreur: "Aucun changement : les valeurs proposées sont celles enregistrées." };
   }
 
-  const trace = `Corrige le ${new Date().toISOString().slice(0, 10)} par ${auteur.nom} : ${changements.join(", ")}. Motif : ${motif}`;
+  const trace = `Corrigé le ${new Date().toISOString().slice(0, 10)} par ${auteur.nom} : ${changements.join(", ")}. Motif : ${motif}`;
   const note = v.review_note ? `${v.review_note}\n${trace}` : trace;
 
   await sql`
@@ -471,7 +471,7 @@ export async function corrigerVersement(
     { avant, apres, motif },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: `Versement corrige : ${changements.join(", ")}.` };
+  return { ok: true, message: `Versement corrigé : ${changements.join(", ")}.` };
 }
 
 /**
@@ -487,7 +487,7 @@ export async function annulerVersementValide(
 ): Promise<EtatFormulaire> {
   const auteur = await exigerMembre();
   if (!peut(auteur, "corrigerVersement")) {
-    return { ok: false, erreur: "L'annulation d'un versement revient au tresorier et au president." };
+    return { ok: false, erreur: "L'annulation d'un versement revient au trésorier et au président." };
   }
 
   const id = String(donnees.get("id") ?? "");
@@ -502,10 +502,10 @@ export async function annulerVersementValide(
   const v = rows[0];
   if (!v) return { ok: false, erreur: "Versement introuvable." };
   if (v.status === STATUT_VERSEMENT.rejete) {
-    return { ok: false, erreur: "Cette ligne est deja annulee." };
+    return { ok: false, erreur: "Cette ligne est déjà annulée." };
   }
 
-  const trace = `Annule le ${new Date().toISOString().slice(0, 10)} par ${auteur.nom}. Motif : ${motif}`;
+  const trace = `Annulé le ${new Date().toISOString().slice(0, 10)} par ${auteur.nom}. Motif : ${motif}`;
   await sql`
     update contributions
     set status = ${STATUT_VERSEMENT.rejete}, reviewed_by = ${auteur.id}::uuid,
@@ -519,5 +519,5 @@ export async function annulerVersementValide(
     { montant: Number(v.amount), mois: String(v.period), motif },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: `Versement annule : ${moisLong(String(v.period))} redevient disponible.` };
+  return { ok: true, message: `Versement annulé : ${moisLong(String(v.period))} redevient disponible.` };
 }

@@ -21,7 +21,7 @@ export async function GET(requete: Request) {
   const jeton = process.env.SETUP_TOKEN;
   if (!jeton) {
     return NextResponse.json(
-      { erreur: "SETUP_TOKEN n'est pas definie dans les variables d'environnement." },
+      { erreur: "SETUP_TOKEN n'est pas définie dans les variables d'environnement." },
       { status: 503 },
     );
   }
@@ -43,7 +43,7 @@ export async function GET(requete: Request) {
   } catch (e) {
     return NextResponse.json(
       {
-        erreur: "La table members n'existe pas. Verifiez que DATABASE_URL pointe sur la bonne base.",
+        erreur: "La table members n'existe pas. Vérifiez que DATABASE_URL pointe sur la bonne base.",
         detail: String(e),
       },
       { status: 409 },
@@ -64,7 +64,7 @@ export async function GET(requete: Request) {
       ok: true,
       action: "mot_de_passe_reinitialise",
       message:
-        "Mot de passe reinitialise. Connectez-vous, changez-le immediatement, " +
+        "Mot de passe réinitialisé. Connectez-vous, changez-le immédiatement, " +
         "puis supprimez SETUP_TOKEN des variables d'environnement.",
       membre: membre.full_name,
       email,
@@ -82,7 +82,7 @@ export async function GET(requete: Request) {
       {
         erreur:
           "Des membres existent, mais aucun ne porte cette adresse. " +
-          "Reprenez l'une des adresses ci-dessous dans BOOTSTRAP_EMAIL, puis redeployez.",
+          "Reprenez l'une des adresses ci-dessous dans BOOTSTRAP_EMAIL, puis redéployez.",
         adresseCherchee: email,
         membresEnregistres: autres.map((m) => ({
           nom: m.full_name,
@@ -103,7 +103,7 @@ export async function GET(requete: Request) {
     ok: true,
     action: "compte_cree",
     message:
-      "Compte president cree. Connectez-vous, changez ce mot de passe, " +
+      "Compte président créé. Connectez-vous, changez ce mot de passe, " +
       "puis supprimez SETUP_TOKEN des variables d'environnement.",
     email,
     motDePasseProvisoire: provisoire,

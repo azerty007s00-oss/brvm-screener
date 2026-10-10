@@ -36,7 +36,7 @@ export async function enregistrerApport(
    * Un mouvement a zero franc et sans frais ne dit rien.
    */
   if (montant === 0 && frais === 0) {
-    return { ok: false, erreur: "Indiquez un montant vire, des frais, ou les deux." };
+    return { ok: false, erreur: "Indiquez un montant viré, des frais, ou les deux." };
   }
 
   /*
@@ -49,7 +49,7 @@ export async function enregistrerApport(
    * l'argent etait revenu, et la depense s'annulerait au lieu de se voir.
    */
   if (montant > 0 && frais > montant) {
-    return { ok: false, erreur: "Les frais ne peuvent pas depasser le montant vire." };
+    return { ok: false, erreur: "Les frais ne peuvent pas dépasser le montant viré." };
   }
 
   const sql = db();
@@ -64,7 +64,7 @@ export async function enregistrerApport(
       return {
         ok: false,
         erreur:
-          "Le suivi des frais demande la migration scripts/migration-frais.sql, a executer dans la console Neon.",
+          "Le suivi des frais demande la migration scripts/migration-frais.sql, à exécuter dans la console Neon.",
       };
     }
     await sql`
@@ -81,7 +81,7 @@ export async function enregistrerApport(
   revalidatePath("/", "layout");
   return {
     ok: true,
-    message: sens === SENS_TRANSFERT.entree ? "Apport enregistre." : "Retrait enregistre.",
+    message: sens === SENS_TRANSFERT.entree ? "Apport enregistré." : "Retrait enregistré.",
   };
 }
 
@@ -104,9 +104,9 @@ export async function enregistrerValorisation(
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValo)) return { ok: false, erreur: "Date invalide." };
   if (!Number.isFinite(total) || total <= 0) return { ok: false, erreur: "Valeur totale invalide." };
-  if (!Number.isFinite(liquidites) || liquidites < 0) return { ok: false, erreur: "Liquidites invalides." };
+  if (!Number.isFinite(liquidites) || liquidites < 0) return { ok: false, erreur: "Liquidités invalides." };
   if (liquidites > total) {
-    return { ok: false, erreur: "Les liquidites ne peuvent pas depasser la valeur totale." };
+    return { ok: false, erreur: "Les liquidités ne peuvent pas dépasser la valeur totale." };
   }
 
   const sql = db();
@@ -139,8 +139,8 @@ export async function enregistrerValorisation(
   return {
     ok: true,
     message: existant.length > 0
-      ? "Releve remplace. Les parts sont recalculees."
-      : "Releve enregistre. Les parts sont recalculees.",
+      ? "Relevé remplacé. Les parts sont recalculées."
+      : "Relevé enregistré. Les parts sont recalculées.",
   };
 }
 
@@ -157,7 +157,7 @@ export async function supprimerValorisation(
     id,
   });
   revalidatePath("/", "layout");
-  return { ok: true, message: "Releve supprime." };
+  return { ok: true, message: "Relevé supprimé." };
 }
 
 /**
@@ -200,5 +200,5 @@ export async function supprimerApport(
     },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Mouvement supprime." };
+  return { ok: true, message: "Mouvement supprimé." };
 }

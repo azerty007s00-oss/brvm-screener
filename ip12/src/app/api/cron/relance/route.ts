@@ -44,9 +44,9 @@ export async function GET(requete: Request) {
     return NextResponse.json(
       {
         erreur:
-          "CRON_SECRET n'est pas definie : la relance est desactivee pour empecher " +
-          "un declenchement par un tiers. Renseignez-la dans les variables " +
-          "d'environnement, puis redeployez.",
+          "CRON_SECRET n'est pas définie : la relance est désactivée pour empêcher " +
+          "un déclenchement par un tiers. Renseignez-la dans les variables " +
+          "d'environnement, puis redéployez.",
       },
       { status: 503 },
     );
@@ -55,7 +55,7 @@ export async function GET(requete: Request) {
   const fourni = Buffer.from(recu);
   const reference = Buffer.from(`Bearer ${attendu}`);
   if (fourni.length !== reference.length || !timingSafeEqual(fourni, reference)) {
-    return NextResponse.json({ erreur: "Non autorise" }, { status: 401 });
+    return NextResponse.json({ erreur: "Non autorisé" }, { status: 401 });
   }
 
   const maintenant = new Date();
@@ -110,7 +110,7 @@ export async function GET(requete: Request) {
     dejaVus = await dejaRelancesAujourdhui(maintenant);
   } catch (e) {
     return NextResponse.json(
-      { erreur: `Registre des relances illisible, aucun courrier envoye : ${String(e)}` },
+      { erreur: `Registre des relances illisible, aucun courrier envoyé : ${String(e)}` },
       { status: 500 },
     );
   }

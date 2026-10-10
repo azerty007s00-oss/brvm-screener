@@ -72,21 +72,21 @@ export async function avertirLeBureau(
     "",
     `Relance de ${moisLong(maintenant.toISOString().slice(0, 8) + "01")} : ` +
       `${destinataires.length} ${accorde(destinataires.length, "membre")} ` +
-        `${accorde(destinataires.length, "vient", "viennent")} d'etre ` +
+        `${accorde(destinataires.length, "vient", "viennent")} d'être ` +
         `${accorde(destinataires.length, "relance")}.`,
     "",
-    "A ENCAISSER",
-    `  Echeances du jour : ${attendus} ${accorde(attendus, "membre")}.`,
-    `  Mois en retard : ${moisDus}, ${accorde(moisDus, "reparti")} sur ` +
+    "À ENCAISSER",
+    `  Échéances du jour : ${attendus} ${accorde(attendus, "membre")}.`,
+    `  Mois en retard : ${moisDus}, ${accorde(moisDus, "réparti")} sur ` +
       `${enRetard.length} ${accorde(enRetard.length, "membre")}.`,
-    `  Penalites dues a ce jour : ${fcfa(penalites)}.`,
+    `  Pénalités dues à ce jour : ${fcfa(penalites)}.`,
     "",
-    "DETAIL",
+    "DÉTAIL",
   ];
 
   for (const d of destinataires) {
     const motifs: string[] = [];
-    if (d.echeanceDuJour) motifs.push("echeance du jour");
+    if (d.echeanceDuJour) motifs.push("échéance du jour");
     if (d.arrieres.length > 0) motifs.push(`${d.arrieres.length} mois en retard`);
     /*
      * La dette inscrite, toutes natures : le bureau relit cette liste pour
@@ -97,10 +97,10 @@ export async function avertirLeBureau(
     if (d.dette.nb > 0) {
       motifs.push(
         d.dette.nb === d.dette.nbRetard
-          ? `${d.dette.nb} ${accorde(d.dette.nb, "penalite")} de retard ` +
-            `${accorde(d.dette.nb, "impayee")}`
-          : `${d.dette.nb} ${accorde(d.dette.nb, "penalite")} ` +
-            `${accorde(d.dette.nb, "impayee")}, dont ${d.dette.nbRetard} de retard`,
+          ? `${d.dette.nb} ${accorde(d.dette.nb, "pénalité")} de retard ` +
+            `${accorde(d.dette.nb, "impayée")}`
+          : `${d.dette.nb} ${accorde(d.dette.nb, "pénalité")} ` +
+            `${accorde(d.dette.nb, "impayée")}, dont ${d.dette.nbRetard} de retard`,
       );
     }
     /*
@@ -109,17 +109,17 @@ export async function avertirLeBureau(
      * constat a echoue. Elle dit alors au bureau ce qu'il reste a porter.
      */
     if (d.nonInscrites.montant > 0) {
-      motifs.push(`${fcfa(d.nonInscrites.montant)} d'art. 9 a porter au registre`);
+      motifs.push(`${fcfa(d.nonInscrites.montant)} d'art. 9 à porter au registre`);
     }
     if (d.avanceManquante) motifs.push("avance obligatoire non tenue");
-    if (d.avanceAuSeuil) motifs.push("preavis : avance obligatoire au minimum");
+    if (d.avanceAuSeuil) motifs.push("préavis : avance obligatoire au minimum");
     if (annonceFinAvance(d, maintenant)) motifs.push("annonce de la fin de sa mesure d'avance");
     /*
      * Un membre ecrit pour un simple rappel de regime figurait ici sans motif :
      * « NOM — », que le president ne pouvait pas lire.
      */
-    if (motifs.length === 0 && d.regles.length > 0) motifs.push("rappel de son regime particulier");
-    lignes.push(`  ${d.situation.nom} — ${motifs.join(", ")}`);
+    if (motifs.length === 0 && d.regles.length > 0) motifs.push("rappel de son régime particulier");
+    lignes.push(`  ${d.situation.nom} : ${motifs.join(", ")}`);
   }
 
   /*
@@ -135,24 +135,24 @@ export async function avertirLeBureau(
   if (panne) {
     lignes.push(
       "",
-      "AVERTISSEMENT — les regles individuelles n'ont pas pu etre lues.",
-      "Les courriers qui viennent de partir ne portent donc ni cotisation particuliere, " +
-        "ni penalites majorees, ni avance imposee, ni plan de redressement, et les " +
-        "montants reclames sont ceux du regime commun.",
-      `Detail technique : ${panne}`,
+      "AVERTISSEMENT : les règles individuelles n'ont pas pu être lues.",
+      "Les courriers qui viennent de partir ne portent donc ni cotisation particulière, " +
+        "ni pénalités majorées, ni avance imposée, ni plan de redressement, et les " +
+        "montants réclamés sont ceux du régime commun.",
+      `Détail technique : ${panne}`,
     );
   }
 
   const siteUrl = lienDuSite();
   if (siteUrl) lignes.push("", `Valider les encaissements : ${siteUrl}/versements`);
-  lignes.push("", `Le suivi du club — ${CLUB.nom}`);
+  lignes.push("", `Le suivi du club ${CLUB.nom}`);
 
   const bureau = await joignablesPour("validerVersement");
   let partis = 0;
   for (const m of bureau) {
     const { ok } = await envoyerCourriel({
       destinataire: m.email,
-      sujet: `${CLUB.sigle} — a encaisser apres la relance (${destinataires.length} membres)`,
+      sujet: `${CLUB.sigle} : à encaisser après la relance (${destinataires.length} membres)`,
       texte: lignes.join("\n"),
     });
     if (ok) partis++;
@@ -216,8 +216,8 @@ async function aQuiValider(
   const vues = new Set([principal.email.toLowerCase()]);
   const copie: { email: string; libelle: string }[] = [];
   for (const [personne, libelle] of [
-    [president, "le president"],
-    [declarant, "le membre qui declare"],
+    [president, "le président"],
+    [declarant, "le membre qui déclare"],
   ] as const) {
     if (!personne) continue;
     const adresse = personne.email.toLowerCase();
@@ -251,7 +251,7 @@ export async function avertirDeclaration(params: {
   const lignes = [
     "Bonjour,",
     "",
-    `${params.membreNom} declare avoir verse ${fcfa(params.montant)}.`,
+    `${params.membreNom} déclare avoir versé ${fcfa(params.montant)}.`,
     params.mois.length === 1
       ? `Mois couvert : ${moisLong(params.mois[0])}.`
       : `Mois couverts : ${params.mois.map(moisLong).join(", ")}.`,
@@ -259,18 +259,18 @@ export async function avertirDeclaration(params: {
       ? "Un justificatif est joint."
       : "Aucun justificatif n'est joint pour l'instant.",
     "",
-    `A valider par le ${ROLES[principal.role].toLowerCase()}.` + (enCopie ? ` ${enCopie}` : ""),
-    "La ligne est deja visible de tous, marquee « en attente » : rien ne se perd " +
+    `À valider par le ${ROLES[principal.role].toLowerCase()}.` + (enCopie ? ` ${enCopie}` : ""),
+    "La ligne est déjà visible de tous, marquée « en attente » : rien ne se perd " +
       "tant que la validation n'a pas eu lieu.",
   ];
   const siteUrl = lienDuSite();
   if (siteUrl) lignes.push("", `Valider : ${siteUrl}/versements`);
-  lignes.push("", `Le suivi du club — ${CLUB.nom}`);
+  lignes.push("", `Le suivi du club ${CLUB.nom}`);
 
   const { ok } = await envoyerCourriel({
     destinataire: principal.email,
     copie: copie.map((c) => c.email),
-    sujet: `${CLUB.sigle} — versement declare par ${params.membreNom}, a valider`,
+    sujet: `${CLUB.sigle} : versement déclaré par ${params.membreNom}, à valider`,
     texte: lignes.join("\n"),
   });
   // Ce que l'appelant compte, ce sont les personnes atteintes, non les envois.
@@ -299,25 +299,25 @@ export async function avertirReglementPenalite(params: {
   const lignes = [
     "Bonjour,",
     "",
-    `${params.membreNom} declare avoir regle ${params.quantite} ` +
-      `${accorde(params.quantite, "penalite")}, ` +
+    `${params.membreNom} déclare avoir réglé ${params.quantite} ` +
+      `${accorde(params.quantite, "pénalité")}, ` +
       `soit ${fcfa(params.montant)}.`,
     params.avecJustificatif
       ? "Un justificatif est joint."
       : "Aucun justificatif n'est joint pour l'instant.",
     "",
-    `A verifier par le ${ROLES[principal.role].toLowerCase()}.` + (enCopie ? ` ${enCopie}` : ""),
-    "La penalite reste due jusqu'a la validation : rien n'entre en caisse sur " +
-      "parole, et la relance continue de la reclamer tant que la ligne n'est pas soldee.",
+    `À vérifier par le ${ROLES[principal.role].toLowerCase()}.` + (enCopie ? ` ${enCopie}` : ""),
+    "La pénalité reste due jusqu'à la validation : rien n'entre en caisse sur " +
+      "parole, et la relance continue de la réclamer tant que la ligne n'est pas soldée.",
   ];
   const siteUrl = lienDuSite();
-  if (siteUrl) lignes.push("", `Verifier : ${siteUrl}/penalites`);
-  lignes.push("", `Le suivi du club — ${CLUB.nom}`);
+  if (siteUrl) lignes.push("", `Vérifier : ${siteUrl}/penalites`);
+  lignes.push("", `Le suivi du club ${CLUB.nom}`);
 
   const { ok } = await envoyerCourriel({
     destinataire: principal.email,
     copie: copie.map((c) => c.email),
-    sujet: `${CLUB.sigle} — reglement de penalite declare par ${params.membreNom}, a verifier`,
+    sujet: `${CLUB.sigle} : règlement de pénalité déclaré par ${params.membreNom}, à vérifier`,
     texte: lignes.join("\n"),
   });
   return ok ? 1 + copie.length : 0;
@@ -354,27 +354,27 @@ export async function avertirAbsence(params: {
   const lignes = [
     `Bonjour ${membre.nom},`,
     "",
-    `Le secretariat a enregistre votre absence a la seance du ${dateCourte(params.seance.date)}` +
-      `${params.seance.titre ? ` — ${params.seance.titre}` : ""}.`,
+    `Le secrétariat a enregistré votre absence à la séance du ${dateCourte(params.seance.date)}` +
+      `${params.seance.titre ? ` (${params.seance.titre})` : ""}.`,
     "",
-    `Vous comptez desormais ${params.total} ${accorde(params.total, "absence")} ` +
-      `${accorde(params.total, "injustifiee")}.`,
+    `Vous comptez désormais ${params.total} ${accorde(params.total, "absence")} ` +
+      `${accorde(params.total, "injustifiée")}.`,
     fermeUneTranche
-      ? `Ce nombre ferme une tranche de ${absencesParTranche} : une penalite de ` +
+      ? `Ce nombre ferme une tranche de ${absencesParTranche} : une pénalité de ` +
         `${fcfa(penaliteAbsence)} est due.`
-      : `A la prochaine absence injustifiee, une penalite de ${fcfa(penaliteAbsence)} sera due ` +
-        `— le club sanctionne par tranche de ${absencesParTranche}, non l'empechement ponctuel.`,
+      : `À la prochaine absence injustifiée, une pénalité de ${fcfa(penaliteAbsence)} sera due : ` +
+        `le club sanctionne par tranche de ${absencesParTranche}, non l'empêchement ponctuel.`,
     "",
-    "Si votre absence etait justifiee, signalez-le au secretaire : il la passera en " +
-      "« excuse », et elle sortira du compte penalisable.",
+    "Si votre absence était justifiée, signalez-le au secrétaire : il la passera en " +
+      "« excusé », et elle sortira du compte penalisable.",
   ];
   const siteUrl = lienDuSite();
-  if (siteUrl) lignes.push("", `Feuille de presence : ${siteUrl}/reunions`);
-  lignes.push("", `Le suivi du club — ${CLUB.nom}`);
+  if (siteUrl) lignes.push("", `Feuille de présence : ${siteUrl}/reunions`);
+  lignes.push("", `Le suivi du club ${CLUB.nom}`);
 
   const { ok } = await envoyerCourriel({
     destinataire: membre.email,
-    sujet: `${CLUB.sigle} — absence relevee a la seance du ${dateCourte(params.seance.date)}`,
+    sujet: `${CLUB.sigle} : absence relevée à la séance du ${dateCourte(params.seance.date)}`,
     texte: lignes.join("\n"),
   });
   return ok;
@@ -402,29 +402,29 @@ export async function envoyerAcces(
   const lignes = [
     `Bonjour ${prenom},`,
     "",
-    `Votre acces au site du club ${CLUB.nom} est pret.`,
+    `Votre accès au site du club ${CLUB.nom} est prêt.`,
     "",
     ...(url ? [`Adresse du site : ${url}`, ""] : []),
     `Identifiant : ${membre.email}`,
     `Mot de passe provisoire : ${motDePasseProvisoire}`,
     "",
-    "Ce mot de passe ne sert qu'une fois : a la premiere connexion, le site vous",
-    "demande d'en choisir un autre, connu de vous seul. Le president lui-meme ne",
+    "Ce mot de passe ne sert qu'une fois : à la première connexion, le site vous",
+    "demande d'en choisir un autre, connu de vous seul. Le président lui-même ne",
     "peut pas le lire.",
     "",
-    "Vous y verrez a tout moment ce que vous avez verse, ce que vous devez, et ce",
-    "que vaut votre part du portefeuille. Les comptes sont ouverts a tous les",
+    "Vous y verrez à tout moment ce que vous avez versé, ce que vous devez, et ce",
+    "que vaut votre part du portefeuille. Les comptes sont ouverts à tous les",
     "membres : c'est le principe de l'article 12.",
     "",
-    "Si cette adresse n'est pas la votre, ou si vous n'avez pas demande cet acces,",
-    "signalez-le au president.",
+    "Si cette adresse n'est pas la vôtre, ou si vous n'avez pas demandé cet accès,",
+    "signalez-le au président.",
     "",
-    `Le bureau — ${CLUB.nom}`,
+    `Le bureau d'${CLUB.nom}`,
   ];
 
   return envoyerCourriel({
     destinataire: membre.email,
-    sujet: `${CLUB.sigle} — votre acces au site du club`,
+    sujet: `${CLUB.sigle} : votre accès au site du club`,
     texte: lignes.join("\n"),
   });
 }
@@ -456,22 +456,22 @@ export async function avertirDemandeReinitialisation(params: {
   const lignes = [
     "Bonjour,",
     "",
-    `${params.nom} ne parvient plus a se connecter et demande la reinitialisation ` +
+    `${params.nom} ne parvient plus à se connecter et demande la reinitialisation ` +
       "de son mot de passe.",
     `Adresse du compte : ${params.email}`,
     "",
     "Ouvrez sa fiche sur la page Membres et donnez-lui un mot de passe provisoire : " +
-      "il lui sera demande d'en choisir un autre a sa premiere connexion.",
+      "il lui sera demandé d'en choisir un autre à sa première connexion.",
   ];
-  if (siteUrl) lignes.push("", `Reinitialiser : ${siteUrl}/membres`);
-  lignes.push("", `Le suivi du club — ${CLUB.nom}`);
+  if (siteUrl) lignes.push("", `Réinitialiser : ${siteUrl}/membres`);
+  lignes.push("", `Le suivi du club ${CLUB.nom}`);
 
   let partis = 0;
   const motifs: string[] = [];
   for (const m of titulaires) {
     const { ok, detail } = await envoyerCourriel({
       destinataire: m.email,
-      sujet: `${CLUB.sigle} — ${params.nom} demande un nouveau mot de passe`,
+      sujet: `${CLUB.sigle} : ${params.nom} demande un nouveau mot de passe`,
       texte: lignes.join("\n"),
     });
     if (ok) partis++;

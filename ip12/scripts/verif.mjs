@@ -799,7 +799,7 @@ assert.equal(
   "En attente : juin",
   "a defaut de retard, l'attente est ce qui reste a dire",
 );
-assert.equal(statutLigne([cel("2026-05-01", "paye")]).texte, "A jour");
+assert.equal(statutLigne([cel("2026-05-01", "paye")]).texte, "À jour");
 
 // Au-dela de deux mois, on compte au lieu d'enumerer : la phrase doit tenir a
 // cote du nom, sinon le navigateur coupe les deux.
@@ -818,25 +818,24 @@ assert.equal(
     .toISOString()
     .slice(0, 10);
   const r = statutLigne([cel("2026-01-01", "paye"), cel(futur, "paye")]);
-  assert.ok(r.texte.startsWith("A jour, avance "), `avance attendue, obtenu « ${r.texte} »`);
+  assert.ok(r.texte.startsWith("À jour, avance "), `avance attendue, obtenu « ${r.texte} »`);
 }
 
 // Les mois hors periode -- avant l'entree du membre -- ne comptent pas.
-assert.equal(statutLigne([cel("2026-01-01", "hors_periode"), cel("2026-02-01", "paye")]).texte, "A jour");
+assert.equal(statutLigne([cel("2026-01-01", "hors_periode"), cel("2026-02-01", "paye")]).texte, "À jour");
 
-// Abreviations : sans accent, et distinctes deux a deux.
-assert.equal(moisCourt("2026-08-01"), "aout");
+// Abreviations : avec leurs accents, comme le reste du site, et distinctes deux a deux.
+assert.equal(moisCourt("2026-08-01"), "août");
+assert.equal(moisCourt("2026-02-01"), "févr.");
+assert.equal(moisCourt("2026-12-01"), "déc.");
 assert.equal(moisCourt("2026-01-01"), "janv.");
 assert.equal(initialeMois("2026-09-01"), "S");
-assert.ok(
-  !/[\u00c0-\u017f]/.test(Object.values(LIBELLE_STATUT).join("") + moisCourt("2026-08-01")),
-  "les libelles d'etat et les mois courts restent sans accent",
-);
+assert.equal(LIBELLE_STATUT.paye, "Payé", "les libelles d'etat portent leurs accents");
 
 // Le resume parle a qui ecoute la page : il compte, et il ignore le hors-periode.
 assert.equal(
   resumeFrise([cel("2026-01-01", "hors_periode"), cel("2026-02-01", "paye"), cel("2026-03-01", "retard")], "Awa"),
-  "Awa, 2 mois : 1 paye, 1 en retard",
+  "Awa, 2 mois : 1 payé, 1 en retard",
 );
 
 
@@ -970,7 +969,7 @@ assert.equal(nombre(3857845).includes(" "), false, "pas d'espace fine : elle m
   const r = reperesTemps("2026-01-01", "2026-09-28", 1000);
   assert.deepEqual(
     r.map((x) => x.libelle),
-    ["janv. 2026", "fevr.", "mars", "avr.", "mai", "juin", "juil.", "aout"],
+    ["janv. 2026", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août"],
   );
   // Les derniers pixels appartiennent a la date de fin : septembre s'y
   // superposerait.

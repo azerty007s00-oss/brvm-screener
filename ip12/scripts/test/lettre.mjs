@@ -125,7 +125,7 @@ try {
 }
 writeFileSync(`${RACINE}/${ATELIER}-js/package.json`, '{"type":"module"}');
 const { enHtml } = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/courriel.js`);
-const { texteRelance, sujetRelance, doitRecevoir } = await import(
+const { texteRelance, sujetRelance: sujetRelanceBrut, doitRecevoir } = await import(
   `${RACINE}/${ATELIER}-js/${ATELIER}/relance.js`
 );
 
@@ -166,9 +166,12 @@ const SITE = "https://ip12-alpha.vercel.app";
  * `fcfa` separe les milliers par une espace insecable, pour qu'un montant ne se
  * coupe jamais en fin de ligne. Les controles comparent donc sur un texte
  * normalise, faute de quoi ils mesureraient la typographie et non le propos.
+ * Les accents suivent la meme regle : ils ont leur controle a part, plus bas.
  */
+const sansAccents = (texte) => texte.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 const lettre = (d, quand = LE_30) =>
-  texteRelance(d, SITE, quand).replace(/\u00a0/g, " ");
+  sansAccents(texteRelance(d, SITE, quand).replace(/\u00a0/g, " "));
+const sujetRelance = (...args) => sansAccents(sujetRelanceBrut(...args));
 
 /* --------------------------------- l'objet compte les mois reellement dus */
 
@@ -215,7 +218,7 @@ const sommes = (texte) =>
   texte.split("\n").filter((l) => /^(Penalites?|S'y ajoute|Total des penalites)/.test(l));
 
 const lettreSansCircuit = () =>
-  texteRelance(bourama, SITE, LE_30, false).replace(/\u00a0/g, " ");
+  sansAccents(texteRelance(bourama, SITE, LE_30, false).replace(/\u00a0/g, " "));
 const troisLignes = sommes(texteBourama);
 verifier(
   troisLignes.some((l) => /inscrites a votre compte : 15, pour un total de 7 500/.test(l)),
@@ -375,7 +378,7 @@ const sousPlan = {
 const texteSousPlan = lettre(sousPlan);
 
 verifier(
-  /MESURE DISCIPLINAIRE — plan de redressement \(R5\)/.test(texteSousPlan),
+  /MESURE DISCIPLINAIRE : plan de redressement \(R5\)/.test(texteSousPlan),
   "le plan accorde doit paraitre dans la relance, et non rester au registre",
 );
 verifier(
@@ -434,7 +437,7 @@ const sousAvance = {
 const texteAvance = lettre(sousAvance);
 
 verifier(
-  /MESURE DISCIPLINAIRE — avance obligatoire/.test(texteAvance),
+  /MESURE DISCIPLINAIRE : avance obligatoire/.test(texteAvance),
   "l'avance imposee doit paraitre",
 );
 verifier(
@@ -525,7 +528,7 @@ verifier(
   "en defaut, l'avance a son propre bloc : la repeter dans le regime la diluerait",
 );
 verifier(
-  /MESURE DISCIPLINAIRE — avance obligatoire/.test(avanceEnDefaut),
+  /MESURE DISCIPLINAIRE : avance obligatoire/.test(avanceEnDefaut),
   "et ce bloc-la doit bien paraitre",
 );
 
@@ -597,7 +600,7 @@ verifier(
 );
 
 verifier(
-  /s'impute sur août 2026, le plus ancien/.test(texteBourama),
+  /s'impute sur aout 2026, le plus ancien/.test(texteBourama),
   "le courrier doit nommer le mois sur lequel l'argent ira, non le mois courant",
 );
 verifier(
@@ -738,11 +741,11 @@ verifier(
 /* --- l'objet, lu par dix personnes ------------------------------------- */
 
 verifier(
-  sujetRelance(absenceSeule, "2026-10-01", LE_30) === "IP12 — 1 penalite impayee",
+  sujetRelance(absenceSeule, "2026-10-01", LE_30) === "IP12 : 1 penalite impayee",
   "« 1 penalite(s) impayee(s) » : le nombre est connu au moment d'ecrire",
 );
 verifier(
-  sujetRelance(penalitesSeules, "2026-10-01", LE_30) === "IP12 — 7 penalites impayees",
+  sujetRelance(penalitesSeules, "2026-10-01", LE_30) === "IP12 : 7 penalites impayees",
   "et le pluriel s'accorde quand il le faut",
 );
 
@@ -779,7 +782,7 @@ verifier(
   "et dire ce qu'elle exige, en francs comme en mois",
 );
 verifier(
-  /a compter du 10\/10\/2026 et jusqu'au 31\/12\/2027 — dans 10 jours/.test(texteAVenir),
+  /a compter du 10\/10\/2026 et jusqu'au 31\/12\/2027, dans 10 jours/.test(texteAVenir),
   "et combien de jours il reste : c'est le delai qui fait agir",
 );
 verifier(
@@ -787,7 +790,7 @@ verifier(
   "le terme de la mesure se dit aussi",
 );
 verifier(
-  !/— dans 10 jours,/.test(texteAVenir),
+  !/, dans 10 jours,/.test(texteAVenir),
   "le decompte ferme la phrase, il ne la coupe pas",
 );
 verifier(
@@ -844,6 +847,22 @@ for (const ligne of texteBourama.split("\n")) {
  */
 const html = enHtml(texteAVenir);
 
+/*
+ * LES ACCENTS. Le courrier s'ecrit en francais correct : les controles du propos
+ * les ignorent, celui-ci les exige. Et un titre accentue reste un titre au rendu.
+ */
+{
+  const brut = texteRelance({ ...bourama, reglesAVenir: [REGLE_BLA] }, SITE, LE_30);
+  for (const mot of ["Pénalités", "à régler", "être à jour", "MESURE À VENIR"]) {
+    verifier(brut.includes(mot), `le courrier doit porter ses accents : « ${mot} »`);
+  }
+  verifier(!/\u2014/.test(brut), "aucun tiret cadratin dans le courrier");
+  verifier(
+    /text-transform:uppercase[^>]*>MESURE À VENIR</.test(enHtml(brut)),
+    "un titre en capitales accentuees doit rester un titre",
+  );
+}
+
 verifier(
   !/<p[^>]*>[^<]*Penalites de retard impayees[^<]*Vos 15 penalites/.test(html),
   "deux lignes distinctes ne doivent pas fondre en un seul bloc : le montant de " +
@@ -876,7 +895,7 @@ verifier(
   "la date du courrier appartient au pied, non au corps",
 );
 verifier(
-  /font-size:13px[^>]*>Le bureau — Investment Pioneers<\/p>/.test(html),
+  /font-size:13px[^>]*>Le bureau d'Investment Pioneers<\/p>/.test(html),
   "la signature aussi",
 );
 verifier(
@@ -948,7 +967,7 @@ const blaAuSeuil = { ...blaConfortable, avanceAuSeuil: auMinimum };
 verifier(doitRecevoir(blaAuSeuil, LE_10), "au minimum, le preavis part");
 verifier(doitRecevoir(blaAuSeuil, LE_7), "des le 7 : il a jusqu'a l'echeance pour verser");
 verifier(
-  sujetRelance(blaAuSeuil, "2026-10-01", LE_10) === "IP12 — votre avance obligatoire arrive au minimum",
+  sujetRelance(blaAuSeuil, "2026-10-01", LE_10) === "IP12 : votre avance obligatoire arrive au minimum",
   "l'objet dit un avertissement, non un retard",
 );
 const textePreavis = lettre(blaAuSeuil, LE_10);
@@ -1017,7 +1036,7 @@ verifier(
 );
 verifier(
   sujetRelance(blaEnFin, "2027-10-01", LE_10_OCT_2027) ===
-    "IP12 — fin de votre mesure d'avance le 31/12/2027",
+    "IP12 : fin de votre mesure d'avance le 31/12/2027",
   "l'objet annonce la fin et sa date",
 );
 const texteFin = lettre(blaEnFin, LE_10_OCT_2027);

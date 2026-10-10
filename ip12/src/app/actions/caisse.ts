@@ -65,7 +65,7 @@ export async function enregistrerMouvement(
     { date, sens, categorie, montant: Math.round(montant) },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Mouvement enregistre et valide." };
+  return { ok: true, message: "Mouvement enregistré et validé." };
 }
 
 export async function validerMouvement(
@@ -81,13 +81,13 @@ export async function validerMouvement(
     where id = ${id}::uuid and status = ${STATUT_CAISSE.enAttente}
     returning id
   `;
-  if (rows.length === 0) return { ok: false, erreur: "Mouvement introuvable ou deja traite." };
+  if (rows.length === 0) return { ok: false, erreur: "Mouvement introuvable ou déjà traité." };
   await journaliser({ id: auteur.id, nom: auteur.nom }, "validation_mouvement_caisse", {
     entite: "cash_movements",
     id,
   });
   revalidatePath("/", "layout");
-  return { ok: true, message: "Mouvement valide." };
+  return { ok: true, message: "Mouvement validé." };
 }
 
 export async function rejeterMouvement(
@@ -123,7 +123,7 @@ export async function rejeterMouvement(
     where id = ${id}::uuid and status <> ${STATUT_CAISSE.rejete}
     returning id, amount, direction, category
   `) as { id: string; amount: number | string; direction: string; category: string }[];
-  if (rows.length === 0) return { ok: false, erreur: "Mouvement introuvable ou deja rejete." };
+  if (rows.length === 0) return { ok: false, erreur: "Mouvement introuvable ou déjà rejeté." };
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "rejet_mouvement_caisse",
@@ -136,7 +136,7 @@ export async function rejeterMouvement(
     },
   );
   revalidatePath("/", "layout");
-  return { ok: true, message: "Mouvement rejete : il ne compte plus dans la caisse." };
+  return { ok: true, message: "Mouvement rejeté : il ne compte plus dans la caisse." };
 }
 
 /**
@@ -157,10 +157,10 @@ export async function regulariserCaisse(
   const soldeReel = Number(donnees.get("soldeReel") ?? NaN);
   const date = String(donnees.get("date") ?? "").slice(0, 10);
   const motif =
-    String(donnees.get("motif") ?? "").trim() || "Penalites historiques non documentees";
+    String(donnees.get("motif") ?? "").trim() || "Pénalités historiques non documentées";
 
   if (!Number.isFinite(soldeReel) || soldeReel < 0) {
-    return { ok: false, erreur: "Solde constate invalide." };
+    return { ok: false, erreur: "Solde constaté invalide." };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, erreur: "Date invalide." };
 
@@ -170,7 +170,7 @@ export async function regulariserCaisse(
   if (ecart === 0) {
     return {
       ok: true,
-      message: `La caisse tombe deja juste a ${fcfa(s.totalEnCaisse)}. Rien a regulariser.`,
+      message: `La caisse tombe déjà juste à ${fcfa(s.totalEnCaisse)}. Rien à régulariser.`,
     };
   }
 
@@ -192,7 +192,7 @@ export async function regulariserCaisse(
   return {
     ok: true,
     message:
-      `Ecart de ${fcfa(Math.abs(ecart))} inscrit en ${ecart > 0 ? "recette" : "depense"}. ` +
-      `La caisse affiche desormais ${fcfa(Math.round(soldeReel))}.`,
+      `Écart de ${fcfa(Math.abs(ecart))} inscrit en ${ecart > 0 ? "recette" : "depense"}. ` +
+      `La caisse affiche désormais ${fcfa(Math.round(soldeReel))}.`,
   };
 }

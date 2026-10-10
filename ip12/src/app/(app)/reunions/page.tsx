@@ -10,12 +10,12 @@ import { MenuLigne } from "@/components/menu-ligne";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Reunions" };
+export const metadata = { title: "Réunions" };
 
 const OPTIONS_PRESENCE = [
-  { valeur: "present", libelle: "Present" },
+  { valeur: "present", libelle: "Présent" },
   { valeur: "absent", libelle: "Absent" },
-  { valeur: "excuse", libelle: "Excuse" },
+  { valeur: "excuse", libelle: "Excusé" },
 ];
 
 export default async function PageReunions() {
@@ -42,11 +42,11 @@ export default async function PageReunions() {
 
   const saisie = gere ? (
     <Panneau
-      libelle="Convoquer une seance"
-      titre="Nouvelle reunion"
-      introduction="Les reunions et la feuille de presence sont tenues par le secretaire. Une absence peut etre sanctionnee depuis la page Penalites."
+      libelle="Convoquer une séance"
+      titre="Nouvelle réunion"
+      introduction="Les réunions et la feuille de présence sont tenues par le secrétaire. Une absence peut être sanctionnée depuis la page Pénalités."
     >
-        <FormulaireAction action={creerReunion} libelle="Creer la reunion">
+        <FormulaireAction action={creerReunion} libelle="Créer la réunion">
           <Champ
             nom="date"
             libelle="Date"
@@ -55,9 +55,9 @@ export default async function PageReunions() {
           />
           <Champ
             nom="titre"
-            libelle="Intitule"
+            libelle="Intitulé"
             requis={false}
-            aide="Par exemple : assemblee generale."
+            aide="Par exemple : assemblée générale."
           />
           <Champ nom="note" libelle="Ordre du jour ou note" requis={false} />
         </FormulaireAction>
@@ -68,21 +68,21 @@ export default async function PageReunions() {
     <>
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <EnTeteEcran
-          titre="Reunions tenues"
+          titre="Réunions tenues"
           brut={reunions.length}
 
           detail={
             derniere
-              ? `Derniere seance le ${dateCourte(derniere.date_reunion)}${tauxPresence === null ? "" : `, ${Math.round(tauxPresence * 100)} % de presence`}.`
-              : "Aucune seance enregistree."
+              ? `Dernière séance le ${dateCourte(derniere.date_reunion)}${tauxPresence === null ? "" : `, ${Math.round(tauxPresence * 100)} % de présence`}.`
+              : "Aucune séance enregistrée."
           }
         />
         <div className="sans-impression">{saisie}</div>
       </div>
 
-      <Carte titre={`Seances (${reunions.length})`}>
+      <Carte titre={`Séances (${reunions.length})`}>
         {reunions.length === 0 ? (
-          <Vide>Aucune reunion enregistree.</Vide>
+          <Vide>Aucune réunion enregistrée.</Vide>
         ) : (
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {reunions.map((r) => {
@@ -92,13 +92,13 @@ export default async function PageReunions() {
                 <li key={r.id} className="py-3">
                   <div className="min-w-0">
                     <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                      {r.titre ?? "Seance"} &middot; {dateCourte(r.date_reunion)}
-                      {!pointee && <Badge ton="ambre">Non pointee</Badge>}
+                      {r.titre ?? "Séance"} &middot; {dateCourte(r.date_reunion)}
+                      {!pointee && <Badge ton="ambre">Non pointée</Badge>}
                     </p>
                     <p className="text-xs" style={{ color: "var(--discret)" }}>
                       {pointee
-                        ? `${r.presents} presents · ${r.absents} absents · ${r.excuses} excuses`
-                        : "Feuille de presence a remplir"}
+                        ? `${r.presents} présents · ${r.absents} absents · ${r.excuses} excusés`
+                        : "Feuille de présence à remplir"}
                       {r.cree_par ? ` · ${r.cree_par}` : ""}
                     </p>
                     {r.note && <p className="mt-0.5 text-xs italic">{r.note}</p>}
@@ -106,7 +106,7 @@ export default async function PageReunions() {
 
                   {gere ? (
                     <div className="mt-2 space-y-2">
-                      <Depliant titre={pointee ? "Corriger la feuille" : "Pointer les presences"}>
+                      <Depliant titre={pointee ? "Corriger la feuille" : "Pointer les présences"}>
                         <FormulaireAction
                           action={enregistrerPresences}
                           libelle="Enregistrer la feuille"
@@ -129,14 +129,14 @@ export default async function PageReunions() {
                         * elle, et n'a pas a cotoyer le bouton de pointage.
                         */}
                       <MenuLigne
-                        etiquette={`Actions sur la seance du ${dateCourte(r.date_reunion)}`}
+                        etiquette={`Actions sur la séance du ${dateCourte(r.date_reunion)}`}
                         actions={[
                           {
-                            libelle: "Supprimer la seance",
+                            libelle: "Supprimer la séance",
                             action: supprimerReunion,
                             champs: <ChampCache nom="id" valeur={r.id} />,
                             confirmation:
-                              "Supprimer cette reunion et sa feuille de presence ?",
+                              "Supprimer cette réunion et sa feuille de présence ?",
                             confirmer: "Supprimer",
                           },
                         ]}
@@ -145,8 +145,8 @@ export default async function PageReunions() {
                   ) : (
                     pointee && (
                       <p className="mt-1 text-xs" style={{ color: "var(--discret)" }}>
-                        Vous y etiez note{" "}
-                        <strong>{pointees.get(membre.id) ?? "non pointe"}</strong>.
+                        Vous y étiez note{" "}
+                        <strong>{pointees.get(membre.id) ?? "non pointé"}</strong>.
                       </p>
                     )
                   )}
@@ -156,8 +156,8 @@ export default async function PageReunions() {
           </ul>
         )}
         <p className="mt-4 text-[11px]" style={{ color: "var(--discret)" }}>
-          Les reunions et la feuille de presence sont tenues par le secretaire. Une absence peut
-          etre sanctionnee depuis la page Penalites.
+          Les réunions et la feuille de présence sont tenues par le secrétaire. Une absence peut
+          être sanctionnée depuis la page Pénalités.
         </p>
       </Carte>
     </>
