@@ -1533,54 +1533,90 @@ assert.deepEqual(
 /*
  * RIEN AU-DESSUS DU MINIMUM, UN PREAVIS AU MINIMUM, LA MESURE EN DESSOUS.
  *
- * Trois mois exiges a 5 000 : le minimum est de 15 000. « Au minimum » veut
- * dire qu'une echeance de plus sans versement le ferait passer dessous --
- * donc moins de 20 000.
+ * Trois mois exiges a 5 000, sans terme : le minimum est de 15 000. « Au
+ * minimum » veut dire qu'une echeance de plus sans versement le ferait passer
+ * dessous -- donc moins de 20 000.
  */
+const sansTerme = { moisRequis: 3, moisRestants: null };
 assert.deepEqual(
   etatAvance(20_000, 3, 5000),
-  { montantExige: 15_000, respectee: true, auSeuil: false, manque: 0, pourMaintenir: 0 },
+  { montantExige: 15_000, ...sansTerme, respectee: true, auSeuil: false, manque: 0, pourMaintenir: 0 },
   "quatre mois d'avance : tenue, et rien a dire",
 );
 assert.deepEqual(
   etatAvance(15_000, 3, 5000),
-  { montantExige: 15_000, respectee: true, auSeuil: true, manque: 0, pourMaintenir: 5000 },
+  { montantExige: 15_000, ...sansTerme, respectee: true, auSeuil: true, manque: 0, pourMaintenir: 5000 },
   "trois mois tout juste : tenue, mais au seuil -- il faut verser un mois pour la maintenir",
 );
 assert.deepEqual(
   etatAvance(17_500, 3, 5000),
-  { montantExige: 15_000, respectee: true, auSeuil: true, manque: 0, pourMaintenir: 2500 },
+  { montantExige: 15_000, ...sansTerme, respectee: true, auSeuil: true, manque: 0, pourMaintenir: 2500 },
   "trois mois et demi : la prochaine echeance le ferait passer dessous, il manque 2 500",
 );
 assert.deepEqual(
   etatAvance(10_000, 3, 5000),
-  { montantExige: 15_000, respectee: false, auSeuil: false, manque: 5000, pourMaintenir: 10_000 },
+  { montantExige: 15_000, ...sansTerme, respectee: false, auSeuil: false, manque: 5000, pourMaintenir: 10_000 },
   "deux mois : en defaut, ce n'est plus un preavis",
 );
 assert.equal(etatAvance(0, 3, 5000).manque, 15_000, "rien detenu : tout manque");
 
 /*
- * L'OBLIGATION QUI S'ETEINT AVANT LA RUPTURE NE VAUT PAS PREAVIS.
+ * L'EXIGENCE S'ARRETE AU TERME : LE CAS DE BLA.
  *
- * Le 7 novembre, au minimum : sans versement, il passerait dessous le 11. Si
- * la regle prend fin le 10, cela n'arrivera jamais -- lui demander de verser
- * pour la maintenir serait lui faire payer une obligation morte.
+ * Trois mois d'avance, mesure prenant fin le 31 decembre 2027. Les jours de
+ * relance, le mois courant compte dans l'avance tant que son echeance n'est
+ * pas passee.
+ */
+const finBla = "2027-12-31";
+const le7 = (mois) => new Date(`2027-${mois}-07T08:00:00Z`);
+
+// Septembre : quatre mois restent (sept. a dec.), trois sont exiges.
+const septembre2027 = etatAvance(15_000, 3, 5000, finBla, le7("09"));
+assert.equal(septembre2027.moisRestants, 4, "en septembre, quatre mois restent a couvrir");
+assert.equal(septembre2027.moisRequis, 3, "et trois sont exiges, comme d'ordinaire");
+assert.equal(
+  septembre2027.auSeuil && septembre2027.pourMaintenir === 5000,
+  true,
+  "sept., oct. et nov. detenus : decembre manquera a l'echeance, preavis de 5 000",
+);
+
+/*
+ * Octobre : les trois mois qui restent sont exactement ceux qu'il detient. Il
+ * a tout verse jusqu'au terme -- c'est le moment de lui annoncer la fin, et
+ * surtout pas de lui reclamer janvier 2028.
+ */
+const octobre2027 = etatAvance(15_000, 3, 5000, finBla, le7("10"));
+assert.equal(octobre2027.moisRestants, 3, "en octobre, trois mois restent : oct., nov., dec.");
+assert.equal(octobre2027.respectee, true, "detenant ces trois mois, il est en regle");
+assert.equal(octobre2027.auSeuil, false, "et aucun preavis : rien ne reste a constituer");
+
+// Novembre : deux mois restent. Les detenir suffit -- plus de defaut absurde.
+const novembre2027 = etatAvance(10_000, 3, 5000, finBla, le7("11"));
+assert.equal(novembre2027.moisRequis, 2, "en novembre, deux mois seulement sont exiges");
+assert.equal(
+  novembre2027.respectee,
+  true,
+  "novembre et decembre detenus : en regle, sans janvier 2028 qui sort de la mesure",
+);
+assert.equal(
+  etatAvance(5000, 3, 5000, finBla, le7("11")).manque,
+  5000,
+  "novembre seul detenu : il manque decembre, et seulement decembre",
+);
+
+/*
+ * Une mesure qui s'eteint avant l'echeance du mois n'exige pas ce mois : le
+ * 10 novembre, terme d'une mesure, la cotisation de novembre est due le jour
+ * meme -- mais un terme au 5 decembre n'exige pas decembre, du le 10.
  */
 const le7Novembre = new Date("2026-11-07T08:00:00Z");
+const finLe10 = etatAvance(15_000, 3, 5000, "2026-11-10", le7Novembre);
+assert.equal(finLe10.auSeuil, false, "une mesure qui s'eteint a l'echeance n'appelle aucun preavis");
+assert.equal(finLe10.respectee, true, "et reste tenue : seul le preavis tombe");
 assert.equal(
-  etatAvance(15_000, 3, 5000, "2026-11-10", le7Novembre).auSeuil,
-  false,
-  "une regle qui s'eteint le jour de l'echeance n'appelle aucun preavis",
-);
-assert.equal(
-  etatAvance(15_000, 3, 5000, "2026-11-11", le7Novembre).auSeuil,
-  true,
-  "une regle qui dure au-dela de l'echeance l'appelle : la rupture aurait lieu",
-);
-assert.equal(
-  etatAvance(15_000, 3, 5000, "2026-11-10", le7Novembre).respectee,
-  true,
-  "l'obligation reste tenue : seul le preavis tombe",
+  etatAvance(0, 3, 5000, "2027-12-05", le7("11")).moisRestants,
+  1,
+  "un terme au 5 decembre laisse novembre seul a couvrir",
 );
 
 console.log(

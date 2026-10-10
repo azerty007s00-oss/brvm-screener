@@ -770,7 +770,15 @@ export type AvanceExigee = {
   membreNom: string;
   /** Nombre de mois d'avance imposes au membre. */
   mois: number;
-  /** Le montant correspondant, au tarif en vigueur. */
+  /**
+   * Les mois effectivement exiges : les mois imposes, plafonnes aux mois qui
+   * restent a couvrir jusqu'au terme. Une mesure ne peut exiger d'avance des
+   * cotisations posterieures a sa fin.
+   */
+  moisRequis: number;
+  /** Les mois qui restent a couvrir jusqu'au terme ; null sans terme. */
+  moisRestants: number | null;
+  /** Le montant exige, au tarif en vigueur, plafonne de meme. */
   montantExige: number;
   /** Ce qu'il detient effectivement en avance. */
   avanceDetenue: number;
@@ -808,6 +816,8 @@ async function avancesExigeesBrut(aujourdhui: Date): Promise<AvanceExigee[]> {
         membreId: r.membreId,
         membreNom: r.membreNom,
         mois,
+        moisRequis: etat.moisRequis,
+        moisRestants: etat.moisRestants,
         montantExige: etat.montantExige,
         avanceDetenue,
         respectee: etat.respectee,

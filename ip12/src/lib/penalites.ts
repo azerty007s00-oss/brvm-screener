@@ -47,15 +47,35 @@ export function cotisationsARegler(
   return { total: ouverts.reduce((t, c) => t + c.manque, 0), mois: ouverts.map((c) => c.mois) };
 }
 
+/** Nombre de mois de `a` a `b` (0 si meme mois, negatif si `b` precede `a`). */
+function ecartMois(a: string, b: string): number {
+  return (
+    (Number(b.slice(0, 4)) - Number(a.slice(0, 4))) * 12 +
+    (Number(b.slice(5, 7)) - Number(a.slice(5, 7)))
+  );
+}
+
 /**
  * Ou en est l'avance obligatoire d'un membre.
  *
- * TROIS ETATS, ET NON PLUS DEUX. L'obligation etait tenue ou non, et le membre
- * qui la tenait recevait pourtant chaque 10 un rappel de son regime, meme
- * confortablement au-dessus du minimum. Le bureau a tranche : rien tant qu'il
- * a plus que le minimum ; un preavis des qu'il n'en a plus que le minimum --
- * l'echeance suivante consomme un mois d'avance, et sans nouveau versement il
+ * TROIS ETATS, ET NON PLUS DEUX. Le bureau a tranche : rien tant qu'il a plus
+ * que le minimum ; un preavis des qu'il n'en a plus que le minimum -- la
+ * prochaine echeance consomme un mois d'avance, et sans nouveau versement il
  * passerait dessous ; la mesure disciplinaire une fois en defaut.
+ *
+ * L'EXIGENCE S'ARRETE AU TERME DE LA MESURE. Trois mois d'avance, a trois
+ * mois de la fin, couvrent deja tout ce que la mesure exige : au-dela, ce
+ * seraient des cotisations du regime commun payees d'avance, que rien
+ * n'impose. Sans ce plafond, un membre a jour aurait ete declare en defaut en
+ * novembre 2027 faute d'avoir paye janvier 2028, deux mois apres la fin de sa
+ * mesure. L'exigence est donc le plus petit de deux nombres : les mois imposes,
+ * et les mois qui restent a couvrir jusqu'au terme.
+ *
+ * Les mois se comptent comme l'avance elle-meme : le mois courant y entre tant
+ * que son echeance n'est pas passee. Le dernier mois couvert est celui du
+ * terme, si le terme tombe au plus tot a son echeance ; sinon le precedent --
+ * une mesure qui s'eteint le 5 decembre n'exige pas la cotisation de decembre,
+ * due le 10.
  *
  * `pourMaintenir` est ce qu'il doit verser pour rester au minimum apres la
  * prochaine echeance : le courrier le chiffre, plutot que de lui laisser
@@ -70,28 +90,40 @@ export function etatAvance(
   maintenant: Date = new Date(),
 ): {
   montantExige: number;
+  /** Les mois effectivement exiges : les mois imposes, plafonnes au terme. */
+  moisRequis: number;
+  /** Les mois qui restent a couvrir jusqu'au terme ; null sans terme. */
+  moisRestants: number | null;
   respectee: boolean;
   auSeuil: boolean;
   manque: number;
   pourMaintenir: number;
 } {
-  const montantExige = moisExiges * cotisation;
+  const courant = debutMois(maintenant);
+  const premier = estExigible(courant, maintenant) ? decalerMois(courant, 1) : courant;
+  let moisRestants: number | null = null;
+  if (fin) {
+    const moisDuTerme = `${fin.slice(0, 8)}01`;
+    const dernier =
+      fin >= echeanceDuMois(moisDuTerme) ? moisDuTerme : decalerMois(moisDuTerme, -1);
+    moisRestants = Math.max(0, ecartMois(premier, dernier) + 1);
+  }
+  const plafonne = (restants: number | null) =>
+    restants === null ? moisExiges : Math.min(moisExiges, Math.max(0, restants));
+
+  const moisRequis = plafonne(moisRestants);
+  const montantExige = moisRequis * cotisation;
   const respectee = avanceDetenue >= montantExige;
-  /*
-   * UN PREAVIS N'A DE SENS QUE SI L'OBLIGATION DURE JUSQU'A LA RUPTURE.
-   *
-   * Au seuil, c'est l'echeance du mois courant qui ferait passer sous le
-   * minimum : la rupture tomberait le lendemain. Une obligation qui s'eteint
-   * au plus tard ce jour-la ne sera jamais rompue -- avertir le membre, ce
-   * serait lui faire verser pour maintenir une avance que plus rien n'exige.
-   */
-  const dureJusquALaRupture = !fin || fin > echeanceDuMois(debutMois(maintenant));
+  /* Apres la prochaine echeance : un mois consomme, et un mois de terme en moins. */
+  const requisApres = plafonne(moisRestants === null ? null : moisRestants - 1) * cotisation;
   return {
     montantExige,
+    moisRequis,
+    moisRestants,
     respectee,
-    auSeuil: respectee && avanceDetenue < montantExige + cotisation && dureJusquALaRupture,
+    auSeuil: respectee && avanceDetenue - cotisation < requisApres,
     manque: Math.max(0, montantExige - avanceDetenue),
-    pourMaintenir: Math.max(0, montantExige + cotisation - avanceDetenue),
+    pourMaintenir: Math.max(0, requisApres + cotisation - avanceDetenue),
   };
 }
 

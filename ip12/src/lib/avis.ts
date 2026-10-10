@@ -3,7 +3,7 @@ import { listerMembres, reglesIndisponibles } from "@/lib/queries";
 import { envoyerCourriel } from "@/lib/courriel";
 import { CLUB, accorde, dateCourte, fcfa, lienDuSite, moisLong, ROLES } from "@/lib/settings";
 import { titulaires, DROITS } from "@/lib/droits";
-import type { Destinataire } from "@/lib/relance";
+import { annonceFinAvance, type Destinataire } from "@/lib/relance";
 import type { Role } from "@/lib/settings";
 
 /**
@@ -113,6 +113,12 @@ export async function avertirLeBureau(
     }
     if (d.avanceManquante) motifs.push("avance obligatoire non tenue");
     if (d.avanceAuSeuil) motifs.push("preavis : avance obligatoire au minimum");
+    if (annonceFinAvance(d, maintenant)) motifs.push("annonce de la fin de sa mesure d'avance");
+    /*
+     * Un membre ecrit pour un simple rappel de regime figurait ici sans motif :
+     * « NOM — », que le president ne pouvait pas lire.
+     */
+    if (motifs.length === 0 && d.regles.length > 0) motifs.push("rappel de son regime particulier");
     lignes.push(`  ${d.situation.nom} — ${motifs.join(", ")}`);
   }
 

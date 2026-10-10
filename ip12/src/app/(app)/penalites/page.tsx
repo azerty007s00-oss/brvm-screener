@@ -313,7 +313,14 @@ export default async function PagePenalites() {
                     </Badge>
                   </p>
                   <p className="text-xs" style={{ color: "var(--discret)" }}>
-                    {a.mois} mois exiges, soit {fcfa(a.montantExige)} &middot;
+                    {/*
+                      * A l'approche du terme, l'exigence se limite aux mois qui
+                      * restent : « 3 mois exiges, soit 10 000 » se contredirait.
+                      */}
+                    {a.moisRequis < a.mois
+                      ? `${a.moisRequis} mois restant${a.moisRequis > 1 ? "s" : ""} exige${a.moisRequis > 1 ? "s" : ""} sur ${a.mois}`
+                      : `${a.mois} mois exiges`}
+                    , soit {fcfa(a.montantExige)} &middot;
                     detenu {fcfa(a.avanceDetenue)}
                     {a.fin ? ` · jusqu'au ${dateCourte(a.fin)}` : ""}
                   </p>

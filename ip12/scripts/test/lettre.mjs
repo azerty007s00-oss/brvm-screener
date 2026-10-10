@@ -70,6 +70,7 @@ export type DetteMembre = { nb: number; montant: number; nbRetard: number; monta
 export type AvanceExigee = {
   membreId: string; mois: number; montantExige: number; avanceDetenue: number;
   respectee: boolean; auSeuil: boolean; pourMaintenir: number; fin: string | null;
+  moisRequis: number; moisRestants: number | null;
 };
 type Requete = (...a: unknown[]) => Promise<never[]>;
 export function db(): Requete { throw new Error("aucune base dans ce controle"); }
@@ -157,6 +158,7 @@ const bourama = {
   reglesAVenir: [],
   avanceManquante: null,
   avanceAuSeuil: null,
+  avanceFinissante: null,
 };
 const LE_30 = new Date("2026-09-30T08:00:00Z");
 const SITE = "https://ip12-alpha.vercel.app";
@@ -940,6 +942,7 @@ verifier(!doitRecevoir(blaConfortable, LE_7), "ni le 7");
 const auMinimum = {
   membreId: "b", mois: 3, montantExige: 15000, avanceDetenue: 15000,
   respectee: true, auSeuil: true, pourMaintenir: 5000, fin: null,
+  moisRequis: 3, moisRestants: null,
 };
 const blaAuSeuil = { ...blaConfortable, avanceAuSeuil: auMinimum };
 verifier(doitRecevoir(blaAuSeuil, LE_10), "au minimum, le preavis part");
@@ -994,11 +997,81 @@ verifier(
   "une avance tenue n'efface pas le rappel d'une autre regle",
 );
 
+/* --------------------------------------- la fin de la mesure, annoncee */
+
+/*
+ * DECISION DU BUREAU : BLA, tenu a trois mois d'avance jusqu'au 31/12/2027,
+ * est informe de la fin trois mois avant, si tout est verse. En octobre 2027,
+ * les trois mois qui restent sont exactement ceux qu'il detient.
+ */
+const LE_10_OCT_2027 = new Date("2027-10-10T08:00:00Z");
+const finDeMesure = {
+  ...auMinimum, auSeuil: false, pourMaintenir: 0, fin: "2027-12-31",
+  moisRequis: 3, moisRestants: 3,
+};
+const blaEnFin = { ...blaConfortable, avanceFinissante: finDeMesure };
+verifier(doitRecevoir(blaEnFin, LE_10_OCT_2027), "trois mois avant le terme, tout verse : il est informe");
+verifier(
+  !doitRecevoir(blaEnFin, new Date("2027-10-07T08:00:00Z")),
+  "une seule fois, avec le courrier de l'echeance, non aux trois passages",
+);
+verifier(
+  sujetRelance(blaEnFin, "2027-10-01", LE_10_OCT_2027) ===
+    "IP12 — fin de votre mesure d'avance le 31/12/2027",
+  "l'objet annonce la fin et sa date",
+);
+const texteFin = lettre(blaEnFin, LE_10_OCT_2027);
+verifier(/FIN DE VOTRE MESURE D'AVANCE/.test(texteFin), "la fin a son bloc");
+verifier(
+  /prend fin le 31\/12\/2027/.test(texteFin) && /plus\s+rien a constituer d'avance/.test(texteFin),
+  "elle dit la date, et qu'il n'a plus rien a constituer",
+);
+verifier(/le regime commun reprend/.test(texteFin), "et ce qui suit le terme");
+verifier(!/MESURE DISCIPLINAIRE|ARRIVE AU MINIMUM/.test(texteFin), "ni mesure ni preavis : tout est en ordre");
+verifier(
+  !/VOTRE REGIME PARTICULIER/.test(texteFin),
+  "l'avance a son bloc de fin : elle n'est pas repetee sous le regime particulier",
+);
+
+// Novembre : deux mois restent. L'annonce a eu lieu ; rien ne repart.
+const blaNovembre = { ...blaConfortable, avanceFinissante: { ...finDeMesure, moisRequis: 2, moisRestants: 2 } };
+verifier(
+  !doitRecevoir(blaNovembre, new Date("2027-11-10T08:00:00Z")),
+  "l'annonce ne se repete pas les mois suivants",
+);
+
+// Pas tout verse au moment de l'annonce : pas de courrier pour la seule fin.
+verifier(
+  !doitRecevoir({ ...blaConfortable, avanceFinissante: { ...finDeMesure, respectee: false } }, LE_10_OCT_2027),
+  "l'annonce suppose que tout est en ordre : sinon, c'est la mesure qui ecrit",
+);
+
+/*
+ * En defaut dans la derniere periode : la mesure se chiffre sur ce qui reste
+ * jusqu'au terme. Annoncer « trois mois, soit 5 000 FCFA » se contredirait.
+ */
+const defautFinal = {
+  ...finDeMesure, moisRequis: 2, moisRestants: 2, montantExige: 10000,
+  avanceDetenue: 5000, respectee: false,
+};
+const texteDefautFinal = lettre(
+  { ...blaConfortable, avanceManquante: defautFinal, avanceFinissante: defautFinal },
+  new Date("2027-11-10T08:00:00Z"),
+);
+verifier(
+  /il n'en reste que 2 a couvrir, soit 10 000 FCFA/.test(texteDefautFinal),
+  "en fin de mesure, le defaut se chiffre sur les mois qui restent",
+);
+verifier(
+  /prend fin le 31\/12\/2027/.test(texteDefautFinal),
+  "et le courrier qu'il recoit de toute facon dit la fin",
+);
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 console.log(
   `OK - ${controles} controles du courrier de relance : objet, seuil R5, ` +
     "dettes de penalites et leur somme, liste des mois, R2, mode d'emploi des cotisations " +
     "et des penalites, mesures disciplinaires, regime particulier, mesure a venir, " +
-    "notes collees, ordre de reglement des mois, preavis d'avance, mise en forme et rendu HTML",
+    "notes collees, ordre de reglement des mois, preavis d'avance, fin de mesure, mise en forme et rendu HTML",
 );

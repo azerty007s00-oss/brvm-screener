@@ -94,6 +94,11 @@ export type Destinataire = {
    * avance tenue declenche.
    */
   avanceAuSeuil: AvanceExigee | null;
+  /**
+   * Mesure d'avance dans sa derniere periode : les mois qui restent jusqu'au
+   * terme n'excedent plus les mois imposes. C'est la que la fin s'annonce.
+   */
+  avanceFinissante: AvanceExigee | null;
 };
 
 
@@ -152,9 +157,35 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
         },
         avanceManquante: avance && !avance.respectee ? avance : null,
         avanceAuSeuil: avance && avance.respectee && avance.auSeuil ? avance : null,
+        avanceFinissante:
+          avance && avance.moisRestants !== null && avance.moisRestants <= avance.mois
+            ? avance
+            : null,
       };
     })
     .filter((d) => doitRecevoir(d, maintenant));
+}
+
+/**
+ * L'annonce de la fin d'une mesure d'avance.
+ *
+ * DECISION DU BUREAU : le membre est informe de la fin quand tout est en
+ * ordre, et a l'avance de la duree meme de la mesure -- trois mois avant pour
+ * une avance de trois mois. C'est le moment ou les mois qui restent jusqu'au
+ * terme sont exactement ceux qu'il detient : il n'a plus rien a constituer, et
+ * doit le savoir pour ne pas payer d'avance des mois que la mesure n'exige
+ * plus.
+ *
+ * Une seule fois : le mois ou les mois restants egalent les mois imposes, avec
+ * le courrier de l'echeance, comme le rappel de regime. Hors de ce moment, ou
+ * si tout n'est pas en ordre, la fin se dit dans le courrier qu'il recoit de
+ * toute facon.
+ */
+export function annonceFinAvance(d: Destinataire, maintenant: Date): boolean {
+  const a = d.avanceFinissante;
+  return Boolean(
+    a && a.respectee && a.moisRestants === a.mois && etatEcheance(maintenant) !== "a_venir",
+  );
 }
 
 /**
@@ -186,6 +217,7 @@ export function doitRecevoir(d: Destinataire, maintenant: Date): boolean {
      * que le minimum, la mesure disciplinaire une fois en defaut.
      */
     Boolean(d.avanceAuSeuil) ||
+    annonceFinAvance(d, maintenant) ||
     /*
      * UNE REGLE INDIVIDUELLE VAUT COURRIER, MEME A JOUR DE TOUT -- sauf
      * l'avance, qui a ses propres declencheurs juste au-dessus.
@@ -307,6 +339,9 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
     d.nonInscrites.montant === 0 &&
     d.avanceManquante === null &&
     !d.avanceAuSeuil;
+  if (rienDu && d.avanceFinissante?.fin && annonceFinAvance(d, maintenant)) {
+    return `${CLUB.sigle} — fin de votre mesure d'avance le ${dateCourte(d.avanceFinissante.fin)}`;
+  }
   if (rienDu && d.regles.length > 0) {
     return `${CLUB.sigle} — rappel de votre regime particulier`;
   }
@@ -370,8 +405,8 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
 
 export function texteRelance(
   {
-    situation, arrieres, echeanceDuJour, avanceManquante, avanceAuSeuil, dette, nonInscrites,
-    plan, regles, reglesAVenir,
+    situation, arrieres, echeanceDuJour, avanceManquante, avanceAuSeuil, avanceFinissante,
+    dette, nonInscrites, plan, regles, reglesAVenir,
   }: Destinataire,
   siteUrl: string,
   maintenant: Date,
@@ -789,7 +824,9 @@ export function texteRelance(
      * Quand elle est en defaut, le bloc « MESURE DISCIPLINAIRE » la detaille
      * plus bas : on ne la repete pas ici.
      */
-    if (r.nature === "avance_min") return avanceManquante === null && !avanceAuSeuil;
+    if (r.nature === "avance_min") {
+      return avanceManquante === null && !avanceAuSeuil && !avanceFinissante;
+    }
     /* Le plan a toujours son bloc, tenu ou non : il n'a rien a faire ici. */
     return false;
   });
@@ -858,6 +895,30 @@ export function texteRelance(
   }
 
   /*
+   * LA FIN DE LA MESURE, DITE AVANT D'ETRE ATTEINTE.
+   *
+   * Dans sa derniere periode, la mesure n'exige plus que les mois qui restent
+   * jusqu'au terme. Le membre doit le savoir, sans quoi il continuerait de
+   * payer d'avance des mois qu'elle n'exige plus -- et ignorerait qu'apres le
+   * terme, le regime commun reprend.
+   */
+  if (avanceFinissante?.fin) {
+    const terme = dateCourte(avanceFinissante.fin);
+    lignes.push(
+      "",
+      "FIN DE VOTRE MESURE D'AVANCE",
+      `Votre mesure d'avance obligatoire prend fin le ${terme}.`,
+      avanceFinissante.respectee
+        ? "Votre avance couvre deja vos cotisations jusqu'a cette date : vous n'avez plus " +
+          "rien a constituer d'avance."
+        : `D'ici la, elle n'exige plus que les mois qui restent jusqu'au terme : ` +
+          `${avanceFinissante.moisRequis} mois, soit ${fcfa(avanceFinissante.montantExige)}.`,
+      `Apres le ${terme}, le regime commun reprend : la cotisation de chaque mois, au plus ` +
+        `tard le ${REGLES.jourEcheance}.`,
+    );
+  }
+
+  /*
    * LE PREAVIS : TENUE, MAIS AU MINIMUM.
    *
    * Chaque echeance consomme un mois d'avance. Au minimum, la prochaine la
@@ -885,8 +946,16 @@ export function texteRelance(
     lignes.push(
       "",
       "MESURE DISCIPLINAIRE — avance obligatoire.",
-      `L'assemblee vous impose de detenir en permanence ${avanceManquante.mois} mois de ` +
-        `cotisation d'avance, soit ${fcfa(avanceManquante.montantExige)}.`,
+      /*
+       * A l'approche du terme, l'exigence se limite aux mois qui restent :
+       * annoncer « trois mois, soit 10 000 FCFA » se contredirait.
+       */
+      avanceManquante.moisRequis < avanceManquante.mois && avanceManquante.fin
+        ? `L'assemblee vous impose ${avanceManquante.mois} mois de cotisation d'avance. ` +
+          `La mesure prenant fin le ${dateCourte(avanceManquante.fin)}, il n'en reste ` +
+          `que ${avanceManquante.moisRequis} a couvrir, soit ${fcfa(avanceManquante.montantExige)}.`
+        : `L'assemblee vous impose de detenir en permanence ${avanceManquante.mois} mois de ` +
+          `cotisation d'avance, soit ${fcfa(avanceManquante.montantExige)}.`,
       `Vous en detenez aujourd'hui ${fcfa(avanceManquante.avanceDetenue)} : il manque ` +
         `${fcfa(Math.max(0, avanceManquante.montantExige - avanceManquante.avanceDetenue))}.`,
       avanceManquante.fin
