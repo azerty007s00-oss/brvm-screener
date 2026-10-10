@@ -317,11 +317,18 @@ export default async function TableauDeBord() {
             </Carte>
           )}
 
+          {/*
+            * CE QUI ATTEND UN GESTE DU BUREAU, ET RIEN D'AUTRE.
+            *
+            * Le bloc comptait aussi « membres en retard » : les memes noms que
+            * la liste des retardataires, affichee juste en dessous. Sur un
+            * telephone, on lisait deux fois de suite DROPOU, KONE, KOUADIO.
+            * La liste suffit ; ce bloc ne garde que les validations.
+            */}
           {estBureau &&
             (s.enAttenteValidation > 0 ||
               reglementsEnAttente.length > 0 ||
-              mouvementsEnAttente.length > 0 ||
-              retardataires.length > 0) && (
+              mouvementsEnAttente.length > 0) && (
             <Carte titre="A traiter">
               <ul>
                 {s.enAttenteValidation > 0 && (
@@ -346,14 +353,6 @@ export default async function TableauDeBord() {
                     titre={`Mouvement${mouvementsEnAttente.length > 1 ? "s" : ""} de caisse a valider`}
                     detail="Saisis, en attente de votre visa"
                     href="/caisse"
-                  />
-                )}
-                {retardataires.length > 0 && (
-                  <LigneATraiter
-                    compte={retardataires.length}
-                    titre={`Membre${retardataires.length > 1 ? "s" : ""} en retard`}
-                    detail={retardataires.map((r) => r.nom).join(", ")}
-                    href="/penalites"
                   />
                 )}
               </ul>
@@ -470,18 +469,12 @@ export default async function TableauDeBord() {
                 { libelle: "Membres", brut: situations.length },
               ]}
             />
-            <div className="mt-5 grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
-                  Performance annualisee
-                </p>
-                <p
-                  className="mt-0.5 text-[17px] font-medium tabular-nums"
-                  style={{ color: couleurSigne(s.tri) }}
-                >
-                  {s.tri !== null ? pourcent(s.tri) : "--"}
-                </p>
-              </div>
+            {/*
+              * La performance annualisee figure deja en tete d'ecran, a cote de
+              * la valeur du portefeuille : la repeter ici la faisait lire deux
+              * fois. Reste l'exercice en cours, qu'on ne lit nulle part ailleurs.
+              */}
+            <div className="mt-5">
               <div>
                 <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
                   Exercice en cours

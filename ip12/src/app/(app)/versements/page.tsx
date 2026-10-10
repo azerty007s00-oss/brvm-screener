@@ -106,7 +106,7 @@ export default async function PageVersements({
       versementsEnAttente(),
       listerMembres(),
       justificatifsParLot(),
-      listerVersements({ statut: STATUT_VERSEMENT.valide }),
+      listerVersements({ statut: STATUT_VERSEMENT.valide, parSaisie: true }),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -329,7 +329,12 @@ export default async function PageVersements({
         </div>
       </div>
 
-      {peutValider && (
+      {/*
+        * Vide, elle occupait le premier ecran du telephone pour dire « rien a
+        * valider » -- ce que l'en-tete dit deja, « aucune declaration en
+        * attente ». Elle ne parait que lorsqu'elle a quelque chose a montrer.
+        */}
+      {peutValider && enAttente.length > 0 && (
         <Carte titre={`En attente de validation (${enAttente.length})`}>
           {enAttente.length === 0 ? (
             <Vide>Rien a valider.</Vide>
@@ -427,162 +432,6 @@ export default async function PageVersements({
               ))}
             </ul>
           )}
-        </Carte>
-      )}
-
-      {/*
-       * Les versements valides, ouverts a tous.
-       *
-       * Le justificatif et la note n'existaient que dans la carte « a valider »,
-       * reservee au tresorier : une fois le versement valide, plus personne ne
-       * les voyait, pas meme celui qui les avait joints. Un club dont les
-       * comptes sont ouverts (art. 12) doit montrer la piece autant que le
-       * chiffre -- c'est la piece qui permet de contester.
-       *
-       * La correction et l'annulation restent au tresorier et au president :
-       * voir n'est pas ecrire.
-       */}
-      {corrigibles.length > 0 && (
-        <Carte titre={`Versements valides (${corrigibles.length})`}>
-          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            {peutCorriger
-              ? "Les saisies les plus recentes, justificatifs compris. Une erreur n'est pas definitive : la correction ne remplace pas en silence, l'etat anterieur reste inscrit sur la ligne et au journal, et le motif est obligatoire."
-              : "Les saisies les plus recentes, justificatifs compris. Chacun peut verifier ce qui a ete encaisse, pour lui comme pour les autres : les comptes du club sont ouverts a tous ses membres (art. 12)."}
-          </p>
-          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
-            {corrigibles.map((v) => (
-              <li key={v.id} className="py-1.5">
-                <Depliant
-                  titre={`${v.membre_nom} · ${moisLong(v.mois)} · ${fcfa(v.montant)}`}
-                >
-                  <p
-                    className="mb-3 text-xs"
-                    style={{ color: "var(--discret)" }}
-                  >
-                    Verse le {dateCourte(v.date_versement)} &middot;{" "}
-                    {libelleMode(v.mode)}
-                    {v.reference ? ` · ${v.reference}` : ""}
-                    {v.valide_par_nom
-                      ? ` · valide par ${v.valide_par_nom}`
-                      : ""}
-                  </p>
-                  {v.motif_rejet && (
-                    <p
-                      className="mb-3 whitespace-pre-line rounded-lg px-2 py-1.5 text-[11px]"
-                      style={{
-                        background: "var(--sunk)",
-                        color: "var(--discret)",
-                      }}
-                    >
-                      {v.motif_rejet}
-                    </p>
-                  )}
-                  {v.note && (
-                    <p
-                      className="mb-3 text-xs italic"
-                      style={{ color: "var(--discret)" }}
-                    >
-                      {v.note}
-                    </p>
-                  )}
-                  <div className="mb-3 text-xs">
-                    {(pieces.get(v.lot) ?? []).length > 0 ? (
-                      <ul className="space-y-1">
-                        {(pieces.get(v.lot) ?? []).map((j) => (
-                          <li key={j.id}>
-                            <a
-                              href={`/api/justificatif/${j.id}`}
-                              target="_blank"
-                              rel="noopener"
-                              className="underline"
-                              style={{ color: "var(--gold-ink)" }}
-                            >
-                              {j.nom}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p style={{ color: "var(--discret)" }}>
-                        Aucun justificatif joint.
-                      </p>
-                    )}
-                  </div>
-                  {peutCorriger && (
-                    <>
-                      <FormulaireAction
-                        action={corrigerVersement}
-                        libelle="Corriger"
-                        compact
-                      >
-                        <ChampCache nom="id" valeur={v.id} />
-                        <Champ
-                          nom="montant"
-                          libelle="Montant (FCFA)"
-                          type="number"
-                          min={1}
-                          valeur={v.montant}
-                        />
-                        <Champ
-                          nom="dateVersement"
-                          libelle="Date du versement"
-                          type="date"
-                          valeur={v.date_versement}
-                        />
-                        <Champ
-                          nom="mois"
-                          libelle="Mois couvert"
-                          type="date"
-                          valeur={v.mois}
-                          aide="Le premier du mois. Un mois deja couvert pour ce membre est refuse."
-                        />
-                        <Selection
-                          nom="mode"
-                          libelle="Mode"
-                          valeur={v.mode}
-                          options={MODES_AFFICHES}
-                        />
-                        <Champ
-                          nom="reference"
-                          libelle="Reference"
-                          requis={false}
-                          valeur={v.reference ?? ""}
-                        />
-                        <Champ
-                          nom="motif"
-                          libelle="Motif de la correction"
-                          aide="Restera inscrit sur la ligne."
-                        />
-                      </FormulaireAction>
-                      <div
-                        className="mt-4 border-t pt-3"
-                        style={{ borderColor: "var(--bordure)" }}
-                      >
-                        <p
-                          className="mb-2 text-[11px]"
-                          style={{ color: "var(--discret)" }}
-                        >
-                          Si l&apos;encaissement n&apos;a jamais eu lieu, ou a
-                          ete compte deux fois : l&apos;annulation libere le
-                          mois.
-                        </p>
-                        <FormulaireAction
-                          action={annulerVersementValide}
-                          libelle="Annuler ce versement"
-                          variante="danger"
-                          compact
-                          confirmation={`Annuler ${fcfa(v.montant)} de ${v.membre_nom} pour ${moisLong(v.mois)} ?`}
-                        >
-                          <ChampCache nom="id" valeur={v.id} />
-                          <Champ nom="motif" libelle="Motif de l'annulation" />
-                        </FormulaireAction>
-                      </div>
-                    </>
-                  )}
-                </Depliant>
-              </li>
-            ))}
-          </ul>
         </Carte>
       )}
 
@@ -801,6 +650,175 @@ export default async function PageVersements({
                 requis={false}
               />
             </FormulaireAction>
+          </Depliant>
+        </Carte>
+      )}
+
+      {/*
+       * Les versements valides, ouverts a tous.
+       *
+       * Le justificatif et la note n'existaient que dans la carte « a valider »,
+       * reservee au tresorier : une fois le versement valide, plus personne ne
+       * les voyait, pas meme celui qui les avait joints. Un club dont les
+       * comptes sont ouverts (art. 12) doit montrer la piece autant que le
+       * chiffre -- c'est la piece qui permet de contester.
+       *
+       * La correction et l'annulation restent au tresorier et au president :
+       * voir n'est pas ecrire.
+       *
+       * APRES LE REGISTRE, ET REPLIEE. Elle s'etalait avant lui sur trois pages
+       * d'impression -- cinq ecrans de telephone --, si bien que le registre,
+       * ce qu'on vient voir, n'arrivait qu'a la fin. Elle reste a portee d'un
+       * geste.
+       */}
+      {corrigibles.length > 0 && (
+        <Carte titre="Derniers versements enregistres">
+          <Depliant
+            titre={
+              peutCorriger
+                ? `Afficher les ${corrigibles.length} dernieres saisies, pour verifier ou corriger`
+                : `Afficher les ${corrigibles.length} dernieres saisies`
+            }
+          >
+          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+            {peutCorriger
+              ? "Les saisies les plus recentes, justificatifs compris. Une erreur n'est pas definitive : la correction ne remplace pas en silence, l'etat anterieur reste inscrit sur la ligne et au journal, et le motif est obligatoire."
+              : "Les saisies les plus recentes, justificatifs compris. Chacun peut verifier ce qui a ete encaisse, pour lui comme pour les autres : les comptes du club sont ouverts a tous ses membres (art. 12)."}
+          </p>
+          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {corrigibles.map((v) => (
+              <li key={v.id} className="py-1.5">
+                <Depliant
+                  titre={`${v.membre_nom} · ${moisLong(v.mois)} · ${fcfa(v.montant)}`}
+                >
+                  <p
+                    className="mb-3 text-xs"
+                    style={{ color: "var(--discret)" }}
+                  >
+                    Verse le {dateCourte(v.date_versement)} &middot;{" "}
+                    {libelleMode(v.mode)}
+                    {v.reference ? ` · ${v.reference}` : ""}
+                    {v.valide_par_nom
+                      ? ` · valide par ${v.valide_par_nom}`
+                      : ""}
+                  </p>
+                  {v.motif_rejet && (
+                    <p
+                      className="mb-3 whitespace-pre-line rounded-lg px-2 py-1.5 text-[11px]"
+                      style={{
+                        background: "var(--sunk)",
+                        color: "var(--discret)",
+                      }}
+                    >
+                      {v.motif_rejet}
+                    </p>
+                  )}
+                  {v.note && (
+                    <p
+                      className="mb-3 text-xs italic"
+                      style={{ color: "var(--discret)" }}
+                    >
+                      {v.note}
+                    </p>
+                  )}
+                  <div className="mb-3 text-xs">
+                    {(pieces.get(v.lot) ?? []).length > 0 ? (
+                      <ul className="space-y-1">
+                        {(pieces.get(v.lot) ?? []).map((j) => (
+                          <li key={j.id}>
+                            <a
+                              href={`/api/justificatif/${j.id}`}
+                              target="_blank"
+                              rel="noopener"
+                              className="underline"
+                              style={{ color: "var(--gold-ink)" }}
+                            >
+                              {j.nom}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p style={{ color: "var(--discret)" }}>
+                        Aucun justificatif joint.
+                      </p>
+                    )}
+                  </div>
+                  {peutCorriger && (
+                    <>
+                      <FormulaireAction
+                        action={corrigerVersement}
+                        libelle="Corriger"
+                        compact
+                      >
+                        <ChampCache nom="id" valeur={v.id} />
+                        <Champ
+                          nom="montant"
+                          libelle="Montant (FCFA)"
+                          type="number"
+                          min={1}
+                          valeur={v.montant}
+                        />
+                        <Champ
+                          nom="dateVersement"
+                          libelle="Date du versement"
+                          type="date"
+                          valeur={v.date_versement}
+                        />
+                        <Champ
+                          nom="mois"
+                          libelle="Mois couvert"
+                          type="date"
+                          valeur={v.mois}
+                          aide="Le premier du mois. Un mois deja couvert pour ce membre est refuse."
+                        />
+                        <Selection
+                          nom="mode"
+                          libelle="Mode"
+                          valeur={v.mode}
+                          options={MODES_AFFICHES}
+                        />
+                        <Champ
+                          nom="reference"
+                          libelle="Reference"
+                          requis={false}
+                          valeur={v.reference ?? ""}
+                        />
+                        <Champ
+                          nom="motif"
+                          libelle="Motif de la correction"
+                          aide="Restera inscrit sur la ligne."
+                        />
+                      </FormulaireAction>
+                      <div
+                        className="mt-4 border-t pt-3"
+                        style={{ borderColor: "var(--bordure)" }}
+                      >
+                        <p
+                          className="mb-2 text-[11px]"
+                          style={{ color: "var(--discret)" }}
+                        >
+                          Si l&apos;encaissement n&apos;a jamais eu lieu, ou a
+                          ete compte deux fois : l&apos;annulation libere le
+                          mois.
+                        </p>
+                        <FormulaireAction
+                          action={annulerVersementValide}
+                          libelle="Annuler ce versement"
+                          variante="danger"
+                          compact
+                          confirmation={`Annuler ${fcfa(v.montant)} de ${v.membre_nom} pour ${moisLong(v.mois)} ?`}
+                        >
+                          <ChampCache nom="id" valeur={v.id} />
+                          <Champ nom="motif" libelle="Motif de l'annulation" />
+                        </FormulaireAction>
+                      </div>
+                    </>
+                  )}
+                </Depliant>
+              </li>
+            ))}
+          </ul>
           </Depliant>
         </Carte>
       )}

@@ -6,7 +6,8 @@ import { joindreJustificatif } from "@/app/actions/versements";
 import { ChampJustificatif } from "@/components/justificatif";
 import { justificatifsParLot } from "@/lib/justificatifs";
 import { penalitesNonInscrites } from "@/lib/constat";
-import { ROLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { ROLES, dateCourte, fcfa, moisLong, nombre } from "@/lib/settings";
+import { couleurSigne } from "@/lib/perf";
 import { Champ, ChampCache, Depliant, FormulaireAction } from "@/components/formulaires";
 import { libelleMode } from "@/lib/valeurs";
 import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
@@ -77,7 +78,9 @@ export default async function PageMonCompte() {
         unite={maPart ? "FCFA" : undefined}
         detail={
           maPart
-            ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % au prorata du capital echu \u00b7 plus-value ${fcfa(maPart.plusValue)}`
+            ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % au prorata du capital echu${
+                maPart.dues > 0 ? ` \u00b7 capital diminue de ${fcfa(maPart.dues)} de penalites dues` : ""
+              }`
             : "Votre part se calcule des votre premier versement valide."
         }
       />
@@ -91,13 +94,19 @@ export default async function PageMonCompte() {
             contexte:
               maPart && maPart.avance > 0 ? `dont ${fcfa(maPart.avance)} d'avance, en depot` : undefined,
           },
+          /*
+           * Le pourcentage est deja dit sous le montant : cette case le
+           * repetait. Elle donne a la place ce que la part a gagne -- ou perdu
+           * -- sur ce qui a ete verse, signe et teinte comme au portefeuille.
+           */
           {
-            libelle: "Ma part",
-            valeur: maPart ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} %` : "--",
-            contexte:
-              maPart && maPart.dues > 0
-                ? `capital diminue de ${fcfa(maPart.dues)} de penalites dues`
-                : "au prorata du capital echu",
+            libelle: "Plus-value",
+            valeur: maPart
+              ? `${maPart.plusValue >= 0 ? "+" : "\u2212"}${nombre(Math.abs(maPart.plusValue))}`
+              : "--",
+            unite: maPart ? "FCFA" : undefined,
+            encre: maPart ? couleurSigne(maPart.plusValue) : undefined,
+            contexte: "valeur de ma part moins ce que j'ai verse",
           },
         ]}
       />

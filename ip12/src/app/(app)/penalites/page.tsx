@@ -355,126 +355,6 @@ export default async function PagePenalites() {
         </Carte>
       )}
 
-      {gere && (
-        <Carte titre="Constater les retards">
-          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            Le site calcule ce que les statuts prevoient ; c&apos;est le bureau
-            qui le porte au registre. Cette action est rejouable : une penalite
-            deja reglee ou annulee n&apos;est jamais retouchee, seules celles
-            encore dues voient leur montant reajuste si R4 vient a
-            s&apos;appliquer.
-          </p>
-          {aConstater.length === 0 ? (
-            <Alerte ton="vert">
-              Le registre est a jour : rien de nouveau a constater.
-            </Alerte>
-          ) : (
-            <>
-              <Alerte
-                ton="ambre"
-                titre={`${aConstater.length} penalite${aConstater.length > 1 ? "s" : ""} a constater`}
-              >
-                <ul className="mt-1 space-y-0.5">
-                  {aConstater.slice(0, 8).map((p, i) => (
-                    <li key={`${p.nom}-${p.mois}-${i}`}>
-                      {p.nom} &middot; {moisLong(p.mois)} &middot;{" "}
-                      {fcfa(p.montant)}
-                      {p.doublee ? " (doublee, R4)" : ""}
-                    </li>
-                  ))}
-                  {aConstater.length > 8 && (
-                    <li>et {aConstater.length - 8} autres…</li>
-                  )}
-                </ul>
-              </Alerte>
-              {/*
-                * UN SEUL BOUTON PLEIN PAR ECRAN, et c'est « Saisir une
-                * penalite », en tete de page. Celui-ci et son jumeau des
-                * absences etaient pleins eux aussi : trois commandes noires sur
-                * un meme ecran ne disent plus laquelle compte. L'encadre qui
-                * les precede designe deja ce qu'il y a a faire.
-                */}
-              <FormulaireAction
-                action={constaterPenalitesRetard}
-                libelle="Porter au registre"
-                variante="discret"
-                confirmation={`Constater ${aConstater.length} penalite(s) de retard ?`}
-              />
-            </>
-          )}
-        </Carte>
-      )}
-
-      {gere && (
-        <Carte titre="Constater les absences">
-          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-            {fcfa(REGLES.penaliteAbsence)} par tranche de{" "}
-            {REGLES.absencesParTranche} absences injustifiees. Le club
-            sanctionne la repetition, non l&apos;empechement ponctuel : une
-            absence isolee ne coute rien. Pour en justifier une, le secretaire
-            la passe en &laquo;&nbsp;Excuse&nbsp;&raquo; sur la seance, depuis
-            la page Reunions — elle sort alors du compte.
-          </p>
-          {absences.length === 0 ? (
-            <Vide>Aucune feuille de presence pointee.</Vide>
-          ) : (
-            <>
-              <ul
-                className="mb-3 divide-y text-sm"
-                style={{ borderColor: "var(--bordure)" }}
-              >
-                {absences
-                  .filter((a) => a.injustifiees > 0 || a.excusees > 0)
-                  .map((a) => (
-                    <li
-                      key={a.membreId}
-                      className="flex justify-between gap-2 py-1.5"
-                    >
-                      <span>{a.nom}</span>
-                      <span style={{ color: "var(--discret)" }}>
-                        {a.injustifiees} injustifiee
-                        {a.injustifiees > 1 ? "s" : ""}
-                        {a.excusees > 0
-                          ? ` · ${a.excusees} excusee${a.excusees > 1 ? "s" : ""}`
-                          : ""}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
-              {absencesAConstater.length === 0 ? (
-                <Alerte ton="vert">
-                  Le registre est a jour : aucune tranche d&apos;absences a
-                  porter.
-                </Alerte>
-              ) : (
-                <>
-                  <Alerte
-                    ton="ambre"
-                    titre={`${absencesAConstater.length} tranche${absencesAConstater.length > 1 ? "s" : ""} a constater`}
-                  >
-                    <ul className="mt-1 space-y-0.5">
-                      {absencesAConstater.map((t, i) => (
-                        <li key={`${t.nom}-${t.rang}-${i}`}>
-                          {t.nom} &middot; tranche {t.rang} (
-                          {t.absenceDeclenchante} absences) &middot;{" "}
-                          {fcfa(t.montant)}
-                        </li>
-                      ))}
-                    </ul>
-                  </Alerte>
-                  <FormulaireAction
-                    action={constaterPenalitesAbsence}
-                    libelle="Porter au registre"
-                    variante="discret"
-                    confirmation={`Constater ${absencesAConstater.length} penalite(s) d'absence ?`}
-                  />
-                </>
-              )}
-            </>
-          )}
-        </Carte>
-      )}
-
       {/*
        * LE REGLEMENT SE DECLARE AILLEURS, ET C'EST VOULU.
        *
@@ -501,7 +381,8 @@ export default async function PagePenalites() {
         </div>
       )}
 
-      {gere && circuitPret && (
+      {/* Vide, elle disait « aucun reglement en attente » : l'accueil compte deja cette file. */}
+      {gere && circuitPret && lotsAExaminer.length > 0 && (
         <Carte titre={`Reglements declares, a verifier (${lotsAExaminer.length})`}>
           {lotsAExaminer.length === 0 ? (
             <Vide>Aucun reglement declare en attente.</Vide>
@@ -814,6 +695,135 @@ export default async function PagePenalites() {
       </Carte>
 
 
+
+      {/*
+        * LES OUTILS APRES LE REGISTRE, ET SEULEMENT QUAND ILS SERVENT.
+        *
+        * Ils passaient avant lui : on lisait d'abord « le registre est a jour :
+        * rien de nouveau a constater », puis la liste des absences, avant
+        * d'atteindre ce qu'on venait voir, en troisieme page. Le constat des
+        * retards a lieu de toute facon a chaque relance : sa carte ne parait
+        * que lorsqu'il reste quelque chose a porter.
+        */}
+      {gere && aConstater.length > 0 && (
+        <Carte titre="Constater les retards">
+          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+            Le site calcule ce que les statuts prevoient ; c&apos;est le bureau
+            qui le porte au registre. Cette action est rejouable : une penalite
+            deja reglee ou annulee n&apos;est jamais retouchee, seules celles
+            encore dues voient leur montant reajuste si R4 vient a
+            s&apos;appliquer.
+          </p>
+          {aConstater.length === 0 ? (
+            <Alerte ton="vert">
+              Le registre est a jour : rien de nouveau a constater.
+            </Alerte>
+          ) : (
+            <>
+              <Alerte
+                ton="ambre"
+                titre={`${aConstater.length} penalite${aConstater.length > 1 ? "s" : ""} a constater`}
+              >
+                <ul className="mt-1 space-y-0.5">
+                  {aConstater.slice(0, 8).map((p, i) => (
+                    <li key={`${p.nom}-${p.mois}-${i}`}>
+                      {p.nom} &middot; {moisLong(p.mois)} &middot;{" "}
+                      {fcfa(p.montant)}
+                      {p.doublee ? " (doublee, R4)" : ""}
+                    </li>
+                  ))}
+                  {aConstater.length > 8 && (
+                    <li>et {aConstater.length - 8} autres…</li>
+                  )}
+                </ul>
+              </Alerte>
+              {/*
+                * UN SEUL BOUTON PLEIN PAR ECRAN, et c'est « Saisir une
+                * penalite », en tete de page. Celui-ci et son jumeau des
+                * absences etaient pleins eux aussi : trois commandes noires sur
+                * un meme ecran ne disent plus laquelle compte. L'encadre qui
+                * les precede designe deja ce qu'il y a a faire.
+                */}
+              <FormulaireAction
+                action={constaterPenalitesRetard}
+                libelle="Porter au registre"
+                variante="discret"
+                confirmation={`Constater ${aConstater.length} penalite(s) de retard ?`}
+              />
+            </>
+          )}
+        </Carte>
+      )}
+
+      {gere && (
+        <Carte titre="Constater les absences">
+          <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
+            {fcfa(REGLES.penaliteAbsence)} par tranche de{" "}
+            {REGLES.absencesParTranche} absences injustifiees. Le club
+            sanctionne la repetition, non l&apos;empechement ponctuel : une
+            absence isolee ne coute rien. Pour en justifier une, le secretaire
+            la passe en &laquo;&nbsp;Excuse&nbsp;&raquo; sur la seance, depuis
+            la page Reunions — elle sort alors du compte.
+          </p>
+          {absences.length === 0 ? (
+            <Vide>Aucune feuille de presence pointee.</Vide>
+          ) : (
+            <>
+              <ul
+                className="mb-3 divide-y text-sm"
+                style={{ borderColor: "var(--bordure)" }}
+              >
+                {absences
+                  .filter((a) => a.injustifiees > 0 || a.excusees > 0)
+                  .map((a) => (
+                    <li
+                      key={a.membreId}
+                      className="flex justify-between gap-2 py-1.5"
+                    >
+                      <span>{a.nom}</span>
+                      <span style={{ color: "var(--discret)" }}>
+                        {a.injustifiees} injustifiee
+                        {a.injustifiees > 1 ? "s" : ""}
+                        {a.excusees > 0
+                          ? ` · ${a.excusees} excusee${a.excusees > 1 ? "s" : ""}`
+                          : ""}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+              {absencesAConstater.length === 0 ? (
+                <Alerte ton="vert">
+                  Le registre est a jour : aucune tranche d&apos;absences a
+                  porter.
+                </Alerte>
+              ) : (
+                <>
+                  <Alerte
+                    ton="ambre"
+                    titre={`${absencesAConstater.length} tranche${absencesAConstater.length > 1 ? "s" : ""} a constater`}
+                  >
+                    <ul className="mt-1 space-y-0.5">
+                      {absencesAConstater.map((t, i) => (
+                        <li key={`${t.nom}-${t.rang}-${i}`}>
+                          {t.nom} &middot; tranche {t.rang} (
+                          {t.absenceDeclenchante} absences) &middot;{" "}
+                          {fcfa(t.montant)}
+                        </li>
+                      ))}
+                    </ul>
+                  </Alerte>
+                  <FormulaireAction
+                    action={constaterPenalitesAbsence}
+                    libelle="Porter au registre"
+                    variante="discret"
+                    confirmation={`Constater ${absencesAConstater.length} penalite(s) d'absence ?`}
+                  />
+                </>
+              )}
+            </>
+          )}
+        </Carte>
+      )}
     </>
   );
 }

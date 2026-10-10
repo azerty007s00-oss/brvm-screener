@@ -157,10 +157,20 @@ const CHAMPS_VERSEMENT = `
 export async function listerVersements(filtre?: {
   membreId?: string;
   statut?: string;
+  /**
+   * Les dernieres saisies d'abord, et non les mois les plus lointains.
+   *
+   * La liste des versements a corriger s'annoncait « les saisies les plus
+   * recentes » et etait triee par mois couvert : les avances de 2027, saisies
+   * en septembre, occupaient les onze premieres lignes, et la saisie d'hier
+   * qu'on venait corriger etait loin dessous.
+   */
+  parSaisie?: boolean;
 }): Promise<Versement[]> {
   const sql = db();
   const membreId = filtre?.membreId ?? null;
   const statut = filtre?.statut ?? null;
+  const parSaisie = filtre?.parSaisie ?? false;
   const rows = await sql`
     select ${sql.unsafe(CHAMPS_VERSEMENT)}
     from contributions c
@@ -169,7 +179,8 @@ export async function listerVersements(filtre?: {
     left join members r on r.id = c.reviewed_by
     where (${membreId}::uuid is null or c.member_id = ${membreId}::uuid)
       and (${statut}::text is null or c.status = ${statut}::text)
-    order by c.period desc, m.full_name
+    order by case when ${parSaisie}::boolean then c.created_at end desc nulls last,
+      c.period desc, m.full_name
   `;
   return (rows as Versement[]).map((r) => ({ ...r, montant: n(r.montant) }));
 }
