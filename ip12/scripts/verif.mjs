@@ -31,6 +31,7 @@ const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
   prochainReglement, montantsParMois, imputer, imputerPenalites, cotisationsARegler,
+  etatAvance,
 } = await import("../.verif/penalites.mjs");
 const {
   tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa,
@@ -1513,6 +1514,37 @@ assert.deepEqual(
   "a jour, le total est nul, et l'avance de novembre ne le rend pas negatif",
 );
 
+/* ------------------------------------------ l'avance obligatoire, trois etats */
+
+/*
+ * RIEN AU-DESSUS DU MINIMUM, UN PREAVIS AU MINIMUM, LA MESURE EN DESSOUS.
+ *
+ * Trois mois exiges a 5 000 : le minimum est de 15 000. « Au minimum » veut
+ * dire qu'une echeance de plus sans versement le ferait passer dessous --
+ * donc moins de 20 000.
+ */
+assert.deepEqual(
+  etatAvance(20_000, 3, 5000),
+  { montantExige: 15_000, respectee: true, auSeuil: false, manque: 0, pourMaintenir: 0 },
+  "quatre mois d'avance : tenue, et rien a dire",
+);
+assert.deepEqual(
+  etatAvance(15_000, 3, 5000),
+  { montantExige: 15_000, respectee: true, auSeuil: true, manque: 0, pourMaintenir: 5000 },
+  "trois mois tout juste : tenue, mais au seuil -- il faut verser un mois pour la maintenir",
+);
+assert.deepEqual(
+  etatAvance(17_500, 3, 5000),
+  { montantExige: 15_000, respectee: true, auSeuil: true, manque: 0, pourMaintenir: 2500 },
+  "trois mois et demi : la prochaine echeance le ferait passer dessous, il manque 2 500",
+);
+assert.deepEqual(
+  etatAvance(10_000, 3, 5000),
+  { montantExige: 15_000, respectee: false, auSeuil: false, manque: 5000, pourMaintenir: 10_000 },
+  "deux mois : en defaut, ce n'est plus un preavis",
+);
+assert.equal(etatAvance(0, 3, 5000).manque, 15_000, "rien detenu : tout manque");
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -1520,5 +1552,5 @@ console.log(
     + "net place et gain de gestion, reperes de l'abscisse, "
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
-    + "total des cotisations a regler",
+    + "total des cotisations a regler, avance obligatoire",
 );

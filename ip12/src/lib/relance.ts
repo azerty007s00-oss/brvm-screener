@@ -88,6 +88,12 @@ export type Destinataire = {
    * reviendrait a laisser courir un delai dont il ne sait rien.
    */
   avanceManquante: AvanceExigee | null;
+  /**
+   * Avance tenue, mais au minimum : la prochaine echeance la ferait passer
+   * dessous sans nouveau versement. C'est le preavis -- le seul courrier qu'une
+   * avance tenue declenche.
+   */
+  avanceAuSeuil: AvanceExigee | null;
 };
 
 
@@ -145,35 +151,54 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
           nb: 0, montant: 0, nbRetard: 0, montantRetard: 0,
         },
         avanceManquante: avance && !avance.respectee ? avance : null,
+        avanceAuSeuil: avance && avance.respectee && avance.auSeuil ? avance : null,
       };
     })
-    .filter(
-      (d) =>
-        d.arrieres.length > 0 ||
-        d.echeanceDuJour !== null ||
-        d.dette.nb > 0 ||
-        /*
-         * Une penalite courue suffit. Un membre qui a fini par verser ses mois
-         * en retard doit encore la penalite de l'art. 9, acquise a l'echeance :
-         * plus d'arriere, rien au registre tant que le constat n'a pas eu lieu,
-         * et il ne recevait donc aucun courrier a son sujet.
-         */
-        d.nonInscrites.montant > 0 ||
-        d.avanceManquante !== null ||
-        /*
-         * UNE REGLE INDIVIDUELLE VAUT COURRIER, MEME A JOUR DE TOUT.
-         *
-         * Un membre sous cotisation particuliere, penalites majorees ou plan de
-         * redressement, et qui ne doit rien, n'etait destinataire d'aucun
-         * courrier : la mesure decidee en assemblee ne lui etait jamais
-         * rappelee, et ses penalites tombaient doublees sans explication.
-         *
-         * Une seule fois par mois, cependant, et non aux trois passages : les
-         * rappels des 7 et 9 s'adressent a qui doit quelque chose. Celui-ci est
-         * un rappel de regime, il part avec le courrier de l'echeance.
-         */
-        (d.regles.length > 0 && etatEcheance(maintenant) !== "a_venir"),
-    );
+    .filter((d) => doitRecevoir(d, maintenant));
+}
+
+/**
+ * Qui recoit un courrier ce jour-la.
+ *
+ * Isole et exporte parce que c'est ici que se decide qu'un membre est ecrit ou
+ * non -- la question la plus sensible du courrier, et la seule qu'aucun
+ * controle ne verifiait, enfouie qu'elle etait dans une lecture de la base.
+ */
+export function doitRecevoir(d: Destinataire, maintenant: Date): boolean {
+  return (
+    d.arrieres.length > 0 ||
+    d.echeanceDuJour !== null ||
+    d.dette.nb > 0 ||
+    /*
+     * Une penalite courue suffit. Un membre qui a fini par verser ses mois
+     * en retard doit encore la penalite de l'art. 9, acquise a l'echeance :
+     * plus d'arriere, rien au registre tant que le constat n'a pas eu lieu,
+     * et il ne recevait donc aucun courrier a son sujet.
+     */
+    d.nonInscrites.montant > 0 ||
+    d.avanceManquante !== null ||
+    /*
+     * L'AVANCE TENUE NE DECLENCHE QUE LE PREAVIS.
+     *
+     * Le membre tenu a une avance minimale recevait chaque 10 un rappel de son
+     * regime, meme confortablement au-dessus du minimum. Le bureau a tranche :
+     * rien tant qu'il a plus que le minimum, un preavis des qu'il n'en a plus
+     * que le minimum, la mesure disciplinaire une fois en defaut.
+     */
+    Boolean(d.avanceAuSeuil) ||
+    /*
+     * UNE REGLE INDIVIDUELLE VAUT COURRIER, MEME A JOUR DE TOUT -- sauf
+     * l'avance, qui a ses propres declencheurs juste au-dessus.
+     *
+     * Un membre sous cotisation particuliere, penalites majorees ou plan de
+     * redressement, et qui ne doit rien, n'etait destinataire d'aucun
+     * courrier : la mesure decidee en assemblee ne lui etait jamais rappelee,
+     * et ses penalites tombaient doublees sans explication. Une seule fois par
+     * mois, cependant : les rappels des 7 et 9 s'adressent a qui doit quelque
+     * chose ; celui-ci part avec le courrier de l'echeance.
+     */
+    (d.regles.some((r) => r.nature !== "avance_min") && etatEcheance(maintenant) !== "a_venir")
+  );
 }
 
 /** Envoie une relance a chacun. Ne leve jamais : chaque echec est isole. */
@@ -280,11 +305,25 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
     d.echeanceDuJour === null &&
     d.dette.nb === 0 &&
     d.nonInscrites.montant === 0 &&
-    d.avanceManquante === null;
+    d.avanceManquante === null &&
+    !d.avanceAuSeuil;
   if (rienDu && d.regles.length > 0) {
     return `${CLUB.sigle} — rappel de votre regime particulier`;
   }
   if (d.avanceManquante) return `${CLUB.sigle} — avance obligatoire non constituee`;
+  /*
+   * Le preavis passe apres tout ce qui est du : un membre en retard lit
+   * d'abord son retard. Seul, il dit ce qu'il est -- un avertissement, non un
+   * reproche.
+   */
+  if (
+    d.avanceAuSeuil &&
+    d.arrieres.length === 0 &&
+    d.echeanceDuJour === null &&
+    d.dette.nb === 0
+  ) {
+    return `${CLUB.sigle} — votre avance obligatoire arrive au minimum`;
+  }
   /*
    * Le plan vient apres l'avance non tenue -- celle-ci est un manquement, celui-la
    * une mesure que le membre respecte peut-etre -- mais avant le simple retard :
@@ -331,8 +370,8 @@ export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: D
 
 export function texteRelance(
   {
-    situation, arrieres, echeanceDuJour, avanceManquante, dette, nonInscrites, plan, regles,
-    reglesAVenir,
+    situation, arrieres, echeanceDuJour, avanceManquante, avanceAuSeuil, dette, nonInscrites,
+    plan, regles, reglesAVenir,
   }: Destinataire,
   siteUrl: string,
   maintenant: Date,
@@ -354,7 +393,8 @@ export function texteRelance(
     echeanceDuJour === null &&
     dette.nb === 0 &&
     nonInscrites.montant === 0 &&
-    avanceManquante === null;
+    avanceManquante === null &&
+    !avanceAuSeuil;
   if (rienDu) {
     lignes.push(
       "",
@@ -749,7 +789,7 @@ export function texteRelance(
      * Quand elle est en defaut, le bloc « MESURE DISCIPLINAIRE » la detaille
      * plus bas : on ne la repete pas ici.
      */
-    if (r.nature === "avance_min") return avanceManquante === null;
+    if (r.nature === "avance_min") return avanceManquante === null && !avanceAuSeuil;
     /* Le plan a toujours son bloc, tenu ou non : il n'a rien a faire ici. */
     return false;
   });
@@ -817,6 +857,30 @@ export function texteRelance(
     );
   }
 
+  /*
+   * LE PREAVIS : TENUE, MAIS AU MINIMUM.
+   *
+   * Chaque echeance consomme un mois d'avance. Au minimum, la prochaine la
+   * ferait passer dessous sans nouveau versement -- et la mesure deviendrait
+   * disciplinaire. Le courrier le dit avant, et chiffre ce qu'il faut verser :
+   * un avertissement utile est celui qui donne le montant, pas le calcul.
+   */
+  if (avanceAuSeuil) {
+    lignes.push(
+      "",
+      "VOTRE AVANCE OBLIGATOIRE ARRIVE AU MINIMUM",
+      `L'assemblee vous impose de detenir en permanence ${avanceAuSeuil.mois} mois de ` +
+        `cotisation d'avance, soit ${fcfa(avanceAuSeuil.montantExige)}. Vous en detenez ` +
+        `${fcfa(avanceAuSeuil.avanceDetenue)} : l'obligation est tenue.`,
+      "Mais chaque echeance consomme un mois de cette avance : sans nouveau versement, la " +
+        `prochaine la fera passer sous le minimum. Versez au moins ` +
+        `${fcfa(avanceAuSeuil.pourMaintenir)} pour la maintenir.`,
+      avanceAuSeuil.fin
+        ? `Cette obligation court jusqu'au ${dateCourte(avanceAuSeuil.fin)}.`
+        : "Cette obligation est sans terme fixe.",
+    );
+  }
+
   if (avanceManquante) {
     lignes.push(
       "",
@@ -849,7 +913,15 @@ export function texteRelance(
    * avant les trois qui le concernent. On lui expliquait longuement ce qu'il n'a
    * pas a faire.
    */
-  const doitUneCotisation = echeanceDuJour !== null || arrieres.length > 0;
+  /*
+   * Qui doit maintenir ou reconstituer son avance doit verser, lui aussi : le
+   * courrier qui le lui demande sans dire comment l'enverrait au groupe.
+   */
+  const doitUneCotisation =
+    echeanceDuJour !== null ||
+    arrieres.length > 0 ||
+    avanceManquante !== null ||
+    Boolean(avanceAuSeuil);
   if (siteUrl && doitUneCotisation) {
     lignes.push(
       "",

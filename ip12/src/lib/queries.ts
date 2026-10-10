@@ -5,6 +5,7 @@ import { estTableAbsente } from "./erreurs";
 import { CLUB, REGLES, debutMois, estExigible, moisDuClub, tauxNormalise } from "./settings";
 import type { Role } from "./settings";
 import {
+  etatAvance,
   montantsParMois,
   prochainReglement,
   situationMembre,
@@ -774,6 +775,13 @@ export type AvanceExigee = {
   /** Ce qu'il detient effectivement en avance. */
   avanceDetenue: number;
   respectee: boolean;
+  /**
+   * Tenue, mais au minimum : l'echeance suivante consomme un mois d'avance, et
+   * sans nouveau versement il passerait dessous. C'est le cas du preavis.
+   */
+  auSeuil: boolean;
+  /** Ce qu'il doit verser pour rester au minimum apres la prochaine echeance. */
+  pourMaintenir: number;
   /** Terme de l'obligation, s'il en a ete fixe un. */
   fin: string | null;
 };
@@ -794,15 +802,17 @@ async function avancesExigeesBrut(aujourdhui: Date): Promise<AvanceExigee[]> {
     .filter((r) => r.nature === REGLE_MEMBRE.avanceMinimale && (r.valeur ?? 0) > 0)
     .map((r) => {
       const mois = r.valeur ?? 0;
-      const montantExige = mois * reglages.cotisationMensuelle;
       const avanceDetenue = situations.find((x) => x.membreId === r.membreId)?.avance ?? 0;
+      const etat = etatAvance(avanceDetenue, mois, reglages.cotisationMensuelle);
       return {
         membreId: r.membreId,
         membreNom: r.membreNom,
         mois,
-        montantExige,
+        montantExige: etat.montantExige,
         avanceDetenue,
-        respectee: avanceDetenue >= montantExige,
+        respectee: etat.respectee,
+        auSeuil: etat.auSeuil,
+        pourMaintenir: etat.pourMaintenir,
         fin: r.fin,
       };
     });

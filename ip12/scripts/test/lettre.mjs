@@ -69,7 +69,7 @@ export type SituationClub = {
 export type DetteMembre = { nb: number; montant: number; nbRetard: number; montantRetard: number };
 export type AvanceExigee = {
   membreId: string; mois: number; montantExige: number; avanceDetenue: number;
-  respectee: boolean; fin: string | null;
+  respectee: boolean; auSeuil: boolean; pourMaintenir: number; fin: string | null;
 };
 type Requete = (...a: unknown[]) => Promise<never[]>;
 export function db(): Requete { throw new Error("aucune base dans ce controle"); }
@@ -124,7 +124,7 @@ try {
 }
 writeFileSync(`${RACINE}/${ATELIER}-js/package.json`, '{"type":"module"}');
 const { enHtml } = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/courriel.js`);
-const { texteRelance, sujetRelance } = await import(
+const { texteRelance, sujetRelance, doitRecevoir } = await import(
   `${RACINE}/${ATELIER}-js/${ATELIER}/relance.js`
 );
 
@@ -156,6 +156,7 @@ const bourama = {
   regles: [],
   reglesAVenir: [],
   avanceManquante: null,
+  avanceAuSeuil: null,
 };
 const LE_30 = new Date("2026-09-30T08:00:00Z");
 const SITE = "https://ip12-alpha.vercel.app";
@@ -893,11 +894,98 @@ verifier(
   "une balise saisie dans une note s'affiche, elle ne s'execute pas",
 );
 
+/* ------------------------------ l'avance tenue ne declenche que le preavis */
+
+/*
+ * LE CAS DE BLA.
+ *
+ * Tenu a trois mois d'avance, il recevait chaque 10 un « rappel de regime »,
+ * meme confortablement au-dessus du minimum. Le bureau a tranche : rien tant
+ * qu'il a plus que le minimum, un preavis des qu'il n'en a plus que le minimum,
+ * la mesure disciplinaire une fois en defaut.
+ */
+const LE_10 = new Date("2026-10-10T08:00:00Z");
+const LE_7 = new Date("2026-10-07T08:00:00Z");
+const regleAvance = {
+  id: "ra", membreId: "b", membreNom: "BLA", nature: "avance_min", valeur: 3,
+  debut: "2026-10-10", fin: null, note: null, actif: true,
+};
+const aJourDeTout = {
+  ...bourama,
+  arrieres: [],
+  echeanceDuJour: null,
+  dette: { nb: 0, montant: 0, nbRetard: 0, montantRetard: 0 },
+  nonInscrites: { nb: 0, montant: 0, mois: [] },
+};
+const blaConfortable = { ...aJourDeTout, regles: [regleAvance] };
+verifier(
+  !doitRecevoir(blaConfortable, LE_10),
+  "au-dessus du minimum, l'avance tenue ne vaut aucun courrier, meme le 10",
+);
+verifier(!doitRecevoir(blaConfortable, LE_7), "ni le 7");
+
+const auMinimum = {
+  membreId: "b", mois: 3, montantExige: 15000, avanceDetenue: 15000,
+  respectee: true, auSeuil: true, pourMaintenir: 5000, fin: null,
+};
+const blaAuSeuil = { ...blaConfortable, avanceAuSeuil: auMinimum };
+verifier(doitRecevoir(blaAuSeuil, LE_10), "au minimum, le preavis part");
+verifier(doitRecevoir(blaAuSeuil, LE_7), "des le 7 : il a jusqu'a l'echeance pour verser");
+verifier(
+  sujetRelance(blaAuSeuil, "2026-10-01", LE_10) === "IP12 — votre avance obligatoire arrive au minimum",
+  "l'objet dit un avertissement, non un retard",
+);
+const textePreavis = lettre(blaAuSeuil, LE_10);
+verifier(
+  /VOTRE AVANCE OBLIGATOIRE ARRIVE AU MINIMUM/.test(textePreavis),
+  "le preavis a son bloc",
+);
+verifier(
+  /Versez au moins 5 000 FCFA pour la maintenir\./.test(textePreavis),
+  "et chiffre ce qu'il faut verser, plutot que de laisser faire le calcul",
+);
+verifier(!/MESURE DISCIPLINAIRE/.test(textePreavis), "l'obligation est tenue : aucune mesure");
+verifier(
+  !/VOTRE REGIME PARTICULIER/.test(textePreavis),
+  "l'avance a son bloc : elle n'est pas repetee sous le regime particulier",
+);
+verifier(
+  !/ce courrier ne vous reclame rien/.test(textePreavis),
+  "un preavis n'est pas un courrier « a jour de tout » : il demande un versement",
+);
+verifier(
+  /COMMENT ENREGISTRER VOTRE COTISATION/.test(textePreavis),
+  "il doit verser : le mode d'emploi l'accompagne",
+);
+
+// La mesure disciplinaire reste ce qu'elle etait, aux trois passages.
+const blaEnDefaut = {
+  ...blaConfortable,
+  avanceManquante: { ...auMinimum, avanceDetenue: 10000, respectee: false, auSeuil: false },
+};
+verifier(doitRecevoir(blaEnDefaut, LE_7), "en defaut, il est ecrit des le 7");
+
+/*
+ * Les autres regles gardent leur rappel mensuel : le bureau n'a tranche que
+ * pour l'avance. Une cotisation particuliere ou des penalites majorees,
+ * jamais rappelees, tomberaient sans explication.
+ */
+const sousTarif = {
+  ...aJourDeTout,
+  regles: [{ ...regleAvance, id: "rc", nature: "cotisation", valeur: 10000 }],
+};
+verifier(doitRecevoir(sousTarif, LE_10), "une cotisation particuliere garde son rappel du 10");
+verifier(!doitRecevoir(sousTarif, LE_7), "mais un seul par mois");
+verifier(
+  doitRecevoir({ ...blaConfortable, regles: [regleAvance, sousTarif.regles[0]] }, LE_10),
+  "une avance tenue n'efface pas le rappel d'une autre regle",
+);
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 console.log(
   `OK - ${controles} controles du courrier de relance : objet, seuil R5, ` +
     "dettes de penalites et leur somme, liste des mois, R2, mode d'emploi des cotisations " +
     "et des penalites, mesures disciplinaires, regime particulier, mesure a venir, " +
-    "notes collees, ordre de reglement des mois, mise en forme et rendu HTML",
+    "notes collees, ordre de reglement des mois, preavis d'avance, mise en forme et rendu HTML",
 );

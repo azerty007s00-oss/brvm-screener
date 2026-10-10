@@ -47,6 +47,42 @@ export function cotisationsARegler(
   return { total: ouverts.reduce((t, c) => t + c.manque, 0), mois: ouverts.map((c) => c.mois) };
 }
 
+/**
+ * Ou en est l'avance obligatoire d'un membre.
+ *
+ * TROIS ETATS, ET NON PLUS DEUX. L'obligation etait tenue ou non, et le membre
+ * qui la tenait recevait pourtant chaque 10 un rappel de son regime, meme
+ * confortablement au-dessus du minimum. Le bureau a tranche : rien tant qu'il
+ * a plus que le minimum ; un preavis des qu'il n'en a plus que le minimum --
+ * l'echeance suivante consomme un mois d'avance, et sans nouveau versement il
+ * passerait dessous ; la mesure disciplinaire une fois en defaut.
+ *
+ * `pourMaintenir` est ce qu'il doit verser pour rester au minimum apres la
+ * prochaine echeance : le courrier le chiffre, plutot que de lui laisser
+ * faire le calcul.
+ */
+export function etatAvance(
+  avanceDetenue: number,
+  moisExiges: number,
+  cotisation: number,
+): {
+  montantExige: number;
+  respectee: boolean;
+  auSeuil: boolean;
+  manque: number;
+  pourMaintenir: number;
+} {
+  const montantExige = moisExiges * cotisation;
+  const respectee = avanceDetenue >= montantExige;
+  return {
+    montantExige,
+    respectee,
+    auSeuil: respectee && avanceDetenue < montantExige + cotisation,
+    manque: Math.max(0, montantExige - avanceDetenue),
+    pourMaintenir: Math.max(0, montantExige + cotisation - avanceDetenue),
+  };
+}
+
 /** Ce que chaque mois porte deja, rejets exclus. */
 export function montantsParMois(versements: VersementConnu[]): Map<string, number> {
   const porte = new Map<string, number>();

@@ -112,6 +112,7 @@ export async function avertirLeBureau(
       motifs.push(`${fcfa(d.nonInscrites.montant)} d'art. 9 a porter au registre`);
     }
     if (d.avanceManquante) motifs.push("avance obligatoire non tenue");
+    if (d.avanceAuSeuil) motifs.push("preavis : avance obligatoire au minimum");
     lignes.push(`  ${d.situation.nom} — ${motifs.join(", ")}`);
   }
 
