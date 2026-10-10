@@ -324,7 +324,8 @@ verifier(
  * payait ses penalites n'avait rien a toucher.
  */
 verifier(
-  texteBourama.includes("COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE"),
+  texteBourama.includes("choisissez ce que vous reglez") &&
+    texteBourama.includes("une cotisation ou une penalite"),
   "des que le courrier reclame des penalites, il doit dire comment les declarer",
 );
 verifier(
@@ -333,15 +334,16 @@ verifier(
 );
 const sansDette = { ...bourama, dette: { nb: 0, montant: 0, nbRetard: 0, montantRetard: 0 } };
 verifier(
-  !lettre(sansDette).includes("COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE"),
-  "sans penalite reclamee, ce chemin n'a pas a encombrer le courrier",
+  !lettre(sansDette).includes("une penalite") &&
+    lettre(sansDette).includes("COMMENT ENREGISTRER VOTRE COTISATION"),
+  "sans penalite reclamee, le choix de la penalite n'a pas a encombrer le courrier",
 );
 /*
  * La migration qui cree la table s'execute a la main : entre la mise en ligne et
  * ce geste, le courrier ne doit pas envoyer chercher un bouton absent.
  */
 verifier(
-  !lettreSansCircuit().includes("Declarer un reglement"),
+  !/choisissez ce que vous reglez|choisissez « une penalite »/.test(lettreSansCircuit()),
   "circuit absent : le courrier ne doit pas donner une consigne qui ne mene nulle part",
 );
 verifier(
@@ -695,7 +697,7 @@ verifier(
   "qui ne doit aucune cotisation n'a que faire du mode d'emploi des versements",
 );
 verifier(
-  /COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE/.test(textePenalites),
+  /COMMENT ENREGISTRER LE REGLEMENT DE VOS PENALITES/.test(textePenalites),
   "en revanche le chemin des penalites, lui, le concerne",
 );
 /*
@@ -703,21 +705,32 @@ verifier(
  * personne ne lui a dit d'ouvrir le site ni ou toucher.
  */
 verifier(
-  /1\. Ouvrez https/.test(textePenalites) && /2\. Touchez « Penalites »/.test(textePenalites),
-  "seul, le chemin des penalites doit commencer par ouvrir le site",
+  /1\. Ouvrez https/.test(textePenalites) &&
+    /2\. Touchez « Versements »/.test(textePenalites) &&
+    /choisissez « une penalite »/.test(textePenalites),
+  "seul, le chemin des penalites part de Versements et nomme le choix a faire",
 );
+/*
+ * UN SEUL CHEMIN, UN SEUL MODE D'EMPLOI. Le courrier en portait deux, dix
+ * lignes a qui devait cotisation et penalite, parce que les deux se
+ * declaraient sur deux pages.
+ */
 verifier(
-  /Le chemin n'est pas le meme/.test(texteBourama) &&
-    !/2\. Touchez « Penalites »/.test(texteBourama),
-  "accompagne du bloc des cotisations, il ne repete pas les deux premieres etapes",
+  (texteBourama.match(/COMMENT ENREGISTRER/g) ?? []).length === 1 &&
+    (texteBourama.match(/1\. Ouvrez/g) ?? []).length === 1,
+  "qui doit les deux lit un seul mode d'emploi, non deux",
 );
 /*
  * Mais il doit quand meme dire OU : le membre vient d'etre envoye sur
  * « Versements », et le bouton n'y est pas.
  */
 verifier(
-  /1\. Touchez « Penalites », puis « Declarer un reglement »/.test(texteBourama),
-  "la premiere etape doit nommer la page, sans quoi on cherche le bouton",
+  /Si un meme transfert couvre les\s+deux, declarez chacun a part\./.test(texteBourama),
+  "un transfert qui paie les deux se declare en deux fois, et le courrier le dit",
+);
+verifier(
+  /Une penalite se regle entiere, de la plus ancienne a la plus recente\./.test(texteBourama),
+  "la regle d'imputation des penalites est dite, comme celle des cotisations",
 );
 
 /* --- l'objet, lu par dix personnes ------------------------------------- */

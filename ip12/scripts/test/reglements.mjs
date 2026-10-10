@@ -275,9 +275,14 @@ const AUJOURDHUI = new Date().toISOString().slice(0, 10);
 
 const ligne = nouvellePenalite(15);
 session.acteur = membre;
+/*
+ * Le membre ne choisit plus la ligne : il declare un montant, qui s'impute de
+ * la plus ancienne a la plus recente, en unites entieres. 2 000 FCFA font ici
+ * quatre penalites de 500 sur la seule ligne due.
+ */
 let r = await actions.declarerReglementPenalite(
   {},
-  formulaire({ penaliteId: ligne, quantite: 4, datePaiement: AUJOURDHUI, mode: "mobile_money" }),
+  formulaire({ montant: 2000, datePaiement: AUJOURDHUI, mode: "mobile_money" }),
 );
 verifier(r.ok, `la declaration doit passer : ${r.erreur ?? ""}`);
 
@@ -300,33 +305,38 @@ egal(lire(`select status from penalty_settlements where penalty_id='${ligne}';`)
 
 r = await actions.declarerReglementPenalite(
   {},
-  formulaire({ penaliteId: ligne, quantite: 2, datePaiement: AUJOURDHUI, mode: "especes" }),
+  formulaire({ montant: 1000, datePaiement: AUJOURDHUI, mode: "especes" }),
 );
-verifier(!r.ok && /deja en attente/.test(r.erreur ?? ""),
-  "une seconde declaration sur la meme ligne doit etre refusee en clair");
+verifier(!r.ok && /deja une declaration en attente/.test(r.erreur ?? ""),
+  "une ligne deja declaree est enjambee, et s'il n'en reste pas d'autre le refus le dit");
 
 /* ------------------------------------- personne ne declare pour un autre */
 
-const ligneAutre = nouvellePenalite(1, 500, tresorier.id);
 r = await actions.declarerReglementPenalite(
   {},
-  formulaire({ penaliteId: ligneAutre, quantite: 1, datePaiement: AUJOURDHUI, mode: "especes" }),
+  formulaire({ membreId: tresorier.id, montant: 500, datePaiement: AUJOURDHUI, mode: "especes" }),
 );
-verifier(!r.ok && /vos propres penalites/.test(r.erreur ?? ""),
+verifier(!r.ok && /que pour soi/.test(r.erreur ?? ""),
   "un membre ne doit pas pouvoir declarer le reglement d'un autre");
 
 /* ----------------------------------------- ni une quantite hors de la ligne */
 
 const ligneCourte = nouvellePenalite(2);
+/*
+ * La premiere ligne porte une attente et est enjambee ; la seconde ne compte
+ * que deux penalites. 1 500 n'y entrent pas : 1 000 seulement s'imputent, et
+ * la difference serait encaissee sans etre portee nulle part.
+ */
 r = await actions.declarerReglementPenalite(
   {},
-  formulaire({ penaliteId: ligneCourte, quantite: 3, datePaiement: AUJOURDHUI, mode: "especes" }),
+  formulaire({ montant: 1500, datePaiement: AUJOURDHUI, mode: "especes" }),
 );
-verifier(!r.ok, "declarer plus que ce que porte la ligne doit etre refuse");
+verifier(!r.ok && /se regle entiere/.test(r.erreur ?? ""),
+  "declarer plus que ce qui peut s'imputer doit etre refuse, en nommant la part declarable");
 
 r = await actions.declarerReglementPenalite(
   {},
-  formulaire({ penaliteId: ligneCourte, quantite: 1, datePaiement: "2099-01-01", mode: "especes" }),
+  formulaire({ montant: 500, datePaiement: "2099-01-01", mode: "especes" }),
 );
 verifier(!r.ok && /futur/.test(r.erreur ?? ""), "une date de paiement future doit etre refusee");
 
@@ -368,7 +378,7 @@ verifier(!r.ok, "une declaration deja examinee ne doit pas pouvoir etre validee 
 const sienne = nouvellePenalite(1, 500, tresorier.id);
 r = await actions.declarerReglementPenalite(
   {},
-  formulaire({ penaliteId: sienne, quantite: 1, datePaiement: AUJOURDHUI, mode: "especes" }),
+  formulaire({ montant: 500, datePaiement: AUJOURDHUI, mode: "especes" }),
 );
 verifier(r.ok, `le tresorier doit pouvoir declarer pour lui-meme : ${r.erreur ?? ""}`);
 const laSienne = lire(`select id from penalty_settlements where penalty_id='${sienne}';`);
@@ -380,12 +390,20 @@ egal(lire(`select status from penalties where id='${sienne}';`), "due",
 
 /* ========================================================= 4. le refus */
 
+/*
+ * Onze penalites restent sur la ligne d'origine, et deux sur la ligne courte,
+ * constatees le meme jour. La premiere inscrite passe la premiere : 5 500
+ * soldent les onze de la ligne d'origine, et seulement elles.
+ */
 session.acteur = membre;
 r = await actions.declarerReglementPenalite(
   {},
-  formulaire({ penaliteId: ligne, datePaiement: AUJOURDHUI, mode: "virement" }),
+  formulaire({ montant: 5500, datePaiement: AUJOURDHUI, mode: "virement" }),
 );
 verifier(r.ok, `declarer le solde entier doit passer : ${r.erreur ?? ""}`);
+egal(lire(`select count(*) from penalty_settlements
+           where penalty_id='${ligneCourte}' and status='en_attente';`), "0",
+  "a date de constat egale, la premiere inscrite est reglee la premiere");
 const aRefuser = lire(`select id from penalty_settlements
                        where penalty_id='${ligne}' and status='en_attente';`);
 session.acteur = tresorier;
@@ -403,7 +421,7 @@ egal(lire(`select review_note from penalty_settlements where id='${aRefuser}';`)
 session.acteur = membre;
 r = await actions.declarerReglementPenalite(
   {},
-  formulaire({ penaliteId: ligne, datePaiement: AUJOURDHUI, mode: "virement" }),
+  formulaire({ montant: 5500, datePaiement: AUJOURDHUI, mode: "virement" }),
 );
 verifier(r.ok, "une ligne examinee doit pouvoir etre declaree a nouveau");
 

@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
-import { situationsClub, synthese } from "@/lib/queries";
+import {
+  listerMouvementsCaisse,
+  reglementsPenalite,
+  situationsClub,
+  synthese,
+} from "@/lib/queries";
+import { STATUT_CAISSE, STATUT_REGLEMENT } from "@/lib/valeurs";
 import { couleurSigne, dureeEnClair, pourcent } from "@/lib/perf";
 import { CLUB, REGLES, dateCourte, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
 import { Carte, CarteEtat, EnTeteEcran, ValeurChiffree, Vide } from "@/components/ui";
@@ -90,6 +96,27 @@ export default async function TableauDeBord() {
   const maSituation = situations.find((x) => x.membreId === membre.id);
   const retardataires = situations.filter((x) => x.nbMoisRetard > 0);
   const estBureau = membre.role === "president" || membre.role === "tresorier";
+
+  /*
+   * LES TROIS FILES DU TRESORIER, ET NON UNE SEULE.
+   *
+   * « A traiter » ne comptait que les versements a valider. Les reglements de
+   * penalite et les mouvements de caisse attendaient chacun sur leur page, et
+   * l'ecran qui se veut la synthese du necessaire n'en disait rien -- d'autant
+   * plus genant que les penalites se declarent desormais depuis les
+   * versements, et atterrissent dans une file que ce bloc ne voyait pas.
+   *
+   * Lues pour le seul bureau, et sans jamais faire tomber la page : la table
+   * des reglements peut manquer tant que sa migration n'a pas tourne.
+   */
+  const [reglementsEnAttente, mouvementsEnAttente] = estBureau
+    ? await Promise.all([
+        reglementsPenalite({ statut: STATUT_REGLEMENT.enAttente }).catch(() => []),
+        listerMouvementsCaisse()
+          .then((m) => m.filter((x) => x.statut === STATUT_CAISSE.enAttente))
+          .catch(() => []),
+      ])
+    : [[], []];
 
   const maFenetre = maSituation?.cellules.slice(-14) ?? [];
   const moisCourant = debutMois();
@@ -290,7 +317,11 @@ export default async function TableauDeBord() {
             </Carte>
           )}
 
-          {estBureau && (s.enAttenteValidation > 0 || retardataires.length > 0) && (
+          {estBureau &&
+            (s.enAttenteValidation > 0 ||
+              reglementsEnAttente.length > 0 ||
+              mouvementsEnAttente.length > 0 ||
+              retardataires.length > 0) && (
             <Carte titre="A traiter">
               <ul>
                 {s.enAttenteValidation > 0 && (
@@ -299,6 +330,22 @@ export default async function TableauDeBord() {
                     titre={`Versement${s.enAttenteValidation > 1 ? "s" : ""} a valider`}
                     detail="Declares par les membres, en attente de votre visa"
                     href="/versements"
+                  />
+                )}
+                {reglementsEnAttente.length > 0 && (
+                  <LigneATraiter
+                    compte={reglementsEnAttente.length}
+                    titre={`Reglement${reglementsEnAttente.length > 1 ? "s" : ""} de penalite a valider`}
+                    detail={[...new Set(reglementsEnAttente.map((r) => r.membre_nom))].join(", ")}
+                    href="/penalites"
+                  />
+                )}
+                {mouvementsEnAttente.length > 0 && (
+                  <LigneATraiter
+                    compte={mouvementsEnAttente.length}
+                    titre={`Mouvement${mouvementsEnAttente.length > 1 ? "s" : ""} de caisse a valider`}
+                    detail="Saisis, en attente de votre visa"
+                    href="/caisse"
                   />
                 )}
                 {retardataires.length > 0 && (

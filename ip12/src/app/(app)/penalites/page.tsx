@@ -16,27 +16,24 @@ import {
   rouvrirPenalite,
   constaterPenalitesAbsence,
   constaterPenalitesRetard,
-  declarerReglementPenalite,
   reglerPenalite,
   rejeterReglementPenalite,
   validerReglementPenalite,
 } from "@/app/actions/penalites";
 import { dejaAuRegistre, issueR5, tranchesAbsence } from "@/lib/penalites";
 import { EFFET, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
-import {
-  KIND_PENALITE, MODES_AFFICHES, STATUT_PENALITE, STATUT_REGLEMENT, libelleMode,
-} from "@/lib/valeurs";
+import { KIND_PENALITE, STATUT_PENALITE, STATUT_REGLEMENT, libelleMode } from "@/lib/valeurs";
 import {
   Champ,
   ChampCache,
   FormulaireAction,
   Selection,
 } from "@/components/formulaires";
-import { ChampJustificatif } from "@/components/justificatif";
 import { justificatifsParLot } from "@/lib/justificatifs";
 import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
 import { ChampMenu, MenuLigne } from "@/components/menu-ligne";
+import { LienBouton } from "@/components/boutons";
 import {
   EcranInitialisation,
   estTableAbsente,
@@ -448,56 +445,28 @@ export default async function PagePenalites() {
       )}
 
       {/*
-       * DECLARER LE REGLEMENT D'UNE PENALITE.
+       * LE REGLEMENT SE DECLARE AILLEURS, ET C'EST VOULU.
        *
-       * La relance reclame des penalites, et le mode d'emploi qui la suit ne
-       * savait expliquer que la declaration d'une cotisation -- « le mois
-       * couvert », qu'une penalite n'a pas. Le membre qui payait par mobile
-       * money n'avait donc rien a toucher : il ecrivait au groupe, et le
-       * tresorier saisissait a sa place.
+       * Cette page portait son propre formulaire, ou le membre choisissait la
+       * ligne qu'il reglait. C'etait permettre de solder une penalite recente
+       * en laissant une plus ancienne ouverte -- ce que le club a exclu pour
+       * les cotisations comme pour les penalites. Le reglement se declare
+       * desormais depuis Versements, par un montant, et s'impute de la plus
+       * ancienne a la plus recente : un seul chemin, une seule regle.
        *
-       * La penalite ne bouge pas pour autant : elle reste due jusqu'a la
-       * validation, et la phrase le dit, sans quoi la relance du lendemain
-       * passerait pour une erreur du site.
+       * Cette page reste le registre : ce qui est du, ce qui a ete declare, ce
+       * que le tresorier valide.
        */}
       {circuitPret && mesLignesDues.length > 0 && (
         <div className="sans-impression">
-          <Panneau
-            libelle="Declarer un reglement"
-            titre="Declarer le reglement d'une penalite"
-            introduction="Votre declaration part au tresorier, qui verifie l'encaissement. La penalite reste due jusqu'a sa validation : la relance continuera de la reclamer d'ici la, et ce n'est pas une erreur."
-          >
-            <FormulaireAction action={declarerReglementPenalite} libelle="Declarer">
-              <Selection
-                nom="penaliteId"
-                libelle="Penalite reglee"
-                options={mesLignesDues.map((p) => ({
-                  valeur: p.id,
-                  libelle:
-                    `${LIBELLE_NATURE[p.nature] ?? p.nature} du ${dateCourte(p.date_constat)} — ` +
-                    `${fcfa(p.montant)}${p.quantite > 1 ? ` (${p.quantite} × ${fcfa(p.montant_unitaire)})` : ""}`,
-                }))}
-              />
-              <Champ
-                nom="quantite"
-                libelle="Nombre regle (facultatif)"
-                type="number"
-                min={1}
-                requis={false}
-                aide="Vide : la ligne entiere. Une ligne peut porter plusieurs penalites, et se regler par parties."
-              />
-              <Champ
-                nom="datePaiement"
-                libelle="Date du paiement"
-                type="date"
-                valeur={new Date().toISOString().slice(0, 10)}
-              />
-              <Selection nom="mode" libelle="Mode" options={MODES_AFFICHES} />
-              <Champ nom="reference" libelle="Reference du paiement (facultatif)" requis={false} />
-              <Champ nom="note" libelle="Note (facultatif)" requis={false} />
-              <ChampJustificatif />
-            </FormulaireAction>
-          </Panneau>
+          <Carte titre="Regler vos penalites">
+            <p className="mb-4 text-[13px]" style={{ color: "var(--ink-2)" }}>
+              Le reglement se declare depuis Versements : choisissez « une penalite », puis
+              indiquez le montant verse. Il solde vos penalites de la plus ancienne a la plus
+              recente, et part au tresorier, qui le valide.
+            </p>
+            <LienBouton href="/versements">Declarer un reglement</LienBouton>
+          </Carte>
         </div>
       )}
 

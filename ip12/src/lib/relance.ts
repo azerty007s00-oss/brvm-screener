@@ -922,111 +922,94 @@ export function texteRelance(
     arrieres.length > 0 ||
     avanceManquante !== null ||
     Boolean(avanceAuSeuil);
-  if (siteUrl && doitUneCotisation) {
+  /*
+   * UN SEUL MODE D'EMPLOI, PARCE QU'IL N'Y A PLUS QU'UN CHEMIN.
+   *
+   * Le courrier en portait deux -- la cotisation, la penalite --, dix lignes
+   * a qui devait les deux, parce que les deux se declaraient sur deux pages.
+   * Les penalites se declarent desormais depuis Versements, en choisissant
+   * « une penalite » : le chemin est le meme, seuls changent le choix a faire
+   * au formulaire et la regle d'imputation.
+   *
+   * La partie penalites reste suspendue au circuit : tant que la migration n'a
+   * pas cree la table, le courrier ne doit pas envoyer chercher un choix qui ne
+   * mene nulle part.
+   */
+  const doitUnePenalite = dette.nb > 0 && circuitReglements;
+  if (siteUrl && (doitUneCotisation || doitUnePenalite)) {
+    const lesDeux = doitUneCotisation && doitUnePenalite;
     lignes.push(
       "",
-      "COMMENT ENREGISTRER VOTRE COTISATION",
+      lesDeux
+        ? "COMMENT ENREGISTRER VOS REGLEMENTS"
+        : doitUnePenalite
+          ? "COMMENT ENREGISTRER LE REGLEMENT DE VOS PENALITES"
+          : "COMMENT ENREGISTRER VOTRE COTISATION",
       `  1. Ouvrez ${siteUrl} et connectez-vous.`,
       /*
        * Le tiroir a disparu avec la refonte : la navigation est en bas de
-       * l'ecran sur telephone, dans une colonne a gauche sur ordinateur. Le
-       * courrier decrivait encore le menu d'avant -- et un membre qui suit une
-       * consigne fausse ecrit au groupe, ce que ces cinq lignes servent
-       * justement a eviter.
+       * l'ecran sur telephone, dans une colonne a gauche sur ordinateur.
        */
       "  2. Touchez « Versements » : dans la barre du bas sur telephone,",
       "     dans la colonne de gauche sur ordinateur.",
-      "  3. Ouvrez « Declarer un versement » et indiquez le montant verse,",
-      "     la date et le moyen de paiement.",
-      /*
-       * LE MOIS NE SE SAISIT PLUS, IL S'ANNONCE.
-       *
-       * Le courrier disait « indiquez le mois couvert ». Le formulaire ne le
-       * demande plus : les mois se reglent du plus ancien au plus recent, donc
-       * le mois impute est determine, et le montant verse dit le reste. Decrire
-       * un champ qui n'existe pas enverrait le membre chercher ce qu'il ne
-       * trouvera pas -- et un membre qui ne trouve pas ecrit au groupe, ce que
-       * ces cinq lignes servent a eviter.
-       *
-       * `arrieres` exclut le mois courant et reste dans l'ordre : son premier
-       * element est bien le mois sur lequel l'argent ira d'abord.
-       */
-      ...(arrieres.length > 0
+      ...(lesDeux
         ? [
-            `     Votre versement s'impute sur ${moisLong(arrieres[0])}, le plus ancien`,
+            "  3. Ouvrez « Declarer un versement », choisissez ce que vous reglez —",
+            "     une cotisation ou une penalite —, puis indiquez le montant verse,",
+            "     la date et le moyen de paiement. Si un meme transfert couvre les",
+            "     deux, declarez chacun a part.",
+          ]
+        : doitUnePenalite
+          ? [
+              "  3. Ouvrez « Declarer un versement », choisissez « une penalite »,",
+              "     puis indiquez le montant verse, la date et le moyen de paiement.",
+            ]
+          : [
+              "  3. Ouvrez « Declarer un versement » et indiquez le montant verse,",
+              "     la date et le moyen de paiement.",
+            ]),
+      /*
+       * LE MOIS NE SE SAISIT PLUS, IL S'ANNONCE. Les mois se reglent du plus
+       * ancien au plus recent : le courrier nomme celui sur lequel l'argent
+       * ira d'abord, sans quoi le membre croirait regler le mois courant.
+       * `arrieres` exclut le mois courant et reste dans l'ordre.
+       */
+      ...(doitUneCotisation && arrieres.length > 0
+        ? [
+            `     ${lesDeux ? "Une cotisation" : "Votre versement"} s'impute sur ` +
+              `${moisLong(arrieres[0])}, le plus ancien`,
             "     mois ouvert, puis sur les suivants s'il le depasse.",
           ]
         : []),
+      ...(doitUnePenalite
+        ? ["     Une penalite se regle entiere, de la plus ancienne a la plus recente."]
+        : []),
       "  4. Joignez la capture de votre transfert : elle epargne une question.",
-      "  5. Le tresorier valide, et votre mois se marque d'une coche.",
-      "",
-      /*
-       * UN PARAGRAPHE, UNE LIGNE.
-       *
-       * Celui-ci etait coupe a la main tous les soixante-quinze caracteres,
-       * quand les autres sont ecrits d'un trait. Sur un telephone, une ligne
-       * deja coupee se recoupe : on lit quatre lignes longues alternant avec
-       * quatre moignons. Les listes et les etapes numerotees gardent leurs
-       * retours -- la, ils portent du sens.
-       */
-      "Le tresorier est prevenu par courriel des que vous declarez, le president et " +
-        "vous-meme en copie : inutile d'ecrire en plus, et vous gardez la trace de ce " +
-        "que vous avez declare. Tant que la validation n'a pas eu lieu, votre " +
-        "declaration reste visible de tous, marquee « en attente » : rien ne se perd.",
+      doitUneCotisation
+        ? "  5. Le tresorier valide, et votre mois se marque d'une coche."
+        : "  5. Le tresorier verifie l'encaissement et solde la penalite.",
     );
+    if (doitUneCotisation) {
+      lignes.push(
+        "",
+        /*
+         * UN PARAGRAPHE, UNE LIGNE. Coupe a la main, il se recoupait sur un
+         * telephone : quatre lignes longues alternant avec quatre moignons.
+         */
+        "Le tresorier est prevenu par courriel des que vous declarez, le president et " +
+          "vous-meme en copie : inutile d'ecrire en plus, et vous gardez la trace de ce " +
+          "que vous avez declare. Tant que la validation n'a pas eu lieu, votre " +
+          "declaration reste visible de tous, marquee « en attente » : rien ne se perd.",
+      );
+    }
+    if (doitUnePenalite) {
+      lignes.push(
+        "",
+        "La penalite reste due jusqu'a cette verification : si une relance vous " +
+          "parvient entre-temps et la reclame encore, ce n'est pas une erreur.",
+      );
+    }
   }
-
-  /*
-   * LE CHEMIN DES PENALITES, HORS DE CELUI DES COTISATIONS.
-   *
-   * Il etait imbrique dans le bloc ci-dessus : un membre a jour de ses
-   * versements et ne devant que des penalites n'en lisait donc rien, alors que
-   * c'est le seul qui le concerne. Les cinq etapes des cotisations, elles, ne
-   * valent que pour une cotisation -- elles demandent « le mois couvert »,
-   * qu'une penalite n'a pas.
-   */
-  if (siteUrl && dette.nb > 0 && circuitReglements) {
-    /*
-     * Les deux premieres etapes -- ouvrir le site, trouver la page -- ne se
-     * repetent pas quand le bloc des cotisations vient de les donner.
-     */
-    /*
-     * Deux jeux d'etapes, ecrits chacun en entier. Les numeroter par decalage
-     * avait coute la seule indication qui compte quand on vient d'etre envoye
-     * sur « Versements » : ou se trouve le bouton.
-     */
-    const etapes = doitUneCotisation
-      ? [
-          "  Le chemin n'est pas le meme : une penalite ne couvre aucun mois.",
-          "  1. Touchez « Penalites », puis « Declarer un reglement ».",
-          "  2. Choisissez la penalite reglee, la date et le moyen de paiement,",
-          "     et joignez la capture de votre transfert.",
-          "  3. Le tresorier verifie l'encaissement et solde la ligne.",
-        ]
-      : [
-          `  1. Ouvrez ${siteUrl} et connectez-vous.`,
-          "  2. Touchez « Penalites » : dans la barre du bas sur telephone,",
-          "     dans la colonne de gauche sur ordinateur.",
-          "  3. Ouvrez « Declarer un reglement » et choisissez la penalite reglee,",
-          "     la date et le moyen de paiement.",
-          "  4. Joignez la capture de votre transfert.",
-          "  5. Le tresorier verifie l'encaissement et solde la ligne.",
-        ];
-    lignes.push(
-      "",
-      "COMMENT ENREGISTRER LE REGLEMENT D'UNE PENALITE",
-      ...etapes,
-      "",
-      "La penalite reste due jusqu'a cette verification : si une relance vous " +
-        "parvient entre-temps et la reclame encore, ce n'est pas une erreur.",
-    );
-  }
-  /*
-   * La date distingue les passages du mois. Trois courriers au texte identique
-   * sont replies par la messagerie sous « messages precedents masques », et le
-   * dernier parait vide -- l'ecueil deja rencontre sur les courriers d'essai.
-   */
-  /* « Relance » contredirait « ce courrier ne vous reclame rien ». */
   lignes.push(
     "",
     `${rienDu ? "Courrier" : "Relance"} du ${dateCourte(maintenant.toISOString().slice(0, 10))}.`,

@@ -204,6 +204,8 @@ export type LignePenalite = {
   quantite: number;
   montantUnitaire: number;
   dateConstat: string;
+  /** Instant d'inscription au registre : departage deux penalites du meme jour. */
+  inscrite?: string;
 };
 
 export type ImputationPenalite = { penaliteId: string; quantite: number; montant: number };
@@ -238,8 +240,18 @@ export function imputerPenalites(
   let reste = Math.round(montant);
   if (!Number.isFinite(reste) || reste <= 0) return [];
 
+  /*
+   * Deux penalites peuvent porter la meme date de constat : la reprise
+   * d'arriere en ecrit plusieurs d'un coup, et le tresorier en saisit parfois
+   * deux le meme jour. Les departager par identifiant -- un tirage aleatoire --
+   * reglerait l'une ou l'autre au hasard. La premiere inscrite passe la
+   * premiere ; l'identifiant ne departage plus que des egalites parfaites.
+   */
   const ordonnees = [...lignes].sort(
-    (a, b) => a.dateConstat.localeCompare(b.dateConstat) || a.id.localeCompare(b.id),
+    (a, b) =>
+      a.dateConstat.localeCompare(b.dateConstat) ||
+      (a.inscrite ?? "").localeCompare(b.inscrite ?? "") ||
+      a.id.localeCompare(b.id),
   );
 
   const imputations: ImputationPenalite[] = [];

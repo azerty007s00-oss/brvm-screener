@@ -7,10 +7,10 @@ import { exigerDroit, exigerMembre } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { avertirReglementPenalite } from "@/lib/avis";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
-import { porterRetardsAuRegistre, resumeConstat } from "@/lib/constat";
-import { absencesParMembre, reglagesEffectifs } from "@/lib/queries";
-import { dateCourte } from "@/lib/settings";
-import { tranchesAbsence } from "@/lib/penalites";
+import { penalitesNonInscrites, porterRetardsAuRegistre, resumeConstat } from "@/lib/constat";
+import { absencesParMembre, reglagesEffectifs, situationsClub } from "@/lib/queries";
+import { accorde, dateCourte, fcfa } from "@/lib/settings";
+import { imputerPenalites, tranchesAbsence, type ImputationPenalite } from "@/lib/penalites";
 import {
   KIND_PENALITE, METHODE, STATUT_PENALITE, STATUT_REGLEMENT, libelleMode,
 } from "@/lib/valeurs";
@@ -382,116 +382,223 @@ export async function rouvrirPenalite(
 /* ------------------------------------ reglement declare par le membre */
 
 /**
- * Le membre declare avoir regle une penalite.
+ * Le reglement de penalites declare par un membre.
  *
- * POURQUOI CE CHEMIN EXISTE. La relance reclamait des penalites, et le mode
- * d'emploi qui la suit n'expliquait que la declaration d'une cotisation : « le
- * mois couvert », qu'une penalite n'a pas. Un membre qui payait ses penalites par
- * mobile money n'avait donc rien a toucher -- il ecrivait au groupe, et le
- * tresorier saisissait a sa place, precisement ce que l'outil devait supprimer.
+ * UN SEUL CHEMIN, UNE SEULE REGLE. Le membre choisissait la ligne qu'il
+ * reglait, sur la page Penalites. C'etait permettre de solder une penalite
+ * recente en laissant une plus ancienne ouverte -- exactement ce que le club a
+ * exclu pour les cotisations. Il indique desormais un montant, depuis le
+ * formulaire des versements, et ce montant eteint les penalites de la plus
+ * ancienne a la plus recente. Cette action est la seule a ecrire une
+ * declaration : le formulaire des versements l'appelle, et elle refuserait
+ * pareillement un appel venu d'ailleurs.
  *
- * LA PENALITE NE BOUGE PAS. La declaration s'inscrit a cote ; la ligne reste
- * `due`. Rien n'entre en caisse sur parole, la dette annoncee par la relance ne
- * baisse pas, et le seuil de R5 tient. C'est la validation du tresorier, et elle
- * seule, qui solde -- par le meme code que son constat direct.
+ * MEME REGLE, AUTRE UNITE. Une penalite ne se coupe pas : le registre la
+ * compte en unites entieres. Un versement n'en solde donc qu'un nombre entier,
+ * et ce qui ne suffit pas a en payer une de plus est refuse en nommant le
+ * montant declarable -- jamais encaisse sans etre porte nulle part.
+ *
+ * La declaration ne touche pas la dette : elle attend le tresorier, qui seul
+ * solde. Une ligne portant deja une declaration en attente est enjambee.
  */
 export async function declarerReglementPenalite(
   _precedent: EtatFormulaire,
   donnees: FormData,
 ): Promise<EtatFormulaire> {
   const auteur = await exigerMembre();
-  const penaliteId = String(donnees.get("penaliteId") ?? "");
-  const saisie = String(donnees.get("quantite") ?? "").trim();
-  const datePaiement = String(donnees.get("datePaiement") ?? "").slice(0, 10);
+  const membreCible = String(donnees.get("membreId") ?? auteur.id);
+  const montant = Math.round(Number(donnees.get("montant") ?? 0));
+  /* Le formulaire des versements nomme le champ « dateVersement ». */
+  const datePaiement = String(
+    donnees.get("datePaiement") ?? donnees.get("dateVersement") ?? "",
+  ).slice(0, 10);
   const mode = String(donnees.get("mode") ?? METHODE.mobileMoney);
   const reference = String(donnees.get("reference") ?? "").trim() || null;
   const note = String(donnees.get("note") ?? "").trim() || null;
 
-  if (!penaliteId) return { ok: false, erreur: "Penalite introuvable." };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePaiement)) return { ok: false, erreur: "Date de paiement invalide." };
-  if (!METHODES.includes(mode)) return { ok: false, erreur: "Mode de paiement inconnu." };
+  /*
+   * CHACUN NE DECLARE QUE POUR LUI.
+   *
+   * Declarer pour un autre, puis valider sa propre declaration, viderait le
+   * controle de son sens. Le tresorier qui constate un encaissement de
+   * penalite le solde depuis la page Penalites, ou son geste vaut validation
+   * -- et se trace comme tel.
+   */
+  if (membreCible !== auteur.id) {
+    return {
+      ok: false,
+      erreur:
+        "Une penalite ne se declare que pour soi. Pour un autre membre, soldez-la " +
+        "depuis la page Penalites : votre saisie y vaut validation.",
+    };
+  }
+  if (!Number.isFinite(montant) || montant <= 0) {
+    return { ok: false, erreur: "Indiquez le montant verse." };
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(datePaiement)) {
+    return { ok: false, erreur: "Date de paiement invalide." };
+  }
   if (datePaiement > new Date().toISOString().slice(0, 10)) {
     return { ok: false, erreur: "La date de paiement est dans le futur." };
   }
+  if (!METHODES.includes(mode)) return { ok: false, erreur: "Mode de paiement inconnu." };
 
   const sql = db();
-  const lignes = (await sql`
-    select member_id, quantity, unit_amount
-    from penalties where id = ${penaliteId}::uuid and status = ${STATUT_PENALITE.due}
-  `) as { member_id: string; quantity: number; unit_amount: number | string }[];
-  if (lignes.length === 0) {
-    return { ok: false, erreur: "Cette penalite n'est plus due : rouvrez la page." };
-  }
-  const ligne = lignes[0];
+  const [lignesDues, lignesEnAttente] = await Promise.all([
+    sql`
+      select id, quantity, unit_amount,
+             to_char(incurred_on, 'YYYY-MM-DD') as date_constat,
+             to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US') as inscrite
+      from penalties
+      where member_id = ${auteur.id}::uuid and status = ${STATUT_PENALITE.due}
+    `,
+    sql`
+      select penalty_id from penalty_settlements
+      where member_id = ${auteur.id}::uuid and status = ${STATUT_REGLEMENT.enAttente}
+    `,
+  ]);
+  const dues = lignesDues as {
+    id: string;
+    quantity: number | string;
+    unit_amount: number | string;
+    date_constat: string;
+    inscrite: string;
+  }[];
+  const enAttente = lignesEnAttente as { penalty_id: string }[];
 
   /*
-   * Chacun ne declare que pour lui. Le tresorier et le president n'ont pas
-   * besoin de ce chemin : ils constatent directement, leur saisie valant
-   * validation -- et declarer pour un autre leur permettrait de valider ensuite
-   * leur propre declaration.
+   * UNE PENALITE NE SE REGLE PAS AVANT D'ETRE NEE.
+   *
+   * Elle nait du constat -- automatique a chaque relance -- ou de la main du
+   * president ou du tresorier. Entre deux relances, l'art. 9 en fait courir
+   * que le registre ne porte pas encore : le courrier les annonce, et repondre
+   * « vous n'avez aucune penalite due » a qui vient de les lire serait un
+   * dementi. On dit laquelle des deux situations est la sienne.
    */
-  if (String(ligne.member_id) !== auteur.id) {
-    return { ok: false, erreur: "Vous ne pouvez declarer que le reglement de vos propres penalites." };
-  }
+  const mienne = (await situationsClub()).find((x) => x.membreId === auteur.id);
+  const nonInscrites = mienne
+    ? (await penalitesNonInscrites([mienne]))?.get(auteur.id) ?? null
+    : null;
 
-  const restant = Number(ligne.quantity);
-  if (!Number.isInteger(restant) || restant < 1) {
-    return { ok: false, erreur: "Quantite de la penalite illisible : signalez-le au tresorier." };
-  }
-  const quantite = saisie === "" ? restant : Number(saisie);
-  if (!Number.isInteger(quantite) || quantite < 1 || quantite > restant) {
+  if (dues.length === 0) {
     return {
       ok: false,
-      erreur: `Indiquez un nombre entier entre 1 et ${restant} : c'est ce qui reste dû sur cette ligne.`,
+      erreur:
+        !nonInscrites || nonInscrites.nb === 0
+          ? "Vous n'avez aucune penalite due."
+          : nonInscrites.nb === 1
+            ? "Votre penalite n'est pas encore portee au registre : elle le sera au prochain " +
+              "constat, qui a lieu a chaque relance. Le tresorier peut aussi la porter des maintenant."
+            : `Vos ${nonInscrites.nb} penalites ne sont pas encore portees au registre : elles le ` +
+              "seront au prochain constat, qui a lieu a chaque relance. Le tresorier peut aussi " +
+              "les porter des maintenant.",
+    };
+  }
+
+  const dejaDeclarees = new Set(enAttente.map((r) => String(r.penalty_id)));
+  const imputations = imputerPenalites(
+    montant,
+    dues.map((d) => ({
+      id: String(d.id),
+      quantite: Number(d.quantity),
+      montantUnitaire: Number(d.unit_amount),
+      dateConstat: d.date_constat,
+      inscrite: d.inscrite,
+    })),
+    dejaDeclarees,
+  );
+  const impute = imputations.reduce((t, i) => t + i.montant, 0);
+
+  if (imputations.length === 0) {
+    /*
+     * Deux causes, et le membre doit savoir laquelle : un montant trop petit
+     * pour une seule penalite, ou des lignes qui attendent toutes le
+     * tresorier. Un meme message le laisserait reessayer en vain.
+     */
+    const libres = dues.filter((d) => !dejaDeclarees.has(String(d.id)));
+    if (libres.length === 0) {
+      return {
+        ok: false,
+        erreur:
+          "Toutes vos penalites portent deja une declaration en attente : le tresorier " +
+          "doit d'abord se prononcer.",
+      };
+    }
+    const plusPetite = Math.min(...libres.map((d) => Number(d.unit_amount)));
+    return {
+      ok: false,
+      erreur: `Ce montant ne couvre aucune penalite entiere : la plus petite est de ${fcfa(plusPetite)}.`,
+    };
+  }
+  if (impute < montant) {
+    return {
+      ok: false,
+      erreur:
+        `Une penalite se regle entiere : ce versement en couvre ${fcfa(impute)}. ` +
+        `Declarez ${fcfa(impute)}` +
+        (nonInscrites && nonInscrites.nb > 0
+          ? `. Le reste de votre dette — ${nonInscrites.nb} ${accorde(nonInscrites.nb, "penalite")} — ` +
+            "n'est pas encore porte au registre, et ne peut donc pas etre regle pour l'instant."
+          : ", et gardez la difference pour une cotisation."),
     };
   }
 
   const lot = randomUUID();
-  try {
-    await sql`
-      insert into penalty_settlements
-        (penalty_id, member_id, quantity, paid_on, method, reference, note, batch_id,
-         status, declared_by)
-      values (${penaliteId}::uuid, ${auteur.id}::uuid, ${quantite}, ${datePaiement}::date,
-              ${mode}, ${reference}, ${note}, ${lot}::uuid,
-              ${STATUT_REGLEMENT.enAttente}, ${auteur.id}::uuid)
-    `;
-  } catch (e) {
-    /*
-     * L'index unique n'accepte qu'une declaration en attente par ligne : deux
-     * declarations concurrentes feraient solder deux fois la meme quantite. Le
-     * refus se dit en clair plutot qu'en erreur de base.
-     */
-    if (/penalty_settlements_une_attente_idx/.test(String(e))) {
-      return {
-        ok: false,
-        erreur: "Une declaration est deja en attente sur cette penalite : le tresorier doit d'abord se prononcer.",
-      };
+  const posees: ImputationPenalite[] = [];
+  for (const i of imputations) {
+    try {
+      await sql`
+        insert into penalty_settlements
+          (penalty_id, member_id, quantity, paid_on, method, reference, note, batch_id,
+           status, declared_by)
+        values (${i.penaliteId}::uuid, ${auteur.id}::uuid, ${i.quantite},
+                ${datePaiement}::date, ${mode}, ${reference}, ${note}, ${lot}::uuid,
+                ${STATUT_REGLEMENT.enAttente}, ${auteur.id}::uuid)
+      `;
+      posees.push(i);
+    } catch (e) {
+      /*
+       * L'index unique n'accepte qu'une declaration en attente par ligne. Une
+       * declaration posee entre-temps sur l'une d'elles : on passe, sans
+       * perdre celles qui ont abouti.
+       */
+      if (/penalty_settlements_une_attente_idx/.test(String(e))) continue;
+      throw e;
     }
-    throw e;
+  }
+  if (posees.length === 0) {
+    return {
+      ok: false,
+      erreur:
+        "Une declaration vient d'etre posee sur ces penalites : rouvrez la page pour voir " +
+        "ou vous en etes.",
+    };
   }
 
+  const quantite = posees.reduce((t, i) => t + i.quantite, 0);
+  const total = posees.reduce((t, i) => t + i.montant, 0);
   const pieces = await enregistrerJustificatif(donnees, lot, auteur.id, auteur.id);
   await avertirReglementPenalite({
     auteurId: auteur.id,
     membreNom: auteur.nom,
     quantite,
-    montant: quantite * Number(ligne.unit_amount),
+    montant: total,
     avecJustificatif: pieces.joint,
   }).catch(() => 0);
 
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "declaration_reglement_penalite",
-    { entite: "penalty_settlements", id: penaliteId },
-    { quantite, montant: quantite * Number(ligne.unit_amount) },
+    { entite: "penalty_settlements", id: lot },
+    { imputations: posees, montantTotal: total },
   );
   revalidatePath("/", "layout");
   return {
     ok: true,
     message:
-      `Reglement de ${quantite} penalite(s) declare — en attente de validation par le tresorier. ` +
-      "La penalite reste due jusque-la.",
+      `Reglement de ${fcfa(total)} declare sur ${quantite} ${accorde(quantite, "penalite")}, ` +
+      "de la plus ancienne a la plus recente. En attente de validation par le tresorier : " +
+      "les penalites restent dues jusque-la.",
   };
 }
 

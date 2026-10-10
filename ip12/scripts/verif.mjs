@@ -1447,6 +1447,20 @@ assert.deepEqual(imputerPenalites(0, registre), [], "un montant nul n'impute rie
 assert.deepEqual(imputerPenalites(-1000, registre), [], "un montant negatif n'impute rien");
 
 /*
+ * Meme date de constat : la premiere inscrite passe la premiere. Departager
+ * par identifiant -- un tirage aleatoire -- reglerait l'une ou l'autre au
+ * hasard.
+ */
+assert.deepEqual(
+  imputerPenalites(500, [
+    { ...pen("zz", 1, 500, "2026-09-10"), inscrite: "2026-09-10T08:00:00.000001" },
+    { ...pen("aa", 1, 500, "2026-09-10"), inscrite: "2026-09-10T09:00:00.000001" },
+  ]),
+  [{ penaliteId: "zz", quantite: 1, montant: 500 }],
+  "a date egale, l'ordre d'inscription l'emporte sur l'identifiant",
+);
+
+/*
  * Un montant unitaire nul ferait boucler sans jamais consommer le versement :
  * la ligne est ecartee, et le tresorier la verra rester due.
  */
