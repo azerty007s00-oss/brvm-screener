@@ -179,7 +179,7 @@ export default async function TableauDeBord() {
       unite: s.valorisation ? "FCFA" : undefined,
     },
     {
-      libelle: "Performance annualisee",
+      libelle: "Performance annualisée",
       valeur: s.tri !== null ? pourcent(s.tri) : "--",
       encre: couleurSigne(s.tri),
     },

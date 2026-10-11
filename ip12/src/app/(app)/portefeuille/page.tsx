@@ -198,7 +198,7 @@ export default async function PagePortefeuille() {
                     : undefined,
               },
               {
-                libelle: "Performance annualisee",
+                libelle: "Performance annualisée",
                 valeur: s.tri !== null ? pourcent(s.tri) : "--",
                 encre: couleurSigne(s.tri),
                 contexte: s.triPeriode ? `TRI depuis le ${dateCourte(s.triPeriode.debut)}` : undefined,

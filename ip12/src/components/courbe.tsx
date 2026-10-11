@@ -533,7 +533,7 @@ export function CourbePortefeuille({
             fill="transparent"
             tabIndex={0}
             role="application"
-            aria-label="Parcourir les relevés : flèches, Début, Fin, Echap"
+            aria-label="Parcourir les relevés : flèches, Début, Fin, Échap"
             style={{ cursor: "crosshair", touchAction: "pan-y", outlineOffset: -2 }}
             onPointerMove={viser}
             onPointerDown={viser}

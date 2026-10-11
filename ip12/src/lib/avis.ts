@@ -366,7 +366,7 @@ export async function avertirAbsence(params: {
         `le club sanctionne par tranche de ${absencesParTranche}, non l'empêchement ponctuel.`,
     "",
     "Si votre absence était justifiée, signalez-le au secrétaire : il la passera en " +
-      "« excusé », et elle sortira du compte penalisable.",
+      "« excusé », et elle sortira du compte pénalisable.",
   ];
   const siteUrl = lienDuSite();
   if (siteUrl) lignes.push("", `Feuille de présence : ${siteUrl}/reunions`);
@@ -456,7 +456,7 @@ export async function avertirDemandeReinitialisation(params: {
   const lignes = [
     "Bonjour,",
     "",
-    `${params.nom} ne parvient plus à se connecter et demande la reinitialisation ` +
+    `${params.nom} ne parvient plus à se connecter et demande la réinitialisation ` +
       "de son mot de passe.",
     `Adresse du compte : ${params.email}`,
     "",
