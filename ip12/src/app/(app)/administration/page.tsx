@@ -671,7 +671,21 @@ export default async function PageAdministration() {
               <tbody>
                 {decomptes.map((d) => (
                   <tr key={d.membreId} className="border-t" style={{ borderColor: "var(--bordure)" }}>
-                    <td className="py-1.5">{d.nom}</td>
+                    <td className="py-1.5">
+                      {d.nom}
+                      {/*
+                        * La quote-part et les penalites se lisent sous le nom, non en
+                        * colonnes : les penalites sont deja retranchees de la part, et
+                        * une colonne de plus laisserait croire qu'on les soustrait
+                        * encore pour obtenir le net.
+                        */}
+                      <span className="block text-[11px]" style={{ color: "var(--discret)" }}>
+                        {(d.part * 100).toFixed(1).replace(".", ",")} % du capital
+                        {d.penalitesDeduites > 0
+                          ? ` · ${fcfa(d.penalitesDeduites)} de pénalités déduites`
+                          : ""}
+                      </span>
+                    </td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.valeurBrute)}</td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisVente)}</td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisTransfert)}</td>
