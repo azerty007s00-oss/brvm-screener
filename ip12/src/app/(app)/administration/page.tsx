@@ -58,6 +58,11 @@ function resumeDetails(details: unknown): string {
     .join(" · ");
 }
 
+/** Un taux dit comme on le lit : 0,014 donne « 1,4 % ». */
+function pourcentage(taux: number): string {
+  return `${(taux * 100).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`;
+}
+
 export default async function PageAdministration() {
   const membre = await exigerMembre();
   const transport = transportConfigure();
@@ -640,21 +645,25 @@ export default async function PageAdministration() {
         resume="Ce que chaque membre emporterait en partant aujourd'hui."
       >
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          L&apos;art. 20 rembourse la part au cours de cession, diminuée de{" "}
-          {(REGLES.fraisCession * 100).toFixed(0)} % de frais, et l&apos;art. 9 veut que les
-          pénalités dues restent acquises au club : elles se retranchent du versement. Le
-          remboursement intervient sous {REGLES.delaiRemboursementMois} mois (R5). Une exclusion
-          demande le vote des {(REGLES.majoriteExclusion * 100).toFixed(0)} %.
+          Le sortant paie les frais de sa sortie, et seulement ceux-là. Seule sa part
+          en actions coûte à vendre : {pourcentage(REGLES.fraisVenteActions)} de frais réels, au
+          barème de la SGI homologué par l&apos;AMF-UMOA. Le transfert vers son compte est
+          estimé à {pourcentage(REGLES.fraisTransfertSortie)} (art. 20), en attendant les frais
+          réels. Son avance est rendue au nominal, et ses pénalités dues restent acquises au
+          club (art. 9). Le remboursement intervient sous {REGLES.delaiRemboursementMois} mois
+          (R5). Hors exclusion de plein droit, une exclusion demande le vote des{" "}
+          {(REGLES.majoriteExclusion * 100).toFixed(0)} % (art. 20).
         </p>
 
         {decomptes.length > 0 && (
           <div className="defilement-x mb-4">
-            <table className="w-full min-w-[34rem] text-xs">
+            <table className="w-full min-w-[40rem] text-xs">
               <thead>
                 <tr style={{ color: "var(--discret)" }}>
                   <th className="py-1 text-left font-medium">Membre</th>
                   <th className="py-1 text-right font-medium">Part</th>
-                  <th className="py-1 text-right font-medium">Frais {(REGLES.fraisCession * 100).toFixed(0)} %</th>
+                  <th className="py-1 text-right font-medium">Vente actions {pourcentage(REGLES.fraisVenteActions)}</th>
+                  <th className="py-1 text-right font-medium">Transfert {pourcentage(REGLES.fraisTransfertSortie)}</th>
                   <th className="py-1 text-right font-medium">Avance</th>
                   <th className="py-1 text-right font-medium">Net</th>
                 </tr>
@@ -664,7 +673,8 @@ export default async function PageAdministration() {
                   <tr key={d.membreId} className="border-t" style={{ borderColor: "var(--bordure)" }}>
                     <td className="py-1.5">{d.nom}</td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.valeurBrute)}</td>
-                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisIndicatifs)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisVente)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisTransfert)}</td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.avance)}</td>
                     <td className="py-1.5 text-right font-medium tabular-nums">{fcfa(d.netIndicatif)}</td>
                   </tr>
@@ -672,11 +682,11 @@ export default async function PageAdministration() {
               </tbody>
             </table>
             <p className="mt-2 text-[11px]" style={{ color: "var(--discret)" }}>
-              Indicatif, sur l&apos;avoir connu du club (portefeuille et caisse). Les frais
-              réels de la SGI ne sont connus qu&apos;après coup : ces chiffres ouvrent la
-              discussion, ils ne la closent pas. L&apos;avance est rendue au nominal et
-              ne supporte donc aucun frais de cession ; les pénalités dues sont déjà
-              retranchées, leur déduction ayant lieu au calcul de la part.
+              Indicatif, sur l&apos;avoir connu du club (portefeuille et caisse) au dernier
+              relevé. La vente porte sur la quote-part du membre dans les actions du relevé ;
+              ses liquidités et son avance ne supportent aucun frais de vente. Le transfert
+              porte sur tout ce qui lui est viré. Les pénalités dues sont déjà retranchées,
+              leur déduction ayant lieu au calcul de la part.
             </p>
           </div>
         )}
@@ -728,7 +738,7 @@ export default async function PageAdministration() {
               libelle="Frais retenus (FCFA)"
               type="number"
               min={0}
-              aide={`${(REGLES.fraisCession * 100).toFixed(0)} % selon l'art. 20 ; saisir les frais réels s'ils différent.`}
+              aide={`Vente de sa part en actions et transfert, tels que le tableau ci-dessus les estime ; saisir les frais réels dès qu'ils sont connus.`}
             />
             <Champ
               nom="acquisAuClub"

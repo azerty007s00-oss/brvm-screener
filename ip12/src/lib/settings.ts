@@ -46,8 +46,18 @@ export const REGLES = {
   exclusionApresMois: 3,
   /** Art. 20 - majorite des 3/4 pour prononcer l'exclusion. */
   majoriteExclusion: 0.75,
-  /** Art. 20 - remboursement au cours de cession diminue de 2 % de frais. */
-  fraisCession: 0.02,
+  /**
+   * Art. 20 - 2 % de frais au remboursement. Le bureau les entend comme les frais
+   * de transfert ou de retrait vers le compte du sortant : indicatifs, remplaces
+   * par les frais reels des qu'ils sont connus.
+   */
+  fraisTransfertSortie: 0.02,
+  /**
+   * Frais reels de vente d'actions, bareme de la SGI homologue par l'AMF-UMOA le
+   * 22/07/2025 et verifie sur ses avis d'execution : BRVM et DC/BR 0,3 %,
+   * courtage 1 % HT, TAF 10 % du courtage, soit 1,4 % du montant vendu.
+   */
+  fraisVenteActions: 0.014,
   /** R5 - remboursement sous 4 mois en cas d'exclusion de plein droit. */
   delaiRemboursementMois: 4,
   /**

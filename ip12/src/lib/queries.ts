@@ -19,7 +19,7 @@ import {
   STATUT_VERSEMENT,
   SENS_TRANSFERT,
 } from "./valeurs";
-import { dietzModifie, dureeEnAnnees, repartirParts, tri, type Flux, type PartMembre } from "./perf";
+import { decompteSortie, dietzModifie, dureeEnAnnees, repartirParts, tri, type Flux, type PartMembre } from "./perf";
 
 /** bigint et numeric reviennent en chaine avec le pilote Postgres : on normalise. */
 const n = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
@@ -1026,8 +1026,12 @@ export type DecompteSortie = {
   avance: number;
   /** Valeur totale de ses droits, avance comprise, penalites deja deduites. */
   valeurBrute: number;
-  /** Art. 20 : 2 % retenus, sur la seule quote-part du portefeuille. */
-  fraisIndicatifs: number;
+  /** Sa quote-part des actions du dernier releve : la seule poche a vendre. */
+  pocheActions: number;
+  /** Frais reels de vente de cette poche, au bareme de la SGI. */
+  fraisVente: number;
+  /** Art. 20 : 2 % indicatifs de transfert vers son compte. */
+  fraisTransfert: number;
   /** Penalites deja retranchees de son capital, pour memoire. */
   penalitesDeduites: number;
   netIndicatif: number;
@@ -1049,13 +1053,12 @@ async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
     synthese(),
     penalitesDuesParMembre().catch(() => new Map<string, number>()),
   ]);
+  const actions = s.valorisation?.actions ?? 0;
   return s.parts.map((p) => {
-    /*
-     * Les frais de cession ne portent que sur la quote-part du portefeuille :
-     * l'avance est un depot rendu, non un titre cede.
-     */
-    const cessible = Math.max(0, p.valeur - p.avance);
-    const frais = Math.round(cessible * REGLES.fraisCession);
+    const d = decompteSortie(p, actions, {
+      venteActions: REGLES.fraisVenteActions,
+      transfert: REGLES.fraisTransfertSortie,
+    });
     return {
       membreId: p.membreId,
       nom: p.nom,
@@ -1063,9 +1066,11 @@ async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
       part: p.part,
       avance: p.avance,
       valeurBrute: p.valeur,
-      fraisIndicatifs: frais,
+      pocheActions: d.pocheActions,
+      fraisVente: d.fraisVente,
+      fraisTransfert: d.fraisTransfert,
       penalitesDeduites: dues.get(p.membreId) ?? 0,
-      netIndicatif: Math.max(0, p.valeur - frais),
+      netIndicatif: d.net,
     };
   });
 }

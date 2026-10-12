@@ -24,7 +24,7 @@ const assert = new Proxy(strict0, {
   },
 });
 
-const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent } = await import(
+const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie } = await import(
   "../.verif/perf.mjs"
 );
 const {
@@ -1618,6 +1618,39 @@ assert.equal(
   "un terme au 5 decembre laisse novembre seul a couvrir",
 );
 
+
+/* ------------------------------------------- sortie d'un membre : side pocket */
+
+{
+  /*
+   * Decision du bureau (octobre 2026) : seule la poche actions du sortant
+   * supporte les frais de vente, 1,4 % au bareme de la SGI ; le transfert, 2 %
+   * indicatifs, porte sur tout ce qui lui est vire.
+   */
+  const taux = { venteActions: 0.014, transfert: 0.02 };
+
+  // Part de 100 000 sans avance, dont 70 930 en actions.
+  const d = decompteSortie({ valeur: 100_000, avance: 0, part: 0.1 }, 709_300, taux);
+  assert.equal(d.pocheActions, 70_930);
+  assert.equal(d.fraisVente, 993, "1,4 % de la seule poche actions");
+  assert.equal(d.fraisTransfert, 1_980, "2 % de ce qui reste a virer");
+  assert.equal(d.net, 97_027);
+
+  // L'avance ne se vend pas : elle n'entre pas dans la poche actions, mais se vire.
+  const avecAvance = decompteSortie({ valeur: 115_000, avance: 15_000, part: 0.1 }, 709_300, taux);
+  assert.equal(avecAvance.fraisVente, 993, "l'avance ne supporte aucun frais de vente");
+  assert.equal(avecAvance.fraisTransfert, Math.round((115_000 - 993) * 0.02), "mais elle se transfere");
+
+  // Sans releve, rien a vendre : seul le transfert reste.
+  const sansReleve = decompteSortie({ valeur: 50_000, avance: 0, part: 0.1 }, 0, taux);
+  assert.equal(sansReleve.fraisVente, 0);
+  assert.equal(sansReleve.net, 49_000);
+
+  // La poche actions ne depasse jamais la part elle-meme.
+  const borne = decompteSortie({ valeur: 10_000, avance: 0, part: 0.5 }, 1_000_000, taux);
+  assert.equal(borne.pocheActions, 10_000);
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -1625,5 +1658,5 @@ console.log(
     + "net place et gain de gestion, reperes de l'abscisse, "
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
-    + "total des cotisations a regler, avance obligatoire",
+    + "total des cotisations a regler, avance obligatoire, sortie en side pocket",
 );

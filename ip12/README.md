@@ -181,7 +181,7 @@ Phoenix Capital Management.
 | Art. 12 | Droits de vote proportionnels aux parts, calculees sur le capital echu |
 | Ouverture du compte-titres | 17/07/2023 — les virements antérieurs portent la date de sortie de caisse ; le TRI les ramène à ce jour, le capital n'étant pas encore placé |
 | Art. 14 | Le président transmet les ordres de bourse, le trésorier par délégation |
-| Art. 20 | Exclusion à 3 mois de retard, majorité des 3/4, remboursement moins 2 % de frais |
+| Art. 20 | Exclusion à 3 mois de retard, majorité des 3/4. Au remboursement, le sortant paie les frais réels de vente de sa part en actions (1,4 %, side pocket) et le transfert vers son compte (2 % indicatifs) |
 | R1 | Souscription à la bourse en ligne, mandat au bureau ; ordres transmis par le président ou le trésorier par délégation (art. 14) |
 | R2 | Droit de vote suspendu dès 30 jours de retard, jusqu'à régularisation |
 | R3 | Déclaration du retard au groupe obligatoire à l'entrée dans le 2e mois |

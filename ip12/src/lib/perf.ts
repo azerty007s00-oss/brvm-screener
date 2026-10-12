@@ -179,6 +179,42 @@ export function repartirParts(
     .sort((a, b) => b.valeur - a.valeur);
 }
 
+/**
+ * Ce que le sortant emporte, frais deduits : le principe de la side pocket.
+ *
+ * DECISION DU BUREAU (octobre 2026). Les frais de la sortie sont a la charge du
+ * sortant, et seulement ceux que sa sortie provoque. Sa part est isolee et
+ * decoupee comme l'avoir du club :
+ *
+ * - sa poche en actions, c'est-a-dire sa quote-part des actions du releve, est la
+ *   seule qui coute a vendre. Elle supporte les frais reels de vente, 1,4 % au
+ *   bareme de la SGI. Ils sont dus que le club vende ou non : garder ces titres
+ *   en payant le sortant sur les liquidites ferait economiser aux autres des
+ *   frais d'achat, sans que le sortant ait rien a y gagner ;
+ * - ses liquidites et son avance ne coutent rien a degager ;
+ * - le transfert vers son compte, enfin, porte sur tout ce qui lui est vire :
+ *   2 % indicatifs (art. 20), remplaces par les frais reels quand ils sont connus.
+ *
+ * Les penalites dues ne se retranchent pas ici : elles ont deja quitte son
+ * capital en diluant sa part (voir `repartirParts`).
+ */
+export function decompteSortie(
+  p: { valeur: number; avance: number; part: number },
+  actionsDuClub: number,
+  taux: { venteActions: number; transfert: number },
+): { pocheActions: number; fraisVente: number; fraisTransfert: number; net: number } {
+  const cessible = Math.max(0, p.valeur - p.avance);
+  const pocheActions = Math.min(cessible, Math.round(p.part * Math.max(0, actionsDuClub)));
+  const fraisVente = Math.round(pocheActions * taux.venteActions);
+  const fraisTransfert = Math.round(Math.max(0, p.valeur - fraisVente) * taux.transfert);
+  return {
+    pocheActions,
+    fraisVente,
+    fraisTransfert,
+    net: Math.max(0, p.valeur - fraisVente - fraisTransfert),
+  };
+}
+
 /** Une duree en annees, dite comme on la dit : « 2 ans et 3 mois ». */
 export function dureeEnClair(annees: number): string {
   const mois = Math.max(0, Math.round(annees * 12));

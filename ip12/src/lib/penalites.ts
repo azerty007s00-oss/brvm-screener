@@ -631,8 +631,8 @@ export function issueR5(
       voie: "exclusion_plein_droit",
       texte:
         `Retard de ${nbMoisRetard} mois non déclaré au groupe (R3 non respectée) : ` +
-        `exclusion de plein droit, remboursement sous ${REGLES.delaiRemboursementMois} mois ` +
-        `au cours de cession diminué de ${(REGLES.fraisCession * 100).toFixed(0)} % de frais.`,
+        `exclusion de plein droit, remboursement sous ${REGLES.delaiRemboursementMois} mois, ` +
+        "diminué des frais de vente de sa part en actions et des frais de transfert.",
     };
   }
   if (planDejaUtilise) {
