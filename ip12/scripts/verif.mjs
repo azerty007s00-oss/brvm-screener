@@ -24,7 +24,7 @@ const assert = new Proxy(strict0, {
   },
 });
 
-const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie } = await import(
+const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie, etatCaisse } = await import(
   "../.verif/perf.mjs"
 );
 const {
@@ -1649,6 +1649,45 @@ assert.equal(
   // La poche actions ne depasse jamais la part elle-meme.
   const borne = decompteSortie({ valeur: 10_000, avance: 0, part: 0.5 }, 1_000_000, taux);
   assert.equal(borne.pocheActions, 10_000);
+
+  // La penalite qui court sans etre inscrite se retranche avant tout frais.
+  const courue = decompteSortie(
+    { valeur: 100_000, avance: 0, part: 0.1, penalitesEnCours: 1_000 },
+    709_300,
+    taux,
+  );
+  assert.equal(courue.valeur, 99_000, "la part se dit penalites deduites");
+  assert.equal(courue.fraisTransfert, Math.round((99_000 - 993) * 0.02));
+  assert.equal(courue.net, 99_000 - 993 - Math.round((99_000 - 993) * 0.02));
+}
+
+/* ------------------------------------------- la caisse, avant et apres une sortie */
+
+{
+  const base = {
+    penalitesEncaissees: 10_000, recettes: 0, apportsNets: 300_000,
+  };
+  // Avant : Bourama est actif, il a verse 250 000 sur 1 000 000.
+  const avant = etatCaisse({
+    ...base, versementsActifs: 1_000_000, versementsSortis: 0, depenses: 20_000,
+    netDuAuxSortis: 0, remboursementsSortants: 0,
+  });
+  // Sortie enregistree : ses versements passent chez les sortis, 335 911 lui sont dus.
+  const enregistree = etatCaisse({
+    ...base, versementsActifs: 750_000, versementsSortis: 250_000, depenses: 20_000,
+    netDuAuxSortis: 335_911, remboursementsSortants: 0,
+  });
+  assert.equal(enregistree.totalEnCaisse, avant.totalEnCaisse, "rien n'est sorti de la caisse");
+  assert.equal(enregistree.duAuxSortants, 335_911);
+  assert.equal(enregistree.aPartager, avant.aPartager - 335_911, "son du ne se partage plus");
+  // Paye : la depense de remboursement solde la dette, une seule fois.
+  const paye = etatCaisse({
+    ...base, versementsActifs: 750_000, versementsSortis: 250_000, depenses: 20_000 + 335_911,
+    netDuAuxSortis: 335_911, remboursementsSortants: 335_911,
+  });
+  assert.equal(paye.totalEnCaisse, avant.totalEnCaisse - 335_911, "la caisse baisse au paiement");
+  assert.equal(paye.duAuxSortants, 0);
+  assert.equal(paye.aPartager, enregistree.aPartager, "le paiement ne touche plus aux parts");
 }
 
 console.log(
@@ -1658,5 +1697,5 @@ console.log(
     + "net place et gain de gestion, reperes de l'abscisse, "
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
-    + "total des cotisations a regler, avance obligatoire, sortie en side pocket",
+    + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties",
 );

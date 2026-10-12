@@ -435,7 +435,10 @@ export async function enregistrerSortie(
   revalidatePath("/", "layout");
   return {
     ok: true,
-    message: `Sortie enregistrée : ${fcfa(net)} à verser à ${membre[0].full_name}, sous ${REGLES.delaiRemboursementMois} mois (R5).`,
+    message:
+      `Sortie enregistrée : ${fcfa(net)} à verser à ${membre[0].full_name}, sous ` +
+      `${REGLES.delaiRemboursementMois} mois (R5). Le jour du paiement, enregistrez-le dans ` +
+      "Caisse en dépense « Remboursement d'un membre sorti ».",
   };
 }
 

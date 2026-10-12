@@ -13,13 +13,23 @@ import {
   type SituationMembre,
 } from "./penalites";
 import {
+  CATEGORIE_REMBOURSEMENT_SORTIE,
   KIND_PENALITE,
   REGLE_MEMBRE,
   STATUT_PENALITE,
   STATUT_VERSEMENT,
   SENS_TRANSFERT,
 } from "./valeurs";
-import { decompteSortie, dietzModifie, dureeEnAnnees, repartirParts, tri, type Flux, type PartMembre } from "./perf";
+import {
+  decompteSortie,
+  dietzModifie,
+  dureeEnAnnees,
+  etatCaisse,
+  repartirParts,
+  tri,
+  type Flux,
+  type PartMembre,
+} from "./perf";
 
 /** bigint et numeric reviennent en chaine avec le pilote Postgres : on normalise. */
 const n = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
@@ -1017,6 +1027,40 @@ async function listerSortiesBrut(): Promise<Sortie[]> {
   }
 }
 
+/**
+ * Les membres sortis : ce qu'ils ont verse, et ce que le club leur doit.
+ *
+ * LEUR ARGENT EST ENTRE EN CAISSE, ET Y RESTE JUSQU'A LEUR PAIEMENT.
+ *
+ * La caisse se calculait sur les versements des seuls membres actifs. Une sortie
+ * desactive le membre : sa caisse aurait perdu d'un coup tout ce qu'il avait
+ * verse, alors que rien n'en etait sorti -- et son paiement, saisi ensuite en
+ * depense, l'aurait retranche une seconde fois.
+ *
+ * Ne comptent que les membres dont la sortie est enregistree : une fiche
+ * desactivee sans sortie (un doublon, un essai) reste hors de la caisse, comme
+ * avant.
+ */
+async function membresSortisBrut(): Promise<{ membreId: string; verse: number; net: number }[]> {
+  try {
+    const sql = db();
+    const rows = await sql`
+      select m.id,
+             (select coalesce(sum(e.net_paid), 0) from member_exits e
+               where e.member_id = m.id)::bigint as net,
+             (select coalesce(sum(c.amount), 0) from contributions c
+               where c.member_id = m.id and c.status = ${STATUT_VERSEMENT.valide})::bigint as verse
+      from members m
+      where not m.is_active
+        and exists (select 1 from member_exits e where e.member_id = m.id)
+    `;
+    return rows.map((r) => ({ membreId: String(r.id), verse: n(r.verse), net: n(r.net) }));
+  } catch {
+    // La table des sorties peut manquer d'une base a l'autre.
+    return [];
+  }
+}
+
 export type DecompteSortie = {
   membreId: string;
   nom: string;
@@ -1024,7 +1068,7 @@ export type DecompteSortie = {
   part: number;
   /** Avance en depot : rendue au nominal, sans frais -- ce n'est pas une cession. */
   avance: number;
-  /** Valeur totale de ses droits, avance comprise, penalites deja deduites. */
+  /** Valeur totale de ses droits, avance comprise, toutes penalites deduites. */
   valeurBrute: number;
   /** Sa quote-part des actions du dernier releve : la seule poche a vendre. */
   pocheActions: number;
@@ -1032,8 +1076,10 @@ export type DecompteSortie = {
   fraisVente: number;
   /** Art. 20 : 2 % indicatifs de transfert vers son compte. */
   fraisTransfert: number;
-  /** Penalites deja retranchees de son capital, pour memoire. */
+  /** Penalites retranchees : celles du registre et celles qui courent. */
   penalitesDeduites: number;
+  /** Dont celles qui courent sans etre encore inscrites au registre. */
+  penalitesEnCours: number;
   netIndicatif: number;
 };
 
@@ -1048,14 +1094,18 @@ export type DecompteSortie = {
  * du membre en diluant sa part. Les deduire une seconde fois les compterait deux
  * fois.
  */
-async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
+async function decomptesSortieBrut(
+  /** Penalites qui courent sans etre inscrites, par membre (lib/constat). */
+  enCours: Map<string, number> = new Map(),
+): Promise<DecompteSortie[]> {
   const [s, dues] = await Promise.all([
     synthese(),
     penalitesDuesParMembre().catch(() => new Map<string, number>()),
   ]);
   const actions = s.valorisation?.actions ?? 0;
   return s.parts.map((p) => {
-    const d = decompteSortie(p, actions, {
+    const courues = enCours.get(p.membreId) ?? 0;
+    const d = decompteSortie({ ...p, penalitesEnCours: courues }, actions, {
       venteActions: REGLES.fraisVenteActions,
       transfert: REGLES.fraisTransfertSortie,
     });
@@ -1065,11 +1115,12 @@ async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
       verse: p.verse,
       part: p.part,
       avance: p.avance,
-      valeurBrute: p.valeur,
+      valeurBrute: d.valeur,
       pocheActions: d.pocheActions,
       fraisVente: d.fraisVente,
       fraisTransfert: d.fraisTransfert,
-      penalitesDeduites: dues.get(p.membreId) ?? 0,
+      penalitesDeduites: (dues.get(p.membreId) ?? 0) + courues,
+      penalitesEnCours: courues,
       netIndicatif: d.net,
     };
   });
@@ -1151,6 +1202,15 @@ export type Synthese = {
   valorisation: Valorisation | null;
   totalVerse: number;
   totalEnCaisse: number;
+  /** Versements des membres sortis : entres en caisse, ils y restent. */
+  versementsSortis: number;
+  /** Depenses « remboursement d'un membre sorti » deja payees. */
+  remboursementsSortants: number;
+  /**
+   * Ce que le club doit encore aux membres sortis. Encore en caisse, cet argent
+   * n'est plus a partager : il sort de l'avoir des l'enregistrement de la sortie.
+   */
+  duAuxSortants: number;
   totalApports: number;
   /** Penalites encaissees, recettes et depenses valides du journal de caisse. */
   penalitesEncaissees: number;
@@ -1180,7 +1240,7 @@ export type Synthese = {
 };
 
 async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
-  const [situations, apports, valos, enAttente, duesParMembre, encaissees, caisse] =
+  const [situations, apports, valos, enAttente, duesParMembre, encaissees, caisse, sortis] =
     await Promise.all([
       situationsClub(aujourdhui),
       listerApports(),
@@ -1189,11 +1249,16 @@ async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
       penalitesDuesParMembre().catch(() => new Map<string, number>()),
       penalitesEncaissees(),
       listerMouvementsCaisse().catch(() => [] as MouvementCaisse[]),
+      membresSortisBrut(),
     ]);
 
   const valides = caisse.filter((m) => m.statut === "valide");
   const recettes = valides.filter((m) => m.sens === "recette").reduce((t, m) => t + m.montant, 0);
   const depenses = valides.filter((m) => m.sens === "depense").reduce((t, m) => t + m.montant, 0);
+  const remboursementsSortants = valides
+    .filter((m) => m.sens === "depense" && m.categorie === CATEGORIE_REMBOURSEMENT_SORTIE)
+    .reduce((t, m) => t + m.montant, 0);
+  const versementsSortis = sortis.reduce((t, x) => t + x.verse, 0);
 
   const valorisation = valos.at(-1) ?? null;
   const totalVerse = situations.reduce((s, m) => s + m.verse, 0);
@@ -1211,9 +1276,22 @@ async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
    * encaissees, recettes -- diminue des depenses et du net vire au compte-titres.
    * Un retrait depuis la SGI revient en caisse, d'ou le net.
    */
-  const totalEnCaisse = totalVerse + encaissees + recettes - depenses - totalApports;
+  const { totalEnCaisse, duAuxSortants, aPartager } = etatCaisse({
+    versementsActifs: totalVerse,
+    versementsSortis,
+    penalitesEncaissees: encaissees,
+    recettes,
+    depenses,
+    apportsNets: totalApports,
+    netDuAuxSortis: sortis.reduce((t, x) => t + x.net, 0),
+    remboursementsSortants,
+  });
 
-  const avoirDuClub = (valorisation?.total ?? 0) + totalEnCaisse;
+  /*
+   * Ce qui est du a un membre sorti dort encore en caisse, mais n'appartient plus
+   * aux autres : le partager gonflerait leurs parts jusqu'au jour du paiement.
+   */
+  const avoirDuClub = (valorisation?.total ?? 0) + aPartager;
 
   const parts = repartirParts(
     situations.map((s) => ({
@@ -1293,6 +1371,9 @@ async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
     valorisation,
     totalVerse,
     totalEnCaisse,
+    versementsSortis,
+    remboursementsSortants,
+    duAuxSortants,
     totalApports,
     penalitesEncaissees: encaissees,
     recettes,

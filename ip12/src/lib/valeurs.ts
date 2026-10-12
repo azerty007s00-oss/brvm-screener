@@ -103,8 +103,15 @@ export const CATEGORIES_DEPENSE = [
   { valeur: "frais_bancaires", libelle: "Frais bancaires" },
   { valeur: "frais_sgi", libelle: "Frais SGI" },
   { valeur: "regularisation", libelle: "Régularisation de caisse" },
+  { valeur: "remboursement_sortie", libelle: "Remboursement d'un membre sorti" },
   { valeur: "autre", libelle: "Autre dépense" },
 ];
+
+/**
+ * Le paiement d'un membre sorti. Il solde ce que le club lui doit depuis
+ * l'enregistrement de sa sortie : voir `duAuxSortants` dans la synthese.
+ */
+export const CATEGORIE_REMBOURSEMENT_SORTIE = "remboursement_sortie";
 
 export const CATEGORIES_RECETTE = [
   { valeur: "versements_acquis", libelle: "Versements acquis au club (art. 18)" },

@@ -182,13 +182,18 @@ export default async function PageCaisse() {
 
       <Carte titre="Composition du solde">
         <ul className="space-y-1 text-sm">
-          {[
-            ["Cotisations validées", s.totalVerse, "+"],
-            ["Pénalités encaissées", s.penalitesEncaissees, "+"],
-            ["Recettes exceptionnelles", s.recettes, "+"],
-            ["Dépenses de fonctionnement", s.depenses, "−"],
-            ["Net viré au compte-titres", s.totalApports, "−"],
-          ].map(([libelle, montant, signe]) => (
+          {(
+            [
+              ["Cotisations validées", s.totalVerse + s.versementsSortis, "+"],
+              ["Pénalités encaissées", s.penalitesEncaissees, "+"],
+              ["Recettes exceptionnelles", s.recettes, "+"],
+              ["Dépenses de fonctionnement", s.depenses - s.remboursementsSortants, "−"],
+              ["Remboursements de membres sortis", s.remboursementsSortants, "−"],
+              ["Net viré au compte-titres", s.totalApports, "−"],
+            ] as const
+          )
+            .filter(([libelle, montant]) => montant !== 0 || libelle !== "Remboursements de membres sortis")
+            .map(([libelle, montant, signe]) => (
             <li key={String(libelle)} className="flex justify-between gap-2">
               <span style={{ color: "var(--discret)" }}>
                 {signe as string} {libelle as string}
@@ -207,6 +212,12 @@ export default async function PageCaisse() {
               {fcfa(s.totalEnCaisse)}
             </span>
           </li>
+          {s.duAuxSortants > 0 && (
+            <li className="flex justify-between gap-2">
+              <span style={{ color: "var(--discret)" }}>dont à verser aux membres sortis</span>
+              <span className="whitespace-nowrap tabular-nums">{fcfa(s.duAuxSortants)}</span>
+            </li>
+          )}
         </ul>
         <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
           Un retrait depuis la SGI revient en caisse : le net viré tient compte

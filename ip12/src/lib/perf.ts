@@ -195,24 +195,59 @@ export function repartirParts(
  * - le transfert vers son compte, enfin, porte sur tout ce qui lui est vire :
  *   2 % indicatifs (art. 20), remplaces par les frais reels quand ils sont connus.
  *
- * Les penalites dues ne se retranchent pas ici : elles ont deja quitte son
- * capital en diluant sa part (voir `repartirParts`).
+ * Les penalites inscrites au registre ne se retranchent pas ici : elles ont deja
+ * quitte son capital en diluant sa part (voir `repartirParts`). Celles qui
+ * courent sans etre inscrites encore -- l'art. 9 sur un mois impaye depuis le
+ * dernier constat -- n'ont rien dilue : elles se retranchent ici, en entier,
+ * avant tout frais. Le constat les inscrira plus tard ; la sortie, elle, n'attend
+ * pas.
  */
 export function decompteSortie(
-  p: { valeur: number; avance: number; part: number },
+  p: { valeur: number; avance: number; part: number; penalitesEnCours?: number },
   actionsDuClub: number,
   taux: { venteActions: number; transfert: number },
-): { pocheActions: number; fraisVente: number; fraisTransfert: number; net: number } {
-  const cessible = Math.max(0, p.valeur - p.avance);
+): { valeur: number; pocheActions: number; fraisVente: number; fraisTransfert: number; net: number } {
+  const valeur = Math.max(0, p.valeur - Math.max(0, p.penalitesEnCours ?? 0));
+  const cessible = Math.max(0, valeur - p.avance);
   const pocheActions = Math.min(cessible, Math.round(p.part * Math.max(0, actionsDuClub)));
   const fraisVente = Math.round(pocheActions * taux.venteActions);
-  const fraisTransfert = Math.round(Math.max(0, p.valeur - fraisVente) * taux.transfert);
+  const fraisTransfert = Math.round(Math.max(0, valeur - fraisVente) * taux.transfert);
   return {
+    valeur,
     pocheActions,
     fraisVente,
     fraisTransfert,
-    net: Math.max(0, p.valeur - fraisVente - fraisTransfert),
+    net: Math.max(0, valeur - fraisVente - fraisTransfert),
   };
+}
+
+/**
+ * La caisse, et ce qu'il en reste a partager.
+ *
+ * Un membre sorti a verse : cet argent est entre et reste en caisse jusqu'a son
+ * paiement. Ce que le club lui doit n'est pourtant plus aux autres : il sort de
+ * l'avoir a partager des l'enregistrement de la sortie, et sort de la caisse le
+ * jour ou la depense « remboursement d'un membre sorti » est validee. Ni avant,
+ * ni deux fois.
+ */
+export function etatCaisse(e: {
+  versementsActifs: number;
+  versementsSortis: number;
+  penalitesEncaissees: number;
+  recettes: number;
+  /** Toutes les depenses validees, remboursements de sortants compris. */
+  depenses: number;
+  apportsNets: number;
+  /** Ce que les sorties enregistrees ont fixe a verser. */
+  netDuAuxSortis: number;
+  /** Les depenses « remboursement d'un membre sorti » validees. */
+  remboursementsSortants: number;
+}): { totalEnCaisse: number; duAuxSortants: number; aPartager: number } {
+  const totalEnCaisse =
+    e.versementsActifs + e.versementsSortis + e.penalitesEncaissees + e.recettes -
+    e.depenses - e.apportsNets;
+  const duAuxSortants = Math.max(0, e.netDuAuxSortis - e.remboursementsSortants);
+  return { totalEnCaisse, duAuxSortants, aPartager: totalEnCaisse - duAuxSortants };
 }
 
 /** Une duree en annees, dite comme on la dit : « 2 ans et 3 mois ». */

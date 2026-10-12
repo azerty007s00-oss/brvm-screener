@@ -6,7 +6,9 @@ import {
   reglagesEffectifs,
   reglesIndividuelles,
   situationsClub,
+  synthese,
 } from "@/lib/queries";
+import { penalitesNonInscrites } from "@/lib/constat";
 import { journalRecent } from "@/lib/journal";
 import { joignablesPour } from "@/lib/avis";
 import {
@@ -77,9 +79,9 @@ export default async function PageAdministration() {
     );
   }
 
-  let reglages, situations, journal, membres, regles, sorties, decomptes, avertissables;
+  let reglages, situations, journal, membres, regles, sorties, avertissables, synth;
   try {
-    [reglages, situations, journal, membres, regles, sorties, decomptes, avertissables] =
+    [reglages, situations, journal, membres, regles, sorties, avertissables, synth] =
       await Promise.all([
         reglagesEffectifs(),
         situationsClub(),
@@ -87,13 +89,22 @@ export default async function PageAdministration() {
         listerMembres(),
         reglesIndividuelles(true).catch(() => []),
         listerSorties(),
-        decomptesSortie().catch(() => []),
         joignablesPour("gererMembres").catch(() => []),
+        synthese(),
       ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
     throw e;
   }
+  /*
+   * Ce qui court sans etre inscrit au registre se deduit de la sortie, sans
+   * attendre le prochain constat. `null` si le registre resiste : on taira alors
+   * une penalite plutot que de la compter deux fois.
+   */
+  const courues = await penalitesNonInscrites(situations);
+  const decomptes = await decomptesSortie(
+    new Map([...(courues ?? new Map())].map(([id, c]) => [id, c.montant])),
+  ).catch(() => []);
 
   /*
    * Le journal garde la trace de chaque essai : on peut donc en afficher l'issue
@@ -684,6 +695,9 @@ export default async function PageAdministration() {
                         {d.penalitesDeduites > 0
                           ? ` · ${fcfa(d.penalitesDeduites)} de pénalités déduites`
                           : ""}
+                        {d.penalitesEnCours > 0
+                          ? `, dont ${fcfa(d.penalitesEnCours)} pas encore inscrites`
+                          : ""}
                       </span>
                     </td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.valeurBrute)}</td>
@@ -699,9 +713,19 @@ export default async function PageAdministration() {
               Indicatif, sur l&apos;avoir connu du club (portefeuille et caisse) au dernier
               relevé. La vente porte sur la quote-part du membre dans les actions du relevé ;
               ses liquidités et son avance ne supportent aucun frais de vente. Le transfert
-              porte sur tout ce qui lui est viré. Les pénalités dues sont déjà retranchées,
-              leur déduction ayant lieu au calcul de la part.
+              porte sur tout ce qui lui est viré. Toutes les pénalités sont déjà retranchées
+              de la part, y compris celles qui courent sans être encore inscrites au registre.
             </p>
+          </div>
+        )}
+
+        {synth.duAuxSortants > 0 && (
+          <div className="mb-3">
+            <Alerte ton="ambre">
+              Reste à verser aux membres sortis : {fcfa(synth.duAuxSortants)}. Le jour du
+              paiement, enregistrez-le dans Caisse comme dépense « Remboursement d&apos;un
+              membre sorti » : la dette sera soldée.
+            </Alerte>
           </div>
         )}
 
@@ -745,14 +769,14 @@ export default async function PageAdministration() {
               libelle="Valeur de la part (FCFA)"
               type="number"
               min={0}
-              aide="Au cours de cession. Le tableau ci-dessus en donne l'estimation au dernier relevé."
+              aide="Reprenez la colonne « Part » du tableau ci-dessus : toutes les pénalités y sont déjà déduites."
             />
             <Champ
               nom="frais"
               libelle="Frais retenus (FCFA)"
               type="number"
               min={0}
-              aide={`Vente de sa part en actions et transfert, tels que le tableau ci-dessus les estime ; saisir les frais réels dès qu'ils sont connus.`}
+              aide="« Vente actions » plus « Transfert » du tableau ci-dessus ; saisissez les frais réels dès qu'ils sont connus."
             />
             <Champ
               nom="acquisAuClub"
@@ -760,7 +784,7 @@ export default async function PageAdministration() {
               type="number"
               min={0}
               valeur={0}
-              aide="Art. 9 : les pénalités dues ne se remboursent pas."
+              aide="Laissez 0 si vous reprenez la part du tableau : ses pénalités y sont déjà déduites."
             />
             <Champ nom="note" libelle="Référence de la décision" requis={false} />
           </FormulaireAction>
