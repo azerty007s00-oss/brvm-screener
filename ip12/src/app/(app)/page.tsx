@@ -130,12 +130,12 @@ export default async function TableauDeBord() {
    * affichait donc 1 000 FCFA quand « Mon compte », le recapitulatif du bureau et
    * la relance en annoncaient 8 500.
    *
-   * La dette inscrite plus ce qui court : les deux sont dues, et `nonInscrites`
-   * ne retient que les mois absents du registre, donc rien n'est compte deux fois.
+   * La dette inscrite plus ce qui court : les deux sont dues, et la part du
+   * membre les porte deja reunies (lib/queries, synthese). Ce qui court ne sert
+   * ici qu'a defaut de part.
    */
   const detteDe = (membreId: string) =>
-    (s.parts.find((p) => p.membreId === membreId)?.dues ?? 0) +
-    (courues?.get(membreId)?.montant ?? 0);
+    s.parts.find((p) => p.membreId === membreId)?.dues ?? courues?.get(membreId)?.montant ?? 0;
   const maDette = maSituation ? detteDe(membre.id) : 0;
   const aFaire = maSituation && (maSituation.nbMoisRetard > 0 || maDette > 0);
 

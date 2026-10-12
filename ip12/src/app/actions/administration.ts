@@ -14,12 +14,13 @@ import {
 } from "@/lib/relance";
 import { versionDeployee } from "@/lib/version";
 import { porterRetardsAuRegistre, resumeConstat, type IssueConstat } from "@/lib/constat";
-import { listerMembres, reglagesEffectifs } from "@/lib/queries";
-import { CLUB, REGLES, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
+import { decomptesSortie, listerMembres, reglagesEffectifs } from "@/lib/queries";
+import { CLUB, REGLES, dateCourte, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
 import {
   KIND_PENALITE,
   KIND_VERSEMENT,
   METHODE,
+  PREFIXE_SOLDE_SORTIE,
   REGLE_MEMBRE,
   STATUT_PENALITE,
   STATUT_VERSEMENT,
@@ -366,19 +367,24 @@ export async function leverRegleMembre(
 /* --------------------------------------------------------- sorties (art. 20) */
 
 /**
- * Enregistre la sortie d'un membre et solde ses comptes.
+ * Enregistre la sortie d'un membre, au calcul du site.
  *
- * L'art. 20 rembourse la part au cours de cession, diminuee de 2 % de frais.
- * L'art. 9 veut que les penalites soient « definitivement acquises au benefice du
- * club » : elles ne se remboursent pas, et se retranchent donc du versement.
+ * Les montants ne sont plus saisis : ils sont ceux du decompte arrete au dernier
+ * releve (`decomptesSortie`), le meme que le tableau de la page. Le bureau choisit
+ * le membre, la date et le motif ; le reste se calcule, et se corrige ensuite sur
+ * justificatif (`corrigerSortie`).
  *
- * Les montants sont saisis, non imposes. Le site en propose le calcul au dernier
- * releve, mais les frais reels de la SGI ne sont connus qu'apres coup et le club
- * vote : les chiffres ouvrent la discussion, ils ne la closent pas.
+ * En une seule transaction :
+ * - la sortie est inscrite : ses droits, ses penalites compensees, les frais
+ *   provisoires et le net a lui verser ;
+ * - ses penalites dues sont soldees par compensation, avec le motif de sortie.
+ *   Rien n'entre en caisse : la caisse les reconnait a leur note et ne les
+ *   compte pas comme encaissees ;
+ * - le membre est desactive. Le laisser actif le ferait figurer aux relances,
+ *   aux feuilles de presence et aux parts d'un club qu'il a quitte.
  *
- * Le membre est desactive dans le meme mouvement. Le laisser actif le ferait
- * figurer aux relances, aux feuilles de presence et aux parts d'un club qu'il a
- * quitte -- et fausserait la repartition de tous les autres.
+ * Ce qu'il a verse reste en caisse ; ce qui lui est du sort de l'avoir a
+ * partager des maintenant, et de la caisse le jour de son paiement.
  */
 export async function enregistrerSortie(
   _precedent: EtatFormulaire,
@@ -389,56 +395,134 @@ export async function enregistrerSortie(
   const membreId = String(donnees.get("membre") ?? "");
   const date = String(donnees.get("date") ?? "").slice(0, 10);
   const motif = String(donnees.get("motif") ?? "").trim();
-  const brut = Math.round(Number(donnees.get("valeurBrute") ?? 0));
-  const frais = Math.round(Number(donnees.get("frais") ?? 0));
-  const acquis = Math.round(Number(donnees.get("acquisAuClub") ?? 0));
   const note = String(donnees.get("note") ?? "").trim();
 
   if (!membreId) return { ok: false, erreur: "Choisissez le membre sortant." };
-  if (!date) return { ok: false, erreur: "Indiquez la date de sortie." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, erreur: "Indiquez la date de sortie." };
   if (!motif) return { ok: false, erreur: "Indiquez le motif de la sortie." };
-  for (const [libelle, v] of [
-    ["La valeur brute", brut],
-    ["Les frais", frais],
-    ["Le montant acquis au club", acquis],
-  ] as const) {
-    if (!Number.isFinite(v) || v < 0) return { ok: false, erreur: `${libelle} doit être positif ou nul.` };
-  }
-  if (frais + acquis > brut) {
-    return {
-      ok: false,
-      erreur: "Frais et pénalités dépassent la valeur de la part : le club ne peut réclamer au sortant.",
-    };
-  }
 
   const sql = db();
   const membre = await sql`select full_name, is_active from members where id = ${membreId}::uuid`;
   if (!membre[0]) return { ok: false, erreur: "Membre introuvable." };
   if (!membre[0].is_active) return { ok: false, erreur: "Ce membre est déjà sorti." };
 
-  const net = brut - frais - acquis;
+  const d = (await decomptesSortie()).find((x) => x.membreId === membreId);
+  if (!d) return { ok: false, erreur: "Le décompte de ce membre est introuvable : rechargez la page." };
+  if (!d.arrete) {
+    return { ok: false, erreur: "Aucun relevé de portefeuille : saisissez-en un avant d'enregistrer une sortie." };
+  }
 
-  await sql`
-    insert into member_exits (member_id, exit_date, reason, gross_value, fees,
-                              net_paid, forfeited, note, created_by)
-    values (${membreId}::uuid, ${date}::date, ${motif}, ${brut}, ${frais},
-            ${net}, ${acquis}, ${note === "" ? null : note}, ${auteur.id}::uuid)
-  `;
-  await sql`update members set is_active = false where id = ${membreId}::uuid`;
+  /*
+   * Ses droits avant penalites, ses penalites compensees, les frais : le net en
+   * decoule. Si ses penalites depassent ses droits, il ne recoit rien et le reste
+   * de sa dette se lit dans la note.
+   */
+  const frais = d.fraisVente + d.fraisGarde + d.fraisTransfert;
+  const droits = Math.max(0, Math.round(d.valeurBrute + d.penalitesDeduites));
+  const compensees = Math.max(0, Math.min(d.penalitesDeduites, droits - frais));
+  const net = Math.max(0, droits - compensees - frais);
+  const reste = d.penalitesDeduites - compensees;
+
+  const detail = [
+    note,
+    `Arrêtée au relevé du ${dateCourte(d.arrete)}`,
+    `pénalités compensées ${fcfa(compensees)}` +
+      (d.penalitesEnCours > 0 ? `, dont ${fcfa(d.penalitesEnCours)} non inscrites au registre` : ""),
+    `frais provisoires : cession ${fcfa(d.fraisVente)}, garde ${fcfa(d.fraisGarde)}, transfert ${fcfa(d.fraisTransfert)}`,
+    reste > 0 ? `reste dû au club ${fcfa(reste)}` : "",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  await sql.transaction([
+    sql`
+      insert into member_exits (member_id, exit_date, reason, gross_value, fees,
+                                net_paid, forfeited, note, created_by)
+      values (${membreId}::uuid, ${date}::date, ${motif}, ${droits}, ${frais},
+              ${net}, ${compensees}, ${detail}, ${auteur.id}::uuid)
+    `,
+    sql`
+      update penalties
+      set status = ${STATUT_PENALITE.payee},
+          settled_on = ${date}::date,
+          settlement_note = ${`${PREFIXE_SOLDE_SORTIE} : ${motif}`},
+          resolved_by = ${auteur.id}::uuid,
+          resolved_at = now()
+      where member_id = ${membreId}::uuid and status = ${STATUT_PENALITE.due}
+    `,
+    sql`update members set is_active = false where id = ${membreId}::uuid`,
+  ]);
 
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "sortie_membre",
     { entite: "member_exits", id: membreId },
-    { date, motif, brut, frais, acquis, net },
+    { date, motif, arrete: d.arrete, droits, compensees, frais, net },
   );
   revalidatePath("/", "layout");
   return {
     ok: true,
     message:
       `Sortie enregistrée : ${fcfa(net)} à verser à ${membre[0].full_name}, sous ` +
-      `${REGLES.delaiRemboursementMois} mois (R5). Le jour du paiement, enregistrez-le dans ` +
-      "Caisse en dépense « Remboursement d'un membre sorti ».",
+      `${REGLES.delaiRemboursementMois} mois (R5). Ses pénalités sont soldées avec le motif de ` +
+      "sortie. Le jour du paiement, enregistrez-le dans Caisse en dépense « Remboursement " +
+      "d'un membre sorti ».",
+  };
+}
+
+/**
+ * Remplace les frais provisoires d'une sortie par les frais reels.
+ *
+ * Les 2 % de transfert ne sont qu'une estimation, et la provision de cession
+ * peut ceder la place aux frais d'une vente reelle : le net a verser se
+ * recalcule, et la dette envers le sortant suit. L'ancien montant reste au
+ * journal, avec le justificatif.
+ */
+export async function corrigerSortie(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererSorties");
+
+  const id = String(donnees.get("sortie") ?? "");
+  const frais = Math.round(Number(donnees.get("frais") ?? Number.NaN));
+  const raison = String(donnees.get("raison") ?? "").trim();
+  if (!id) return { ok: false, erreur: "Sortie introuvable." };
+  if (!Number.isFinite(frais) || frais < 0) return { ok: false, erreur: "Les frais doivent être positifs ou nuls." };
+  if (!raison) return { ok: false, erreur: "Indiquez le justificatif des frais réels." };
+
+  const sql = db();
+  const rows = await sql`
+    select e.gross_value, e.forfeited, e.fees, e.net_paid, m.full_name
+    from member_exits e join members m on m.id = e.member_id
+    where e.id = ${id}::uuid
+  `;
+  const e = rows[0];
+  if (!e) return { ok: false, erreur: "Sortie introuvable." };
+
+  const droits = Number(e.gross_value);
+  const compensees = Number(e.forfeited);
+  if (frais + compensees > droits) {
+    return { ok: false, erreur: "Ces frais dépassent ce qui revient au sortant." };
+  }
+  const net = droits - compensees - frais;
+
+  await sql`
+    update member_exits
+    set fees = ${frais}, net_paid = ${net},
+        note = concat_ws(' · ', note, ${`frais réels ${fcfa(frais)} (${raison})`})
+    where id = ${id}::uuid
+  `;
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "sortie_frais_corriges",
+    { entite: "member_exits", id },
+    { avant: { frais: Number(e.fees), net: Number(e.net_paid) }, apres: { frais, net }, raison },
+  );
+  revalidatePath("/", "layout");
+  return {
+    ok: true,
+    message: `Frais corrigés : ${fcfa(net)} à verser à ${e.full_name} (au lieu de ${fcfa(Number(e.net_paid))}).`,
   };
 }
 

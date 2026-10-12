@@ -11,9 +11,11 @@ import {
   situationMembre,
   type ReglesMembre,
   type SituationMembre,
+  penalitesCourues,
 } from "./penalites";
 import {
   CATEGORIE_REMBOURSEMENT_SORTIE,
+  PREFIXE_SOLDE_SORTIE,
   KIND_PENALITE,
   REGLE_MEMBRE,
   STATUT_PENALITE,
@@ -25,6 +27,7 @@ import {
   dietzModifie,
   dureeEnAnnees,
   etatCaisse,
+  fraisGardeCourus,
   repartirParts,
   tri,
   type Flux,
@@ -662,13 +665,21 @@ async function listerMouvementsCaisseBrut(): Promise<MouvementCaisse[]> {
   return (rows as MouvementCaisse[]).map((r) => ({ ...r, montant: n(r.montant) }));
 }
 
-/** Penalites effectivement encaissees : elles grossissent la caisse. */
-async function penalitesEncaisseesBrut(): Promise<number> {
+/**
+ * Penalites effectivement encaissees : elles grossissent la caisse.
+ *
+ * Une penalite soldee par compensation a la sortie de son membre est reglee,
+ * mais rien n'est entre en caisse : elle n'est pas comptee ici.
+ */
+async function penalitesEncaisseesBrut(arrete: string | null = null): Promise<number> {
   try {
     const sql = db();
     const rows = await sql`
       select coalesce(sum(quantity * unit_amount), 0)::bigint as total
-      from penalties where status = ${STATUT_PENALITE.payee}
+      from penalties
+      where status = ${STATUT_PENALITE.payee}
+        and coalesce(settlement_note, '') not like ${`${PREFIXE_SOLDE_SORTIE}%`}
+        and (${arrete}::date is null or coalesce(settled_on, incurred_on) <= ${arrete}::date)
     `;
     return n(rows[0]?.total);
   } catch {
@@ -1041,18 +1052,23 @@ async function listerSortiesBrut(): Promise<Sortie[]> {
  * desactivee sans sortie (un doublon, un essai) reste hors de la caisse, comme
  * avant.
  */
-async function membresSortisBrut(): Promise<{ membreId: string; verse: number; net: number }[]> {
+async function membresSortisBrut(
+  arrete: string | null = null,
+): Promise<{ membreId: string; verse: number; net: number }[]> {
   try {
     const sql = db();
     const rows = await sql`
       select m.id,
              (select coalesce(sum(e.net_paid), 0) from member_exits e
-               where e.member_id = m.id)::bigint as net,
+               where e.member_id = m.id
+                 and (${arrete}::date is null or e.exit_date <= ${arrete}::date))::bigint as net,
              (select coalesce(sum(c.amount), 0) from contributions c
-               where c.member_id = m.id and c.status = ${STATUT_VERSEMENT.valide})::bigint as verse
+               where c.member_id = m.id and c.status = ${STATUT_VERSEMENT.valide}
+                 and (${arrete}::date is null or c.paid_on <= ${arrete}::date))::bigint as verse
       from members m
       where not m.is_active
-        and exists (select 1 from member_exits e where e.member_id = m.id)
+        and exists (select 1 from member_exits e where e.member_id = m.id
+                      and (${arrete}::date is null or e.exit_date <= ${arrete}::date))
     `;
     return rows.map((r) => ({ membreId: String(r.id), verse: n(r.verse), net: n(r.net) }));
   } catch {
@@ -1066,67 +1082,116 @@ export type DecompteSortie = {
   nom: string;
   verse: number;
   part: number;
-  /** Avance en depot : rendue au nominal, sans frais -- ce n'est pas une cession. */
+  /** Avance en depot : rendue intacte, sans aucun frais. */
   avance: number;
-  /** Valeur totale de ses droits, avance comprise, toutes penalites deduites. */
+  /** Valeur de sa part au releve, avance comprise, toutes penalites deduites. */
   valeurBrute: number;
-  /** Sa quote-part des actions du dernier releve : la seule poche a vendre. */
+  /** Sa quote-part des actions du releve. */
   pocheActions: number;
-  /** Frais reels de vente de cette poche, au bareme de la SGI. */
+  /** Provision pour frais de cession de cette poche, au bareme de la SGI. */
   fraisVente: number;
-  /** Art. 20 : 2 % indicatifs de transfert vers son compte. */
+  /** Sa quote-part des frais de garde courus et pas encore preleves. */
+  fraisGarde: number;
+  /** Art. 20 : 2 % indicatifs de transfert vers son compte, hors avance. */
   fraisTransfert: number;
-  /** Penalites retranchees : celles du registre et celles qui courent. */
+  /** Penalites retranchees a leur montant : celles du registre et celles qui courent. */
   penalitesDeduites: number;
   /** Dont celles qui courent sans etre encore inscrites au registre. */
   penalitesEnCours: number;
   netIndicatif: number;
+  /** Le releve auquel la sortie est arretee (AAAA-MM-JJ), ou null sans releve. */
+  arrete: string | null;
 };
 
 /**
- * Ce que couterait la sortie de chaque membre, sur l'avoir connu du club.
+ * Ce que la sortie de chaque membre lui rapporterait, arretee au dernier releve.
  *
- * Purement indicatif : les frais reels de la SGI ne sont connus qu'apres coup, et
- * le club vote. Le calcul sert a ouvrir la discussion sur des chiffres, non a la
- * clore.
+ * UNE SEULE DATE : le releve. La valeur du portefeuille, la caisse, les
+ * cotisations et les virements sont ceux de ce jour-la ; une cotisation recue le
+ * lendemain ne deplace pas la valeur du sortant. Les penalites, elles, sont
+ * arretees a aujourd'hui, jour ou la sortie s'enregistre : registre et ce qui
+ * court, sans attendre le constat.
  *
- * Les penalites dues ne se retranchent pas ici : elles ont deja quitte le capital
- * du membre en diluant sa part. Les deduire une seconde fois les compterait deux
- * fois.
+ * C'est aussi le calcul qu'enregistre la sortie : le tableau et le registre des
+ * sorties disent le meme chiffre.
  */
-async function decomptesSortieBrut(
-  /** Penalites qui courent sans etre inscrites, par membre (lib/constat). */
-  enCours: Map<string, number> = new Map(),
-): Promise<DecompteSortie[]> {
-  const [s, dues] = await Promise.all([
-    synthese(),
+async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
+  const valos = await listerValorisations();
+  const arrete = valos.at(-1)?.date_valo ?? null;
+  const jourArrete = arrete ? new Date(`${arrete}T23:59:59Z`) : instantCourant();
+
+  const [auReleve, situationsAuReleve, situationsDuJour, dues, registre, bornes] = await Promise.all([
+    synthese(jourArrete, arrete),
+    situationsClub(jourArrete, arrete),
+    situationsClub(),
     penalitesDuesParMembre().catch(() => new Map<string, number>()),
+    listerPenalites().catch(() => [] as Penalite[]),
+    bornesReprisePenalites().catch(() => new Map<string, string>()),
   ]);
-  const actions = s.valorisation?.actions ?? 0;
-  return s.parts.map((p) => {
-    const courues = enCours.get(p.membreId) ?? 0;
-    const d = decompteSortie({ ...p, penalitesEnCours: courues }, actions, {
-      venteActions: REGLES.fraisVenteActions,
-      transfert: REGLES.fraisTransfertSortie,
-    });
+
+  const courues = penalitesCourues(
+    situationsDuJour,
+    registre.map((p) => ({
+      membreId: p.membre_id,
+      nature: p.nature,
+      dateConstat: p.date_constat,
+      cle: p.source_key,
+    })),
+    bornes,
+  );
+  const enCours = (id: string) => courues.get(id)?.montant ?? 0;
+  const dette = (id: string) => (dues.get(id) ?? 0) + enCours(id);
+
+  const parts = repartirParts(
+    situationsAuReleve.map((s) => ({
+      membreId: s.membreId,
+      nom: s.nom,
+      acquis: s.acquis,
+      avance: s.avance,
+      dues: dette(s.membreId),
+    })),
+    auReleve.avoir,
+  );
+
+  const actions = auReleve.valorisation?.actions ?? 0;
+  const fraisGarde = arrete
+    ? fraisGardeCourus(actions, arrete, {
+        conservation: REGLES.conservationSGI,
+        tenueCompte: REGLES.tenueCompteSGI,
+        taxe: REGLES.taxeCommissionsSGI,
+      })
+    : 0;
+
+  return parts.map((p) => {
+    const d = decompteSortie(
+      p,
+      { actions, fraisGardeCourus: fraisGarde },
+      { venteActions: REGLES.fraisVenteActions, transfert: REGLES.fraisTransfertSortie },
+    );
     return {
       membreId: p.membreId,
       nom: p.nom,
       verse: p.verse,
       part: p.part,
       avance: p.avance,
-      valeurBrute: d.valeur,
+      valeurBrute: p.valeur,
       pocheActions: d.pocheActions,
       fraisVente: d.fraisVente,
+      fraisGarde: d.fraisGarde,
       fraisTransfert: d.fraisTransfert,
-      penalitesDeduites: (dues.get(p.membreId) ?? 0) + courues,
-      penalitesEnCours: courues,
+      penalitesDeduites: p.dues,
+      penalitesEnCours: enCours(p.membreId),
       netIndicatif: d.net,
+      arrete,
     };
   });
 }
 
-async function situationsClubBrut(aujourdhui: Date): Promise<SituationClub[]> {
+async function situationsClubBrut(
+  aujourdhui: Date,
+  /** Ne retenir que les versements payes au plus tard ce jour (AAAA-MM-JJ). */
+  arrete: string | null = null,
+): Promise<SituationClub[]> {
   const sql = db();
   const [membres, declarations, derogations, nbPenalites, reglages] = await Promise.all([
     listerMembres(),
@@ -1147,6 +1212,7 @@ async function situationsClubBrut(aujourdhui: Date): Promise<SituationClub[]> {
   return membres.map((m) => {
     const siens = versements
       .filter((v) => String(v.member_id) === m.id)
+      .filter((v) => arrete === null || !v.paid_on || String(v.paid_on) <= arrete)
       .map((v) => ({
         mois_couvert: v.mois as string,
         montant: n(v.amount),
@@ -1237,20 +1303,37 @@ export type Synthese = {
    * ici un total qui ne dit ni l'un ni l'autre.
    */
   enAttenteValidation: number;
+  /**
+   * L'avoir partage entre les membres actifs : le releve, ce qui a ete vire a la
+   * SGI depuis, et la caisse, moins ce qui est du aux membres sortis.
+   */
+  avoir: number;
+  /** Vire a la SGI apres le dernier releve : pas encore dans sa valeur, plus en caisse. */
+  enTransit: number;
 };
 
-async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
-  const [situations, apports, valos, enAttente, duesParMembre, encaissees, caisse, sortis] =
+async function syntheseBrut(aujourdhui: Date, arrete: string | null = null): Promise<Synthese> {
+  const [situations, apportsTous, valos, enAttente, duesParMembre, encaissees, caisseToute, sortis, registre, bornes] =
     await Promise.all([
-      situationsClub(aujourdhui),
+      situationsClub(aujourdhui, arrete),
       listerApports(),
       listerValorisations(),
       versementsEnAttente(),
       penalitesDuesParMembre().catch(() => new Map<string, number>()),
-      penalitesEncaissees(),
+      penalitesEncaissees(arrete),
       listerMouvementsCaisse().catch(() => [] as MouvementCaisse[]),
-      membresSortisBrut(),
+      membresSortisBrut(arrete),
+      listerPenalites().catch(() => [] as Penalite[]),
+      bornesReprisePenalites().catch(() => new Map<string, string>()),
     ]);
+
+  /*
+   * ARRETEE A UNE DATE, la synthese ne retient que ce qui l'a precedee : c'est
+   * ainsi qu'une sortie se calcule au jour du releve, sans qu'une cotisation ou
+   * un mouvement de caisse posterieur ne deplace la valeur du sortant.
+   */
+  const apports = apportsTous.filter((a) => arrete === null || a.date_transfert <= arrete);
+  const caisse = caisseToute.filter((m) => arrete === null || m.date_mouvement <= arrete);
 
   const valides = caisse.filter((m) => m.statut === "valide");
   const recettes = valides.filter((m) => m.sens === "recette").reduce((t, m) => t + m.montant, 0);
@@ -1260,7 +1343,7 @@ async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
     .reduce((t, m) => t + m.montant, 0);
   const versementsSortis = sortis.reduce((t, x) => t + x.verse, 0);
 
-  const valorisation = valos.at(-1) ?? null;
+  const valorisation = valos.filter((v) => arrete === null || v.date_valo <= arrete).at(-1) ?? null;
   const totalVerse = situations.reduce((s, m) => s + m.verse, 0);
 
   const net = netApport;
@@ -1288,10 +1371,38 @@ async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
   });
 
   /*
+   * VIRE A LA SGI DEPUIS LE RELEVE : l'argent a quitte la caisse, et le releve ne
+   * le porte pas encore. Le compter au nominal evite que toutes les parts baissent
+   * d'autant jusqu'au releve suivant.
+   */
+  const enTransit = valorisation
+    ? apports
+        .filter((a) => a.date_transfert > valorisation.date_valo)
+        .reduce((t, a) => t + net(a), 0)
+    : 0;
+
+  /*
    * Ce qui est du a un membre sorti dort encore en caisse, mais n'appartient plus
    * aux autres : le partager gonflerait leurs parts jusqu'au jour du paiement.
    */
-  const avoirDuClub = (valorisation?.total ?? 0) + aPartager;
+  const avoirDuClub = (valorisation?.total ?? 0) + enTransit + aPartager;
+
+  /*
+   * LA DETTE DE PENALITES D'UN MEMBRE : ce que le registre porte, plus ce qui
+   * court sans y etre encore. Les deux sont dues ; aucune n'attend le constat.
+   */
+  const courues = penalitesCourues(
+    situations,
+    registre.map((p) => ({
+      membreId: p.membre_id,
+      nature: p.nature,
+      dateConstat: p.date_constat,
+      cle: p.source_key,
+    })),
+    bornes,
+  );
+  const dettePenalites = (id: string) =>
+    (duesParMembre.get(id) ?? 0) + (courues.get(id)?.montant ?? 0);
 
   const parts = repartirParts(
     situations.map((s) => ({
@@ -1299,7 +1410,7 @@ async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
       nom: s.nom,
       acquis: s.acquis,
       avance: s.avance,
-      dues: duesParMembre.get(s.membreId) ?? 0,
+      dues: dettePenalites(s.membreId),
     })),
     avoirDuClub,
   );
@@ -1384,6 +1495,8 @@ async function syntheseBrut(aujourdhui: Date): Promise<Synthese> {
     exercice,
     nbRetardataires: situations.filter((s) => s.nbMoisRetard > 0).length,
     enAttenteValidation: enAttente.length,
+    avoir: avoirDuClub,
+    enTransit,
   };
 }
 
@@ -1484,13 +1597,20 @@ export const decomptesSortie = cache(decomptesSortieBrut);
  * requete, sans quoi deux Date differentes rouvriraient deux entrees.
  */
 const situationsClubCache = cache(situationsClubBrut);
-export function situationsClub(aujourdhui: Date = instantCourant()): Promise<SituationClub[]> {
-  return situationsClubCache(aujourdhui);
+export function situationsClub(
+  aujourdhui: Date = instantCourant(),
+  arrete: string | null = null,
+): Promise<SituationClub[]> {
+  return situationsClubCache(aujourdhui, arrete);
 }
 
 const syntheseCache = cache(syntheseBrut);
-export function synthese(aujourdhui: Date = instantCourant()): Promise<Synthese> {
-  return syntheseCache(aujourdhui);
+export function synthese(
+  aujourdhui: Date = instantCourant(),
+  /** Arreter caisse, cotisations et virements a ce jour (AAAA-MM-JJ) : le releve d'une sortie. */
+  arrete: string | null = null,
+): Promise<Synthese> {
+  return syntheseCache(aujourdhui, arrete);
 }
 
 const avancesExigeesCache = cache(avancesExigeesBrut);

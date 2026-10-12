@@ -111,13 +111,16 @@ export type PartMembre = {
   acquis: number;
   /** Versements valides de mois a venir : capital en depot, rendu au nominal. */
   avance: number;
-  /** Penalites constatees et non reglees : elles quittent son capital. */
+  /**
+   * Penalites dues et non reglees, inscrites ou qui courent : une dette envers le
+   * club, retranchee de sa part a son montant.
+   */
   dues: number;
   /** Tout ce qu'il a verse : acquis + avance. Sert a mesurer la plus-value. */
   verse: number;
   /** Sa quote-part du pot a partager, hors avances. */
   part: number;
-  /** Ce qu'il detient : son avance au nominal, plus sa quote-part. */
+  /** Ce qu'il detient : son avance au nominal, plus sa quote-part, moins ses penalites. */
   valeur: number;
   plusValue: number;
 };
@@ -144,9 +147,17 @@ export type ApportMembre = {
  * 2. Le mois venu, l'avance rejoint d'elle-meme le capital acquis : ni perte,
  *    ni gain. C'est a l'appelant de faire ce classement, selon l'echeance.
  *
- * 3. La penalite constatee et impayee quitte le capital du membre (art. 9 : elle
- *    est acquise au benefice du club). Elle dilue son poids, et ce poids perdu se
- *    reporte sur tous les autres sans qu'aucun montant n'ait a etre deplace.
+ * 3. La penalite impayee est une dette du membre envers le club, a son montant
+ *    (art. 9 : elle est acquise au benefice du club). Le club la detient comme
+ *    une creance : elle s'ajoute au pot a partager, et se retranche de la part du
+ *    membre qui la doit. Son poids, lui, ne change pas.
+ *
+ *    DECISION DU BUREAU (octobre 2026), sur deux audits independants. La regle
+ *    precedente retirait la penalite du capital du membre : elle diluait son
+ *    poids, et une penalite de 500 FCFA lui en coutait environ 850, selon la
+ *    performance du club. Payee, la meme penalite lui coutait 450. Desormais,
+ *    payer ou ne pas payer ne change rien a la valeur nette de sa part : la
+ *    penalite coute son montant, ni plus ni moins.
  *
  * `valeurTotale` est l'avoir du club, portefeuille et caisse reunis : une avance
  * versee ce mois-ci dort d'abord en caisse, et la retrancher du seul portefeuille
@@ -157,22 +168,28 @@ export function repartirParts(
   valeurTotale: number,
 ): PartMembre[] {
   const avances = apports.reduce((t, m) => t + m.avance, 0);
+  const creances = apports.reduce((t, m) => t + Math.max(0, m.dues), 0);
 
   /*
-   * Les avances sortent du pot avant partage. Le plancher a zero couvre le cas
-   * limite ou elles excederaient l'avoir constate -- un releve de portefeuille
-   * en retard sur un gros versement d'avance : mieux vaut ne rien partager que
-   * repartir un montant negatif.
+   * Les avances sortent du pot avant partage ; les penalites dues y entrent,
+   * comme creances du club. Le plancher a zero couvre le cas limite ou les
+   * avances excederaient l'avoir constate -- un releve de portefeuille en retard
+   * sur un gros versement d'avance : mieux vaut ne rien partager que repartir un
+   * montant negatif.
    */
-  const aPartager = Math.max(0, valeurTotale - avances);
+  const aPartager = Math.max(0, valeurTotale + creances - avances);
 
-  const net = (m: ApportMembre) => Math.max(0, m.acquis - m.dues);
-  const totalNet = apports.reduce((t, m) => t + net(m), 0);
+  const poids = (m: ApportMembre) => Math.max(0, m.acquis);
+  const totalPoids = apports.reduce((t, m) => t + poids(m), 0);
 
   return apports
     .map((m) => {
-      const part = totalNet > 0 ? net(m) / totalNet : 0;
-      const valeur = m.avance + part * aPartager;
+      const part = totalPoids > 0 ? poids(m) / totalPoids : 0;
+      /*
+       * Peut etre negative : un membre dont les penalites depassent sa part doit
+       * au club plus qu'il n'y detient. La somme des parts reste l'avoir.
+       */
+      const valeur = m.avance + part * aPartager - Math.max(0, m.dues);
       const verse = m.acquis + m.avance;
       return { ...m, verse, part, valeur, plusValue: valeur - verse };
     })
@@ -180,45 +197,60 @@ export function repartirParts(
 }
 
 /**
- * Ce que le sortant emporte, frais deduits : le principe de la side pocket.
+ * Ce que le sortant emporte : le decompte d'une sortie.
  *
- * DECISION DU BUREAU (octobre 2026). Les frais de la sortie sont a la charge du
- * sortant, et seulement ceux que sa sortie provoque. Sa part est isolee et
- * decoupee comme l'avoir du club :
+ * DECISIONS DU BUREAU (octobre 2026), apres deux audits independants.
  *
- * - sa poche en actions, c'est-a-dire sa quote-part des actions du releve, est la
- *   seule qui coute a vendre. Elle supporte les frais reels de vente, 1,4 % au
- *   bareme de la SGI. Ils sont dus que le club vende ou non : garder ces titres
- *   en payant le sortant sur les liquidites ferait economiser aux autres des
- *   frais d'achat, sans que le sortant ait rien a y gagner ;
- * - ses liquidites et son avance ne coutent rien a degager ;
- * - le transfert vers son compte, enfin, porte sur tout ce qui lui est vire :
- *   2 % indicatifs (art. 20), remplaces par les frais reels quand ils sont connus.
- *
- * Les penalites inscrites au registre ne se retranchent pas ici : elles ont deja
- * quitte son capital en diluant sa part (voir `repartirParts`). Celles qui
- * courent sans etre inscrites encore -- l'art. 9 sur un mois impaye depuis le
- * dernier constat -- n'ont rien dilue : elles se retranchent ici, en entier,
- * avant tout frais. Le constat les inscrira plus tard ; la sortie, elle, n'attend
- * pas.
+ * - Sa part est arretee au releve : le releve, la caisse, les cotisations et les
+ *   virements de ce jour-la (voir `synthese(…, arrete)`). Ses penalites y sont
+ *   deja retranchees, a leur montant.
+ * - Une provision pour frais de cession, au bareme de la SGI (1,4 %), porte sur
+ *   sa quote-part des actions du releve. Elle reste acquise au club, qu'il vende
+ *   ou non : les membres restants gardent ces titres et paieront ce cout le jour
+ *   ou ils les vendront.
+ * - Sa quote-part des frais de garde courus depuis le debut de l'annee, que la
+ *   SGI n'a pas encore preleves.
+ * - Les frais de transfert vers son compte, estimes a 2 % (art. 20) et
+ *   remplaces par les frais reels quand ils sont connus. Ils ne touchent pas son
+ *   avance, rendue intacte.
  */
 export function decompteSortie(
-  p: { valeur: number; avance: number; part: number; penalitesEnCours?: number },
-  actionsDuClub: number,
+  p: { valeur: number; avance: number; part: number },
+  club: { actions: number; fraisGardeCourus: number },
   taux: { venteActions: number; transfert: number },
-): { valeur: number; pocheActions: number; fraisVente: number; fraisTransfert: number; net: number } {
-  const valeur = Math.max(0, p.valeur - Math.max(0, p.penalitesEnCours ?? 0));
-  const cessible = Math.max(0, valeur - p.avance);
-  const pocheActions = Math.min(cessible, Math.round(p.part * Math.max(0, actionsDuClub)));
+): { pocheActions: number; fraisVente: number; fraisGarde: number; fraisTransfert: number; net: number } {
+  const cessible = Math.max(0, p.valeur - Math.max(0, p.avance));
+  const pocheActions = Math.min(cessible, Math.round(p.part * Math.max(0, club.actions)));
   const fraisVente = Math.round(pocheActions * taux.venteActions);
-  const fraisTransfert = Math.round(Math.max(0, valeur - fraisVente) * taux.transfert);
+  const fraisGarde = Math.min(
+    cessible - fraisVente,
+    Math.round(p.part * Math.max(0, club.fraisGardeCourus)),
+  );
+  const fraisTransfert = Math.round(Math.max(0, cessible - fraisVente - fraisGarde) * taux.transfert);
   return {
-    valeur,
     pocheActions,
     fraisVente,
+    fraisGarde,
     fraisTransfert,
-    net: Math.max(0, valeur - fraisVente - fraisTransfert),
+    net: Math.max(0, p.valeur - fraisVente - fraisGarde - fraisTransfert),
   };
+}
+
+/**
+ * Les frais de garde que la SGI facture pour l'annee et n'a pas encore preleves,
+ * courus du 1er janvier au jour du releve : commission de conservation sur la
+ * valeur des titres, forfait de tenue de compte, et la taxe sur ses commissions.
+ */
+export function fraisGardeCourus(
+  actions: number,
+  jour: string,
+  bareme: { conservation: number; tenueCompte: number; taxe: number },
+): number {
+  const debut = Date.UTC(Number(jour.slice(0, 4)), 0, 1);
+  const fin = Date.parse(`${jour.slice(0, 10)}T00:00:00Z`);
+  const jours = Math.max(0, Math.round((fin - debut) / 86_400_000));
+  const annuel = (Math.max(0, actions) * bareme.conservation + bareme.tenueCompte) * (1 + bareme.taxe);
+  return Math.round((annuel * jours) / 365);
 }
 
 /**

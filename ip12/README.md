@@ -177,15 +177,15 @@ Phoenix Capital Management.
 |---|---|
 | Art. 6 | Versement mensuel de 5 000 FCFA par membre |
 | Art. 8 | Exigible au plus tard le 10 du mois |
-| Art. 9 | Pénalité de 10 % du versement dû, versée à l'actif du club |
+| Art. 9 | Pénalité de 10 % du versement dû, versée à l'actif du club. Impayée, c'est une dette du membre envers le club, retranchée de sa part à son montant (payée ou due, elle coûte la même chose) |
 | Art. 12 | Droits de vote proportionnels aux parts, calculees sur le capital echu |
 | Ouverture du compte-titres | 17/07/2023 — les virements antérieurs portent la date de sortie de caisse ; le TRI les ramène à ce jour, le capital n'étant pas encore placé |
 | Art. 14 | Le président transmet les ordres de bourse, le trésorier par délégation |
-| Art. 20 | Exclusion à 3 mois de retard, majorité des 3/4. Au remboursement, le sortant paie les frais réels de vente de sa part en actions (1,4 %, side pocket) et le transfert vers son compte (2 % indicatifs) |
+| Art. 20 | Exclusion à 3 mois de retard, majorité des 3/4. La sortie est arrêtée au dernier relevé ; le sortant reçoit sa part, pénalités déduites (soldées par compensation), moins une provision de cession de 1,4 % sur sa part en actions, sa quote-part des frais de garde courus et le transfert vers son compte (2 % estimés, hors avance), corrigés ensuite sur frais réels |
 | R1 | Souscription à la bourse en ligne, mandat au bureau ; ordres transmis par le président ou le trésorier par délégation (art. 14) |
 | R2 | Droit de vote suspendu dès 30 jours de retard, jusqu'à régularisation |
 | R3 | Déclaration du retard au groupe obligatoire à l'entrée dans le 2e mois |
-| R4 | Dès 3 mois de retard, pénalités des 3 derniers mois doublées (30 % → 60 %) |
+| R4 | Dès 3 mois de retard, pénalités des 3 derniers mois doublées (30 % → 60 %). Inscrit au registre dès le 11 du mois |
 | R5 | Retard non déclaré : exclusion de plein droit. Déclaré : plan de redressement unique |
 | AG 2026 | Pénalités indissociables des cotisations : 3 pénalités de retard impayées emportent l'exclusion (R5), à compter du 10/01/2027 |
 | AG 2026 | Avance minimale imposable à un membre, à titre disciplinaire, exprimée en mois |

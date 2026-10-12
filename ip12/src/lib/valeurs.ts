@@ -113,6 +113,13 @@ export const CATEGORIES_DEPENSE = [
  */
 export const CATEGORIE_REMBOURSEMENT_SORTIE = "remboursement_sortie";
 
+/**
+ * Debut de la note d'une penalite soldee par compensation a la sortie de son
+ * membre : elle est reglee, mais rien n'est entre en caisse. La caisse la
+ * reconnait a ce debut de note et ne la compte pas comme encaissee.
+ */
+export const PREFIXE_SOLDE_SORTIE = "Soldée à la sortie";
+
 export const CATEGORIES_RECETTE = [
   { valeur: "versements_acquis", libelle: "Versements acquis au club (art. 18)" },
   { valeur: "penalites_anterieures", libelle: "Pénalités antérieures, détail non disponible" },

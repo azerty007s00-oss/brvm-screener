@@ -58,6 +58,14 @@ export const REGLES = {
    * courtage 1 % HT, TAF 10 % du courtage, soit 1,4 % du montant vendu.
    */
   fraisVenteActions: 0.014,
+  /**
+   * Frais de garde de la SGI, meme bareme : conservation 0,4 % HT par an de la
+   * valeur des titres, tenue de compte 5 000 FCFA HT par an (personne morale),
+   * TAF de 10 % sur ces commissions comme sur le courtage.
+   */
+  conservationSGI: 0.004,
+  tenueCompteSGI: 5_000,
+  taxeCommissionsSGI: 0.1,
   /** R5 - remboursement sous 4 mois en cas d'exclusion de plein droit. */
   delaiRemboursementMois: 4,
   /**

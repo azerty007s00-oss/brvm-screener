@@ -5,7 +5,7 @@ import {
 } from "@/lib/queries";
 import { DROITS } from "@/lib/droits";
 import type { Role } from "@/lib/settings";
-import { cleRetard, dejaAuRegistre, echeanceDuMois } from "@/lib/penalites";
+import { cleRetard, echeanceDuMois, penalitesCourues } from "@/lib/penalites";
 import { moisLong } from "@/lib/settings";
 import { KIND_PENALITE, STATUT_PENALITE } from "@/lib/valeurs";
 
@@ -157,18 +157,7 @@ export async function penalitesNonInscrites(
     return null;
   }
 
-  const index = new Map<string, { nb: number; montant: number; mois: string[] }>();
-  for (const s of situations) {
-    const courues = s.penalites.filter(
-      (p) => !dejaAuRegistre(s.membreId, p.mois, registre, bornes.get(s.membreId)),
-    );
-    index.set(s.membreId, {
-      nb: courues.length,
-      montant: courues.reduce((t, p) => t + p.montant, 0),
-      mois: courues.map((p) => p.mois),
-    });
-  }
-  return index;
+  return penalitesCourues(situations, registre, bornes);
 }
 
 /** Ce que le constat a fait, en une phrase. */

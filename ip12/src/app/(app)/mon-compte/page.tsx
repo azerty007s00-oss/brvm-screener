@@ -47,10 +47,12 @@ export default async function PageMonCompte() {
    * annoncait une troisieme, la somme des deux. Un membre croit son compte avant
    * de croire un courriel : c'est le chiffre du site qui devait etre juste.
    *
-   * Les deux sont dues, et la somme est celle que le tresorier reclame.
+   * Les deux sont dues, et la somme est celle que le tresorier reclame. La part
+   * la porte deja, registre et courues reunis : l'y ajouter encore compterait
+   * deux fois ce qui court.
    */
   const monCourant = courues?.get(membre.id) ?? { nb: 0, montant: 0, mois: [] };
-  const maDette = (maPart?.dues ?? 0) + monCourant.montant;
+  const maDette = maPart ? maPart.dues : monCourant.montant;
 
   // Un lot peut couvrir plusieurs mois : on ne propose la piece qu'une fois par lot.
   const lotsSansPiece = [...new Map(
@@ -79,7 +81,7 @@ export default async function PageMonCompte() {
         detail={
           maPart
             ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % au prorata du capital échu${
-                maPart.dues > 0 ? ` \u00b7 capital diminué de ${fcfa(maPart.dues)} de pénalités dues` : ""
+                maPart.dues > 0 ? ` \u00b7 ${fcfa(maPart.dues)} de pénalités dues déduites` : ""
               }`
             : "Votre part se calcule dès votre premier versement validé."
         }

@@ -24,7 +24,7 @@ const assert = new Proxy(strict0, {
   },
 });
 
-const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie, etatCaisse } = await import(
+const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie, etatCaisse, fraisGardeCourus } = await import(
   "../.verif/perf.mjs"
 );
 const {
@@ -135,28 +135,35 @@ proche(trois.find((p) => p.membreId === "a").valeur, 5 + (95 * 30) / 60, "A");
 proche(trois.find((p) => p.membreId === "b").valeur, (95 * 20) / 60, "B");
 assert.ok(Math.abs(trois.reduce((t, p) => t + p.valeur, 0) - 100) < 1e-9);
 
-// Penalite impayee : elle quitte le capital du fautif et dilue sa part au profit des autres.
+// Penalite impayee : une dette a son montant. Le pot la porte comme creance, la part du fautif la rend.
 const penalise = repartirParts([m("a", "A", 30, 0, 6), m("b", "B", 30)], 60);
 const aPen = penalise.find((p) => p.membreId === "a");
 const bPen = penalise.find((p) => p.membreId === "b");
-assert.ok(Math.abs(aPen.valeur - (60 * 24) / 54) < 1e-9, `obtenu ${aPen.valeur}`);
-assert.ok(Math.abs(bPen.valeur - (60 * 30) / 54) < 1e-9);
-assert.ok(aPen.valeur < 30 && bPen.valeur > 30, "la penalite doit diluer le fautif");
+assert.equal(aPen.part, 0.5, "la penalite ne touche plus au poids");
+assert.equal(aPen.valeur, 33 - 6, `obtenu ${aPen.valeur}`);
+assert.equal(bPen.valeur, 33);
 assert.ok(Math.abs(aPen.valeur + bPen.valeur - 60) < 1e-9, "le partage reste exhaustif");
 
 /*
- * Regularisation : la penalite reglee entre en caisse, donc dans l'avoir, et le
- * poids du membre est restaure. Les parts se reequilibrent -- mais l'argent, lui,
- * est sorti de sa poche : c'est en cela que la sanction demeure.
+ * Regularisation : la penalite reglee entre en caisse, donc dans l'avoir, et la
+ * dette disparait. La part du membre gagne exactement ce qu'il a paye : payer ou
+ * ne pas payer ne change rien a sa valeur nette.
  */
 const regularise = repartirParts([m("a", "A", 30), m("b", "B", 30)], 66);
 assert.equal(regularise.find((p) => p.membreId === "a").valeur, 33);
 assert.equal(regularise.find((p) => p.membreId === "b").valeur, 33);
+assert.equal(
+  regularise.find((p) => p.membreId === "a").valeur - 6,
+  aPen.valeur,
+  "neutralite : paye ou du, la penalite coute son montant",
+);
+assert.equal(regularise.find((p) => p.membreId === "b").valeur, bPen.valeur, "l'autre membre n'y gagne ni n'y perd");
 
-// Penalites superieures au capital : le poids tombe a zero, jamais en dessous.
+// Penalites superieures a sa part : il doit au club plus qu'il n'y detient.
 const ruine = repartirParts([m("a", "A", 10, 0, 50), m("b", "B", 30)], 60);
-assert.equal(ruine.find((p) => p.membreId === "a").valeur, 0);
-assert.equal(ruine.find((p) => p.membreId === "b").valeur, 60);
+assert.equal(ruine.find((p) => p.membreId === "a").valeur, 110 * 0.25 - 50);
+assert.equal(ruine.find((p) => p.membreId === "b").valeur, 110 * 0.75);
+assert.equal(ruine.reduce((t, p) => t + p.valeur, 0), 60);
 
 // Avances superieures a l'avoir constate : rien de negatif n'est reparti.
 const excedent = repartirParts([m("a", "A", 10, 100), m("b", "B", 10)], 50);
@@ -1619,46 +1626,73 @@ assert.equal(
 );
 
 
-/* ------------------------------------------- sortie d'un membre : side pocket */
+/* ------------------------------------------- sortie d'un membre : decompte */
 
 {
   /*
-   * Decision du bureau (octobre 2026) : seule la poche actions du sortant
-   * supporte les frais de vente, 1,4 % au bareme de la SGI ; le transfert, 2 %
-   * indicatifs, porte sur tout ce qui lui est vire.
+   * Decisions du bureau (octobre 2026) : provision de cession de 1,4 % sur la
+   * quote-part des actions, quote-part des frais de garde courus, transfert de
+   * 2 % hors avance.
    */
   const taux = { venteActions: 0.014, transfert: 0.02 };
+  const club = { actions: 709_300, fraisGardeCourus: 0 };
 
   // Part de 100 000 sans avance, dont 70 930 en actions.
-  const d = decompteSortie({ valeur: 100_000, avance: 0, part: 0.1 }, 709_300, taux);
+  const d = decompteSortie({ valeur: 100_000, avance: 0, part: 0.1 }, club, taux);
   assert.equal(d.pocheActions, 70_930);
   assert.equal(d.fraisVente, 993, "1,4 % de la seule poche actions");
   assert.equal(d.fraisTransfert, 1_980, "2 % de ce qui reste a virer");
   assert.equal(d.net, 97_027);
 
-  // L'avance ne se vend pas : elle n'entre pas dans la poche actions, mais se vire.
-  const avecAvance = decompteSortie({ valeur: 115_000, avance: 15_000, part: 0.1 }, 709_300, taux);
-  assert.equal(avecAvance.fraisVente, 993, "l'avance ne supporte aucun frais de vente");
-  assert.equal(avecAvance.fraisTransfert, Math.round((115_000 - 993) * 0.02), "mais elle se transfere");
+  // L'avance est rendue intacte : ni cession, ni transfert.
+  const avecAvance = decompteSortie({ valeur: 115_000, avance: 15_000, part: 0.1 }, club, taux);
+  assert.equal(avecAvance.fraisVente, 993);
+  assert.equal(avecAvance.fraisTransfert, 1_980, "le transfert ne touche pas l'avance");
+  assert.equal(avecAvance.net, 115_000 - 993 - 1_980);
 
   // Sans releve, rien a vendre : seul le transfert reste.
-  const sansReleve = decompteSortie({ valeur: 50_000, avance: 0, part: 0.1 }, 0, taux);
+  const sansReleve = decompteSortie({ valeur: 50_000, avance: 0, part: 0.1 }, { actions: 0, fraisGardeCourus: 0 }, taux);
   assert.equal(sansReleve.fraisVente, 0);
   assert.equal(sansReleve.net, 49_000);
 
   // La poche actions ne depasse jamais la part elle-meme.
-  const borne = decompteSortie({ valeur: 10_000, avance: 0, part: 0.5 }, 1_000_000, taux);
+  const borne = decompteSortie({ valeur: 10_000, avance: 0, part: 0.5 }, { actions: 1_000_000, fraisGardeCourus: 0 }, taux);
   assert.equal(borne.pocheActions, 10_000);
 
-  // La penalite qui court sans etre inscrite se retranche avant tout frais.
-  const courue = decompteSortie(
-    { valeur: 100_000, avance: 0, part: 0.1, penalitesEnCours: 1_000 },
-    709_300,
-    taux,
+  // Les frais de garde courus : sa quote-part, avant le transfert.
+  const garde = decompteSortie({ valeur: 100_000, avance: 0, part: 0.1 }, { actions: 709_300, fraisGardeCourus: 13_450 }, taux);
+  assert.equal(garde.fraisGarde, 1_345);
+  assert.equal(garde.fraisTransfert, Math.round((100_000 - 993 - 1_345) * 0.02));
+
+  // Une part negative (penalites superieures aux droits) ne rapporte rien.
+  const endette = decompteSortie({ valeur: -2_000, avance: 0, part: 0.1 }, club, taux);
+  assert.equal(endette.net, 0);
+  assert.equal(endette.fraisVente + endette.fraisGarde + endette.fraisTransfert, 0);
+
+  // Frais de garde de l'annee, au prorata : 0,4 % HT des titres et 5 000 HT, plus 10 %.
+  assert.equal(
+    fraisGardeCourus(2_693_920, "2026-10-10", { conservation: 0.004, tenueCompte: 5_000, taxe: 0.1 }),
+    Math.round(((2_693_920 * 0.004 + 5_000) * 1.1 * 282) / 365),
   );
-  assert.equal(courue.valeur, 99_000, "la part se dit penalites deduites");
-  assert.equal(courue.fraisTransfert, Math.round((99_000 - 993) * 0.02));
-  assert.equal(courue.net, 99_000 - 993 - Math.round((99_000 - 993) * 0.02));
+  assert.equal(fraisGardeCourus(1_000_000, "2026-01-01", { conservation: 0.004, tenueCompte: 5_000, taxe: 0.1 }), 0);
+}
+
+/*
+ * L'equivalence que les deux audits ont demandee : un membre qui paie sa penalite
+ * et un membre qui la doit sortent avec le meme net, a sa valeur pres.
+ */
+{
+  const taux = { venteActions: 0.014, transfert: 0.02 };
+  const club = { actions: 0, fraisGardeCourus: 0 };
+  const du = repartirParts([m("s", "S", 200_000, 0, 7_500), m("r", "R", 1_800_000)], 3_800_000);
+  const paye = repartirParts([m("s", "S", 200_000), m("r", "R", 1_800_000)], 3_807_500);
+  const sDu = du.find((p) => p.membreId === "s");
+  const sPaye = paye.find((p) => p.membreId === "s");
+  assert.equal(Math.round(sPaye.valeur - 7_500), Math.round(sDu.valeur), "payee ou due, la penalite coute son montant");
+  assert.equal(
+    decompteSortie(sDu, club, taux).net,
+    decompteSortie({ ...sPaye, valeur: sPaye.valeur - 7_500 }, club, taux).net,
+  );
 }
 
 /* ------------------------------------------- la caisse, avant et apres une sortie */

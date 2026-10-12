@@ -8,7 +8,6 @@ import {
   situationsClub,
   synthese,
 } from "@/lib/queries";
-import { penalitesNonInscrites } from "@/lib/constat";
 import { journalRecent } from "@/lib/journal";
 import { joignablesPour } from "@/lib/avis";
 import {
@@ -16,6 +15,7 @@ import {
   reprendreHistorique,
   reprendrePenalites,
   enregistrerSortie,
+  corrigerSortie,
   envoyerCourrielEssai,
   inscrireRegleMembre,
   leverRegleMembre,
@@ -96,15 +96,8 @@ export default async function PageAdministration() {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
     throw e;
   }
-  /*
-   * Ce qui court sans etre inscrit au registre se deduit de la sortie, sans
-   * attendre le prochain constat. `null` si le registre resiste : on taira alors
-   * une penalite plutot que de la compter deux fois.
-   */
-  const courues = await penalitesNonInscrites(situations);
-  const decomptes = await decomptesSortie(
-    new Map([...(courues ?? new Map())].map(([id, c]) => [id, c.montant])),
-  ).catch(() => []);
+  const decomptes = await decomptesSortie().catch(() => []);
+  const arreteSortie = decomptes[0]?.arrete ?? null;
 
   /*
    * Le journal garde la trace de chaque essai : on peut donc en afficher l'issue
@@ -656,24 +649,27 @@ export default async function PageAdministration() {
         resume="Ce que chaque membre emporterait en partant aujourd'hui."
       >
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          Le sortant paie les frais de sa sortie, et seulement ceux-là. Seule sa part
-          en actions coûte à vendre : {pourcentage(REGLES.fraisVenteActions)} de frais réels, au
-          barème de la SGI homologué par l&apos;AMF-UMOA. Le transfert vers son compte est
-          estimé à {pourcentage(REGLES.fraisTransfertSortie)} (art. 20), en attendant les frais
-          réels. Son avance est rendue au nominal, et ses pénalités dues restent acquises au
-          club (art. 9). Le remboursement intervient sous {REGLES.delaiRemboursementMois} mois
-          (R5). Hors exclusion de plein droit, une exclusion demande le vote des{" "}
-          {(REGLES.majoriteExclusion * 100).toFixed(0)} % (art. 20).
+          La sortie est arrêtée au dernier relevé
+          {arreteSortie ? ` (${dateCourte(arreteSortie)})` : ""} : portefeuille, caisse,
+          cotisations et virements de ce jour-là. Ses pénalités, inscrites ou en cours, sont
+          retranchées à leur montant (art. 9). S&apos;y retranchent une provision pour frais de
+          cession de {pourcentage(REGLES.fraisVenteActions)} sur sa part en actions, au barème de
+          la SGI, sa quote-part des frais de garde de l&apos;année, et le transfert vers son compte,
+          estimé à {pourcentage(REGLES.fraisTransfertSortie)} (art. 20) en attendant les frais
+          réels. Son avance est rendue intacte. Le remboursement intervient sous{" "}
+          {REGLES.delaiRemboursementMois} mois (R5). Hors exclusion de plein droit, une
+          exclusion demande le vote des {(REGLES.majoriteExclusion * 100).toFixed(0)} % (art. 20).
         </p>
 
         {decomptes.length > 0 && (
           <div className="defilement-x mb-4">
-            <table className="w-full min-w-[40rem] text-xs">
+            <table className="w-full min-w-[44rem] text-xs">
               <thead>
                 <tr style={{ color: "var(--discret)" }}>
                   <th className="py-1 text-left font-medium">Membre</th>
                   <th className="py-1 text-right font-medium">Part</th>
-                  <th className="py-1 text-right font-medium">Vente actions {pourcentage(REGLES.fraisVenteActions)}</th>
+                  <th className="py-1 text-right font-medium">Cession {pourcentage(REGLES.fraisVenteActions)}</th>
+                  <th className="py-1 text-right font-medium">Garde</th>
                   <th className="py-1 text-right font-medium">Transfert {pourcentage(REGLES.fraisTransfertSortie)}</th>
                   <th className="py-1 text-right font-medium">Avance</th>
                   <th className="py-1 text-right font-medium">Net</th>
@@ -702,6 +698,7 @@ export default async function PageAdministration() {
                     </td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.valeurBrute)}</td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisVente)}</td>
+                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisGarde)}</td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisTransfert)}</td>
                     <td className="py-1.5 text-right tabular-nums">{fcfa(d.avance)}</td>
                     <td className="py-1.5 text-right font-medium tabular-nums">{fcfa(d.netIndicatif)}</td>
@@ -710,11 +707,11 @@ export default async function PageAdministration() {
               </tbody>
             </table>
             <p className="mt-2 text-[11px]" style={{ color: "var(--discret)" }}>
-              Indicatif, sur l&apos;avoir connu du club (portefeuille et caisse) au dernier
-              relevé. La vente porte sur la quote-part du membre dans les actions du relevé ;
-              ses liquidités et son avance ne supportent aucun frais de vente. Le transfert
-              porte sur tout ce qui lui est viré. Toutes les pénalités sont déjà retranchées
-              de la part, y compris celles qui courent sans être encore inscrites au registre.
+              « Part » : ce que vaut sa part au relevé, pénalités déduites. La provision de
+              cession porte sur sa quote-part des actions du relevé, et reste acquise au club
+              qu&apos;il vende ou non. La garde : conservation{" "}
+              {pourcentage(REGLES.conservationSGI)} HT par an et tenue de compte, taxe comprise,
+              courues depuis le 1er janvier. Le transfert ne touche pas l&apos;avance.
             </p>
           </div>
         )}
@@ -737,10 +734,26 @@ export default async function PageAdministration() {
                   {s.membreNom} &middot; {dateCourte(s.date)} &middot; {fcfa(s.netVerse)} versés
                 </p>
                 <p className="text-xs" style={{ color: "var(--discret)" }}>
-                  {s.motif ?? "motif non précisé"} &middot; part {fcfa(s.valeurBrute)} &minus; frais{" "}
-                  {fcfa(s.frais)} &minus; acquis au club {fcfa(s.acquisAuClub)}
+                  {s.motif ?? "motif non précisé"} &middot; droits {fcfa(s.valeurBrute)} &minus;
+                  pénalités compensées {fcfa(s.acquisAuClub)} &minus; frais {fcfa(s.frais)}
                   {s.note ? ` · ${s.note}` : ""}
                 </p>
+                <div className="mt-1">
+                  <Depliant titre="Corriger les frais (frais réels)">
+                    <FormulaireAction action={corrigerSortie} libelle="Corriger" compact>
+                      <ChampCache nom="sortie" valeur={s.id} />
+                      <Champ
+                        nom="frais"
+                        libelle="Frais réels au total (FCFA)"
+                        type="number"
+                        min={0}
+                        valeur={s.frais}
+                        aide="Cession, garde et transfert réellement supportés. Le net à verser est recalculé."
+                      />
+                      <Champ nom="raison" libelle="Justificatif" aide="Avis d'opéré, relevé bancaire…" />
+                    </FormulaireAction>
+                  </Depliant>
+                </div>
               </li>
             ))}
           </ul>
@@ -764,29 +777,12 @@ export default async function PageAdministration() {
               libelle="Motif"
               aide="Démission, exclusion prononcée au vote, exclusion de plein droit (R5)…"
             />
-            <Champ
-              nom="valeurBrute"
-              libelle="Valeur de la part (FCFA)"
-              type="number"
-              min={0}
-              aide="Reprenez la colonne « Part » du tableau ci-dessus : toutes les pénalités y sont déjà déduites."
-            />
-            <Champ
-              nom="frais"
-              libelle="Frais retenus (FCFA)"
-              type="number"
-              min={0}
-              aide="« Vente actions » plus « Transfert » du tableau ci-dessus ; saisissez les frais réels dès qu'ils sont connus."
-            />
-            <Champ
-              nom="acquisAuClub"
-              libelle="Pénalités acquises au club (FCFA)"
-              type="number"
-              min={0}
-              valeur={0}
-              aide="Laissez 0 si vous reprenez la part du tableau : ses pénalités y sont déjà déduites."
-            />
             <Champ nom="note" libelle="Référence de la décision" requis={false} />
+            <p className="text-[11px]" style={{ color: "var(--discret)" }}>
+              Le site enregistre la ligne du tableau ci-dessus : sa part au relevé, ses
+              pénalités soldées par compensation avec ce motif, la provision de cession, la
+              garde et le transfert estimés. Corrigez les frais quand les frais réels sont connus.
+            </p>
           </FormulaireAction>
         </Depliant>
       </Tuile>

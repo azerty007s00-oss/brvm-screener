@@ -752,3 +752,28 @@ export function dejaAuRegistre(
       (p.membreId === membreId && p.nature === "retard" && p.dateConstat.slice(0, 10) === echeance),
   );
 }
+
+/**
+ * Ce qui court sans etre encore inscrit au registre, par membre.
+ *
+ * Fonction pure : le constat et la synthese la partagent, pour que la dette d'un
+ * membre soit la meme partout, sans attendre le prochain constat.
+ */
+export function penalitesCourues(
+  situations: { membreId: string; penalites: { mois: string; montant: number }[] }[],
+  registre: PenaliteAuRegistre[],
+  bornes: Map<string, string>,
+): Map<string, { nb: number; montant: number; mois: string[] }> {
+  const index = new Map<string, { nb: number; montant: number; mois: string[] }>();
+  for (const s of situations) {
+    const courues = s.penalites.filter(
+      (p) => !dejaAuRegistre(s.membreId, p.mois, registre, bornes.get(s.membreId)),
+    );
+    index.set(s.membreId, {
+      nb: courues.length,
+      montant: courues.reduce((t, p) => t + p.montant, 0),
+      mois: courues.map((p) => p.mois),
+    });
+  }
+  return index;
+}

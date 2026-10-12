@@ -32,6 +32,12 @@ export const maxDuration = 30;
  *
  * L'envoi est facultatif : sans transport configure, le site continue d'afficher
  * les alertes, seul le courrier ne part pas.
+ *
+ * LE 11, LE CONSTAT SEUL. L'echeance du 10 vient de passer : la penalite du mois
+ * nait, et le doublement R4 aussi quand c'est le troisieme mois impaye. Sans ce
+ * passage, le registre ne les portait qu'au 7 du mois suivant -- et un membre
+ * exclu entre-temps sortait sans eux, puisqu'un membre sorti n'est plus constate.
+ * Aucun courrier ne part ce jour-la : les trois relances du mois sont faites.
  */
 export async function GET(requete: Request) {
   /*
@@ -90,6 +96,15 @@ export async function GET(requete: Request) {
     }
   } catch (e) {
     constat = { erreur: String(e) };
+  }
+
+  if (joursAvantEcheance(maintenant) < 0) {
+    return NextResponse.json({
+      mois: moisCourant,
+      jour: maintenant.getUTCDate(),
+      constatSeul: true,
+      constat,
+    });
   }
 
   let destinataires;
