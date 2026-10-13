@@ -62,6 +62,7 @@ export type Cellule = {
 };
 export type SituationClub = {
   membreId: string; nom: string; email: string; role: string; cellules: Cellule[];
+  titulaireNom?: string | null;
   moisEnRetard: string[]; joursDeRetard: number; nbPenalitesImpayees: number;
   totalPenalites: number;
   penalites: { mois: string; montant: number; doublee: boolean; figee: boolean }[];
@@ -1086,11 +1087,41 @@ verifier(
   "et le courrier qu'il recoit de toute facon dit la fin",
 );
 
+/* ------------------------- une part rachetee : le courrier va a son detenteur */
+
+const partRachetee = {
+  ...bourama,
+  situation: {
+    ...bourama.situation,
+    membreId: "p", nom: "SORO Tielina · 50 % de la part de KONE Bourama", email: "t@ip12.ci",
+    titulaireNom: "SORO Tielina",
+    cellules: [cellule("2026-08-01", 0, 2500), cellule("2026-09-01", 0, 2500)],
+  },
+};
+const lettrePart = lettre(partRachetee);
+verifier(lettrePart.startsWith("Bonjour SORO Tielina,"), "la relance d'une part s'adresse a son detenteur");
+verifier(
+  lettrePart.includes("Ce courrier concerne la part rachetee que vous detenez (SORO Tielina · 50 % de la part de KONE Bourama)"),
+  "et dit de quelle part il s'agit",
+);
+verifier(
+  lettrePart.includes("en choisissant cette part"),
+  "et comment la regler, a part de la sienne",
+);
+verifier(
+  sujetRelance(partRachetee, "2026-09-01", LE_30).endsWith("(SORO Tielina · 50 % de la part de KONE Bourama)"),
+  "l'objet nomme la part, pour ne pas se confondre avec la relance de sa propre part",
+);
+verifier(
+  !lettre(bourama).includes("part rachetee") && !sujetRelance(bourama, "2026-09-01", LE_30).includes("part de"),
+  "une personne ne lit rien des parts rachetees",
+);
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 console.log(
   `OK - ${controles} controles du courrier de relance : objet, seuil R5, ` +
     "dettes de penalites et leur somme, liste des mois, R2, mode d'emploi des cotisations " +
     "et des penalites, mesures disciplinaires, regime particulier, mesure a venir, " +
-    "notes collees, ordre de reglement des mois, preavis d'avance, fin de mesure, mise en forme et rendu HTML",
+    "notes collees, ordre de reglement des mois, preavis d'avance, fin de mesure, parts rachetees, mise en forme et rendu HTML",
 );

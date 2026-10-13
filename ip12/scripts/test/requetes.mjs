@@ -100,7 +100,13 @@ function instancier(corps, table, fichier, ligne) {
   for (const [entier, argument] of unsafe) {
     const cle = argument.trim();
     let valeurs;
+    /*
+     * Un choix entre deux constantes, selon qu'une migration a tourne : les deux
+     * formes sont verifiees, chacune contre le schema.
+     */
+    const choix = cle.match(/^\w+ \? (CHAMPS_\w+) : (CHAMPS_\w+)$/);
     if (table.has(cle)) valeurs = [table.get(cle)];
+    else if (choix && table.has(choix[1]) && table.has(choix[2])) valeurs = [table.get(choix[1]), table.get(choix[2])];
     else if (PROJECTIONS_CALCULEES[cle]) valeurs = PROJECTIONS_CALCULEES[cle];
     else {
       throw new Error(

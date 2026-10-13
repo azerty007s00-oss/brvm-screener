@@ -122,6 +122,8 @@ export default async function PageVersements({
   // Les 14 derniers mois : au-dela, la grille devient illisible sur telephone.
   const moisAffiches = (situations[0]?.cellules ?? []).slice(-14);
   const maSituation = situations.find((s) => s.membreId === membre.id);
+  /* Les parts rachetees que ce membre detient : il les paie, chacune a part. */
+  const mesParts = membres.filter((m) => m.titulaireId === membre.id);
   const aujourdhui = debutMois();
 
   /*
@@ -243,6 +245,22 @@ export default async function PageVersements({
                 />
               )}
               {/*
+                * UNE PART RACHETEE SE PAIE A PART. Elle a ses propres mois et ses
+                * propres penalites : le detenteur dit laquelle il regle, et le
+                * versement s'impute sur elle seule.
+                */}
+              {!saisieDirecte && mesParts.length > 0 && (
+                <Selection
+                  nom="membreId"
+                  libelle="Pour quelle part"
+                  valeur={String(membre.id)}
+                  options={[
+                    { valeur: String(membre.id), libelle: "Ma part" },
+                    ...mesParts.map((m) => ({ valeur: m.id, libelle: m.nom })),
+                  ]}
+                />
+              )}
+              {/*
                 * COTISATION OU PENALITE, AU MEME ENDROIT.
                 *
                 * Les deux se declaraient sur deux pages. Qui versait les deux
@@ -290,7 +308,9 @@ export default async function PageVersements({
                   " Pénalité : il solde les plus anciennes d'abord, et une pénalité se règle entière." +
                   (saisieDirecte
                     ? " Pour un autre membre, c'est sa propre situation qui s'applique ; une pénalité, elle, se solde depuis la page Pénalités."
-                    : "")
+                    : mesParts.length > 0
+                      ? " Pour une part rachetée, ce sont ses propres mois et ses propres pénalités qui s'appliquent."
+                      : "")
                 }
               />
               {/*

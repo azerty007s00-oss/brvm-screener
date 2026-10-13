@@ -27,7 +27,7 @@ const assert = new Proxy(strict0, {
 const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie, etatCaisse, fraisGardeCourus, potAPartager, partagerSortie } = await import(
   "../.verif/perf.mjs"
 );
-const { courrielSortie, courrielCorrectionSortie, echeanceRemboursement, pointsAVerifier, empreinteSortie, lignesValorisation, lignesPartage } = await import("../.verif/sortie.mjs");
+const { courrielSortie, courrielCorrectionSortie, echeanceRemboursement, pointsAVerifier, empreinteSortie, lignesValorisation, lignesPartage, premierMoisDeLaPart, nomDeLaPart, lignesNouvellesParts } = await import("../.verif/sortie.mjs");
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
@@ -2086,6 +2086,67 @@ assert.equal(
   );
 }
 
+{
+  /*
+   * UNE PART RACHETEE VIT A PART. Sa cotisation suit sa taille, ses penalites
+   * suivent sa cotisation, et elle commence a la premiere echeance qui suit le
+   * rachat.
+   */
+  assert.equal(premierMoisDeLaPart("2026-10-05", 10), "2026-10-01", "rachetee avant l'echeance : le mois en cours");
+  assert.equal(premierMoisDeLaPart("2026-10-10", 10), "2026-11-01", "le jour de l'echeance : le mois suivant");
+  assert.equal(premierMoisDeLaPart("2026-12-20", 10), "2027-01-01", "en fin d'annee : janvier");
+  assert.equal(nomDeLaPart("SORO Tiélina", "KONÉ Bourama", 1), "SORO Tiélina · part de KONÉ Bourama");
+  assert.equal(nomDeLaPart("SORO Tiélina", "KONÉ Bourama", 0.5), "SORO Tiélina · 50 % de la part de KONÉ Bourama");
+
+  // Une demi-part : demi-cotisation, demi-penalites, et R4 double de la meme facon.
+  const entiere = calculerPenalites(["2026-07-01", "2026-08-01", "2026-09-01"], [], { cotisationMensuelle: 5_000, tauxPenalite: 0.1 });
+  const demie = calculerPenalites(["2026-07-01", "2026-08-01", "2026-09-01"], [], { cotisationMensuelle: 2_500, tauxPenalite: 0.1 });
+  assert.deepEqual(
+    demie.map((x) => x.montant),
+    entiere.map((x) => x.montant / 2),
+    "les penalites d'une demi-part sont la moitie de celles d'une part",
+  );
+  assert.ok(demie.every((x) => x.doublee), "R4 frappe la part rachetee comme les autres");
+
+  // Ses mois commencent a la premiere echeance qui suit le rachat, pas avant.
+  const sit = situationMembre(
+    "part", ["2026-09-01", "2026-10-01", "2026-11-01"], [], [], new Date("2026-11-20T12:00:00Z"),
+    "2026-11-01", { cotisationMensuelle: 2_500, tauxPenalite: 0.1 }, 0,
+  );
+  assert.deepEqual(sit.moisEnRetard, ["2026-11-01"], "seul novembre est du");
+  assert.equal(sit.cellules.find((c) => c.mois === "2026-11-01").requis, 2_500, "a hauteur de sa taille");
+
+  // Le courrier de sortie d'une part va a son detenteur, et le dit.
+  const club = {
+    compteTitres: 1_000_000, actions: 900_000, enTransit: 0, caisse: 100_000, creances: 0, avances: 0,
+    aPartager: 1_100_000, cotisations: 1_100_000, fraisGardeCourus: 0,
+  };
+  const t = courrielSortie({
+    nom: "SORO Tiélina", part: "SORO Tiélina · 50 % de la part de KONÉ Bourama",
+    dateSortie: "2027-03-15", motif: "exclusion de plein droit (R5)", releve: "2027-03-15", club,
+    cotisations: 100_000, avance: 0, quotePart: 100_000, droits: 100_000, rachats: [],
+    penalites: 0, penalitesEnCours: 0, compensees: 0, pocheActions: 81_818, fraisVente: 1_145,
+    fraisGarde: 0, fraisTransfert: 1_977, net: 96_878,
+  }).texte;
+  assert.ok(t.startsWith("Bonjour SORO Tiélina,"), "au detenteur");
+  assert.ok(t.includes("La sortie de la part rachetée que vous détenez (SORO Tiélina · 50 % de la part de KONÉ Bourama) prend effet"));
+  assert.ok(t.includes("Votre propre part n'est pas concernée."));
+  const c = courrielCorrectionSortie({
+    nom: "SORO Tiélina", part: "SORO Tiélina · part de KONÉ Bourama", dateSortie: "2027-03-15",
+    fraisAvant: 3_000, fraisApres: 2_500, netAvant: 96_878, netApres: 97_378, raison: "avis d'opéré",
+  }).texte;
+  assert.ok(c.includes("Les frais réels de la sortie de la part rachetée que vous détenez (SORO Tiélina · part de KONÉ Bourama) sont connus"));
+  assert.ok(!/—|--|undefined|NaN/.test(t + c));
+
+  // Avant de confirmer, chaque acheteur lit ce que sa part lui coutera.
+  const np = lignesNouvellesParts([{ nom: "SORO Tiélina", taille: 0.5 }], 5_000, "2026-11-01");
+  assert.equal(
+    np[0],
+    `SORO Tiélina détiendra une part distincte de la sienne (50 % d'une part) : ${fcfa(2_500)} par mois ` +
+      "à partir de novembre 2026, avec ses propres retards et pénalités.",
+  );
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2094,5 +2155,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes",
 );

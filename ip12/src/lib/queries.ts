@@ -51,6 +51,14 @@ export type MembreListe = {
   actif: boolean;
   date_adhesion: string;
   must_change_password: boolean;
+  /**
+   * Le detenteur, si cette ligne est une part rachetee a un sortant, et non une
+   * personne. Une part a ses propres cotisations et penalites, mais ne se
+   * connecte pas : le courrier qui la concerne va a son detenteur.
+   */
+  titulaireId: string | null;
+  /** La fraction d'une part entiere que represente une part rachetee ; null pour une personne. */
+  fraction: number | null;
 };
 
 export type Versement = {
@@ -136,16 +144,44 @@ async function reglagesEffectifsBrut(): Promise<Reglages> {
 
 /* ------------------------------------------------------------------- membres */
 
-const CHAMPS_MEMBRE = `
-  id, full_name as nom, email, phone as telephone, title as titre, role,
+/*
+ * Deux projections, selon que la migration des rachats a tourne : avant, les
+ * colonnes des parts n'existent pas, et toute ligne est une personne.
+ */
+const CHAMPS_MEMBRE_AVEC_PARTS = `
+  id, full_name as nom, coalesce(email, '') as email, phone as telephone, title as titre, role,
   is_active as actif, must_change_password,
-  to_char(joined_on, 'YYYY-MM-DD') as date_adhesion
+  to_char(joined_on, 'YYYY-MM-DD') as date_adhesion,
+  holder_id as titulaire_id, part_fraction as fraction
 `;
+const CHAMPS_MEMBRE_SANS_PARTS = `
+  id, full_name as nom, coalesce(email, '') as email, phone as telephone, title as titre, role,
+  is_active as actif, must_change_password,
+  to_char(joined_on, 'YYYY-MM-DD') as date_adhesion,
+  null::uuid as titulaire_id, null::numeric as fraction
+`;
+
+/**
+ * Les colonnes des parts rachetees existent-elles ? Elles n'arrivent qu'avec
+ * `scripts/migration-rachats.sql` ; avant, toutes les lignes sont des personnes.
+ */
+export const partsEnBase = cache(async (): Promise<boolean> => {
+  try {
+    const rows = await db()`
+      select 1 from information_schema.columns
+      where table_name = 'members' and column_name = 'holder_id'
+    `;
+    return rows.length > 0;
+  } catch {
+    return false;
+  }
+});
 
 async function listerMembresBrut(inclureInactifs: boolean): Promise<MembreListe[]> {
   const sql = db();
+  const avecParts = await partsEnBase();
   const rows = await sql`
-    select ${sql.unsafe(CHAMPS_MEMBRE)}
+    select ${sql.unsafe(avecParts ? CHAMPS_MEMBRE_AVEC_PARTS : CHAMPS_MEMBRE_SANS_PARTS)}
     from members
     where ${inclureInactifs} or is_active = true
     order by case role
@@ -156,7 +192,29 @@ async function listerMembresBrut(inclureInactifs: boolean): Promise<MembreListe[
       else 4
     end, full_name
   `;
-  return rows as MembreListe[];
+  const membres = rows.map((r) => ({
+    ...(r as Omit<MembreListe, "titulaireId" | "fraction">),
+    id: String(r.id),
+    titulaireId: r.titulaire_id ? String(r.titulaire_id) : null,
+    fraction: r.fraction === null || r.fraction === undefined ? null : Number(r.fraction),
+  }));
+  /* Les personnes d'abord, les parts rachetees ensuite : l'ordre des listes ne change pas. */
+  return [...membres.filter((m) => !m.titulaireId), ...membres.filter((m) => m.titulaireId)];
+}
+
+/**
+ * Ce membre peut-il declarer pour cette ligne ? Pour lui-meme, et pour les parts
+ * rachetees qu'il detient : elles n'ont pas de mains pour payer.
+ */
+export async function declarePour(auteurId: string, cibleId: string): Promise<boolean> {
+  if (cibleId === auteurId) return true;
+  const membres = await listerMembres().catch(() => [] as MembreListe[]);
+  return membres.some((m) => m.id === cibleId && m.titulaireId === auteurId);
+}
+
+/** Une part rachetee, et non une personne. */
+export function estPart(m: { titulaireId: string | null }): boolean {
+  return m.titulaireId !== null;
 }
 
 /* ---------------------------------------------------------------- versements */
@@ -704,11 +762,18 @@ export type SituationClub = SituationMembre & {
   /** La part portant sur des mois a venir. */
   avance: number;
   /**
-   * Le poids des cotisations rachetees a des membres sortis. Il compte dans sa
-   * part comme ses propres cotisations, mais n'est jamais entre en caisse : il
-   * reste hors de `verse`.
+   * Pour une part rachetee : le poids recu du sortant. Il compte dans sa valeur
+   * comme des cotisations, mais n'est jamais entre en caisse : il reste hors de
+   * `verse`. Zero pour une personne.
    */
   partsRachetees: number;
+  /** Le detenteur, si cette ligne est une part rachetee. */
+  titulaireId: string | null;
+  /**
+   * Son nom. Pour une part, `email` est aussi celui du detenteur : c'est lui que
+   * la relance de la part doit atteindre.
+   */
+  titulaireNom: string | null;
   retardDeclare: boolean;
   /**
    * Le mois par lequel ce membre doit reprendre, et ce qu'il reste a y
@@ -987,8 +1052,23 @@ async function reglesImminentesBrut(
 
 /** Les derogations en vigueur, indexees par membre, pretes pour le calcul. */
 async function derogationsParMembreBrut(): Promise<Map<string, ReglesMembre>> {
-  const regles = await reglesIndividuelles();
+  const [regles, membres, reglages] = await Promise.all([
+    reglesIndividuelles(),
+    listerMembres(true).catch(() => [] as MembreListe[]),
+    reglagesEffectifs(),
+  ]);
   const index = new Map<string, ReglesMembre>();
+  /*
+   * UNE PART RACHETEE COTISE A PROPORTION DE SA TAILLE : la moitie d'une part
+   * doit la moitie de la cotisation commune, et ses penalites, calculees sur ce
+   * qu'elle doit, suivent d'elles-memes. Une regle individuelle posee sur la
+   * part, plus bas, l'emporte.
+   */
+  for (const m of membres) {
+    if (m.fraction !== null) {
+      index.set(m.id, { cotisationMensuelle: Math.round(m.fraction * reglages.cotisationMensuelle) });
+    }
+  }
   for (const r of regles) {
     if (r.valeur === null || !Number.isFinite(r.valeur) || r.valeur <= 0) continue;
     const courante = index.get(r.membreId) ?? {};
@@ -1265,8 +1345,10 @@ export async function faitsAvantSortie(d: DecompteSortie): Promise<FaitsSortie> 
 }
 
 /**
- * Le poids des cotisations que chaque membre a rachetees a des sortants, au plus
- * tard a cette date.
+ * Le poids que chaque part rachetee a recu du sortant, au plus tard a cette date.
+ *
+ * Il va a la part, non a son detenteur : la part rachetee vit a cote de sa part
+ * de base, avec ses propres cotisations, qui s'y ajoutent ensuite.
  *
  * La table n'existe qu'apres `scripts/migration-rachats.sql` : son absence veut
  * dire qu'aucun rachat n'a eu lieu, pas une panne.
@@ -1274,22 +1356,22 @@ export async function faitsAvantSortie(d: DecompteSortie): Promise<FaitsSortie> 
 async function poidsRachetes(arrete: string | null): Promise<Map<string, number>> {
   try {
     const rows = await db()`
-      select buyer_id, sum(weight)::bigint as poids
+      select part_id, sum(weight)::bigint as poids
       from share_buybacks
       where ${arrete}::date is null or bought_on <= ${arrete}::date
-      group by buyer_id
+      group by part_id
     `;
-    return new Map(rows.map((r) => [String(r.buyer_id), n(r.poids)]));
+    return new Map(rows.map((r) => [String(r.part_id), n(r.poids)]));
   } catch {
     return new Map();
   }
 }
 
-/** Le rachat par des membres est-il en place ? Il demande la table des rachats. */
+/** Le rachat par des membres est-il en place ? Il demande la table des rachats et les colonnes des parts. */
 export async function rachatsDisponibles(): Promise<boolean> {
   try {
     await db()`select 1 from share_buybacks limit 0`;
-    return true;
+    return await partsEnBase();
   } catch {
     return false;
   }
@@ -1344,11 +1426,12 @@ async function situationsClubBrut(
       nbPenalites.get(m.id) ?? 0,
     );
 
+    const titulaire = m.titulaireId ? membres.find((x) => x.id === m.titulaireId) : undefined;
     return {
       ...situation,
       nom: m.nom,
       role: m.role,
-      email: m.email,
+      email: titulaire ? titulaire.email : m.email,
       verse: siens.filter((v) => v.statut === "valide").reduce((s, v) => s + v.montant, 0),
       /*
        * Le capital acquis s'arrete aux mois echus. Une avance ne donne aucun
@@ -1362,6 +1445,8 @@ async function situationsClubBrut(
         .filter((v) => v.statut === "valide" && !estExigible(v.mois_couvert, aujourdhui))
         .reduce((s, v) => s + v.montant, 0),
       partsRachetees: rachetees.get(m.id) ?? 0,
+      titulaireId: m.titulaireId,
+      titulaireNom: titulaire?.nom ?? null,
       retardDeclare:
         situation.moisEnRetard.length > 0 &&
         situation.moisEnRetard.every((mo) => declares.includes(mo)),

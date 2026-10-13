@@ -8,7 +8,7 @@ import { journaliser } from "@/lib/journal";
 import { avertirReglementPenalite } from "@/lib/avis";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
 import { penalitesNonInscrites, porterRetardsAuRegistre, resumeConstat } from "@/lib/constat";
-import { absencesParMembre, reglagesEffectifs, situationsClub } from "@/lib/queries";
+import { absencesParMembre, declarePour, reglagesEffectifs, situationsClub } from "@/lib/queries";
 import { accorde, dateCourte, fcfa } from "@/lib/settings";
 import { imputerPenalites, tranchesAbsence, type ImputationPenalite } from "@/lib/penalites";
 import {
@@ -424,12 +424,12 @@ export async function declarerReglementPenalite(
    * penalite le solde depuis la page Penalites, ou son geste vaut validation
    * -- et se trace comme tel.
    */
-  if (membreCible !== auteur.id) {
+  if (!(await declarePour(auteur.id, membreCible))) {
     return {
       ok: false,
       erreur:
-        "Une pénalité ne se déclare que pour soi. Pour un autre membre, soldez-la " +
-        "depuis la page Pénalités : votre saisie y vaut validation.",
+        "Une pénalité ne se déclare que pour soi, ou pour une part rachetée qu'on détient. " +
+        "Pour un autre membre, soldez-la depuis la page Pénalités : votre saisie y vaut validation.",
     };
   }
   if (!Number.isFinite(montant) || montant <= 0) {
@@ -450,11 +450,11 @@ export async function declarerReglementPenalite(
              to_char(incurred_on, 'YYYY-MM-DD') as date_constat,
              to_char(created_at, 'YYYY-MM-DD"T"HH24:MI:SS.US') as inscrite
       from penalties
-      where member_id = ${auteur.id}::uuid and status = ${STATUT_PENALITE.due}
+      where member_id = ${membreCible}::uuid and status = ${STATUT_PENALITE.due}
     `,
     sql`
       select penalty_id from penalty_settlements
-      where member_id = ${auteur.id}::uuid and status = ${STATUT_REGLEMENT.enAttente}
+      where member_id = ${membreCible}::uuid and status = ${STATUT_REGLEMENT.enAttente}
     `,
   ]);
   const dues = lignesDues as {
@@ -475,9 +475,9 @@ export async function declarerReglementPenalite(
    * « vous n'avez aucune penalite due » a qui vient de les lire serait un
    * dementi. On dit laquelle des deux situations est la sienne.
    */
-  const mienne = (await situationsClub()).find((x) => x.membreId === auteur.id);
+  const mienne = (await situationsClub()).find((x) => x.membreId === membreCible);
   const nonInscrites = mienne
-    ? (await penalitesNonInscrites([mienne]))?.get(auteur.id) ?? null
+    ? (await penalitesNonInscrites([mienne]))?.get(membreCible) ?? null
     : null;
 
   if (dues.length === 0) {
@@ -551,7 +551,7 @@ export async function declarerReglementPenalite(
         insert into penalty_settlements
           (penalty_id, member_id, quantity, paid_on, method, reference, note, batch_id,
            status, declared_by)
-        values (${i.penaliteId}::uuid, ${auteur.id}::uuid, ${i.quantite},
+        values (${i.penaliteId}::uuid, ${membreCible}::uuid, ${i.quantite},
                 ${datePaiement}::date, ${mode}, ${reference}, ${note}, ${lot}::uuid,
                 ${STATUT_REGLEMENT.enAttente}, ${auteur.id}::uuid)
       `;
@@ -577,10 +577,10 @@ export async function declarerReglementPenalite(
 
   const quantite = posees.reduce((t, i) => t + i.quantite, 0);
   const total = posees.reduce((t, i) => t + i.montant, 0);
-  const pieces = await enregistrerJustificatif(donnees, lot, auteur.id, auteur.id);
+  const pieces = await enregistrerJustificatif(donnees, lot, membreCible, auteur.id);
   await avertirReglementPenalite({
     auteurId: auteur.id,
-    membreNom: auteur.nom,
+    membreNom: membreCible === auteur.id ? auteur.nom : (mienne?.nom ?? auteur.nom),
     quantite,
     montant: total,
     avecJustificatif: pieces.joint,

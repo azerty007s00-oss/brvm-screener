@@ -763,6 +763,9 @@ export default async function PageAdministration() {
         <Depliant titre="Enregistrer une sortie">
           <FormulaireSortie
             membres={membres.map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
+            personnes={membres
+              .filter((m) => !m.titulaireId)
+              .map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
             aujourdhui={new Date().toISOString().slice(0, 10)}
             rachatsPossibles={rachatsPossibles}
           />

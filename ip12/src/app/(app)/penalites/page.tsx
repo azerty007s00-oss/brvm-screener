@@ -92,6 +92,22 @@ export default async function PagePenalites() {
     throw e;
   }
 
+  /*
+   * Les parts rachetees que ce membre detient ont leurs propres penalites : il
+   * les voit et les regle comme les siennes, chacune sous le nom de sa part.
+   */
+  const mesParts = membres.filter((m) => m.titulaireId === membre.id).map((m) => m.id);
+  if (!gere && mesParts.length > 0) {
+    const [desParts, reglementsDesParts] = await Promise.all([
+      Promise.all(mesParts.map((id) => listerPenalites({ membreId: id }))),
+      declarations === null
+        ? Promise.resolve(null)
+        : Promise.all(mesParts.map((id) => reglementsPenalite({ membreId: id }))).catch(() => null),
+    ]);
+    penalites = [...penalites, ...desParts.flat()];
+    if (declarations && reglementsDesParts) declarations = [...declarations, ...reglementsDesParts.flat()];
+  }
+
   const total = (statut: string) =>
     penalites
       .filter((p) => p.statut === statut)

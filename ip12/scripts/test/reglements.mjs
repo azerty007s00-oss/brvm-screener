@@ -201,6 +201,8 @@ export const reglagesEffectifs = async () => ({
 export const donnees: { situations: any[] } = { situations: [] };
 export const situationsClub = async (): Promise<any[]> => donnees.situations;
 export const listerMembres = async (): Promise<any[]> => [];
+/* Ce controle declare toujours pour soi : les parts rachetees n'y entrent pas. */
+export const declarePour = async (auteurId: string, cibleId: string) => auteurId === cibleId;
 /*
  * Le registre, lu pour de vrai. Seules les quatre colonnes dont le rapprochement
  * se sert sont projetees ici ; la requete de production, plus large, a ses noms

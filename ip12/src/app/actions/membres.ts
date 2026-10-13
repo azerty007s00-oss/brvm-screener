@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { exigerRole, hacherMotDePasse, motDePasseProvisoire } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { envoyerAcces } from "@/lib/avis";
+import { listerMembres } from "@/lib/queries";
 import { CLUB, POSTES_UNIQUES, ROLES, lienDuSite } from "@/lib/settings";
 import type { Role } from "@/lib/settings";
 import type { EtatFormulaire } from "./auth";
@@ -42,8 +43,9 @@ export async function creerMembre(
   }
 
   const sql = db();
-  const effectif = await sql`select count(*)::int as c from members where is_active = true`;
-  if (Number(effectif[0]?.c ?? 0) >= CLUB.membresMax) {
+  /* Le plafond compte des personnes : une part rachetee n'en est pas une. */
+  const effectif = (await listerMembres()).filter((m) => !m.titulaireId).length;
+  if (effectif >= CLUB.membresMax) {
     return { ok: false, erreur: `Le club est plafonné à ${CLUB.membresMax} membres (statuts).` };
   }
 

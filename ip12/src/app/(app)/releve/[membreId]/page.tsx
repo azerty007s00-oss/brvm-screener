@@ -2,6 +2,7 @@ import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import {
+  declarePour,
   listerMembres,
   listerPenalites,
   listerVersements,
@@ -35,7 +36,8 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
    * comptes. Un membre n'a pas a editer la piece d'un autre, meme si les soldes du
    * club sont ouverts a tous (art. 12).
    */
-  const sien = membreId === lecteur.id;
+  /* Le detenteur d'une part rachetee en tient le releve comme le sien. */
+  const sien = await declarePour(lecteur.id, membreId);
   if (!sien && !peut(lecteur, "validerVersement") && !peut(lecteur, "gererReglages")) {
     return (
       <Carte titre="Relevé">

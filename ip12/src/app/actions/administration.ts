@@ -18,9 +18,12 @@ import {
   courrielCorrectionSortie,
   courrielSortie,
   empreinteSortie,
+  lignesNouvellesParts,
   lignesPartage,
   lignesValorisation,
+  nomDeLaPart,
   pointsAVerifier,
+  premierMoisDeLaPart,
 } from "@/lib/sortie";
 import { partagerSortie, type Rachat } from "@/lib/perf";
 import { porterRetardsAuRegistre, resumeConstat, type IssueConstat } from "@/lib/constat";
@@ -475,7 +478,22 @@ export async function enregistrerSortie(
    * avec le sortant ; le club rachete ce qui reste.
    */
   const actifs = await listerMembres();
-  const nomDe = new Map(actifs.map((m) => [String(m.id), m.nom]));
+  const sortant = actifs.find((m) => m.id === membreId);
+  /*
+   * Une part rachetee sort comme une personne, mais son courrier va a son
+   * detenteur. Une personne qui detient des parts ne sort pas seule : ses parts
+   * resteraient sans detenteur.
+   */
+  const titulaire = sortant?.titulaireId ? actifs.find((m) => m.id === sortant.titulaireId) : null;
+  const sesParts = actifs.filter((m) => m.titulaireId === membreId);
+  if (sesParts.length > 0) {
+    return refus(
+      `${nomSortant} détient ${sesParts.length > 1 ? "des parts rachetées" : "une part rachetée"} ` +
+        `(${sesParts.map((x) => x.nom).join(", ")}) : enregistrez d'abord leur sortie.`,
+    );
+  }
+  /* Seules des personnes rachetent : une part n'a pas de mains pour payer. */
+  const nomDe = new Map(actifs.filter((m) => !m.titulaireId).map((m) => [String(m.id), m.nom]));
   const rachats: Rachat[] = [];
   for (const r of saisies) {
     const nom = nomDe.get(r.membre);
@@ -483,6 +501,9 @@ export async function enregistrerSortie(
     const prix = nombreSaisi(r.prix);
     if (!r.membre || !nom) return refus("Choisissez chaque acheteur parmi les membres actifs.");
     if (r.membre === membreId) return refus("Le sortant ne peut pas racheter ses propres parts.");
+    if (r.membre === titulaire?.id) {
+      return refus(`${nom} détient déjà cette part : il ne peut pas la racheter.`);
+    }
     if (rachats.some((x) => x.membreId === r.membre)) {
       return refus(`${nom} figure deux fois parmi les acheteurs : réunissez ses lignes.`);
     }
@@ -529,6 +550,21 @@ export async function enregistrerSortie(
   }));
   const frais = fraisDe(partage);
 
+  /*
+   * Chaque acheteur recoit une part distincte de la sienne : une ligne du
+   * registre, a son nom, qui cotise a proportion de sa taille a partir de la
+   * premiere echeance qui suit le rachat.
+   */
+  const fractionSortant = sortant?.fraction ?? 1;
+  const reglages = await reglagesEffectifs();
+  const premierMois = premierMoisDeLaPart(date, reglages.jourEcheance);
+  const parts = acheteurs.map((a) => ({
+    ...a,
+    partId: randomUUID(),
+    taille: Math.round(a.fraction * fractionSortant * 1e6) / 1e6,
+    nomPart: nomDeLaPart(a.nom, nomSortant, a.fraction * fractionSortant),
+  }));
+
   const faits = await faitsAvantSortie(d);
   const empreinte = empreinteSortie(membreId, faits, rachats);
   if (confirme !== empreinte) {
@@ -558,16 +594,23 @@ export async function enregistrerSortie(
         partage:
           rachats.length === 0
             ? []
-            : lignesPartage({
-                avance: d.avance,
-                acheteurs,
-                fractionClub: partage.fractionClub,
-                droitsClub: partage.droitsClub,
-                frais,
-                compensees: partage.compensees,
-                netClub: partage.netClub,
-                resteDu: partage.resteDu,
-              }),
+            : [
+                ...lignesPartage({
+                  avance: d.avance,
+                  acheteurs,
+                  fractionClub: partage.fractionClub,
+                  droitsClub: partage.droitsClub,
+                  frais,
+                  compensees: partage.compensees,
+                  netClub: partage.netClub,
+                  resteDu: partage.resteDu,
+                }),
+                ...lignesNouvellesParts(
+                  parts.map((x) => ({ nom: x.nom, taille: x.taille })),
+                  reglages.cotisationMensuelle,
+                  premierMois,
+                ),
+              ],
       },
     };
   }
@@ -605,14 +648,21 @@ export async function enregistrerSortie(
       values (${sortieId}::uuid, ${membreId}::uuid, ${date}::date, ${motif}, ${partage.droitsClub},
               ${frais}, ${partage.netClub}, ${partage.compensees}, ${detail}, ${auteur.id}::uuid)
     `,
-    ...acheteurs.map(
-      (a) => sql`
-        insert into share_buybacks (exit_id, seller_id, buyer_id, bought_on, fraction, weight,
-                                    reference_value, price, paid_to_club, created_by)
-        values (${sortieId}::uuid, ${membreId}::uuid, ${a.membreId}::uuid, ${date}::date,
-                ${a.fraction}, ${a.poids}, ${a.valeur}, ${a.prix}, ${a.auClub}, ${auteur.id}::uuid)
+    ...parts.flatMap((a) => [
+      sql`
+        insert into members (id, full_name, email, role, password_hash, must_change_password,
+                             is_active, joined_on, holder_id, part_fraction)
+        values (${a.partId}::uuid, ${a.nomPart}, null, 'membre', null, false,
+                true, ${premierMois}::date, ${a.membreId}::uuid, ${a.taille})
       `,
-    ),
+      sql`
+        insert into share_buybacks (exit_id, seller_id, buyer_id, part_id, bought_on, fraction,
+                                    weight, reference_value, price, paid_to_club, created_by)
+        values (${sortieId}::uuid, ${membreId}::uuid, ${a.membreId}::uuid, ${a.partId}::uuid,
+                ${date}::date, ${a.fraction}, ${a.poids}, ${a.valeur}, ${a.prix}, ${a.auClub},
+                ${auteur.id}::uuid)
+      `,
+    ]),
     ...acheteurs
       .filter((a) => a.auClub > 0)
       .map(
@@ -641,9 +691,12 @@ export async function enregistrerSortie(
    * pas la sortie ; le message le dit, pour que le bureau le lui transmette.
    */
   const courrier = await envoyerCourrielSortie(
-    { nom: nomSortant, email: membre[0].email },
+    titulaire
+      ? { nom: titulaire.nom, email: titulaire.email }
+      : { nom: nomSortant, email: membre[0].email },
     courrielSortie({
-      nom: nomSortant,
+      nom: titulaire ? titulaire.nom : nomSortant,
+      part: titulaire ? nomSortant : undefined,
       dateSortie: date,
       motif,
       releve: d.releve,
@@ -733,7 +786,7 @@ export async function corrigerSortie(
 
   const sql = db();
   const rows = await sql`
-    select e.gross_value, e.forfeited, e.fees, e.net_paid, m.full_name, m.email,
+    select e.gross_value, e.forfeited, e.fees, e.net_paid, m.full_name, m.email, e.member_id,
            to_char(e.exit_date, 'YYYY-MM-DD') as exit_date
     from member_exits e join members m on m.id = e.member_id
     where e.id = ${id}::uuid
@@ -754,10 +807,15 @@ export async function corrigerSortie(
         note = concat_ws(' · ', note, ${`frais réels ${fcfa(frais)} (${raison})`})
     where id = ${id}::uuid
   `;
+  /* Une part rachetee sortie : le courrier va a son detenteur. */
+  const tous = await listerMembres(true);
+  const ligne = tous.find((m) => m.id === String(e.member_id));
+  const titulaire = ligne?.titulaireId ? tous.find((m) => m.id === ligne.titulaireId) : undefined;
   const courrier = await envoyerCourrielSortie(
-    { nom: e.full_name, email: e.email },
+    titulaire ? { nom: titulaire.nom, email: titulaire.email } : { nom: e.full_name, email: e.email },
     courrielCorrectionSortie({
-      nom: e.full_name,
+      nom: titulaire ? titulaire.nom : e.full_name,
+      part: titulaire ? e.full_name : undefined,
       dateSortie: e.exit_date,
       fraisAvant: Number(e.fees),
       fraisApres: frais,

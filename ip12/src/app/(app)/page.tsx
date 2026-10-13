@@ -95,6 +95,8 @@ export default async function TableauDeBord() {
   const maPart = s.parts.find((p) => p.membreId === membre.id);
   const maSituation = situations.find((x) => x.membreId === membre.id);
   const retardataires = situations.filter((x) => x.nbMoisRetard > 0);
+  /* Des personnes : une part rachetee a sa ligne de cotisation, pas une place de membre. */
+  const nbMembres = situations.filter((x) => !x.titulaireId).length;
   const estBureau = membre.role === "president" || membre.role === "tresorier";
 
   /*
@@ -361,7 +363,7 @@ export default async function TableauDeBord() {
 
           <Carte titre={`Retardataires (${retardataires.length})`}>
             {retardataires.length === 0 ? (
-              <Vide>Aucun retard : les {situations.length} membres sont à jour.</Vide>
+              <Vide>Aucun retard : les {nbMembres} membres sont à jour.</Vide>
             ) : (
               <ul>
                 {retardataires.map((r) => (
@@ -466,7 +468,7 @@ export default async function TableauDeBord() {
                 { libelle: "Versé par le club", brut: s.totalVerse, unite: "FCFA" },
                 { libelle: "Place en bourse", brut: s.totalApports, unite: "FCFA" },
                 { libelle: "En caisse", brut: s.totalEnCaisse, unite: "FCFA" },
-                { libelle: "Membres", brut: situations.length },
+                { libelle: "Membres", brut: nbMembres },
               ]}
             />
             {/*

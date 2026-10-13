@@ -3,7 +3,7 @@ import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { listerMembres, situationsClub, synthese } from "@/lib/queries";
 import { basculerActivite, creerMembre, modifierMembre, reinitialiserMotDePasse } from "@/app/actions/membres";
-import { CLUB, ROLES, dateCourte, fcfa } from "@/lib/settings";
+import { CLUB, ROLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { Badge, Carte, EnTeteEcran, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
@@ -33,6 +33,9 @@ export default async function PageMembres() {
     throw e;
   }
 
+  /* L'effectif compte des personnes : une part rachetee a sa ligne, pas une voix de plus. */
+  const effectif = membres.filter((m) => m.actif && !m.titulaireId).length;
+
   const saisie = estPresident ? (
     <Panneau
       libelle="Nouveau profil"
@@ -57,7 +60,7 @@ export default async function PageMembres() {
           titre="Effectif"
           chiffre={
             <>
-              <Chiffre valeur={membres.filter((m) => m.actif).length} format="entier" /> sur{" "}
+              <Chiffre valeur={effectif} format="entier" /> sur{" "}
               {CLUB.membresMax}
             </>
           }
@@ -66,7 +69,7 @@ export default async function PageMembres() {
         <div className="sans-impression">{saisie}</div>
       </div>
 
-      <Carte titre={`Effectif (${membres.filter((m) => m.actif).length} / ${CLUB.membresMax})`}>
+      <Carte titre={`Effectif (${effectif} / ${CLUB.membresMax})`}>
         {membres.length === 0 ? (
           <Vide>Aucun membre enregistré.</Vide>
         ) : (
@@ -87,11 +90,19 @@ export default async function PageMembres() {
                         )}
                         {situation?.voteSuspendu && <Badge ton="rouge">Vote suspendu</Badge>}
                       </p>
-                      <p className="truncate text-xs" style={{ color: "var(--discret)" }}>
-                        {m.email}
-                        {m.telephone ? ` · ${m.telephone}` : ""} &middot; adhésion{" "}
-                        {dateCourte(m.date_adhesion)}
-                      </p>
+                      {m.titulaireId ? (
+                        <p className="text-xs" style={{ color: "var(--discret)" }}>
+                          Part rachetée, {String(Math.round((m.fraction ?? 1) * 1000) / 10).replace(".", ",")} %
+                          d&apos;une part &middot; cotise depuis {moisLong(m.date_adhesion)}, suivie à part de
+                          celle de son détenteur
+                        </p>
+                      ) : (
+                        <p className="truncate text-xs" style={{ color: "var(--discret)" }}>
+                          {m.email}
+                          {m.telephone ? ` · ${m.telephone}` : ""} &middot; adhésion{" "}
+                          {dateCourte(m.date_adhesion)}
+                        </p>
+                      )}
                       {part && (
                         <p className="mt-0.5 text-xs" style={{ color: "var(--discret)" }}>
                           Versé {fcfa(part.verse)} &middot; part{" "}
@@ -116,7 +127,7 @@ export default async function PageMembres() {
                     )}
                   </div>
 
-                  {estPresident && (
+                  {estPresident && !m.titulaireId && (
                     <div className="mt-2">
                       <Depliant titre="Gérer">
                         <FormulaireAction action={modifierMembre} libelle="Enregistrer les modifications">

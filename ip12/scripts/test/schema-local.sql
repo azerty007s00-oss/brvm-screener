@@ -13,16 +13,18 @@ create extension if not exists pgcrypto;
 create table members (
   id uuid primary key default gen_random_uuid(),
   full_name text not null,
-  email text not null unique,
+  email text unique,
   phone text,
   title text,
   role text not null default 'membre'
     check (role in ('president','vice_president','tresorier','secretaire','membre')),
-  password_hash text not null,
+  password_hash text,
   must_change_password boolean not null default true,
   is_active boolean not null default true,
   joined_on date not null default current_date,
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  holder_id uuid references members(id),
+  part_fraction numeric(9, 6) check (part_fraction is null or (part_fraction > 0 and part_fraction <= 1))
 );
 
 create table contributions (
@@ -166,6 +168,7 @@ create table share_buybacks (
   exit_id uuid not null references member_exits(id) on delete cascade,
   seller_id uuid not null references members(id),
   buyer_id uuid not null references members(id),
+  part_id uuid not null references members(id),
   bought_on date not null,
   fraction numeric(9, 6) not null check (fraction > 0 and fraction <= 1),
   weight bigint not null check (weight >= 0),
@@ -177,7 +180,8 @@ create table share_buybacks (
   check (buyer_id <> seller_id)
 );
 
-create index share_buybacks_buyer on share_buybacks (buyer_id);
+create index share_buybacks_part on share_buybacks (part_id);
+create index members_holder on members (holder_id);
 
 create table meetings (
   id uuid primary key default gen_random_uuid(),

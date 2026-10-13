@@ -26,7 +26,8 @@ export default async function PageReunions() {
   try {
     [reunions, membres, presences] = await Promise.all([
       listerReunions(),
-      listerMembres(),
+      // Une part rachetee n'assiste a rien : seules les personnes sont pointees.
+      listerMembres().then((l) => l.filter((m) => !m.titulaireId)),
       presencesParReunion(),
     ]);
   } catch (e) {

@@ -328,6 +328,15 @@ export { joursAvantEcheance };
  */
 export function sujetRelance(d: Destinataire, moisCourant: string, maintenant: Date): string {
   /*
+   * Une part rachetee recoit son propre courrier, chez son detenteur : l'objet
+   * dit laquelle, sans quoi il lirait deux relances pour un seul retard.
+   */
+  const sujet = sujetDeBase(d, moisCourant, maintenant);
+  return d.situation.titulaireNom ? `${sujet} (${d.situation.nom})` : sujet;
+}
+
+function sujetDeBase(d: Destinataire, moisCourant: string, maintenant: Date): string {
+  /*
    * Rien a reclamer : l'objet ne doit pas annoncer une relance. Un membre a jour
    * qui lit « versement en retard » ouvre le site pour verifier, ou ecrit au
    * groupe -- et la prochaine relance, meritee, se lira comme celle-ci.
@@ -414,7 +423,21 @@ export function texteRelance(
   circuitReglements = true,
 ): string {
   // Le blanc qui suit l'appel n'a de sens que s'il precede un paragraphe.
-  const lignes: string[] = [`Bonjour ${situation.nom},`];
+  const lignes: string[] = [`Bonjour ${situation.titulaireNom ?? situation.nom},`];
+  /*
+   * UNE PART RACHETEE A SON PROPRE COURRIER. Elle a sa cotisation, ses retards et
+   * ses penalites, distincts de ceux de la part de son detenteur ; tout ce qui
+   * suit la concerne, elle seule.
+   */
+  if (situation.titulaireNom) {
+    lignes.push(
+      "",
+      `Ce courrier concerne la part rachetée que vous détenez (${situation.nom}). Elle a sa ` +
+        "propre cotisation, ses propres retards et ses propres pénalités, distincts de ceux de " +
+        "votre part : tout ce qui suit la concerne, elle seule. Pour la régler, déclarez le " +
+        "versement en choisissant cette part.",
+    );
+  }
 
   /*
    * RIEN A RECLAMER : LE COURRIER CHANGE DE NATURE.

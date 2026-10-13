@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { exigerMembre, exigerRole } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
-import { derogationsParMembre, reglagesEffectifs, situationsClub } from "@/lib/queries";
+import { declarePour, derogationsParMembre, reglagesEffectifs, situationsClub } from "@/lib/queries";
 import { imputer, type ReglesMembre } from "@/lib/penalites";
 import { fcfa, moisLong } from "@/lib/settings";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
@@ -66,10 +66,12 @@ export async function declarerVersement(
   const note = String(donnees.get("note") ?? "").trim() || null;
 
   const saisieDirecte = peut(auteur, "saisirVersementValide");
-  if (membreCible !== auteur.id && !saisieDirecte) {
+  if (!saisieDirecte && !(await declarePour(auteur.id, membreCible))) {
     return {
       ok: false,
-      erreur: "Seuls le trésorier et le président peuvent enregistrer un versement pour autrui.",
+      erreur:
+        "Seuls le trésorier et le président peuvent enregistrer un versement pour autrui. " +
+        "Vous pouvez déclarer pour vous et pour les parts rachetées que vous détenez.",
     };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVersement)) return { ok: false, erreur: "Date de versement invalide." };

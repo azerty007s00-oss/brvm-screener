@@ -25,10 +25,14 @@ const ETAT_INITIAL: EtatSortie = { ok: false };
  */
 export function FormulaireSortie({
   membres,
+  personnes,
   aujourdhui,
   rachatsPossibles,
 }: {
+  /** Qui peut sortir : les personnes, et les parts rachetees. */
   membres: { valeur: string; libelle: string }[];
+  /** Qui peut racheter : les personnes seulement. */
+  personnes: { valeur: string; libelle: string }[];
   aujourdhui: string;
   /** Faux tant que la table des rachats n'existe pas en base. */
   rachatsPossibles: boolean;
@@ -73,7 +77,7 @@ export function FormulaireSortie({
       <Champ nom="note" libelle="Référence de la décision" requis={false} valeur={v?.note} />
 
       <Acheteurs
-        membres={membres}
+        membres={personnes}
         initiaux={v?.rachats ?? []}
         possibles={rachatsPossibles}
         onModifie={invalider}
@@ -192,7 +196,9 @@ function Acheteurs({
       </legend>
       <p className="mt-1 text-[12px]" style={{ color: "var(--ink-3)" }}>
         Laissez vide si le club rachète tout. Chaque acheteur indique la part qu&apos;il rachète,
-        en pourcentage, et le prix convenu avec le sortant ; le club rachète le reste.
+        en pourcentage, et le prix convenu avec le sortant ; le club rachète le reste. Ce
+        qu&apos;il rachète devient chez lui une part distincte de la sienne, qui cotise à
+        proportion de sa taille, avec ses propres retards et pénalités.
       </p>
       {lignes.map((l) => (
         <div

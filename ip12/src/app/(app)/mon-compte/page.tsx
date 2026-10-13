@@ -37,6 +37,7 @@ export default async function PageMonCompte() {
 
   const maSituation = situations.find((x) => x.membreId === membre.id);
   const maPart = s.parts.find((p) => p.membreId === membre.id);
+  const mesParts = situations.filter((x) => x.titulaireId === membre.id);
 
   /*
    * MA DETTE DE PENALITES, LA MEME QUE CELLE DU COURRIER.
@@ -112,6 +113,44 @@ export default async function PageMonCompte() {
           },
         ]}
       />
+
+      {/*
+        * MES PARTS RACHETEES. Chacune vit a part de la mienne : sa cotisation, a
+        * proportion de sa taille, ses retards et ses penalites. Je les vois ici,
+        * je les paie en choisissant la part au moment de declarer.
+        */}
+      {mesParts.length > 0 && (
+        <Carte titre={mesParts.length > 1 ? "Mes parts rachetées" : "Ma part rachetée"}>
+          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
+            {mesParts.map((x) => {
+              const valeur = s.parts.find((p) => p.membreId === x.membreId);
+              const cotisation = x.cellules.at(-1)?.requis ?? 0;
+              return (
+                <li key={x.membreId} className="py-2.5 text-sm">
+                  <p className="flex flex-wrap items-center gap-1.5 font-medium">
+                    {x.nom}
+                    {x.nbMoisRetard > 0 && (
+                      <Badge ton="rouge">{x.nbMoisRetard} mois de retard</Badge>
+                    )}
+                  </p>
+                  <p className="mt-0.5 text-xs" style={{ color: "var(--discret)" }}>
+                    Cotisation {fcfa(cotisation)} par mois
+                    {valeur ? ` · valeur ${fcfa(valeur.valeur)}` : ""}
+                    {valeur && valeur.dues > 0 ? ` · ${fcfa(valeur.dues)} de pénalités dues` : ""}
+                  </p>
+                  <Link href={`/releve/${x.membreId}`} className="mt-1 inline-block text-xs underline">
+                    Relevé de cette part
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="mt-2 text-[12px]" style={{ color: "var(--discret)" }}>
+            Pour la payer, déclarez le versement en choisissant cette part : elle a ses propres mois
+            et ses propres pénalités, distincts des vôtres.
+          </p>
+        </Carte>
+      )}
 
       <Carte titre="Mon profil">
         <dl className="grid gap-2 text-sm sm:grid-cols-2">

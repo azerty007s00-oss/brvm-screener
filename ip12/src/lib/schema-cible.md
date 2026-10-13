@@ -14,7 +14,7 @@ horodatages en `timestamptz`.
 | `cash_movements` | id, movement_date, direction, category, amount, note, status, created_by, reviewed_by, reviewed_at, review_note, created_at |
 | `member_rules` | id, member_id, kind, numeric_value, starts_on, ends_on, is_active, note, created_by, created_at |
 | `member_exits` | id, member_id, exit_date, reason, gross_value, fees, net_paid, forfeited, note, created_by, created_at |
-| `share_buybacks` | id, exit_id, seller_id, buyer_id, bought_on, fraction, weight, reference_value, price, paid_to_club, created_by, created_at (après `scripts/migration-rachats.sql`) |
+| `share_buybacks` | id, exit_id, seller_id, buyer_id, part_id, bought_on, fraction, weight, reference_value, price, paid_to_club, created_by, created_at (après `scripts/migration-rachats.sql`, qui ajoute aussi `members.holder_id` et `members.part_fraction`) |
 | `meetings` | id, meeting_date, title, note, created_by, created_at |
 | `attendances` | meeting_id, member_id, status, note |
 | `payment_proofs` | id, batch_id, member_id, filename, mime, byte_size, data, uploaded_by, created_at, blob_url |

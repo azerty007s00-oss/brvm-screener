@@ -1,4 +1,4 @@
-import { CLUB, REGLES, dateCourte, fcfa, nombre } from "./settings";
+import { CLUB, REGLES, dateCourte, fcfa, moisLong, nombre } from "./settings";
 
 /**
  * Le courrier qui explique sa sortie au membre qui s'en va.
@@ -38,7 +38,10 @@ export type ContexteSortie = {
 };
 
 export type DonneesCourrielSortie = {
+  /** A qui le courrier s'adresse : le sortant, ou le detenteur de la part qui sort. */
   nom: string;
+  /** Quand c'est une part rachetee qui sort : son nom. Le courrier va alors a son detenteur. */
+  part?: string;
   dateSortie: string;
   motif: string;
   /** Le releve qui donne la valeur du portefeuille au jour de la sortie (AAAA-MM-JJ). */
@@ -159,8 +162,18 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
   const lignes: string[] = [
     `Bonjour ${d.nom},`,
     "",
-    `Votre sortie du club ${CLUB.nom} prend effet au ${dateCourte(d.dateSortie)}, ` +
-      `pour le motif suivant : ${d.motif.trim().replace(/[\s.…]+$/, "")}.`,
+    (d.part
+      ? `La sortie de la part rachetée que vous détenez (${d.part}) prend effet au ` +
+        `${dateCourte(d.dateSortie)}, pour le motif suivant : `
+      : `Votre sortie du club ${CLUB.nom} prend effet au ${dateCourte(d.dateSortie)}, ` +
+        "pour le motif suivant : ") +
+      `${d.motif.trim().replace(/[\s.…]+$/, "")}.`,
+    ...(d.part
+      ? [
+          "Votre propre part n'est pas concernée. Dans ce décompte, « votre part » et « vos " +
+            "cotisations » désignent celles de la part rachetée.",
+        ]
+      : []),
     "Ce courriel explique, étape par étape, comment le montant qui vous revient a été " +
       "calculé. Chaque chiffre se vérifie avec une simple calculatrice. Tous les membres du " +
       "club sont en copie.",
@@ -241,9 +254,10 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
       );
     }
     lignes.push(
-      "Les parts rachetées par un membre passent à lui : la caisse du club ne débourse rien " +
-        "pour elles et aucune action n'est vendue, donc aucun frais n'y est retenu. Les parts " +
-        "des autres membres ne changent pas.",
+      "Chaque acheteur détient désormais ce qu'il a racheté comme une part distincte de la " +
+        "sienne, qui cotise chaque mois à proportion de sa taille. La caisse du club ne débourse " +
+        "rien pour ces parts et aucune action n'est vendue, donc aucun frais n'y est retenu. Les " +
+        "parts des autres membres ne changent pas.",
     );
   }
 
@@ -355,6 +369,8 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
  */
 export function courrielCorrectionSortie(d: {
   nom: string;
+  /** Quand c'est une part rachetee qui est sortie : son nom. */
+  part?: string;
   dateSortie: string;
   fraisAvant: number;
   fraisApres: number;
@@ -366,8 +382,10 @@ export function courrielCorrectionSortie(d: {
   const lignes = [
     `Bonjour ${d.nom},`,
     "",
-    "Les frais réels de votre sortie du club sont connus : ils remplacent les frais " +
-      "estimés de votre premier décompte.",
+    (d.part
+      ? `Les frais réels de la sortie de la part rachetée que vous détenez (${d.part}) sont connus : `
+      : "Les frais réels de votre sortie du club sont connus : ") +
+      "ils remplacent les frais estimés du premier décompte.",
     `  - Frais retenus dans le premier décompte : ${fcfa(d.fraisAvant)}`,
     `  - Frais réels : ${fcfa(d.fraisApres)} (${d.raison})`,
     "",
@@ -565,4 +583,41 @@ export function lignesPartage(p: {
     lignes.push(`Il resterait ${fcfa(p.resteDu)} de pénalités que le sortant devrait encore au club.`);
   }
   return lignes;
+}
+
+/**
+ * Le premier mois que doit une part rachetee : celui de la premiere echeance qui
+ * suit le rachat. Rachetee le 5, elle doit le mois en cours, dont l'echeance
+ * tombe le 10 ; rachetee le 10 ou apres, elle commence le mois suivant.
+ */
+export function premierMoisDeLaPart(dateRachat: string, jourEcheance: number): string {
+  const [a, m, j] = dateRachat.slice(0, 10).split("-").map(Number);
+  const debut = new Date(Date.UTC(a, m - 1 + (j < jourEcheance ? 0 : 1), 1));
+  return debut.toISOString().slice(0, 10);
+}
+
+/**
+ * Le nom d'une part rachetee dans les listes : son detenteur d'abord, pour
+ * qu'elle se lise a cote de lui, puis ce qu'elle est.
+ */
+export function nomDeLaPart(titulaire: string, sortant: string, fraction: number): string {
+  const ce = fraction >= 1 ? "part" : `${taux(fraction)} de la part`;
+  return `${titulaire} · ${ce} de ${sortant}`;
+}
+
+/**
+ * Ce que deviendra chaque part rachetee : une part distincte chez son acheteur,
+ * qui cotise a proportion de sa taille des la premiere echeance qui suit.
+ */
+export function lignesNouvellesParts(
+  parts: { nom: string; taille: number }[],
+  cotisationCommune: number,
+  premierMois: string,
+): string[] {
+  return parts.map(
+    (x) =>
+      `${x.nom} détiendra une part distincte de la sienne (${taux(x.taille)} d'une part) : ` +
+      `${fcfa(Math.round(x.taille * cotisationCommune))} par mois à partir de ` +
+      `${moisLong(premierMois)}, avec ses propres retards et pénalités.`,
+  );
 }
