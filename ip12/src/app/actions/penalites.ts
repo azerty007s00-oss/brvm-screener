@@ -447,7 +447,7 @@ export async function declarerReglementPenalite(
     return { ok: false, erreur: "Date de paiement invalide." };
   }
   if (datePaiement > new Date().toISOString().slice(0, 10)) {
-    return { ok: false, erreur: "La date de paiement est dans le futur." };
+    return { ok: false, erreur: "La date du paiement ne peut pas être dans le futur : vérifiez le jour et le mois." };
   }
   if (!METHODES.includes(mode)) return { ok: false, erreur: "Mode de paiement inconnu." };
 

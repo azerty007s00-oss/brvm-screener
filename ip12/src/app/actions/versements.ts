@@ -75,6 +75,15 @@ export async function declarerVersement(
     };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateVersement)) return { ok: false, erreur: "Date de versement invalide." };
+  /*
+   * Une date de paiement a venir est une faute de saisie, le plus souvent le jour
+   * et le mois inverses (10/11 pour 10/10). Acceptee, elle sortait le versement
+   * de tout calcul arrete a une date, celui d'une sortie par exemple, tout en le
+   * comptant dans la caisse du jour.
+   */
+  if (dateVersement > new Date().toISOString().slice(0, 10)) {
+    return { ok: false, erreur: "La date du versement ne peut pas être dans le futur : vérifiez le jour et le mois." };
+  }
   if (!Number.isFinite(montant) || montant <= 0) {
     return { ok: false, erreur: "Indiquez le montant versé." };
   }
@@ -420,6 +429,9 @@ export async function corrigerVersement(
     return { ok: false, erreur: "Le montant doit être positif." };
   }
   if (!dateVersement || !mois) return { ok: false, erreur: "Date et mois sont requis." };
+  if (dateVersement > new Date().toISOString().slice(0, 10)) {
+    return { ok: false, erreur: "La date du versement ne peut pas être dans le futur : vérifiez le jour et le mois." };
+  }
   if (!METHODES.includes(mode)) return { ok: false, erreur: "Mode de paiement inconnu." };
 
   /*
