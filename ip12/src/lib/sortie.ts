@@ -340,14 +340,22 @@ export function pointsAVerifier(f: FaitsSortie): string[] {
       ? "Versements : aucun en attente de validation. Un versement reçu mais pas encore déclaré ne compte pas : faites-le saisir d'abord."
       : `Versements : ${v.nb} ${v.nb > 1 ? "déclarés attendent" : "déclaré attend"} validation ` +
           `(${fcfa(v.total)})` +
-          (v.siens > 0 ? `, dont ${v.siens} du sortant` : "") +
-          " : validez-les ou refusez-les d'abord, sinon ils ne comptent pas.",
+          (v.siens > 0
+            ? `, dont ${v.siens} du sortant`
+            : v.nb > 1
+              ? ", tous d'autres membres"
+              : ", d'un autre membre") +
+          (v.nb > 1
+            ? " : validez-les ou refusez-les d'abord, sinon ils ne comptent pas."
+            : " : validez-le ou refusez-le d'abord, sinon il ne compte pas."),
   );
   points.push(
     f.caisseEnAttente === 0
       ? "Caisse : aucun mouvement en attente de validation."
       : `Caisse : ${f.caisseEnAttente} ${f.caisseEnAttente > 1 ? "mouvements attendent" : "mouvement attend"} ` +
-          "validation : validez-les d'abord, sinon ils ne comptent pas.",
+          (f.caisseEnAttente > 1
+            ? "validation : validez-les d'abord, sinon ils ne comptent pas."
+            : "validation : validez-le d'abord, sinon il ne compte pas."),
   );
   if (f.reglementsEnAttente > 0) {
     points.push(

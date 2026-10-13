@@ -1876,7 +1876,10 @@ assert.equal(
   assert.ok(points[0].includes("relevé du 10/10/2026") && points[0].includes("3 jours avant la sortie"));
   assert.ok(points[0].includes("saisissez d'abord un relevé daté du 13/10/2026"));
   assert.ok(points.some((x) => x.includes("2 déclarés attendent validation") && x.includes("dont 1 du sortant")));
-  assert.ok(points.some((x) => x.startsWith("Caisse : 1 mouvement attend validation")));
+  assert.ok(points.some((x) => x.startsWith("Caisse : 1 mouvement attend validation : validez-le d'abord, sinon il ne compte pas.")));
+  // Un seul versement en attente, d'un autre membre : le singulier, et a qui il est.
+  const unSeul = pointsAVerifier({ ...faits, versementsEnAttente: { nb: 1, total: 5_000, siens: 0 } });
+  assert.ok(unSeul.some((x) => x.includes(`1 déclaré attend validation (${fcfa(5_000)}), d'un autre membre : validez-le ou refusez-le d'abord, sinon il ne compte pas.`)));
   assert.ok(points.some((x) => x.includes("1 règlement que le trésorier n'a pas vérifié.")), "accord au singulier");
   assert.ok(points.some((x) => x.includes("compteraient deux fois")), "le risque de double compte est dit");
   const aJour = pointsAVerifier({
