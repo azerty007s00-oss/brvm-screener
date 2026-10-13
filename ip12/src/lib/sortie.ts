@@ -528,10 +528,18 @@ export function lignesValorisation(v: {
   /** Si le club rachete tout : ce qu'il verse, et les frais retenus. */
   netClub: number;
   fraisClub: number;
-  /** Les frais qu'un rachat par le club retiendrait sur la seule part, penalites mises a part. */
-  fraisPart: number;
 }): string[] {
-  const plancher = Math.max(0, v.quotePart - v.fraisPart);
+  /*
+   * LE PLANCHER EST LE PRIX OU LE SORTANT NE GAGNE NI NE PERD A VENDRE A UN
+   * MEMBRE PLUTOT QU'AU CLUB. Le club lui verserait sa part et son avance, moins
+   * ses penalites et les frais ; un acheteur lui verse le prix, moins ce que son
+   * avance ne couvre pas de ses penalites. Les deux se rejoignent au prix « sa
+   * part moins les frais du club ». Calcule sur la part seule, sans les
+   * penalites, ce plancher sortait plus bas que l'offre du club : les 2 % de
+   * transfert portent sur une somme que les penalites diminuent.
+   */
+  const plancher = Math.max(0, v.quotePart - v.fraisClub);
+  const surLePrix = Math.max(0, v.penalites - v.avance);
   const lignes = [
     `Valeur de sa part : ${fcfa(v.quotePart)} (${taux(v.part)} du total à partager).`,
   ];
@@ -543,7 +551,10 @@ export function lignesValorisation(v: {
       (v.penalites > 0 || v.avance > 0 ? ", avance et pénalités comprises." : "."),
     "Si des membres rachètent : ils lui paient un prix convenu entre eux, sans frais pour " +
       `personne. Repère : un prix entre ${fcfa(plancher)} (ce que le club paierait pour sa part, ` +
-      `frais déduits) et ${fcfa(v.quotePart)} (sa valeur) avantage le sortant comme l'acheteur.`,
+      `frais déduits) et ${fcfa(v.quotePart)} (sa valeur) avantage le sortant comme l'acheteur.` +
+      (surLePrix > 0
+        ? ` Sur ce prix, ${fcfa(surLePrix)} vont au club pour ses pénalités : le sortant reçoit le reste.`
+        : ""),
   );
   return lignes;
 }

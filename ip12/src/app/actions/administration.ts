@@ -569,7 +569,6 @@ export async function enregistrerSortie(
   const empreinte = empreinteSortie(membreId, faits, rachats);
   if (confirme !== empreinte) {
     const tout = partagerSortie(base, club, taux, []);
-    const partSeule = partagerSortie({ ...base, avance: 0, penalites: 0 }, club, taux, []);
     return {
       ok: false,
       valeurs,
@@ -588,7 +587,6 @@ export async function enregistrerSortie(
           penalites: d.penalitesDeduites,
           netClub: tout.netClub,
           fraisClub: fraisDe(tout),
-          fraisPart: fraisDe(partSeule),
         }),
         points: pointsAVerifier(faits),
         partage:

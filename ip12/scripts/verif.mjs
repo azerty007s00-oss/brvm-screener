@@ -2059,10 +2059,25 @@ assert.equal(
   // La valorisation, avant toute decision : la valeur et les deux reperes de prix.
   const val = lignesValorisation({
     quotePart: 430_000, part: 0.25, avance: 20_000, penalites: 24_000,
-    netClub: seul.netClub, fraisClub: seul.fraisVente + seul.fraisGarde + seul.fraisTransfert, fraisPart: 15_000,
+    netClub: seul.netClub, fraisClub: seul.fraisVente + seul.fraisGarde + seul.fraisTransfert,
   });
+  /*
+   * Le plancher est le prix ou vendre a un membre rapporte au sortant autant que
+   * le club : prix moins ce que l'avance ne couvre pas des penalites = net du club.
+   */
+  const fraisSeul = seul.fraisVente + seul.fraisGarde + seul.fraisTransfert;
+  const plancher = 430_000 - fraisSeul;
+  assert.equal(plancher - (24_000 - 20_000), seul.netClub, "au plancher, le sortant recoit ce que le club lui verserait");
+  // Le cas de Bourama : 364 350 de part, 9 500 de penalites, sans avance, 11 910 de frais.
+  const bourama = lignesValorisation({
+    quotePart: 364_350, part: 0.0961, avance: 0, penalites: 9_500, netClub: 342_940, fraisClub: 11_910,
+  });
+  assert.ok(bourama.some((l) => l.includes(`un prix entre ${fcfa(352_440)}`)), "352 440, et non 352 250");
+  assert.ok(bourama.some((l) => l.includes(`Sur ce prix, ${fcfa(9_500)} vont au club pour ses pénalités`)));
+  assert.equal(352_440 - 9_500, 342_940, "au plancher, Bourama recoit exactement l'offre du club");
   assert.ok(val[0].startsWith(`Valeur de sa part : ${fcfa(430_000)} (25 % du total à partager).`));
-  assert.ok(val.some((l) => l.includes(`un prix entre ${fcfa(415_000)}`) && l.includes(`et ${fcfa(430_000)} (sa valeur)`)));
+  assert.ok(val.some((l) => l.includes(`un prix entre ${fcfa(plancher)}`) && l.includes(`et ${fcfa(430_000)} (sa valeur)`)));
+  assert.ok(val.some((l) => l.includes(`Sur ce prix, ${fcfa(4_000)} vont au club`)), "ce que l'avance ne couvre pas");
   assert.ok(val.some((l) => l.startsWith(`Si le club rachète tout : il lui verse ${fcfa(seul.netClub)}`)));
   const qui = lignesPartage({
     avance: 20_000,
