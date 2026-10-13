@@ -19,7 +19,7 @@ import {
   inscrireRegleMembre,
   leverRegleMembre,
 } from "@/app/actions/administration";
-import { listerMembres } from "@/lib/queries";
+import { listerMembres, rachatsDisponibles } from "@/lib/queries";
 import { CLUB, REGLES, ROLES, accorde, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { REGLE_MEMBRE } from "@/lib/valeurs";
@@ -98,6 +98,7 @@ export default async function PageAdministration() {
   }
   const decomptes = await decomptesSortie().catch(() => []);
   const releveSortie = decomptes[0]?.releve ?? null;
+  const rachatsPossibles = await rachatsDisponibles();
 
   /*
    * Le journal garde la trace de chaque essai : on peut donc en afficher l'issue
@@ -763,13 +764,15 @@ export default async function PageAdministration() {
           <FormulaireSortie
             membres={membres.map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
             aujourdhui={new Date().toISOString().slice(0, 10)}
+            rachatsPossibles={rachatsPossibles}
           />
           <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
-            Le site calcule la sortie au jour de la date choisie : sa part, ses pénalités soldées
-            par compensation avec ce motif, la provision de cession, la garde et le transfert
-            estimés. Il montre d&apos;abord les données qu&apos;il va utiliser ; vous confirmez
-            qu&apos;elles sont à jour, ou vous saisissez ce qui manque et revenez. Corrigez les
-            frais quand les frais réels sont connus.
+            Le site calcule la sortie au jour de la date choisie. Le premier bouton
+            n&apos;enregistre rien : il montre la valeur de sa part, les repères de prix pour un
+            rachat par des membres, et les données qu&apos;il va utiliser. Vous confirmez
+            qu&apos;elles sont à jour, ou vous saisissez ce qui manque et revenez. Des membres
+            peuvent racheter tout ou partie de ses parts, à un prix convenu avec lui ; le club
+            rachète le reste, frais déduits. Corrigez les frais quand les frais réels sont connus.
           </p>
           <p className="text-[11px]" style={{ color: "var(--discret)" }}>
             Le sortant reçoit aussitôt par courriel le détail du calcul expliqué pas à pas, tous

@@ -20,6 +20,8 @@ import { CLUB, REGLES, dateCourte, fcfa, nombre } from "./settings";
 export type ContexteSortie = {
   /** Le compte-titres au releve, actions et liquidites. */
   compteTitres: number;
+  /** Dont les actions : ce qui coute a vendre. */
+  actions: number;
   /** Vire a la SGI apres le releve, compte au nominal. */
   enTransit: number;
   /** La caisse, hors ce qui est du a des membres deja sortis. */
@@ -45,8 +47,15 @@ export type DonneesCourrielSortie = {
   /** Ses cotisations des mois echus : le numerateur de sa part. */
   cotisations: number;
   avance: number;
-  /** Sa part du pot plus son avance, avant penalites et frais : ce qu'enregistre la sortie. */
+  /** Sa part du pot, avance a part : ce qui se rachete. */
+  quotePart: number;
+  /**
+   * Ce que le club lui doit, avant penalites et frais : son avance, et la part
+   * que le club rachete. Sans acheteur, son avance et toute sa part.
+   */
   droits: number;
+  /** Les membres qui rachetent ses parts ; vide si le club rachete tout. */
+  rachats: RachatCourriel[];
   /** Ses penalites dues, inscrites ou qui courent. */
   penalites: number;
   /** Dont celles qui courent sans etre encore inscrites. */
@@ -58,6 +67,20 @@ export type DonneesCourrielSortie = {
   fraisGarde: number;
   fraisTransfert: number;
   net: number;
+};
+
+export type RachatCourriel = {
+  nom: string;
+  /** La fraction de ses parts rachetee, entre 0 et 1. */
+  fraction: number;
+  /** Ce que vaut cette fraction au jour de la sortie. */
+  valeur: number;
+  /** Le prix convenu entre eux. */
+  prix: number;
+  /** Ce que l'acheteur verse au club, sur ce prix, pour solder les penalites. */
+  auClub: number;
+  /** Ce que l'acheteur verse au sortant. */
+  auSortant: number;
 };
 
 /**
@@ -96,21 +119,42 @@ export function echeanceRemboursement(dateSortie: string, n: number): string {
 export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte: string } {
   const c = d.club;
   const part = c.cotisations > 0 ? d.cotisations / c.cotisations : 0;
-  const quotePart = d.droits - d.avance;
+  const rachete = d.rachats.length > 0;
+  const fractionClub = Math.max(0, 1 - d.rachats.reduce((t, r) => t + r.fraction, 0));
   const frais = d.fraisVente + d.fraisGarde + d.fraisTransfert;
   const retire = d.compensees + frais;
-  const reste = Math.max(0, d.penalites - d.compensees);
+  const parAcheteurs = d.rachats.reduce((t, r) => t + r.auClub, 0);
+  const reste = Math.max(0, d.penalites - d.compensees - parAcheteurs);
+  const desAcheteurs = d.rachats.reduce((t, r) => t + r.auSortant, 0);
+  const total = d.net + desAcheteurs;
   const limite = echeanceRemboursement(d.dateSortie, REGLES.delaiRemboursementMois);
   /*
-   * L'assiette des 2 % : ce qui lui revient hors avance, apres penalites, cession
-   * et garde. C'est celle de `decompteSortie`, recomposee a partir des montants
-   * enregistres.
+   * L'assiette des 2 % : ce que le club lui verse hors avance, apres penalites,
+   * cession et garde. C'est celle de `decompteSortie`, recomposee a partir des
+   * montants enregistres.
    */
-  const baseTransfert = Math.max(0, quotePart - d.compensees - d.fraisVente - d.fraisGarde);
+  const baseTransfert = Math.max(
+    0,
+    d.droits - d.avance - d.compensees - d.fraisVente - d.fraisGarde,
+  );
   const enCours =
     d.penalitesEnCours > 0
       ? `, dont ${fcfa(d.penalitesEnCours)} qui courent sans être encore inscrites au registre`
       : "";
+  let numero = 0;
+  const section = (titre: string) => `${++numero}. ${titre}`;
+
+  const enBref =
+    total <= 0
+      ? reste > 0
+        ? `En bref : rien ne vous revient, et il reste ${fcfa(reste)} de pénalités que vous devez au club.`
+        : "En bref : rien ne vous revient."
+      : !rachete
+        ? `En bref : ${fcfa(d.net)} vous reviennent, à vous verser au plus tard le ${dateCourte(limite)}.`
+        : d.net > 0
+          ? `En bref : ${fcfa(total)} vous reviennent au total : ${fcfa(d.net)} du club, au plus ` +
+            `tard le ${dateCourte(limite)}, et ${fcfa(desAcheteurs)} des membres qui rachètent vos parts.`
+          : `En bref : ${fcfa(total)} vous reviennent, versés par les membres qui rachètent vos parts.`;
 
   const lignes: string[] = [
     `Bonjour ${d.nom},`,
@@ -121,13 +165,9 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
       "calculé. Chaque chiffre se vérifie avec une simple calculatrice. Tous les membres du " +
       "club sont en copie.",
     "",
-    d.net > 0
-      ? `En bref : ${fcfa(d.net)} vous reviennent, à vous verser au plus tard le ${dateCourte(limite)}.`
-      : reste > 0
-        ? `En bref : rien ne vous revient, et il reste ${fcfa(reste)} de pénalités que vous devez au club.`
-        : "En bref : rien ne vous revient.",
+    enBref,
     "",
-    `1. CE QUE LE CLUB POSSÉDAIT : au ${dateCourte(d.dateSortie)}, jour de votre sortie`,
+    section(`CE QUE LE CLUB POSSÉDAIT : au ${dateCourte(d.dateSortie)}, jour de votre sortie`),
     "Le calcul est arrêté au jour de votre sortie : ce qui se passe après ne change plus " +
       "votre montant, ni en plus ni en moins. Le portefeuille y est compté à sa valeur du " +
       `relevé de ${CLUB.sgi} du ${dateCourte(d.releve)}, la société de bourse qui garde les ` +
@@ -165,7 +205,7 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
 
   lignes.push(
     "",
-    "2. VOTRE PART : dans la proportion de vos cotisations",
+    section("VOTRE PART : dans la proportion de vos cotisations"),
     "Chaque membre a droit à une part du total, dans la proportion de ce qu'il a cotisé.",
     `  - Vos cotisations : ${fcfa(d.cotisations)}`,
     `  - Cotisations de l'ensemble des membres, vous compris : ${fcfa(c.cotisations)}`,
@@ -174,38 +214,74 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
     lignes.push(
       `  - Votre proportion : ${nombre(d.cotisations)} ÷ ${nombre(c.cotisations)}, soit ${taux(part)}`,
       `  - Votre part du total : ${nombre(c.aPartager)} × ${nombre(d.cotisations)} ÷ ` +
-        `${nombre(c.cotisations)} = ${fcfa(quotePart)}`,
+        `${nombre(c.cotisations)} = ${fcfa(d.quotePart)}`,
     );
   }
   if (d.avance > 0) {
     lignes.push(
       `  - Votre avance, rendue en entier et sans frais : ${fcfa(d.avance)}`,
-      `Vos droits, part et avance réunies : ${fcfa(d.droits)}`,
+      `Vos droits, part et avance réunies : ${fcfa(d.quotePart + d.avance)}`,
     );
   } else {
-    lignes.push(`Vos droits : ${fcfa(d.droits)}`);
+    lignes.push(`Vos droits : ${fcfa(d.quotePart)}`);
   }
 
-  lignes.push("", "3. CE QUI EN EST RETIRÉ");
+  if (rachete) {
+    lignes.push("", section("QUI RACHÈTE VOS PARTS"));
+    for (const r of d.rachats) {
+      lignes.push(
+        `  - ${r.nom} : ${taux(r.fraction)} de vos parts, d'une valeur de ${fcfa(r.valeur)} ` +
+          `au jour de votre sortie, au prix convenu entre vous de ${fcfa(r.prix)}.`,
+      );
+    }
+    if (fractionClub > 0) {
+      lignes.push(
+        `  - Le club : les ${taux(fractionClub)} restants, d'une valeur de ` +
+          `${fcfa(d.droits - d.avance)}, au calcul du site, frais déduits (ci-dessous).`,
+      );
+    }
+    lignes.push(
+      "Les parts rachetées par un membre passent à lui : la caisse du club ne débourse rien " +
+        "pour elles et aucune action n'est vendue, donc aucun frais n'y est retenu. Les parts " +
+        "des autres membres ne changent pas.",
+    );
+  }
+
+  lignes.push(
+    "",
+    section(rachete ? "CE QUE LE CLUB VOUS DOIT, ET CE QUI EN EST RETIRÉ" : "CE QUI EN EST RETIRÉ"),
+  );
+  if (rachete) {
+    lignes.push(
+      fractionClub > 0
+        ? `Le club vous doit votre avance et la part qu'il rachète : ${fcfa(d.droits)}.`
+        : `Le club vous doit votre avance : ${fcfa(d.droits)}.`,
+    );
+  }
   if (d.penalites <= 0) {
     lignes.push("  - Pénalités : aucune.");
-  } else if (reste > 0) {
+  } else if (d.compensees < d.penalites) {
     lignes.push(
       `  - Vos pénalités : ${fcfa(d.penalites)}${enCours}.`,
-      `    Elles dépassent vos droits : ${fcfa(d.compensees)} en sont retirés, et il reste ` +
-        `${fcfa(reste)} que vous devez au club.`,
+      `    Le club en retient ${fcfa(d.compensees)} sur ce qu'il vous doit.` +
+        (parAcheteurs > 0
+          ? ` Les acheteurs de vos parts lui versent les ${fcfa(parAcheteurs)} restants, pris sur leur prix.`
+          : "") +
+        (reste > 0 ? ` Il reste ${fcfa(reste)} que vous devez au club.` : " Vous ne les devez plus."),
     );
   } else {
     lignes.push(
       `  - Vos pénalités : ${fcfa(d.compensees)}${enCours}.`,
-      "    Elles sont retirées de vos droits et comptent comme réglées : vous ne les devez plus.",
+      "    Elles sont retirées de ce que le club vous doit et comptent comme réglées : vous ne " +
+        "les devez plus.",
     );
   }
   if (d.fraisVente > 0) {
+    const poche = rachete ? "La part des actions que le club vous rachète" : "Votre part des actions du club";
     lignes.push(
       `  - Frais de vente de vos actions : ${taux(REGLES.fraisVenteActions)} de ` +
         `${fcfa(d.pocheActions)} = ${fcfa(d.fraisVente)}.`,
-      `    Votre part des actions du club vaut ${fcfa(d.pocheActions)}. Les vendre coûte ` +
+      `    ${poche} vaut ${fcfa(d.pocheActions)}. Les vendre coûte ` +
         `${taux(REGLES.fraisVenteActions)} chez ${CLUB.sgi} (commission, frais de bourse et ` +
         "taxe). Le club garde ces titres à votre place et paiera ces frais le jour où il les " +
         "vendra : ils sont donc à votre charge, et non à celle des membres qui restent.",
@@ -218,8 +294,9 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
         `${taux(REGLES.conservationSGI)} de leur valeur, plus ${fcfa(REGLES.tenueCompteSGI)} de ` +
         `tenue de compte, plus ${taux(REGLES.taxeCommissionsSGI)} de taxe. Du 1er janvier au ` +
         `relevé, ces frais atteignent ${fcfa(c.fraisGardeCourus)} pour le club, qui ne les a pas ` +
-        "encore payés. Votre part, dans la même proportion que ci-dessus : " +
-        `${fcfa(d.fraisGarde)}.`,
+        "encore payés. Votre part, dans la même proportion que ci-dessus" +
+        (rachete ? ", pour ce que le club rachète" : "") +
+        ` : ${fcfa(d.fraisGarde)}.`,
     );
   }
   if (d.fraisTransfert > 0) {
@@ -235,16 +312,31 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
   }
   lignes.push(`Total retiré : ${fcfa(retire)}`);
 
-  lignes.push(
-    "",
-    "4. CE QUI VOUS REVIENT",
-    `  - Vos droits : ${fcfa(d.droits)}`,
-    `  - Moins le total retiré : ${fcfa(retire)}`,
-    `Montant à vous verser : ${fcfa(d.net)}`,
-  );
+  lignes.push("", section("CE QUI VOUS REVIENT"));
+  if (!rachete) {
+    lignes.push(
+      `  - Vos droits : ${fcfa(d.droits)}`,
+      `  - Moins le total retiré : ${fcfa(retire)}`,
+      `Montant à vous verser : ${fcfa(d.net)}`,
+    );
+  } else {
+    lignes.push(
+      `  - Du club : ${nombre(d.droits)} − ${nombre(retire)} = ${fcfa(d.net)}`,
+      ...d.rachats.map(
+        (r) =>
+          `  - De ${r.nom} : ` +
+          (r.auClub > 0
+            ? `${nombre(r.prix)} − ${nombre(r.auClub)} versés au club pour vos pénalités = ${fcfa(r.auSortant)}`
+            : fcfa(r.auSortant)) +
+          ", à régler directement entre vous",
+      ),
+      `Montant total qui vous revient : ${fcfa(total)}`,
+    );
+  }
   if (d.net > 0) {
     lignes.push(
-      `Le club dispose de ${REGLES.delaiRemboursementMois} mois pour vous le verser (R5), ` +
+      `Le club dispose de ${REGLES.delaiRemboursementMois} mois pour ` +
+        (rachete ? "vous verser ce qu'il vous doit (R5), " : "vous le verser (R5), ") +
         `soit au plus tard le ${dateCourte(limite)}.`,
     );
   }
@@ -381,9 +473,14 @@ export function pointsAVerifier(f: FaitsSortie): string[] {
  * L'empreinte de ce que le bureau a verifie. Si quoi que ce soit change entre la
  * verification et la confirmation, l'empreinte change aussi, et le site redemande.
  */
-export function empreinteSortie(membreId: string, f: FaitsSortie): string {
+export function empreinteSortie(
+  membreId: string,
+  f: FaitsSortie,
+  rachats: { membreId: string; fraction: number; prix: number }[] = [],
+): string {
   return [
     membreId,
+    ...rachats.map((r) => `${r.membreId}:${r.fraction}:${r.prix}`),
     f.jour,
     f.releve?.date ?? "",
     f.releve?.total ?? "",
@@ -394,4 +491,78 @@ export function empreinteSortie(membreId: string, f: FaitsSortie): string {
     f.reglementsEnAttente,
     f.penalites,
   ].join("|");
+}
+
+/**
+ * La valeur de la part d'un membre, avant toute decision : de quoi fixer un prix.
+ *
+ * Le bureau valorise d'abord, en parle aux membres, puis enregistre. Deux
+ * reperes encadrent un rachat par un membre : ce que le club paierait pour la
+ * part, frais deduits, et ce qu'elle vaut. Un prix entre les deux avantage le
+ * sortant comme l'acheteur.
+ */
+export function lignesValorisation(v: {
+  quotePart: number;
+  /** Sa proportion du total a partager, entre 0 et 1. */
+  part: number;
+  avance: number;
+  penalites: number;
+  /** Si le club rachete tout : ce qu'il verse, et les frais retenus. */
+  netClub: number;
+  fraisClub: number;
+  /** Les frais qu'un rachat par le club retiendrait sur la seule part, penalites mises a part. */
+  fraisPart: number;
+}): string[] {
+  const plancher = Math.max(0, v.quotePart - v.fraisPart);
+  const lignes = [
+    `Valeur de sa part : ${fcfa(v.quotePart)} (${taux(v.part)} du total à partager).`,
+  ];
+  if (v.avance > 0) lignes.push(`Son avance, rendue par le club sans frais : ${fcfa(v.avance)}.`);
+  if (v.penalites > 0) lignes.push(`Ses pénalités, payées au club dans tous les cas : ${fcfa(v.penalites)}.`);
+  lignes.push(
+    `Si le club rachète tout : il lui verse ${fcfa(v.netClub)}, après ${fcfa(v.fraisClub)} de ` +
+      "frais (cession, garde, transfert)" +
+      (v.penalites > 0 || v.avance > 0 ? ", avance et pénalités comprises." : "."),
+    "Si des membres rachètent : ils lui paient un prix convenu entre eux, sans frais pour " +
+      `personne. Repère : un prix entre ${fcfa(plancher)} (ce que le club paierait pour sa part, ` +
+      `frais déduits) et ${fcfa(v.quotePart)} (sa valeur) avantage le sortant comme l'acheteur.`,
+  );
+  return lignes;
+}
+
+/** Qui paie quoi, quand des membres rachetent : dit au bureau avant qu'il confirme. */
+export function lignesPartage(p: {
+  avance: number;
+  acheteurs: RachatCourriel[];
+  fractionClub: number;
+  droitsClub: number;
+  frais: number;
+  compensees: number;
+  netClub: number;
+  resteDu: number;
+}): string[] {
+  const lignes = p.acheteurs.map(
+    (r) =>
+      `${r.nom} rachète ${taux(r.fraction)} de ses parts (valeur ${fcfa(r.valeur)}) au prix de ` +
+      `${fcfa(r.prix)} : il verse ${fcfa(r.auSortant)} au sortant` +
+      (r.auClub > 0 ? ` et ${fcfa(r.auClub)} au club pour ses pénalités.` : "."),
+  );
+  lignes.push(
+    p.fractionClub > 0
+      ? `Le club rachète les ${taux(p.fractionClub)} restants : il verse ${fcfa(p.netClub)} au ` +
+          `sortant, avance comprise, après ${fcfa(p.frais)} de frais` +
+          (p.compensees > 0 ? ` et ${fcfa(p.compensees)} de pénalités retenues.` : ".")
+      : `Le club lui rend son avance : ${fcfa(p.netClub)}` +
+          (p.compensees > 0 ? `, après ${fcfa(p.compensees)} de pénalités retenues.` : "."),
+  );
+  if (p.acheteurs.some((r) => r.auClub > 0)) {
+    lignes.push(
+      "Ce que les acheteurs versent au club pour les pénalités est inscrit en caisse, en " +
+        "attente : validez-le dans Caisse à réception de l'argent.",
+    );
+  }
+  if (p.resteDu > 0) {
+    lignes.push(`Il resterait ${fcfa(p.resteDu)} de pénalités que le sortant devrait encore au club.`);
+  }
+  return lignes;
 }

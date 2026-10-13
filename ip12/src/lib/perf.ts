@@ -256,6 +256,110 @@ export function decompteSortie(
   };
 }
 
+/** Un membre qui rachete une partie des parts du sortant, au prix convenu entre eux. */
+export type Rachat = { membreId: string; fraction: number; prix: number };
+
+/**
+ * Le partage d'une sortie entre le club et les membres qui rachetent ses parts.
+ *
+ * DECISIONS DU BUREAU (octobre 2026). Un ou plusieurs membres peuvent racheter
+ * tout ou partie des parts du sortant, a un prix convenu entre eux ; le club
+ * rachete le reste, au calcul de `decompteSortie`.
+ *
+ * - Ce qu'un membre rachete ne coute rien a la caisse et ne vend aucune action :
+ *   aucun frais n'y est retenu. Le poids des cotisations rachetees passe a
+ *   l'acheteur, et les parts des autres membres n'en bougent pas.
+ * - Le club rend l'avance et paie la fraction qu'il rachete, frais deduits.
+ * - Les penalites du sortant sont payees au club : d'abord sur ce que le club
+ *   lui doit, puis sur le prix des acheteurs, au prorata de leurs prix. Ce
+ *   qu'un acheteur verse ainsi au club, il ne le verse pas au sortant.
+ *
+ * Sans acheteur, le resultat est exactement celui de `decompteSortie`.
+ */
+export function partagerSortie(
+  p: { avance: number; quotePart: number; part: number; acquis: number; penalites: number },
+  club: { actions: number; fraisGardeCourus: number },
+  taux: { venteActions: number; transfert: number },
+  rachats: Rachat[],
+): {
+  fractionClub: number;
+  droitsClub: number;
+  pocheActions: number;
+  fraisVente: number;
+  fraisGarde: number;
+  fraisTransfert: number;
+  compensees: number;
+  netClub: number;
+  acheteurs: (Rachat & { poids: number; valeur: number; auClub: number; auSortant: number })[];
+  resteDu: number;
+} {
+  const rachete = rachats.reduce((t, r) => t + r.fraction, 0);
+  /* 70 % + 20 % + 10 % font 0,9999999999999999 en virgule flottante : on arrondit. */
+  const fractionClub = Math.max(0, Math.round((1 - rachete) * 1e9) / 1e9);
+  /*
+   * AU FRANC PRES : les valeurs rachetees et la part du club font exactement la
+   * part du sortant. Arrondies chacune de leur cote, deux moities d'une part
+   * impaire depasseraient d'un franc ; le club prend donc le reste exact, et un
+   * rachat total donne l'arrondi au dernier acheteur.
+   */
+  const valeurs = rachats.map((r, i) =>
+    fractionClub === 0 && i === rachats.length - 1
+      ? p.quotePart - rachats.slice(0, -1).reduce((t, x) => t + Math.round(x.fraction * p.quotePart), 0)
+      : Math.round(r.fraction * p.quotePart),
+  );
+  const partClub =
+    fractionClub === 0 ? 0 : Math.max(0, p.quotePart - valeurs.reduce((t, v) => t + v, 0));
+  const d = decompteSortie(
+    { valeur: p.avance + partClub - p.penalites, avance: p.avance, part: fractionClub * p.part },
+    club,
+    taux,
+  );
+  const frais = d.fraisVente + d.fraisGarde + d.fraisTransfert;
+  const droitsClub = p.avance + partClub;
+  const compensees = Math.max(0, Math.min(p.penalites, droitsClub - frais));
+  const netClub = Math.max(0, droitsClub - compensees - frais);
+
+  /* Ce que le club n'a pas pu retenir se prend sur les prix, au prorata. */
+  const reste = p.penalites - compensees;
+  const totalPrix = rachats.reduce((t, r) => t + Math.max(0, r.prix), 0);
+  const surLesPrix = Math.min(reste, totalPrix);
+  let repartiPrix = 0;
+  let repartiPoids = 0;
+  const acheteurs = rachats.map((r, i) => {
+    const dernier = i === rachats.length - 1;
+    const auClub = dernier
+      ? surLesPrix - repartiPrix
+      : totalPrix > 0
+        ? Math.round((surLesPrix * Math.max(0, r.prix)) / totalPrix)
+        : 0;
+    repartiPrix += auClub;
+    /* Tout rachete : le dernier acheteur prend l'arrondi, pour qu'aucun poids ne se perde. */
+    const poids =
+      dernier && fractionClub === 0 ? p.acquis - repartiPoids : Math.round(r.fraction * p.acquis);
+    repartiPoids += poids;
+    return {
+      ...r,
+      poids,
+      valeur: valeurs[i],
+      auClub,
+      auSortant: Math.max(0, r.prix) - auClub,
+    };
+  });
+
+  return {
+    fractionClub,
+    droitsClub,
+    pocheActions: d.pocheActions,
+    fraisVente: d.fraisVente,
+    fraisGarde: d.fraisGarde,
+    fraisTransfert: d.fraisTransfert,
+    compensees,
+    netClub,
+    acheteurs,
+    resteDu: reste - surLesPrix,
+  };
+}
+
 /**
  * Les frais de garde que la SGI facture pour l'annee et n'a pas encore preleves,
  * courus du 1er janvier au jour du releve : commission de conservation sur la

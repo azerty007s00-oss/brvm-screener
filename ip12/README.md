@@ -181,7 +181,7 @@ Phoenix Capital Management.
 | Art. 12 | Droits de vote proportionnels aux parts, calculees sur le capital echu |
 | Ouverture du compte-titres | 17/07/2023 — les virements antérieurs portent la date de sortie de caisse ; le TRI les ramène à ce jour, le capital n'étant pas encore placé |
 | Art. 14 | Le président transmet les ordres de bourse, le trésorier par délégation |
-| Art. 20 | Exclusion à 3 mois de retard, majorité des 3/4. La sortie est arrêtée au dernier relevé ; le sortant reçoit sa part, pénalités déduites (soldées par compensation), moins une provision de cession de 1,4 % sur sa part en actions, sa quote-part des frais de garde courus et le transfert vers son compte (2 % estimés, hors avance), corrigés ensuite sur frais réels |
+| Art. 20 | Exclusion à 3 mois de retard, majorité des 3/4. La sortie est calculée à sa date, après vérification des données par le bureau. Un ou plusieurs membres peuvent racheter tout ou partie des parts, à un prix convenu avec le sortant : le poids de ses cotisations passe à l'acheteur, sans frais. Le club rachète le reste : sa part, moins une provision de cession de 1,4 % sur sa part en actions, sa quote-part des frais de garde courus et le transfert vers son compte (2 % estimés, hors avance), corrigés ensuite sur frais réels. Les pénalités sont payées au club : sur ce qu'il doit au sortant, puis sur le prix des acheteurs. Le décompte part par courriel à tous les membres |
 | R1 | Souscription à la bourse en ligne, mandat au bureau ; ordres transmis par le président ou le trésorier par délégation (art. 14) |
 | R2 | Droit de vote suspendu dès 30 jours de retard, jusqu'à régularisation |
 | R3 | Déclaration du retard au groupe obligatoire à l'entrée dans le 2e mois |

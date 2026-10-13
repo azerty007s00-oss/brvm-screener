@@ -703,6 +703,12 @@ export type SituationClub = SituationMembre & {
   acquis: number;
   /** La part portant sur des mois a venir. */
   avance: number;
+  /**
+   * Le poids des cotisations rachetees a des membres sortis. Il compte dans sa
+   * part comme ses propres cotisations, mais n'est jamais entre en caisse : il
+   * reste hors de `verse`.
+   */
+  partsRachetees: number;
   retardDeclare: boolean;
   /**
    * Le mois par lequel ce membre doit reprendre, et ce qu'il reste a y
@@ -1107,8 +1113,10 @@ export type DecompteSortie = {
   arrete: string;
   /** Le releve qui donne la valeur du portefeuille ce jour-la, ou null s'il n'y en a pas. */
   releve: string | null;
-  /** Ses cotisations des mois echus au releve : ce qui fixe sa part. */
+  /** Ses cotisations des mois echus au releve, parts rachetees comprises : ce qui fixe sa part. */
   acquis: number;
+  /** Sa part du pot, avance et penalites a part : ce que d'autres membres peuvent racheter. */
+  quotePart: number;
   /** Ce que possedait le club au releve, pour que le courrier de sortie le detaille. */
   club: ContexteSortie;
 };
@@ -1157,7 +1165,7 @@ async function decomptesSortieBrut(dateSortie: string | null): Promise<DecompteS
   const apports = situationsAuReleve.map((s) => ({
     membreId: s.membreId,
     nom: s.nom,
-    acquis: s.acquis,
+    acquis: s.acquis + s.partsRachetees,
     avance: s.avance,
     dues: dette(s.membreId),
   }));
@@ -1182,6 +1190,7 @@ async function decomptesSortieBrut(dateSortie: string | null): Promise<DecompteS
   const compteTitres = auReleve.valorisation?.total ?? 0;
   const club: ContexteSortie = {
     compteTitres,
+    actions,
     enTransit: auReleve.enTransit,
     caisse: auReleve.avoir - compteTitres - auReleve.enTransit,
     creances: pot.creances,
@@ -1214,6 +1223,7 @@ async function decomptesSortieBrut(dateSortie: string | null): Promise<DecompteS
       arrete: jour,
       releve,
       acquis: p.acquis,
+      quotePart: Math.round(p.avance + p.part * pot.aPartager) - p.avance,
       club,
     };
   });
@@ -1254,18 +1264,50 @@ export async function faitsAvantSortie(d: DecompteSortie): Promise<FaitsSortie> 
   };
 }
 
+/**
+ * Le poids des cotisations que chaque membre a rachetees a des sortants, au plus
+ * tard a cette date.
+ *
+ * La table n'existe qu'apres `scripts/migration-rachats.sql` : son absence veut
+ * dire qu'aucun rachat n'a eu lieu, pas une panne.
+ */
+async function poidsRachetes(arrete: string | null): Promise<Map<string, number>> {
+  try {
+    const rows = await db()`
+      select buyer_id, sum(weight)::bigint as poids
+      from share_buybacks
+      where ${arrete}::date is null or bought_on <= ${arrete}::date
+      group by buyer_id
+    `;
+    return new Map(rows.map((r) => [String(r.buyer_id), n(r.poids)]));
+  } catch {
+    return new Map();
+  }
+}
+
+/** Le rachat par des membres est-il en place ? Il demande la table des rachats. */
+export async function rachatsDisponibles(): Promise<boolean> {
+  try {
+    await db()`select 1 from share_buybacks limit 0`;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function situationsClubBrut(
   aujourdhui: Date,
   /** Ne retenir que les versements payes au plus tard ce jour (AAAA-MM-JJ). */
   arrete: string | null = null,
 ): Promise<SituationClub[]> {
   const sql = db();
-  const [membres, declarations, derogations, nbPenalites, reglages] = await Promise.all([
+  const [membres, declarations, derogations, nbPenalites, reglages, rachetees] = await Promise.all([
     listerMembres(),
     declarationsRetard(),
     derogationsParMembre(),
     nbPenalitesRetardDues(),
     reglagesEffectifs(),
+    poidsRachetes(arrete),
   ]);
   const mois = moisDuClub(debutMois(aujourdhui));
 
@@ -1319,6 +1361,7 @@ async function situationsClubBrut(
       avance: siens
         .filter((v) => v.statut === "valide" && !estExigible(v.mois_couvert, aujourdhui))
         .reduce((s, v) => s + v.montant, 0),
+      partsRachetees: rachetees.get(m.id) ?? 0,
       retardDeclare:
         situation.moisEnRetard.length > 0 &&
         situation.moisEnRetard.every((mo) => declares.includes(mo)),
@@ -1475,7 +1518,7 @@ async function syntheseBrut(aujourdhui: Date, arrete: string | null = null): Pro
     situations.map((s) => ({
       membreId: s.membreId,
       nom: s.nom,
-      acquis: s.acquis,
+      acquis: s.acquis + s.partsRachetees,
       avance: s.avance,
       dues: dettePenalites(s.membreId),
     })),

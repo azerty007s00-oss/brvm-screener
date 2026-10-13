@@ -24,10 +24,10 @@ const assert = new Proxy(strict0, {
   },
 });
 
-const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie, etatCaisse, fraisGardeCourus, potAPartager } = await import(
+const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie, etatCaisse, fraisGardeCourus, potAPartager, partagerSortie } = await import(
   "../.verif/perf.mjs"
 );
-const { courrielSortie, courrielCorrectionSortie, echeanceRemboursement, pointsAVerifier, empreinteSortie } = await import("../.verif/sortie.mjs");
+const { courrielSortie, courrielCorrectionSortie, echeanceRemboursement, pointsAVerifier, empreinteSortie, lignesValorisation, lignesPartage } = await import("../.verif/sortie.mjs");
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
@@ -1764,10 +1764,11 @@ assert.equal(
     nom: "SORTANT Test", dateSortie: "2026-10-13", motif: "exclusion de plein droit (R5).",
     releve: "2026-10-10",
     club: {
-      compteTitres: releve.total, enTransit, caisse, creances: pot.creances, avances: pot.avances,
-      aPartager: pot.aPartager, cotisations: pot.cotisations, fraisGardeCourus: fc,
+      compteTitres: releve.total, actions: releve.actions, enTransit, caisse, creances: pot.creances,
+      avances: pot.avances, aPartager: pot.aPartager, cotisations: pot.cotisations, fraisGardeCourus: fc,
     },
-    cotisations: 300_000, avance: 20_000, droits, penalites: 24_000, penalitesEnCours: 6_000,
+    cotisations: 300_000, avance: 20_000, quotePart: droits - 20_000, rachats: [],
+    droits, penalites: 24_000, penalitesEnCours: 6_000,
     compensees, pocheActions: d.pocheActions, fraisVente: d.fraisVente, fraisGarde: d.fraisGarde,
     fraisTransfert: d.fraisTransfert, net,
   };
@@ -1902,6 +1903,189 @@ assert.equal(
   assert.ok(Number.isInteger(centimes.net), "le net est au franc");
 }
 
+{
+  /*
+   * LE RACHAT PAR DES MEMBRES. Le sortant vend tout ou partie de ses parts a
+   * d'autres membres, a un prix convenu entre eux ; le club rachete le reste.
+   */
+  const taux = { venteActions: 0.014, transfert: 0.02 };
+  const club = { actions: 1_400_000, fraisGardeCourus: 12_000 };
+  const base = { avance: 20_000, quotePart: 430_000, part: 0.25, acquis: 300_000, penalites: 24_000 };
+
+  // Sans acheteur : exactement le calcul de toujours.
+  const seul = partagerSortie(base, club, taux, []);
+  const ref = decompteSortie({ valeur: 20_000 + 430_000 - 24_000, avance: 20_000, part: 0.25 }, club, taux);
+  assert.equal(seul.fractionClub, 1);
+  assert.equal(seul.droitsClub, 450_000);
+  assert.equal(seul.fraisVente + seul.fraisGarde + seul.fraisTransfert, ref.fraisVente + ref.fraisGarde + ref.fraisTransfert);
+  assert.equal(seul.netClub, ref.net, "sans acheteur, le net de toujours");
+  assert.equal(seul.compensees, 24_000);
+  assert.equal(seul.acheteurs.length, 0);
+
+  // Un membre rachete tout : le club ne rend que l'avance, moins les penalites.
+  const tout = partagerSortie(base, club, taux, [{ membreId: "b", fraction: 1, prix: 400_000 }]);
+  assert.equal(tout.fractionClub, 0);
+  assert.equal(tout.fraisVente + tout.fraisGarde + tout.fraisTransfert, 0, "aucun frais sur ce qu'un membre rachete");
+  assert.equal(tout.droitsClub, 20_000, "le club ne doit plus que l'avance");
+  assert.equal(tout.compensees, 20_000, "les penalites se prennent d'abord sur l'avance");
+  assert.equal(tout.netClub, 0);
+  assert.equal(tout.acheteurs[0].auClub, 4_000, "le reste des penalites, sur le prix");
+  assert.equal(tout.acheteurs[0].auSortant, 396_000);
+  assert.equal(tout.acheteurs[0].poids, 300_000, "tout le poids passe a l'acheteur");
+  assert.equal(tout.acheteurs[0].valeur, 430_000);
+  assert.equal(tout.resteDu, 0);
+
+  // Deux acheteurs a 30 % et 20 %, le club rachete la moitie restante.
+  const moitie = partagerSortie(base, club, taux, [
+    { membreId: "b", fraction: 0.3, prix: 120_000 },
+    { membreId: "c", fraction: 0.2, prix: 80_000 },
+  ]);
+  assert.equal(moitie.fractionClub, 0.5);
+  assert.equal(moitie.droitsClub, 20_000 + 215_000);
+  assert.equal(moitie.pocheActions, Math.round(0.125 * 1_400_000) > 215_000 - 24_000 ? 215_000 - 24_000 : Math.round(0.125 * 1_400_000));
+  assert.equal(moitie.compensees, 24_000, "le club retient tout sur ce qu'il doit");
+  assert.ok(moitie.acheteurs.every((a) => a.auClub === 0 && a.auSortant === a.prix));
+  assert.deepEqual(moitie.acheteurs.map((a) => a.poids), [90_000, 60_000]);
+  assert.deepEqual(moitie.acheteurs.map((a) => a.valeur), [129_000, 86_000]);
+  assert.equal(
+    moitie.netClub,
+    moitie.droitsClub - 24_000 - moitie.fraisVente - moitie.fraisGarde - moitie.fraisTransfert,
+  );
+
+  // Penalites au-dela de l'avance, deux acheteurs : le reste se partage au prorata des prix.
+  const prorata = partagerSortie({ ...base, penalites: 50_000 }, club, taux, [
+    { membreId: "b", fraction: 0.6, prix: 300_000 },
+    { membreId: "c", fraction: 0.4, prix: 100_000 },
+  ]);
+  assert.equal(prorata.compensees, 20_000);
+  assert.deepEqual(prorata.acheteurs.map((a) => a.auClub), [22_500, 7_500]);
+  assert.equal(prorata.acheteurs.reduce((t, a) => t + a.auClub, 0), 30_000, "au franc pres");
+  assert.equal(prorata.acheteurs[1].poids, 300_000 - 180_000, "le dernier prend l'arrondi du poids");
+
+  // Prix trop bas pour les penalites : la dette restante se dit.
+  const court = partagerSortie({ ...base, avance: 0, penalites: 50_000 }, club, taux, [
+    { membreId: "b", fraction: 1, prix: 30_000 },
+  ]);
+  assert.equal(court.acheteurs[0].auClub, 30_000);
+  assert.equal(court.acheteurs[0].auSortant, 0);
+  assert.equal(court.resteDu, 20_000);
+
+  /*
+   * L'INVARIANT : le poids passe a l'acheteur sans toucher aux parts des autres.
+   * Avant, A (sortant) 300 000, B 600 000, C 300 000. Apres un rachat total par
+   * B, B porte 900 000 et C garde son quart ; le pot ne bouge pas.
+   */
+  const avant = repartirParts(
+    [
+      { membreId: "a", nom: "A", acquis: 300_000, avance: 0, dues: 0 },
+      { membreId: "b", nom: "B", acquis: 600_000, avance: 0, dues: 0 },
+      { membreId: "c", nom: "C", acquis: 300_000, avance: 0, dues: 0 },
+    ],
+    1_200_000,
+  );
+  const apres = repartirParts(
+    [
+      { membreId: "b", nom: "B", acquis: 600_000 + 300_000, avance: 0, dues: 0 },
+      { membreId: "c", nom: "C", acquis: 300_000, avance: 0, dues: 0 },
+    ],
+    1_200_000,
+  );
+  const valeurDe = (l, id) => l.find((x) => x.membreId === id).valeur;
+  assert.equal(valeurDe(apres, "c"), valeurDe(avant, "c"), "C ne gagne ni ne perd");
+  assert.equal(valeurDe(apres, "b"), valeurDe(avant, "b") + valeurDe(avant, "a"), "B porte la part de A");
+
+  // Le courrier avec acheteurs : qui rachete, qui paie quoi, et le total.
+  const donnees = {
+    nom: "SORTANT Test", dateSortie: "2026-10-13", motif: "démission", releve: "2026-10-13",
+    club: {
+      compteTitres: 1_500_000, actions: 1_400_000, enTransit: 0, caisse: 220_000, creances: 24_000,
+      avances: 20_000, aPartager: 1_724_000, cotisations: 1_200_000, fraisGardeCourus: 12_000,
+    },
+    cotisations: 300_000, avance: 20_000, quotePart: 431_000, penalites: 24_000, penalitesEnCours: 0,
+  };
+  const p2 = partagerSortie({ ...base, quotePart: 431_000 }, club, taux, [
+    { membreId: "b", fraction: 0.5, prix: 200_000 },
+  ]);
+  const t2 = courrielSortie({
+    ...donnees,
+    droits: p2.droitsClub,
+    rachats: [{ nom: "ACHETEUR Un", ...p2.acheteurs[0] }],
+    compensees: p2.compensees, pocheActions: p2.pocheActions, fraisVente: p2.fraisVente,
+    fraisGarde: p2.fraisGarde, fraisTransfert: p2.fraisTransfert, net: p2.netClub,
+  }).texte;
+  const total2 = p2.netClub + p2.acheteurs[0].auSortant;
+  assert.ok(t2.includes("3. QUI RACHÈTE VOS PARTS"), "la section du rachat");
+  assert.ok(t2.includes(`ACHETEUR Un : 50 % de vos parts, d'une valeur de ${fcfa(215_500)}`));
+  // Part impaire coupee en deux : l'acheteur et le club font exactement la part.
+  const impaire = partagerSortie({ ...base, quotePart: 407_785 }, club, taux, [{ membreId: "b", fraction: 0.5, prix: 1 }]);
+  assert.equal(impaire.acheteurs[0].valeur + (impaire.droitsClub - base.avance), 407_785, "au franc pres");
+  const tiers = partagerSortie({ ...base, quotePart: 100_001 }, club, taux, [
+    { membreId: "b", fraction: 0.6, prix: 1 },
+    { membreId: "c", fraction: 0.4, prix: 1 },
+  ]);
+  assert.equal(tiers.acheteurs.reduce((t, a) => t + a.valeur, 0), 100_001, "rachat total, au franc pres");
+  assert.equal(tiers.droitsClub, base.avance);
+  const trois = partagerSortie(base, club, taux, [
+    { membreId: "b", fraction: 0.7, prix: 1 },
+    { membreId: "c", fraction: 0.2, prix: 1 },
+    { membreId: "d", fraction: 0.1, prix: 1 },
+  ]);
+  assert.equal(trois.fractionClub, 0, "70 + 20 + 10 font bien 100 %");
+  assert.equal(trois.acheteurs.reduce((t, a) => t + a.poids, 0), base.acquis, "aucun poids perdu");
+  assert.ok(t2.includes(`au prix convenu entre vous de ${fcfa(200_000)}.`));
+  assert.ok(t2.includes("Le club : les 50 % restants"));
+  assert.ok(t2.includes("aucun frais n'y est retenu"));
+  assert.ok(t2.includes(`- De ACHETEUR Un : ${fcfa(200_000)}, à régler directement entre vous`));
+  assert.ok(t2.includes(`Montant total qui vous revient : ${fcfa(total2)}`));
+  assert.ok(t2.includes(`En bref : ${fcfa(total2)} vous reviennent au total`));
+  assert.ok(t2.includes("5. CE QUI VOUS REVIENT"), "les sections se renumerotent");
+  assert.ok(!/—|--|undefined|NaN/.test(t2));
+
+  // Rachat total, penalites au-dela de l'avance : l'acheteur en verse une partie au club.
+  const t3 = courrielSortie({
+    ...donnees,
+    droits: tout.droitsClub,
+    rachats: [{ nom: "ACHETEUR Un", ...tout.acheteurs[0] }],
+    compensees: tout.compensees, pocheActions: 0, fraisVente: 0, fraisGarde: 0, fraisTransfert: 0,
+    net: tout.netClub,
+  }).texte;
+  assert.ok(t3.includes(`Le club vous doit votre avance : ${fcfa(20_000)}.`));
+  assert.ok(t3.includes(`Les acheteurs de vos parts lui versent les ${fcfa(4_000)} restants`));
+  assert.ok(t3.includes(`${nombre(400_000)} − ${nombre(4_000)} versés au club pour vos pénalités = ${fcfa(396_000)}`));
+  assert.ok(t3.includes(`En bref : ${fcfa(396_000)} vous reviennent, versés par les membres qui rachètent vos parts.`));
+  assert.ok(!t3.includes("Le club : les"), "le club ne rachete rien");
+  assert.ok(!t3.includes("au plus tard"), "rien a verser par le club, pas de date limite");
+
+  // La valorisation, avant toute decision : la valeur et les deux reperes de prix.
+  const val = lignesValorisation({
+    quotePart: 430_000, part: 0.25, avance: 20_000, penalites: 24_000,
+    netClub: seul.netClub, fraisClub: seul.fraisVente + seul.fraisGarde + seul.fraisTransfert, fraisPart: 15_000,
+  });
+  assert.ok(val[0].startsWith(`Valeur de sa part : ${fcfa(430_000)} (25 % du total à partager).`));
+  assert.ok(val.some((l) => l.includes(`un prix entre ${fcfa(415_000)}`) && l.includes(`et ${fcfa(430_000)} (sa valeur)`)));
+  assert.ok(val.some((l) => l.startsWith(`Si le club rachète tout : il lui verse ${fcfa(seul.netClub)}`)));
+  const qui = lignesPartage({
+    avance: 20_000,
+    acheteurs: [{ nom: "ACHETEUR Un", ...tout.acheteurs[0] }],
+    fractionClub: 0, droitsClub: 20_000, frais: 0, compensees: 20_000, netClub: 0, resteDu: 0,
+  });
+  assert.ok(qui[0].includes(`il verse ${fcfa(396_000)} au sortant et ${fcfa(4_000)} au club pour ses pénalités.`));
+  assert.ok(qui.some((l) => l.startsWith(`Le club lui rend son avance : ${fcfa(0)}, après ${fcfa(20_000)} de pénalités retenues.`)));
+  assert.ok(qui.some((l) => l.includes("validez-le dans Caisse")));
+  assert.ok(!val.concat(qui).some((l) => /—|--|undefined|NaN/.test(l)));
+
+  // L'empreinte change avec les acheteurs : un prix modifie fait redemander.
+  const f = {
+    jour: "2026-10-13", releve: { date: "2026-10-13", total: 1 }, enTransit: 0,
+    versementsEnAttente: { nb: 0, total: 0, siens: 0 }, caisseEnAttente: 0, reglementsEnAttente: 0,
+    penalites: 0, penalitesEnCours: 0,
+  };
+  assert.notEqual(
+    empreinteSortie("a", f, [{ membreId: "b", fraction: 1, prix: 400_000 }]),
+    empreinteSortie("a", f, [{ membreId: "b", fraction: 1, prix: 390_000 }]),
+  );
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -1910,5 +2094,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie",
+    + "courrier de sortie, rachat des parts par des membres",
 );

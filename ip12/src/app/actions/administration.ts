@@ -18,17 +18,29 @@ import {
   courrielCorrectionSortie,
   courrielSortie,
   empreinteSortie,
+  lignesPartage,
+  lignesValorisation,
   pointsAVerifier,
 } from "@/lib/sortie";
+import { partagerSortie, type Rachat } from "@/lib/perf";
 import { porterRetardsAuRegistre, resumeConstat, type IssueConstat } from "@/lib/constat";
-import { decomptesSortie, faitsAvantSortie, listerMembres, reglagesEffectifs } from "@/lib/queries";
+import {
+  decomptesSortie,
+  faitsAvantSortie,
+  listerMembres,
+  rachatsDisponibles,
+  reglagesEffectifs,
+} from "@/lib/queries";
 import { CLUB, REGLES, dateCourte, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
 import {
   KIND_PENALITE,
   KIND_VERSEMENT,
   METHODE,
+  CATEGORIE_PENALITES_SORTANT,
   PREFIXE_SOLDE_SORTIE,
   REGLE_MEMBRE,
+  SENS_CAISSE,
+  STATUT_CAISSE,
   STATUT_PENALITE,
   STATUT_VERSEMENT,
 } from "@/lib/valeurs";
@@ -400,12 +412,29 @@ export async function leverRegleMembre(
  * Ce qu'il a verse reste en caisse ; ce qui lui est du sort de l'avoir a
  * partager des maintenant, et de la caisse le jour de son paiement.
  */
+export type SaisieRachat = { membre: string; pourcentage: string; prix: string };
+
 export type EtatSortie = EtatFormulaire & {
   /** Ce qui a ete saisi, rendu au formulaire pour qu'il ne se vide pas. */
-  valeurs?: { membre: string; date: string; motif: string; note: string };
+  valeurs?: { membre: string; date: string; motif: string; note: string; rachats: SaisieRachat[] };
   /** Ce que le calcul va utiliser, a confirmer avant l'enregistrement. */
-  aVerifier?: { empreinte: string; membre: string; date: string; nom: string; points: string[] };
+  aVerifier?: {
+    empreinte: string;
+    membre: string;
+    date: string;
+    nom: string;
+    /** La valeur de sa part et les reperes de prix : rien n'est encore enregistre. */
+    valorisation: string[];
+    points: string[];
+    /** Qui paie quoi, quand des membres rachetent. */
+    partage: string[];
+  };
 };
+
+/** Un nombre saisi a la francaise : « 33,5 », « 150 000 ». */
+function nombreSaisi(texte: string): number {
+  return Number(texte.replace(/[\s  ]/g, "").replace(",", "."));
+}
 
 export async function enregistrerSortie(
   _precedent: EtatSortie,
@@ -418,7 +447,13 @@ export async function enregistrerSortie(
   const motif = String(donnees.get("motif") ?? "").trim();
   const note = String(donnees.get("note") ?? "").trim();
   const confirme = String(donnees.get("confirme") ?? "");
-  const valeurs = { membre: membreId, date, motif, note };
+  const pourcentages = donnees.getAll("pourcentage").map(String);
+  const prixSaisis = donnees.getAll("prix").map(String);
+  const saisies: SaisieRachat[] = donnees
+    .getAll("acheteur")
+    .map((a, i) => ({ membre: String(a), pourcentage: pourcentages[i] ?? "", prix: prixSaisis[i] ?? "" }))
+    .filter((r) => r.membre || r.pourcentage.trim() || r.prix.trim());
+  const valeurs = { membre: membreId, date, motif, note, rachats: saisies };
   const refus = (erreur: string): EtatSortie => ({ ok: false, erreur, valeurs });
 
   if (!membreId) return refus("Choisissez le membre sortant.");
@@ -433,6 +468,39 @@ export async function enregistrerSortie(
   const membre = await sql`select full_name, email, is_active from members where id = ${membreId}::uuid`;
   if (!membre[0]) return refus("Membre introuvable.");
   if (!membre[0].is_active) return refus("Ce membre est déjà sorti.");
+  const nomSortant = String(membre[0].full_name);
+
+  /*
+   * LES ACHETEURS. Chacun rachete un pourcentage des parts, a un prix convenu
+   * avec le sortant ; le club rachete ce qui reste.
+   */
+  const actifs = await listerMembres();
+  const nomDe = new Map(actifs.map((m) => [String(m.id), m.nom]));
+  const rachats: Rachat[] = [];
+  for (const r of saisies) {
+    const nom = nomDe.get(r.membre);
+    const pourcentage = nombreSaisi(r.pourcentage);
+    const prix = nombreSaisi(r.prix);
+    if (!r.membre || !nom) return refus("Choisissez chaque acheteur parmi les membres actifs.");
+    if (r.membre === membreId) return refus("Le sortant ne peut pas racheter ses propres parts.");
+    if (rachats.some((x) => x.membreId === r.membre)) {
+      return refus(`${nom} figure deux fois parmi les acheteurs : réunissez ses lignes.`);
+    }
+    if (!Number.isFinite(pourcentage) || pourcentage <= 0 || pourcentage > 100) {
+      return refus(`Indiquez pour ${nom} un pourcentage des parts entre 0 et 100.`);
+    }
+    if (!Number.isFinite(prix) || prix < 0) return refus(`Indiquez pour ${nom} le prix convenu.`);
+    rachats.push({ membreId: r.membre, fraction: Math.round(pourcentage * 1e4) / 1e6, prix: Math.round(prix) });
+  }
+  if (rachats.reduce((t, r) => t + r.fraction, 0) > 1 + 1e-9) {
+    return refus("Les acheteurs rachètent plus de 100 % des parts : corrigez les pourcentages.");
+  }
+  if (rachats.length > 0 && !(await rachatsDisponibles())) {
+    return refus(
+      "Le rachat par des membres demande une mise à jour de la base : exécutez " +
+        "scripts/migration-rachats.sql dans Neon, puis recommencez.",
+    );
+  }
 
   const d = (await decomptesSortie(date)).find((x) => x.membreId === membreId);
   if (!d) return refus("Le décompte de ce membre est introuvable : rechargez la page.");
@@ -443,48 +511,118 @@ export async function enregistrerSortie(
     );
   }
 
+  const base = {
+    avance: d.avance,
+    quotePart: d.quotePart,
+    part: d.part,
+    acquis: d.acquis,
+    penalites: d.penalitesDeduites,
+  };
+  const club = { actions: d.club.actions, fraisGardeCourus: d.club.fraisGardeCourus };
+  const taux = { venteActions: REGLES.fraisVenteActions, transfert: REGLES.fraisTransfertSortie };
+  const fraisDe = (x: { fraisVente: number; fraisGarde: number; fraisTransfert: number }) =>
+    x.fraisVente + x.fraisGarde + x.fraisTransfert;
+  const partage = partagerSortie(base, club, taux, rachats);
+  const acheteurs = partage.acheteurs.map((a) => ({
+    ...a,
+    nom: nomDe.get(a.membreId) ?? "",
+  }));
+  const frais = fraisDe(partage);
+
   const faits = await faitsAvantSortie(d);
-  const empreinte = empreinteSortie(membreId, faits);
+  const empreinte = empreinteSortie(membreId, faits, rachats);
   if (confirme !== empreinte) {
+    const tout = partagerSortie(base, club, taux, []);
+    const partSeule = partagerSortie({ ...base, avance: 0, penalites: 0 }, club, taux, []);
     return {
       ok: false,
       valeurs,
       erreur: confirme
         ? "Les données ont changé depuis votre vérification : relisez-les avant de confirmer."
         : undefined,
-      aVerifier: { empreinte, membre: membreId, date, nom: membre[0].full_name, points: pointsAVerifier(faits) },
+      aVerifier: {
+        empreinte,
+        membre: membreId,
+        date,
+        nom: nomSortant,
+        valorisation: lignesValorisation({
+          quotePart: d.quotePart,
+          part: d.part,
+          avance: d.avance,
+          penalites: d.penalitesDeduites,
+          netClub: tout.netClub,
+          fraisClub: fraisDe(tout),
+          fraisPart: fraisDe(partSeule),
+        }),
+        points: pointsAVerifier(faits),
+        partage:
+          rachats.length === 0
+            ? []
+            : lignesPartage({
+                avance: d.avance,
+                acheteurs,
+                fractionClub: partage.fractionClub,
+                droitsClub: partage.droitsClub,
+                frais,
+                compensees: partage.compensees,
+                netClub: partage.netClub,
+                resteDu: partage.resteDu,
+              }),
+      },
     };
   }
-
-  /*
-   * Ses droits avant penalites, ses penalites compensees, les frais : le net en
-   * decoule. Si ses penalites depassent ses droits, il ne recoit rien et le reste
-   * de sa dette se lit dans la note.
-   */
-  const frais = d.fraisVente + d.fraisGarde + d.fraisTransfert;
-  const droits = Math.max(0, Math.round(d.valeurBrute + d.penalitesDeduites));
-  const compensees = Math.max(0, Math.min(d.penalitesDeduites, droits - frais));
-  const net = Math.max(0, droits - compensees - frais);
-  const reste = d.penalitesDeduites - compensees;
 
   const detail = [
     note,
     `Calculée au ${dateCourte(date)}, portefeuille au relevé du ${dateCourte(d.releve)}`,
-    `pénalités compensées ${fcfa(compensees)}` +
+    ...acheteurs.map(
+      (a) =>
+        `${a.nom} rachète ${(a.fraction * 100).toLocaleString("fr-FR", { maximumFractionDigits: 4 })} % ` +
+        `des parts au prix de ${fcfa(a.prix)}` +
+        (a.auClub > 0 ? `, dont ${fcfa(a.auClub)} versés au club pour les pénalités` : ""),
+    ),
+    `pénalités compensées ${fcfa(partage.compensees)}` +
       (d.penalitesEnCours > 0 ? `, dont ${fcfa(d.penalitesEnCours)} non inscrites au registre` : ""),
-    `frais provisoires : cession ${fcfa(d.fraisVente)}, garde ${fcfa(d.fraisGarde)}, transfert ${fcfa(d.fraisTransfert)}`,
-    reste > 0 ? `reste dû au club ${fcfa(reste)}` : "",
+    `frais provisoires : cession ${fcfa(partage.fraisVente)}, garde ${fcfa(partage.fraisGarde)}, ` +
+      `transfert ${fcfa(partage.fraisTransfert)}`,
+    partage.resteDu > 0 ? `reste dû au club ${fcfa(partage.resteDu)}` : "",
   ]
     .filter(Boolean)
     .join(" · ");
 
+  /*
+   * En une seule transaction : la sortie, les rachats et le poids qu'ils
+   * transmettent, ce que les acheteurs doivent verser au club pour les
+   * penalites (en caisse, en attente de reception), les penalites soldees, le
+   * membre desactive. L'identifiant de la sortie est tire ici pour que les
+   * rachats puissent s'y rattacher dans la meme transaction.
+   */
+  const sortieId = randomUUID();
   await sql.transaction([
     sql`
-      insert into member_exits (member_id, exit_date, reason, gross_value, fees,
+      insert into member_exits (id, member_id, exit_date, reason, gross_value, fees,
                                 net_paid, forfeited, note, created_by)
-      values (${membreId}::uuid, ${date}::date, ${motif}, ${droits}, ${frais},
-              ${net}, ${compensees}, ${detail}, ${auteur.id}::uuid)
+      values (${sortieId}::uuid, ${membreId}::uuid, ${date}::date, ${motif}, ${partage.droitsClub},
+              ${frais}, ${partage.netClub}, ${partage.compensees}, ${detail}, ${auteur.id}::uuid)
     `,
+    ...acheteurs.map(
+      (a) => sql`
+        insert into share_buybacks (exit_id, seller_id, buyer_id, bought_on, fraction, weight,
+                                    reference_value, price, paid_to_club, created_by)
+        values (${sortieId}::uuid, ${membreId}::uuid, ${a.membreId}::uuid, ${date}::date,
+                ${a.fraction}, ${a.poids}, ${a.valeur}, ${a.prix}, ${a.auClub}, ${auteur.id}::uuid)
+      `,
+    ),
+    ...acheteurs
+      .filter((a) => a.auClub > 0)
+      .map(
+        (a) => sql`
+          insert into cash_movements (movement_date, direction, category, amount, note, status, created_by)
+          values (${date}::date, ${SENS_CAISSE.recette}, ${CATEGORIE_PENALITES_SORTANT}, ${a.auClub},
+                  ${`Pénalités de ${nomSortant}, payées par ${a.nom} sur le rachat de ses parts`},
+                  ${STATUT_CAISSE.enAttente}, ${auteur.id}::uuid)
+        `,
+      ),
     sql`
       update penalties
       set status = ${STATUT_PENALITE.payee},
@@ -503,40 +641,67 @@ export async function enregistrerSortie(
    * pas la sortie ; le message le dit, pour que le bureau le lui transmette.
    */
   const courrier = await envoyerCourrielSortie(
-    { nom: membre[0].full_name, email: membre[0].email },
+    { nom: nomSortant, email: membre[0].email },
     courrielSortie({
-      nom: membre[0].full_name,
+      nom: nomSortant,
       dateSortie: date,
       motif,
       releve: d.releve,
       club: d.club,
       cotisations: d.acquis,
       avance: d.avance,
-      droits,
+      quotePart: d.quotePart,
+      droits: partage.droitsClub,
+      rachats: acheteurs.map((a) => ({
+        nom: a.nom,
+        fraction: a.fraction,
+        valeur: a.valeur,
+        prix: a.prix,
+        auClub: a.auClub,
+        auSortant: a.auSortant,
+      })),
       penalites: d.penalitesDeduites,
       penalitesEnCours: d.penalitesEnCours,
-      compensees,
-      pocheActions: d.pocheActions,
-      fraisVente: d.fraisVente,
-      fraisGarde: d.fraisGarde,
-      fraisTransfert: d.fraisTransfert,
-      net,
+      compensees: partage.compensees,
+      pocheActions: partage.pocheActions,
+      fraisVente: partage.fraisVente,
+      fraisGarde: partage.fraisGarde,
+      fraisTransfert: partage.fraisTransfert,
+      net: partage.netClub,
     }),
   ).catch((e: unknown) => ({ ok: false, detail: e instanceof Error ? e.message : String(e) }));
 
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "sortie_membre",
-    { entite: "member_exits", id: membreId },
-    { date, motif, releve: d.releve, droits, compensees, frais, net, courriel: courrier.detail },
+    { entite: "member_exits", id: sortieId },
+    {
+      membre: membreId,
+      date,
+      motif,
+      releve: d.releve,
+      droits: partage.droitsClub,
+      compensees: partage.compensees,
+      frais,
+      net: partage.netClub,
+      rachats: acheteurs.map((a) => ({ acheteur: a.membreId, fraction: a.fraction, prix: a.prix, auClub: a.auClub })),
+      courriel: courrier.detail,
+    },
   );
   revalidatePath("/", "layout");
+  const auClub = acheteurs.reduce((t, a) => t + a.auClub, 0);
   return {
     ok: true,
     message:
-      `Sortie enregistrée : ${fcfa(net)} à verser à ${membre[0].full_name}, sous ` +
-      `${REGLES.delaiRemboursementMois} mois (R5). Ses pénalités sont soldées avec le motif de ` +
-      "sortie. " +
+      `Sortie enregistrée : ${fcfa(partage.netClub)} à verser par le club à ${nomSortant}, sous ` +
+      `${REGLES.delaiRemboursementMois} mois (R5)` +
+      (acheteurs.length > 0
+        ? `, et ${fcfa(acheteurs.reduce((t, a) => t + a.auSortant, 0))} par les acheteurs de ses parts, directement. `
+        : ". ") +
+      (auClub > 0
+        ? `Les ${fcfa(auClub)} que les acheteurs doivent au club pour ses pénalités attendent en caisse : validez-les à réception. `
+        : "") +
+      "Ses pénalités sont soldées avec le motif de sortie. " +
       (courrier.ok
         ? "Le détail du calcul lui a été envoyé par courriel, tous les membres en copie. "
         : `Le courriel de décompte n'est pas parti (${courrier.detail}) : transmettez-lui le détail. `) +
