@@ -15,6 +15,7 @@ import {
 import { versionDeployee } from "@/lib/version";
 import { envoyerCourrielSortie } from "@/lib/avis";
 import {
+  arrieresAvant,
   courrielCorrectionSortie,
   courrielSortie,
   courrielValorisation,
@@ -444,14 +445,18 @@ function nombreSaisi(texte: string): number {
   return Number(texte.replace(/[\s  ]/g, "").replace(",", "."));
 }
 
-/** Les mois que le sortant n'a pas payes a sa date de sortie, et ce qu'il y manque. */
+/**
+ * Les mois que le sortant doit encore a sa date de sortie, et ce qu'il y manque :
+ * jusqu'au premier mois de la part rachetee, celui de la sortie compris si son
+ * echeance tombe le jour meme (voir `arrieresAvant`).
+ */
 async function moisImpayes(membreId: string, date: string): Promise<{ mois: string; manque: number }[]> {
-  const situation = (await situationsClub(new Date(`${date}T23:59:59Z`), date)).find(
-    (x) => x.membreId === membreId,
-  );
-  return (situation?.cellules ?? [])
-    .filter((c) => situation?.moisEnRetard.includes(c.mois) && c.manque > 0)
-    .map((c) => ({ mois: c.mois, manque: c.manque }));
+  const [situations, reglages] = await Promise.all([
+    situationsClub(new Date(`${date}T23:59:59Z`), date),
+    reglagesEffectifs(),
+  ]);
+  const situation = situations.find((x) => x.membreId === membreId);
+  return arrieresAvant(situation?.cellules ?? [], premierMoisDeLaPart(date, reglages.jourEcheance));
 }
 
 export async function enregistrerSortie(
@@ -625,6 +630,7 @@ export async function enregistrerSortie(
           netClub: tout.netClub,
           fraisClub: fraisDe(tout),
           arrieres: arrieresTotal,
+          moisArrieres: impayes.map((x) => x.mois),
         }),
         detail: lignesValeurDeLaPart(
           {
@@ -878,7 +884,8 @@ export async function envoyerValorisation(
     { venteActions: REGLES.fraisVenteActions, transfert: REGLES.fraisTransfertSortie },
     [],
   );
-  const arrieres = (await moisImpayes(membreId, date)).reduce((t, x) => t + x.manque, 0);
+  const impayes = await moisImpayes(membreId, date);
+  const arrieres = impayes.reduce((t, x) => t + x.manque, 0);
 
   const courrier = await envoyerCourrielSortie(
     titulaire ? { nom: titulaire.nom, email: titulaire.email } : { nom: sortant.nom, email: sortant.email },
@@ -894,6 +901,7 @@ export async function envoyerValorisation(
       penalites: d.penalitesDeduites,
       penalitesEnCours: d.penalitesEnCours,
       arrieres,
+      moisArrieres: impayes.map((x) => x.mois),
       netClub: tout.netClub,
       compensees: tout.compensees,
       fraisVente: tout.fraisVente,

@@ -27,7 +27,7 @@ const assert = new Proxy(strict0, {
 const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie, etatCaisse, fraisGardeCourus, potAPartager, partagerSortie } = await import(
   "../.verif/perf.mjs"
 );
-const { courrielSortie, courrielCorrectionSortie, echeanceRemboursement, pointsAVerifier, empreinteSortie, lignesValorisation, lignesPartage, premierMoisDeLaPart, nomDeLaPart, lignesNouvellesParts, courrielValorisation, lignesValeurDeLaPart } = await import("../.verif/sortie.mjs");
+const { courrielSortie, courrielCorrectionSortie, echeanceRemboursement, pointsAVerifier, empreinteSortie, lignesValorisation, lignesPartage, premierMoisDeLaPart, nomDeLaPart, lignesNouvellesParts, courrielValorisation, lignesValeurDeLaPart, arrieresAvant, listeDesMois } = await import("../.verif/sortie.mjs");
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
@@ -2270,6 +2270,42 @@ assert.equal(
   const part = courrielValorisation({ ...base, nom: "SORO Tiélina", part: "SORO Tiélina · part de KONÉ Bourama" });
   assert.equal(part.sujet, "IP12 : valeur de la part rachetée que vous détenez, avant la sortie");
   assert.ok(part.texte.includes("Voici la valeur de la part rachetée que vous détenez (SORO Tiélina · part de KONÉ Bourama)"));
+}
+
+{
+  /*
+   * LES COTISATIONS IMPAYEES DU SORTANT. Sortie le 10/10, jour de l'echeance
+   * d'octobre : octobre est du ce jour-la, et la part rachetee ne commence qu'en
+   * novembre. Il compte donc dans les impayes, sans quoi personne ne le paierait.
+   */
+  const cellules = [
+    { mois: "2026-06-01", manque: 0 },
+    { mois: "2026-07-01", manque: 0 },
+    { mois: "2026-08-01", manque: 5_000 },
+    { mois: "2026-09-01", manque: 5_000 },
+    { mois: "2026-10-01", manque: 5_000 },
+  ];
+  const debutPart = premierMoisDeLaPart("2026-10-10", 10);
+  assert.equal(debutPart, "2026-11-01");
+  const dus = arrieresAvant(cellules, debutPart);
+  assert.deepEqual(dus.map((x) => x.mois), ["2026-08-01", "2026-09-01", "2026-10-01"], "octobre compris");
+  assert.equal(dus.reduce((t, x) => t + x.manque, 0), 15_000, "trois mois, et non deux");
+  // Sortie le 5 : octobre n'est pas encore echu, la part rachetee le doit.
+  const avant = arrieresAvant(cellules, premierMoisDeLaPart("2026-10-05", 10));
+  assert.deepEqual(avant.map((x) => x.mois), ["2026-08-01", "2026-09-01"], "le mois de la part n'est pas compte deux fois");
+  // Un acompte : seul ce qui manque est du.
+  assert.equal(arrieresAvant([{ mois: "2026-09-01", manque: 3_000 }], "2026-11-01")[0].manque, 3_000);
+
+  assert.equal(listeDesMois(["2026-10-01", "2026-08-01", "2026-09-01"]), "août, septembre et octobre 2026");
+  assert.equal(listeDesMois(["2026-12-01", "2027-01-01"]), "décembre 2026 et janvier 2027");
+  assert.equal(listeDesMois(["2026-09-01"]), "septembre 2026");
+
+  // L'ecran et le courrier nomment les mois : le bureau et le sortant les verifient.
+  const val = lignesValorisation({
+    quotePart: 364_350, part: 0.0961, avance: 0, penalites: 9_500, netClub: 342_940, fraisClub: 11_910,
+    arrieres: 15_000, moisArrieres: dus.map((x) => x.mois),
+  });
+  assert.ok(val.some((l) => l.includes(`ses cotisations impayées (${fcfa(15_000)} : août, septembre et octobre 2026)`)));
 }
 
 console.log(

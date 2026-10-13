@@ -487,6 +487,8 @@ export function lignesValorisation(v: {
   fraisClub: number;
   /** Ses cotisations impayees, qu'un acheteur verserait au club. */
   arrieres: number;
+  /** Les mois qu'elles couvrent, nommes pour que le bureau les verifie. */
+  moisArrieres?: string[];
 }): string[] {
   /*
    * LE PRIX CONVENU EST CE QUE RECOIT LE SORTANT ; l'acheteur paie en plus ses
@@ -516,7 +518,9 @@ export function lignesValorisation(v: {
           [
             v.penalites > 0 ? `ses pénalités (${fcfa(v.penalites)})` : "",
             v.arrieres > 0
-              ? `ses cotisations impayées (${fcfa(v.arrieres)}), qui comptent dans la part rachetée`
+              ? `ses cotisations impayées (${fcfa(v.arrieres)}` +
+                (v.moisArrieres?.length ? ` : ${listeDesMois(v.moisArrieres)}` : "") +
+                "), qui comptent dans la part rachetée"
               : "",
           ]
             .filter(Boolean)
@@ -714,6 +718,7 @@ export function courrielValorisation(
     penalites: number;
     penalitesEnCours: number;
     arrieres: number;
+    moisArrieres?: string[];
     /** Si le club rachete tout. */
     netClub: number;
     compensees: number;
@@ -768,7 +773,11 @@ export function courrielValorisation(
         ? " Ils paient en plus au club " +
           [
             v.penalites > 0 ? `vos pénalités (${fcfa(v.penalites)})` : "",
-            v.arrieres > 0 ? `vos cotisations impayées (${fcfa(v.arrieres)})` : "",
+            v.arrieres > 0
+              ? `vos cotisations impayées (${fcfa(v.arrieres)}` +
+                (v.moisArrieres?.length ? ` : ${listeDesMois(v.moisArrieres)}` : "") +
+                ")"
+              : "",
           ]
             .filter(Boolean)
             .join(" et ") +
@@ -783,4 +792,43 @@ export function courrielValorisation(
     sujet: `${CLUB.sigle} : valeur de ${v.part ? "la part rachetée que vous détenez" : "votre part"}, avant la sortie`,
     texte: lignes.join("\n"),
   };
+}
+
+/**
+ * Les cotisations que le sortant doit encore : tous les mois echus jusqu'a sa
+ * sortie, celui dont l'echeance tombe le jour meme compris.
+ *
+ * Le 10, jour de l'echeance, le mois n'est pas encore « en retard » : il ne le
+ * devient que le lendemain. Le compter comme en retard laissait donc de cote le
+ * mois de la sortie, que la part rachetee ne doit pas non plus, puisqu'elle
+ * commence a l'echeance suivante. Ce mois-la, personne ne le payait. La borne
+ * est donc exactement le premier mois de la part rachetee : rien avant elle
+ * n'echappe, rien n'est compte deux fois.
+ */
+export function arrieresAvant(
+  cellules: { mois: string; manque: number }[],
+  premierMoisDeLaPart: string,
+): { mois: string; manque: number }[] {
+  return cellules
+    .filter((c) => c.mois < premierMoisDeLaPart && c.manque > 0)
+    .map((c) => ({ mois: c.mois, manque: c.manque }));
+}
+
+/** « août, septembre et octobre 2026 » : les mois nommes, l'annee une fois par annee. */
+export function listeDesMois(mois: string[]): string {
+  const parAnnee = new Map<string, string[]>();
+  for (const m of [...mois].sort()) {
+    const annee = m.slice(0, 4);
+    const nom = new Date(`${m.slice(0, 7)}-01T00:00:00Z`).toLocaleDateString("fr-FR", {
+      month: "long",
+      timeZone: "UTC",
+    });
+    parAnnee.set(annee, [...(parAnnee.get(annee) ?? []), nom]);
+  }
+  const morceaux = [...parAnnee].map(([annee, noms]) =>
+    noms.length === 1
+      ? `${noms[0]} ${annee}`
+      : `${noms.slice(0, -1).join(", ")} et ${noms.at(-1)} ${annee}`,
+  );
+  return morceaux.length <= 1 ? (morceaux[0] ?? "") : `${morceaux.slice(0, -1).join(", ")} et ${morceaux.at(-1)}`;
 }
