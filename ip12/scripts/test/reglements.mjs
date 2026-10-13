@@ -162,6 +162,15 @@ writeFileSync(
   ),
 );
 
+/* Les demandes de mot de passe oublie en attente : une requete, lue en base. */
+writeFileSync(
+  `${RACINE}/${ATELIER}/journal.ts`,
+  brancher(readFileSync(`${RACINE}/src/lib/journal.ts`, "utf8")).replace(
+    /from "\.\/db"/g,
+    'from "./doublures.js"',
+  ),
+);
+
 writeFileSync(`${RACINE}/${ATELIER}/doublures.ts`, `
 export type EtatFormulaire = { ok: boolean; message?: string; erreur?: string };
 export type Acteur = { id: string; nom: string };
@@ -231,7 +240,7 @@ try {
   execFileSync(
     "npx",
     ["tsc", `${ATELIER}/penalites.ts`, `${ATELIER}/constat.ts`, `${ATELIER}/tentatives.ts`,
-      "--target", "es2022", "--module", "es2022",
+      `${ATELIER}/journal.ts`, "--target", "es2022", "--module", "es2022",
       "--moduleResolution", "bundler", "--strict", "--outDir", `${ATELIER}-js`,
       "--rootDir", "."],
     { cwd: RACINE, stdio: "inherit" },
@@ -244,6 +253,7 @@ globalThis.__sql = requete;
 const actions = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/penalites.js`);
 const constat = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/constat.js`);
 const auth = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/tentatives.js`);
+const journal = await import(`${RACINE}/${ATELIER}-js/${ATELIER}/journal.js`);
 const { session, donnees, bornes } = await import(
   `${RACINE}/${ATELIER}-js/${ATELIER}/doublures.js`,
 );
@@ -710,6 +720,55 @@ egal(await auth.tropDeTentatives(AUTRE), true, "huit echecs bloquent la connexio
 egal(await auth.tropDeDemandes(AUTRE), false,
   "mais pas la demande de reinitialisation : c'est alors qu'elle sert");
 
+/* ========== 9. les demandes de mot de passe oublie en attente ========== */
+
+/*
+ * Une demande reglee quitte la page Administration : le president n'en a plus
+ * que faire. Reglee veut dire que le membre a retrouve l'acces APRES l'avoir
+ * faite, quel que soit le chemin. Une demande sans compte s'efface seule au
+ * bout de sept jours. Le journal, lui, garde tout.
+ */
+const enAttente = async () =>
+  (await journal.demandesEnAttente(20)).map((d) => d.details.email).join(",");
+const AUTRE_MEMBRE = "99999999-9999-9999-9999-999999999999";
+const demande = (email, id, jours) =>
+  `insert into audit_log (action, entity, entity_id, details, created_at)
+   values ('demande_reinitialisation', 'members', ${id ? `'${id}'` : "null"},
+           '{"email":"${email}"}', now() - interval '${jours} days');`;
+psql(BASE, "delete from audit_log;");
+
+psql(BASE, demande("membre@ip12.ci", membre.id, 3) + demande("membre@ip12.ci", membre.id, 2));
+egal(await enAttente(), "membre@ip12.ci,membre@ip12.ci", "deux demandes du membre, en attente");
+
+psql(BASE, `insert into audit_log (actor_id, action, created_at)
+            values ('${AUTRE_MEMBRE}', 'connexion', now() - interval '1 day');`);
+egal(await enAttente(), "membre@ip12.ci,membre@ip12.ci",
+  "la connexion d'un autre membre ne regle rien");
+
+psql(BASE, `insert into audit_log (action, entity, entity_id, created_at)
+            values ('reinitialisation_mot_de_passe', 'members', '${membre.id}',
+                    now() - interval '1 day');`);
+egal(await enAttente(), "", "le provisoire donne apres coup regle les deux demandes");
+
+psql(BASE, demande("membre@ip12.ci", membre.id, 0.5));
+egal(await enAttente(), "membre@ip12.ci",
+  "une nouvelle demande, faite apres le provisoire, attend de nouveau");
+
+psql(BASE, `insert into audit_log (actor_id, action, created_at)
+            values ('${membre.id}', 'connexion', now());`);
+egal(await enAttente(), "", "le membre qui se reconnecte regle sa demande");
+
+psql(BASE, demande("tresorier@ip12.ci", tresorier.id, 2) +
+  `insert into audit_log (actor_id, action, created_at)
+   values ('${tresorier.id}', 'changement_mot_de_passe', now() - interval '1 day');`);
+egal(await enAttente(), "", "le membre qui change son mot de passe regle sa demande");
+
+psql(BASE, demande("inconnu@ip12.ci", null, 1) + demande("ancien@ip12.ci", null, 9));
+egal(await enAttente(), "inconnu@ip12.ci",
+  "une adresse sans compte reste sept jours, puis s'efface");
+egal(lire("select count(*) from audit_log where action = 'demande_reinitialisation';"), "6",
+  "le journal, lui, garde toutes les demandes");
+
 rmSync(`${RACINE}/${ATELIER}`, { recursive: true, force: true });
 rmSync(`${RACINE}/${ATELIER}-js`, { recursive: true, force: true });
 psql("postgres", `drop database if exists ${BASE};`);
@@ -718,5 +777,5 @@ console.log(
     "declaration sans effet sur la dette, unicite de l'attente, quantites, " +
     "scission a la validation, refus, solde total, constat rejouable, R4, " +
     "lignes soldees intactes, borne de reprise, ce qui court sans etre inscrit, " +
-    "plafond des demandes de reinitialisation",
+    "plafond des demandes de reinitialisation, demandes en attente",
 );

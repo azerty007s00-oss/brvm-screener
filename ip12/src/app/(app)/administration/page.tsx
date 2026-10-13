@@ -8,7 +8,7 @@ import {
   situationsClub,
   synthese,
 } from "@/lib/queries";
-import { journalRecent } from "@/lib/journal";
+import { demandesEnAttente, journalRecent } from "@/lib/journal";
 import { joignablesPour } from "@/lib/avis";
 import {
   enregistrerReglages,
@@ -79,9 +79,9 @@ export default async function PageAdministration() {
     );
   }
 
-  let reglages, situations, journal, membres, regles, sorties, avertissables, synth;
+  let reglages, situations, journal, membres, regles, sorties, avertissables, synth, enAttente;
   try {
-    [reglages, situations, journal, membres, regles, sorties, avertissables, synth] =
+    [reglages, situations, journal, membres, regles, sorties, avertissables, synth, enAttente] =
       await Promise.all([
         reglagesEffectifs(),
         situationsClub(),
@@ -91,6 +91,7 @@ export default async function PageAdministration() {
         listerSorties(),
         joignablesPour("gererMembres").catch(() => []),
         synthese(),
+        demandesEnAttente().catch(() => []),
       ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -113,24 +114,21 @@ export default async function PageAdministration() {
   const essaiReussi = detailEssai.reussi === true;
 
   /*
-   * Les demandes de mot de passe oublie, telles que le journal les a gardees.
-   * Toutes, y compris celles qui n'ont rien envoye : c'est precisement
-   * celles-la que rien ne montrait.
+   * Les demandes de mot de passe oublie qui attendent encore, y compris celles
+   * qui n'ont rien envoye : c'est precisement celles-la que rien ne montrait.
+   * Une demande reglee (provisoire donne, membre reconnecte) n'y figure plus.
    */
-  const demandes = journal
-    .filter((j) => j.action === "demande_reinitialisation")
-    .slice(0, 6)
-    .map((j) => {
-      const d = (j.details ?? {}) as { email?: string; issue?: string; detail?: string };
-      return {
-        id: j.id,
-        quand: j.created_at,
-        adresse: d.email ?? "adresse non consignée",
-        issue: d.issue ?? "issue non consignée",
-        detail: d.detail ?? "",
-        partie: d.issue === "avertis",
-      };
-    });
+  const demandes = enAttente.map((j) => {
+    const d = (j.details ?? {}) as { email?: string; issue?: string; detail?: string };
+    return {
+      id: j.id,
+      quand: j.created_at,
+      adresse: d.email ?? "adresse non consignée",
+      issue: d.issue ?? "issue non consignée",
+      detail: d.detail ?? "",
+      partie: d.issue === "avertis",
+    };
+  });
 
 
   const moisDecouverts = situations.reduce((total, s) => total + s.nbMoisRetard, 0);
@@ -353,7 +351,7 @@ export default async function PageAdministration() {
       <Tuile
         icone={<Icone.bouclier />}
         titre="Mots de passe oubliés"
-        resume="Les demandes faites depuis la page de connexion, et ce que chacune a donné."
+        resume="Les demandes en attente. Une demande réglée disparaît d'elle-même."
         marque={
           <Badge ton={avertissables.length === 0 ? "rouge" : "vert"}>
             {avertissables.length === 0
@@ -429,8 +427,9 @@ export default async function PageAdministration() {
 
         {demandes.length === 0 ? (
           <Vide>
-            Aucune demande depuis la mise en place de cette trace. Les essais faits avant
-            n&apos;y figurent pas : rien ne les consignait.
+            Aucune demande en attente. Une demande disparaît dès que le membre a retrouvé
+            l&apos;accès (mot de passe provisoire donné, reconnexion) ; celle qui ne
+            correspond à aucun compte s&apos;efface au bout de sept jours.
           </Vide>
         ) : (
           <ul className="space-y-2">

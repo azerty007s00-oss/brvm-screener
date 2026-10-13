@@ -43,3 +43,43 @@ export async function journalRecent(limite = 40) {
     created_at: string;
   }[];
 }
+
+/**
+ * Les demandes de mot de passe oublie qui attendent encore quelque chose.
+ *
+ * Une demande est reglee des que le membre a retrouve l'acces apres l'avoir
+ * faite : le president lui a donne un provisoire, il s'est reconnecte, ou il a
+ * change son mot de passe. Elle quitte alors la page Administration ; le
+ * journal, lui, la garde. Plusieurs demandes du meme membre tombent ensemble.
+ *
+ * Une demande qui n'a trouve aucun compte (adresse inconnue, compte inactif,
+ * plafond atteint) n'a rien a regler : elle reste sept jours, le temps d'etre
+ * lue, puis s'efface d'elle-meme.
+ *
+ * Lue a part du journal recent : prise dans ses trente dernieres lignes, une
+ * demande en attente disparaissait au bout de trente autres actions, reglee
+ * ou non.
+ */
+export async function demandesEnAttente(limite = 6) {
+  const sql = db();
+  const rows = await sql`
+    select d.id, d.details, d.created_at
+    from audit_log d
+    where d.action = 'demande_reinitialisation'
+      and (d.entity_id is not null or d.created_at > now() - interval '7 days')
+      and not exists (
+        select 1
+        from audit_log r
+        where d.entity_id is not null
+          and r.created_at > d.created_at
+          and (
+            (r.action = 'reinitialisation_mot_de_passe' and r.entity_id = d.entity_id)
+            or (r.action in ('connexion', 'changement_mot_de_passe')
+                and r.actor_id::text = d.entity_id)
+          )
+      )
+    order by d.created_at desc
+    limit ${limite}
+  `;
+  return rows as { id: number; details: unknown; created_at: string }[];
+}
