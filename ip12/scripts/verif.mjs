@@ -1854,7 +1854,7 @@ assert.equal(
   assert.ok(texte.includes("Tous les membres du club sont en copie."));
   assert.ok(texte.includes("CONTESTER CE DÉCOMPTE : preuve à l'appui"), "le droit de contester, en titre");
   assert.ok(texte.includes("Chaque membre en copie peut en faire autant."));
-  assert.ok(texte.includes("n'hésitez pas à la demander"), "demander l'information manquante");
+  assert.ok(texte.includes("N'hésitez pas à la demander"), "demander l'information manquante");
   // Arrete au jour de la sortie ; le releve plus ancien est dit verifie par le bureau.
   assert.ok(texte.includes("1. CE QUE LE CLUB POSSÉDAIT : au 13/10/2026, jour de votre sortie"));
   assert.ok(texte.includes("relevé de Phoenix Capital Management du 10/10/2026"));
@@ -2237,10 +2237,10 @@ assert.equal(
   const lignes = texte.split("\n");
   assert.equal(sujet, "IP12 : valeur de votre part, avant la sortie");
   assert.ok(texte.startsWith("Bonjour KONÉ Bourama,"));
-  assert.ok(texte.includes("Rien n'est encore enregistré : si un chiffre vous paraît faux, c'est le moment de le dire."));
+  assert.ok(texte.includes("Rien n'est encore enregistré : vous pouvez la contester."));
   assert.ok(texte.includes(`En bref : votre part vaut ${fcfa(364_350)}.`));
   assert.ok(texte.includes("1. CE QUE LE CLUB POSSÉDAIT") && texte.includes("2. VOTRE PART"), "le meme detail que le decompte");
-  assert.ok(texte.includes("3. CE QUI PEUT VOUS REVENIR"));
+  assert.ok(texte.includes("3. CE QUI VOUS REVIENDRAIT"));
   assert.ok(texte.includes("CONTESTER CE DÉCOMPTE : preuve à l'appui"), "le droit de contester");
   // L'offre du club se refait a la calculatrice : la part, moins chaque retenue.
   const debut = lignes.findIndex((l) => l.startsWith("Si le club rachète tout"));
@@ -2250,8 +2250,9 @@ assert.equal(
     .slice(debut + 1, fin)
     .reduce((t, l) => t + (l.includes("Moins") ? -1 : 1) * montant(l.replace(/, dont.*$/, "")), 0);
   assert.equal(calcul, 342_940, "part moins penalites moins frais = offre du club");
-  assert.ok(lignes[fin].startsWith(`Soit ${fcfa(342_940)}, au plus tard 4 mois après votre sortie (R5).`));
-  assert.ok(texte.includes(`entre ${fcfa(342_940)}, ce que le club vous verserait, et ${fcfa(354_850)}`));
+  assert.ok(lignes[fin].startsWith(`Soit ${fcfa(342_940)}, versés sous 4 mois (R5).`));
+  assert.ok(texte.includes(`Repère : entre ${fcfa(342_940)} et ${fcfa(354_850)} pour la totalité.`));
+  assert.ok(texte.split("\n").length < 45, "concis");
   assert.ok(texte.includes(`vos pénalités (${fcfa(9_500)}) et vos cotisations impayées (${fcfa(15_000)})`));
   assert.ok(!/—|--|undefined|NaN/.test(texte));
 
@@ -2268,7 +2269,7 @@ assert.equal(
   // Une part rachetee : le courrier va au detenteur, et dit laquelle.
   const part = courrielValorisation({ ...base, nom: "SORO Tiélina", part: "SORO Tiélina · part de KONÉ Bourama" });
   assert.equal(part.sujet, "IP12 : valeur de la part rachetée que vous détenez, avant la sortie");
-  assert.ok(part.texte.includes("Avant d'enregistrer la sortie de la part rachetée que vous détenez (SORO Tiélina · part de KONÉ Bourama)"));
+  assert.ok(part.texte.includes("Voici la valeur de la part rachetée que vous détenez (SORO Tiélina · part de KONÉ Bourama)"));
 }
 
 console.log(

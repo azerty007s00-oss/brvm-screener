@@ -97,11 +97,9 @@ export type RachatCourriel = {
  */
 const CONTESTER = [
   "CONTESTER CE DÉCOMPTE : preuve à l'appui",
-  "Si un chiffre vous paraît faux, vous pouvez le contester en répondant à ce courriel, " +
-    "preuve à l'appui : reçu ou capture de versement, relevé de la SGI, échange avec le " +
-    "bureau. Chaque membre en copie peut en faire autant.",
-  "S'il vous manque une information pour vérifier (le relevé de la SGI, le détail de vos " +
-    "versements ou de vos pénalités), n'hésitez pas à la demander en répondant à ce courriel : " +
+  "Un chiffre vous paraît faux ? Répondez à ce courriel, preuve à l'appui (reçu, relevé de " +
+    "la SGI). Chaque membre en copie peut en faire autant.",
+  "Il vous manque une information pour vérifier ? N'hésitez pas à la demander en répondant : " +
     "le bureau vous la communiquera.",
 ];
 
@@ -644,10 +642,8 @@ export function lignesValeurDeLaPart(
   const part = c.cotisations > 0 ? d.cotisations / c.cotisations : 0;
   const lignes: string[] = [
     section(`CE QUE LE CLUB POSSÉDAIT : au ${dateCourte(d.dateSortie)}, jour de votre sortie`),
-    "Le calcul est arrêté au jour de votre sortie : ce qui se passe après ne change plus " +
-      "votre montant, ni en plus ni en moins. Le portefeuille y est compté à sa valeur du " +
-      `relevé de ${CLUB.sgi} du ${dateCourte(d.releve)}, la société de bourse qui garde les ` +
-      "titres du club : c'est la dernière valeur connue et vérifiable." +
+    "Calcul arrêté au jour de votre sortie : ce qui suit ne change plus rien. Le portefeuille " +
+      `est compté au relevé de ${CLUB.sgi} du ${dateCourte(d.releve)}, sa dernière valeur vérifiable.` +
       (d.releve < d.dateSortie.slice(0, 10)
         ? releveConfirme
           ? " Le bureau a confirmé qu'elle était toujours valable à la date de votre sortie."
@@ -671,21 +667,16 @@ export function lignesValeurDeLaPart(
   if (c.avances > 0) lignes.push(`  - Moins les avances des membres : ${fcfa(c.avances)}`);
   lignes.push(`Total à partager entre les membres : ${fcfa(c.aPartager)}`);
   if (c.creances > 0) {
-    lignes.push(
-      "Les pénalités dues comptent dans ce que possède le club : c'est de l'argent qu'on lui doit.",
-    );
+    lignes.push("Les pénalités dues comptent : c'est de l'argent qu'on doit au club.");
   }
   if (c.avances > 0) {
-    lignes.push(
-      "Les avances sont des cotisations payées pour des mois qui ne sont pas encore arrivés : " +
-        "elles appartiennent à chacun, ne rapportent rien, ne perdent rien, et sont rendues à part.",
-    );
+    lignes.push("Les avances (mois payés d'avance) sont rendues à part, sans gain ni perte.");
   }
 
   lignes.push(
     "",
     section("VOTRE PART : dans la proportion de vos cotisations"),
-    "Chaque membre a droit à une part du total, dans la proportion de ce qu'il a cotisé.",
+    "Chacun a droit à une part du total, à proportion de ce qu'il a cotisé.",
     `  - Vos cotisations : ${fcfa(d.cotisations)}`,
     `  - Cotisations de l'ensemble des membres, vous compris : ${fcfa(c.cotisations)}`,
   );
@@ -733,7 +724,6 @@ export function courrielValorisation(
 ): { sujet: string; texte: string } {
   let numero = 0;
   const section = (titre: string) => `${++numero}. ${titre}`;
-  const fraisClub = v.fraisVente + v.fraisGarde + v.fraisTransfert;
   const plancher = Math.max(0, v.netClub - v.avance);
   const plafond = Math.max(plancher, v.quotePart - v.penalites);
   const reste = Math.max(0, v.penalites - v.compensees);
@@ -741,64 +731,49 @@ export function courrielValorisation(
   const lignes: string[] = [
     `Bonjour ${v.nom},`,
     "",
-    (v.part
-      ? `Avant d'enregistrer la sortie de la part rachetée que vous détenez (${v.part}), le ` +
-        "bureau vous communique sa valeur"
-      : "Avant d'enregistrer votre sortie du club, le bureau vous communique la valeur de votre part") +
-      `, calculée au ${dateCourte(v.dateSortie)}, et le détail de son calcul. Rien n'est encore ` +
-      "enregistré : si un chiffre vous paraît faux, c'est le moment de le dire.",
-    "Tous les membres du club sont en copie : vos parts peuvent être rachetées par un ou " +
-      "plusieurs d'entre eux, qui doivent connaître la même valeur et la même logique.",
+    (v.part ? `Voici la valeur de la part rachetée que vous détenez (${v.part})` : "Voici la valeur de votre part") +
+      ` au ${dateCourte(v.dateSortie)}, et son calcul. Rien n'est encore enregistré : vous pouvez ` +
+      "la contester. Tous les membres sont en copie, car ils peuvent racheter vos parts.",
     "",
     `En bref : votre part vaut ${fcfa(v.quotePart)}.`,
     "",
     ...lignesValeurDeLaPart(v, section, false),
     "",
-    section("CE QUI PEUT VOUS REVENIR : selon qui rachète"),
-    "Si le club rachète tout, il vous verse ce que vaut votre part, moins vos pénalités et les " +
-      "frais que le club supportera pour vous :",
+    section("CE QUI VOUS REVIENDRAIT"),
+    "Si le club rachète tout :",
     `  - Votre part${v.avance > 0 ? " et votre avance" : ""} : ${fcfa(v.quotePart + v.avance)}`,
   ];
   if (v.compensees > 0) {
     lignes.push(
       `  - Moins vos pénalités : ${fcfa(v.compensees)}` +
-        (v.penalitesEnCours > 0 ? `, dont ${fcfa(v.penalitesEnCours)} pas encore inscrites au registre` : ""),
+        (v.penalitesEnCours > 0 ? `, dont ${fcfa(v.penalitesEnCours)} pas encore inscrites` : ""),
     );
   }
   if (v.fraisVente > 0) {
-    lignes.push(
-      `  - Moins la vente de vos actions, ${taux(REGLES.fraisVenteActions)} chez ${CLUB.sgi} : ` +
-        fcfa(v.fraisVente),
-    );
+    lignes.push(`  - Moins la vente de vos actions (${taux(REGLES.fraisVenteActions)}) : ${fcfa(v.fraisVente)}`);
   }
-  if (v.fraisGarde > 0) lignes.push(`  - Moins votre part des frais de garde de l'année : ${fcfa(v.fraisGarde)}`);
+  if (v.fraisGarde > 0) lignes.push(`  - Moins vos frais de garde de l'année : ${fcfa(v.fraisGarde)}`);
   if (v.fraisTransfert > 0) {
     lignes.push(
-      `  - Moins le transfert vers votre compte, estimé à ${taux(REGLES.fraisTransfertSortie)} : ` +
-        fcfa(v.fraisTransfert),
+      `  - Moins le transfert, estimé à ${taux(REGLES.fraisTransfertSortie)} : ${fcfa(v.fraisTransfert)}`,
     );
   }
   lignes.push(
-    `Soit ${fcfa(v.netClub)}, au plus tard ${REGLES.delaiRemboursementMois} mois après votre sortie (R5).` +
-      (reste > 0 ? ` Il resterait ${fcfa(reste)} de pénalités que vous devriez au club.` : ""),
-    "Si des membres rachètent, le prix convenu avec eux vous revient en entier, sans frais" +
-      (v.avance > 0 ? ", et le club vous rend votre avance" : "") +
-      "." +
+    `Soit ${fcfa(v.netClub)}, versés sous ${REGLES.delaiRemboursementMois} mois (R5).` +
+      (reste > 0 ? ` Il resterait ${fcfa(reste)} de pénalités dues au club.` : ""),
+    "Si des membres rachètent : le prix convenu vous revient en entier, sans frais" +
+      (v.avance > 0 ? ", avance rendue par le club" : "") +
+      `. Repère : entre ${fcfa(plancher)} et ${fcfa(plafond)} pour la totalité.` +
       (v.penalites > 0 || v.arrieres > 0
-        ? " Ils versent en plus au club " +
+        ? " Ils paient en plus au club " +
           [
             v.penalites > 0 ? `vos pénalités (${fcfa(v.penalites)})` : "",
             v.arrieres > 0 ? `vos cotisations impayées (${fcfa(v.arrieres)})` : "",
           ]
             .filter(Boolean)
             .join(" et ") +
-          ", à proportion de ce qu'ils rachètent."
-        : "") +
-      ` Repère pour la totalité de vos parts : entre ${fcfa(plancher)}, ce que le club vous ` +
-      `verserait${v.avance > 0 ? " avance mise à part" : ""}, et ${fcfa(plafond)}, la valeur de ` +
-      `votre part${v.penalites > 0 ? " moins les pénalités que paie l'acheteur" : ""}.`,
-    `Les frais du club comptent ${fcfa(fraisClub)} en tout. Le décompte définitif vous sera ` +
-      "envoyé à l'enregistrement de la sortie.",
+          "."
+        : ""),
     "",
     ...CONTESTER,
     "",
