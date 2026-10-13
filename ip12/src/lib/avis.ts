@@ -484,25 +484,29 @@ export async function avertirDemandeReinitialisation(params: {
 }
 
 /**
- * Le decompte de sa sortie, adresse au membre qui s'en va.
+ * Le decompte de sa sortie, adresse au membre qui s'en va, tous les membres en
+ * copie.
  *
- * Le president et le tresorier en copie : l'un a enregistre la sortie, l'autre
- * paiera, et le sortant qui repond a ce courrier pour poser une question les
- * trouve tous deux au bout du fil. Sans adresse connue du sortant, le courrier
- * va au bureau, qui le lui transmet : il ne se perd pas en silence.
+ * Le decompte du sortant deplace aussi les parts de ceux qui restent : chacun
+ * le relit, et chacun peut le contester preuve a l'appui. La copie est visible,
+ * pour que tous sachent que tous l'ont recu, et qu'une reponse aille a tous.
+ * Sans adresse connue du sortant, le courrier va au premier membre de la liste
+ * -- le president d'abord --, qui le lui transmet : il ne se perd pas en silence.
  */
 export async function envoyerCourrielSortie(
   membre: { nom: string; email: string | null },
   courrier: { sujet: string; texte: string },
 ): Promise<{ ok: boolean; detail: string }> {
   const sienne = (membre.email ?? "").trim();
-  const bureau = [
-    ...(await joignablesPour("gererSorties")),
-    ...(await joignablesPour("validerVersement")),
-  ];
+  /*
+   * Les membres actifs avec une adresse. Le sortant vient d'etre desactive, mais
+   * la liste a pu etre lue plus tot dans la meme requete : on l'ecarte par son
+   * adresse, pour ne pas le mettre en copie de son propre courrier.
+   */
+  const membres = (await listerMembres().catch(() => [])).filter((m) => m.actif && m.email);
   const vues = new Set(sienne ? [sienne.toLowerCase()] : []);
   const copie: string[] = [];
-  for (const m of bureau) {
+  for (const m of membres) {
     const adresse = m.email.toLowerCase();
     if (vues.has(adresse)) continue;
     vues.add(adresse);
@@ -513,7 +517,7 @@ export async function envoyerCourrielSortie(
     return envoyerCourriel({ destinataire: sienne, copie, sujet: courrier.sujet, texte: courrier.texte });
   }
   const [premier, ...autres] = copie;
-  if (!premier) return { ok: false, detail: "ni le sortant ni le bureau n'ont d'adresse" };
+  if (!premier) return { ok: false, detail: "ni le sortant ni aucun membre n'a d'adresse" };
   return envoyerCourriel({
     destinataire: premier,
     copie: autres,

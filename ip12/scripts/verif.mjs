@@ -27,7 +27,7 @@ const assert = new Proxy(strict0, {
 const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie, etatCaisse, fraisGardeCourus, potAPartager } = await import(
   "../.verif/perf.mjs"
 );
-const { courrielSortie, courrielCorrectionSortie, echeanceRemboursement } = await import("../.verif/sortie.mjs");
+const { courrielSortie, courrielCorrectionSortie, echeanceRemboursement, pointsAVerifier, empreinteSortie } = await import("../.verif/sortie.mjs");
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
@@ -1762,7 +1762,7 @@ assert.equal(
 
   const donnees = {
     nom: "SORTANT Test", dateSortie: "2026-10-13", motif: "exclusion de plein droit (R5).",
-    arrete: "2026-10-10",
+    releve: "2026-10-10",
     club: {
       compteTitres: releve.total, enTransit, caisse, creances: pot.creances, avances: pot.avances,
       aPartager: pot.aPartager, cotisations: pot.cotisations, fraisGardeCourus: fc,
@@ -1843,6 +1843,56 @@ assert.equal(
   assert.ok(correction.includes(`Montant à vous verser : ${fcfa(402_500)}, au lieu de ${fcfa(400_000)}.`));
   assert.ok(correction.includes(`Frais réels : ${fcfa(9_500)} (avis d'opéré du 20/10)`));
   assert.ok(!/—|--/.test(correction));
+  assert.ok(correction.includes("Tous les membres du club sont en copie."), "la correction va a tous");
+  assert.ok(correction.includes("CONTESTER CE DÉCOMPTE"), "la correction se conteste aussi");
+
+  /*
+   * TOUS EN COPIE, ET LE DROIT DE CONTESTER. Le decompte du sortant deplace les
+   * parts des autres : chacun le recoit, et chacun peut le contester sur pieces.
+   */
+  assert.ok(texte.includes("Tous les membres du club sont en copie."));
+  assert.ok(texte.includes("CONTESTER CE DÉCOMPTE : preuve à l'appui"), "le droit de contester, en titre");
+  assert.ok(texte.includes("Chaque membre en copie peut en faire autant."));
+  assert.ok(texte.includes("n'hésitez pas à la demander"), "demander l'information manquante");
+  // Arrete au jour de la sortie ; le releve plus ancien est dit verifie par le bureau.
+  assert.ok(texte.includes("1. CE QUE LE CLUB POSSÉDAIT : au 13/10/2026, jour de votre sortie"));
+  assert.ok(texte.includes("relevé de Phoenix Capital Management du 10/10/2026"));
+  assert.ok(texte.includes("Le bureau a confirmé qu'elle était toujours valable à la date de votre sortie."));
+  assert.ok(
+    !courrielSortie({ ...donnees, releve: "2026-10-13" }).texte.includes("Le bureau a confirmé"),
+    "un releve du jour meme n'a rien a verifier",
+  );
+
+  /*
+   * AVANT D'ENREGISTRER : ce que le calcul va utiliser, et quoi faire si ce n'est
+   * pas a jour.
+   */
+  const faits = {
+    jour: "2026-10-13", releve: { date: "2026-10-10", total: 3_857_845 }, enTransit: 40_000,
+    versementsEnAttente: { nb: 2, total: 40_000, siens: 1 }, caisseEnAttente: 1,
+    reglementsEnAttente: 1, penalites: 24_000, penalitesEnCours: 6_000,
+  };
+  const points = pointsAVerifier(faits);
+  assert.ok(points[0].includes("relevé du 10/10/2026") && points[0].includes("3 jours avant la sortie"));
+  assert.ok(points[0].includes("saisissez d'abord un relevé daté du 13/10/2026"));
+  assert.ok(points.some((x) => x.includes("2 déclarés attendent validation") && x.includes("dont 1 du sortant")));
+  assert.ok(points.some((x) => x.startsWith("Caisse : 1 mouvement attend validation")));
+  assert.ok(points.some((x) => x.includes("1 règlement que le trésorier n'a pas vérifié.")), "accord au singulier");
+  assert.ok(points.some((x) => x.includes("compteraient deux fois")), "le risque de double compte est dit");
+  const aJour = pointsAVerifier({
+    ...faits, releve: { date: "2026-10-13", total: 3_857_845 }, enTransit: 0,
+    versementsEnAttente: { nb: 0, total: 0, siens: 0 }, caisseEnAttente: 0, reglementsEnAttente: 0,
+    penalites: 0, penalitesEnCours: 0,
+  });
+  assert.ok(aJour[0].includes("le jour même de la sortie"));
+  assert.ok(aJour.includes("Pénalités du sortant : aucune."));
+  assert.ok(!points.concat(aJour).some((x) => /—|--|undefined|NaN/.test(x)));
+  // L'empreinte suit les donnees : un versement valide entre-temps fait redemander.
+  assert.notEqual(
+    empreinteSortie("a", faits),
+    empreinteSortie("a", { ...faits, versementsEnAttente: { nb: 1, total: 20_000, siens: 1 } }),
+  );
+  assert.equal(empreinteSortie("a", faits), empreinteSortie("a", { ...faits }));
 
   // Au franc pres : une valeur a centimes ne laisse pas de centimes au net.
   const centimes = decompteSortie({ valeur: 100_000.4, avance: 0, part: 0.1 }, { actions: 0, fraisGardeCourus: 0 }, taux);

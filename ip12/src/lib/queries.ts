@@ -18,7 +18,9 @@ import {
   PREFIXE_SOLDE_SORTIE,
   KIND_PENALITE,
   REGLE_MEMBRE,
+  STATUT_CAISSE,
   STATUT_PENALITE,
+  STATUT_REGLEMENT,
   STATUT_VERSEMENT,
   SENS_TRANSFERT,
 } from "./valeurs";
@@ -34,7 +36,7 @@ import {
   type Flux,
   type PartMembre,
 } from "./perf";
-import type { ContexteSortie } from "./sortie";
+import type { ContexteSortie, FaitsSortie } from "./sortie";
 
 /** bigint et numeric reviennent en chaine avec le pilote Postgres : on normalise. */
 const n = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
@@ -1101,8 +1103,10 @@ export type DecompteSortie = {
   /** Dont celles qui courent sans etre encore inscrites au registre. */
   penalitesEnCours: number;
   netIndicatif: number;
-  /** Le releve auquel la sortie est arretee (AAAA-MM-JJ), ou null sans releve. */
-  arrete: string | null;
+  /** Le jour auquel la sortie est arretee (AAAA-MM-JJ) : sa date de sortie, ou aujourd'hui. */
+  arrete: string;
+  /** Le releve qui donne la valeur du portefeuille ce jour-la, ou null s'il n'y en a pas. */
+  releve: string | null;
   /** Ses cotisations des mois echus au releve : ce qui fixe sa part. */
   acquis: number;
   /** Ce que possedait le club au releve, pour que le courrier de sortie le detaille. */
@@ -1110,33 +1114,35 @@ export type DecompteSortie = {
 };
 
 /**
- * Ce que la sortie de chaque membre lui rapporterait, arretee au dernier releve.
+ * Ce que la sortie de chaque membre lui rapporterait, arretee a sa date de sortie.
  *
- * UNE SEULE DATE : le releve. La valeur du portefeuille, la caisse, les
- * cotisations et les virements sont ceux de ce jour-la ; une cotisation recue le
- * lendemain ne deplace pas la valeur du sortant. Les penalites, elles, sont
- * arretees a aujourd'hui, jour ou la sortie s'enregistre : registre et ce qui
- * court, sans attendre le constat.
+ * UNE SEULE DATE : celle de la sortie (aujourd'hui pour le tableau indicatif).
+ * La caisse, les cotisations, les virements et les penalites qui courent sont
+ * ceux de ce jour-la ; ce qui arrive apres ne deplace plus la valeur du sortant.
+ * Le portefeuille y est pris a la valeur du dernier releve a cette date ou
+ * avant : avant d'enregistrer, le bureau confirme qu'il est toujours a jour, ou
+ * saisit un releve du jour (`enregistrerSortie`). Les penalites du registre sont
+ * celles qui restent dues au jour ou la sortie s'enregistre.
  *
  * C'est aussi le calcul qu'enregistre la sortie : le tableau et le registre des
- * sorties disent le meme chiffre.
+ * sorties disent le meme chiffre pour la meme date.
  */
-async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
-  const valos = await listerValorisations();
-  const arrete = valos.at(-1)?.date_valo ?? null;
-  const jourArrete = arrete ? new Date(`${arrete}T23:59:59Z`) : instantCourant();
+async function decomptesSortieBrut(dateSortie: string | null): Promise<DecompteSortie[]> {
+  const jour = dateSortie ?? instantCourant().toISOString().slice(0, 10);
+  const jourArrete = new Date(`${jour}T23:59:59Z`);
 
-  const [auReleve, situationsAuReleve, situationsDuJour, dues, registre, bornes] = await Promise.all([
-    synthese(jourArrete, arrete),
-    situationsClub(jourArrete, arrete),
-    situationsClub(),
+  const [auReleve, situationsAuReleve, dues, registre, bornes] = await Promise.all([
+    synthese(jourArrete, jour),
+    situationsClub(jourArrete, jour),
     penalitesDuesParMembre().catch(() => new Map<string, number>()),
     listerPenalites().catch(() => [] as Penalite[]),
     bornesReprisePenalites().catch(() => new Map<string, string>()),
   ]);
+  const releve = auReleve.valorisation?.date_valo ?? null;
 
+  /* Ce qui court a la date de sortie, et non au-dela : il ne doit plus rien apres. */
   const courues = penalitesCourues(
-    situationsDuJour,
+    situationsAuReleve,
     registre.map((p) => ({
       membreId: p.membre_id,
       nature: p.nature,
@@ -1158,8 +1164,9 @@ async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
   const parts = repartirParts(apports, auReleve.avoir);
 
   const actions = auReleve.valorisation?.actions ?? 0;
-  const fraisGarde = arrete
-    ? fraisGardeCourus(actions, arrete, {
+  /* Les frais de garde courent jusqu'au jour de la sortie, sur les titres du releve. */
+  const fraisGarde = releve
+    ? fraisGardeCourus(actions, jour, {
         conservation: REGLES.conservationSGI,
         tenueCompte: REGLES.tenueCompteSGI,
         taxe: REGLES.taxeCommissionsSGI,
@@ -1204,11 +1211,47 @@ async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
       penalitesDeduites: p.dues,
       penalitesEnCours: enCours(p.membreId),
       netIndicatif: d.net,
-      arrete,
+      arrete: jour,
+      releve,
       acquis: p.acquis,
       club,
     };
   });
+}
+
+/**
+ * Ce que le bureau doit savoir a jour avant d'enregistrer une sortie a cette date.
+ *
+ * Le calcul ne voit que ce qui est saisi et valide : un versement qui attend
+ * validation ne compte pas, un releve vieux de deux mois donne la valeur d'il y
+ * a deux mois. Le site ne peut pas deviner ce qui manque ; il montre ce qu'il
+ * va utiliser, et le bureau confirme ou complete.
+ */
+export async function faitsAvantSortie(d: DecompteSortie): Promise<FaitsSortie> {
+  const [versements, caisse, reglements] = await Promise.all([
+    versementsEnAttente().catch(() => [] as Versement[]),
+    listerMouvementsCaisse().catch(() => [] as MouvementCaisse[]),
+    reglementsPenalite({ membreId: d.membreId, statut: STATUT_REGLEMENT.enAttente }).catch(
+      () => [] as ReglementPenalite[],
+    ),
+  ]);
+  const enAttente = versements.filter((v) => v.date_versement <= d.arrete);
+  return {
+    jour: d.arrete,
+    releve: d.releve ? { date: d.releve, total: d.club.compteTitres } : null,
+    enTransit: d.club.enTransit,
+    versementsEnAttente: {
+      nb: enAttente.length,
+      total: enAttente.reduce((t, v) => t + v.montant, 0),
+      siens: enAttente.filter((v) => v.membre_id === d.membreId).length,
+    },
+    caisseEnAttente: caisse.filter(
+      (m) => m.statut === STATUT_CAISSE.enAttente && m.date_mouvement <= d.arrete,
+    ).length,
+    reglementsEnAttente: reglements.length,
+    penalites: d.penalitesDeduites,
+    penalitesEnCours: d.penalitesEnCours,
+  };
 }
 
 async function situationsClubBrut(
@@ -1606,7 +1649,11 @@ export const listerMouvementsCaisse = cache(listerMouvementsCaisseBrut);
 export const penalitesEncaissees = cache(penalitesEncaisseesBrut);
 export const derogationsParMembre = cache(derogationsParMembreBrut);
 export const listerSorties = cache(listerSortiesBrut);
-export const decomptesSortie = cache(decomptesSortieBrut);
+const decomptesSortieCache = cache(decomptesSortieBrut);
+/** Sans date : arretee a aujourd'hui, pour le tableau indicatif. */
+export function decomptesSortie(dateSortie: string | null = null): Promise<DecompteSortie[]> {
+  return decomptesSortieCache(dateSortie);
+}
 
 /*
  * Les lectures a valeur par defaut passent par une enveloppe.

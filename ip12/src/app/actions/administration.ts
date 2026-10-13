@@ -14,9 +14,14 @@ import {
 } from "@/lib/relance";
 import { versionDeployee } from "@/lib/version";
 import { envoyerCourrielSortie } from "@/lib/avis";
-import { courrielCorrectionSortie, courrielSortie } from "@/lib/sortie";
+import {
+  courrielCorrectionSortie,
+  courrielSortie,
+  empreinteSortie,
+  pointsAVerifier,
+} from "@/lib/sortie";
 import { porterRetardsAuRegistre, resumeConstat, type IssueConstat } from "@/lib/constat";
-import { decomptesSortie, listerMembres, reglagesEffectifs } from "@/lib/queries";
+import { decomptesSortie, faitsAvantSortie, listerMembres, reglagesEffectifs } from "@/lib/queries";
 import { CLUB, REGLES, dateCourte, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
 import {
   KIND_PENALITE,
@@ -371,10 +376,17 @@ export async function leverRegleMembre(
 /**
  * Enregistre la sortie d'un membre, au calcul du site.
  *
- * Les montants ne sont plus saisis : ils sont ceux du decompte arrete au dernier
- * releve (`decomptesSortie`), le meme que le tableau de la page. Le bureau choisit
- * le membre, la date et le motif ; le reste se calcule, et se corrige ensuite sur
- * justificatif (`corrigerSortie`).
+ * Les montants ne sont plus saisis : ils sont ceux du decompte arrete a la date
+ * de sortie (`decomptesSortie`). Le bureau choisit le membre, la date et le
+ * motif ; le reste se calcule, et se corrige ensuite sur justificatif
+ * (`corrigerSortie`).
+ *
+ * EN DEUX TEMPS. Le calcul ne voit que ce qui est saisi : un releve ancien, un
+ * versement en attente de validation faussent la part sans que rien ne le
+ * signale. Le premier envoi ne fait donc que montrer ce que le calcul va
+ * utiliser a cette date ; le bureau confirme que c'est a jour, ou saisit ce qui
+ * manque et revient. La confirmation porte une empreinte de ce qui a ete montre :
+ * si quoi que ce soit a change entre-temps, le site redemande.
  *
  * En une seule transaction :
  * - la sortie est inscrite : ses droits, ses penalites compensees, les frais
@@ -388,30 +400,60 @@ export async function leverRegleMembre(
  * Ce qu'il a verse reste en caisse ; ce qui lui est du sort de l'avoir a
  * partager des maintenant, et de la caisse le jour de son paiement.
  */
+export type EtatSortie = EtatFormulaire & {
+  /** Ce qui a ete saisi, rendu au formulaire pour qu'il ne se vide pas. */
+  valeurs?: { membre: string; date: string; motif: string; note: string };
+  /** Ce que le calcul va utiliser, a confirmer avant l'enregistrement. */
+  aVerifier?: { empreinte: string; membre: string; date: string; nom: string; points: string[] };
+};
+
 export async function enregistrerSortie(
-  _precedent: EtatFormulaire,
+  _precedent: EtatSortie,
   donnees: FormData,
-): Promise<EtatFormulaire> {
+): Promise<EtatSortie> {
   const auteur = await exigerDroit("gererSorties");
 
   const membreId = String(donnees.get("membre") ?? "");
   const date = String(donnees.get("date") ?? "").slice(0, 10);
   const motif = String(donnees.get("motif") ?? "").trim();
   const note = String(donnees.get("note") ?? "").trim();
+  const confirme = String(donnees.get("confirme") ?? "");
+  const valeurs = { membre: membreId, date, motif, note };
+  const refus = (erreur: string): EtatSortie => ({ ok: false, erreur, valeurs });
 
-  if (!membreId) return { ok: false, erreur: "Choisissez le membre sortant." };
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, erreur: "Indiquez la date de sortie." };
-  if (!motif) return { ok: false, erreur: "Indiquez le motif de la sortie." };
+  if (!membreId) return refus("Choisissez le membre sortant.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return refus("Indiquez la date de sortie.");
+  if (!motif) return refus("Indiquez le motif de la sortie.");
+  /* Le calcul a besoin des donnees du jour de sortie : un jour a venir n'en a pas encore. */
+  if (date > new Date().toISOString().slice(0, 10)) {
+    return refus("La date de sortie ne peut pas être dans le futur.");
+  }
 
   const sql = db();
   const membre = await sql`select full_name, email, is_active from members where id = ${membreId}::uuid`;
-  if (!membre[0]) return { ok: false, erreur: "Membre introuvable." };
-  if (!membre[0].is_active) return { ok: false, erreur: "Ce membre est déjà sorti." };
+  if (!membre[0]) return refus("Membre introuvable.");
+  if (!membre[0].is_active) return refus("Ce membre est déjà sorti.");
 
-  const d = (await decomptesSortie()).find((x) => x.membreId === membreId);
-  if (!d) return { ok: false, erreur: "Le décompte de ce membre est introuvable : rechargez la page." };
-  if (!d.arrete) {
-    return { ok: false, erreur: "Aucun relevé de portefeuille : saisissez-en un avant d'enregistrer une sortie." };
+  const d = (await decomptesSortie(date)).find((x) => x.membreId === membreId);
+  if (!d) return refus("Le décompte de ce membre est introuvable : rechargez la page.");
+  if (!d.releve) {
+    return refus(
+      `Aucun relevé de portefeuille au ${dateCourte(date)} ou avant : saisissez-en un, puis ` +
+        "déclarez à nouveau la sortie.",
+    );
+  }
+
+  const faits = await faitsAvantSortie(d);
+  const empreinte = empreinteSortie(membreId, faits);
+  if (confirme !== empreinte) {
+    return {
+      ok: false,
+      valeurs,
+      erreur: confirme
+        ? "Les données ont changé depuis votre vérification : relisez-les avant de confirmer."
+        : undefined,
+      aVerifier: { empreinte, membre: membreId, date, nom: membre[0].full_name, points: pointsAVerifier(faits) },
+    };
   }
 
   /*
@@ -427,7 +469,7 @@ export async function enregistrerSortie(
 
   const detail = [
     note,
-    `Arrêtée au relevé du ${dateCourte(d.arrete)}`,
+    `Calculée au ${dateCourte(date)}, portefeuille au relevé du ${dateCourte(d.releve)}`,
     `pénalités compensées ${fcfa(compensees)}` +
       (d.penalitesEnCours > 0 ? `, dont ${fcfa(d.penalitesEnCours)} non inscrites au registre` : ""),
     `frais provisoires : cession ${fcfa(d.fraisVente)}, garde ${fcfa(d.fraisGarde)}, transfert ${fcfa(d.fraisTransfert)}`,
@@ -466,7 +508,7 @@ export async function enregistrerSortie(
       nom: membre[0].full_name,
       dateSortie: date,
       motif,
-      arrete: d.arrete,
+      releve: d.releve,
       club: d.club,
       cotisations: d.acquis,
       avance: d.avance,
@@ -486,7 +528,7 @@ export async function enregistrerSortie(
     { id: auteur.id, nom: auteur.nom },
     "sortie_membre",
     { entite: "member_exits", id: membreId },
-    { date, motif, arrete: d.arrete, droits, compensees, frais, net, courriel: courrier.detail },
+    { date, motif, releve: d.releve, droits, compensees, frais, net, courriel: courrier.detail },
   );
   revalidatePath("/", "layout");
   return {
@@ -496,7 +538,7 @@ export async function enregistrerSortie(
       `${REGLES.delaiRemboursementMois} mois (R5). Ses pénalités sont soldées avec le motif de ` +
       "sortie. " +
       (courrier.ok
-        ? "Le détail du calcul lui a été envoyé par courriel, le bureau en copie. "
+        ? "Le détail du calcul lui a été envoyé par courriel, tous les membres en copie. "
         : `Le courriel de décompte n'est pas parti (${courrier.detail}) : transmettez-lui le détail. `) +
       "Le jour du paiement, enregistrez-le dans Caisse en dépense « Remboursement " +
       "d'un membre sorti ».",
@@ -577,7 +619,7 @@ export async function corrigerSortie(
     message:
       `Frais corrigés : ${fcfa(net)} à verser à ${e.full_name} (au lieu de ${fcfa(Number(e.net_paid))}). ` +
       (courrier.ok
-        ? "Il en a été averti par courriel, le bureau en copie."
+        ? "Il en a été averti par courriel, tous les membres en copie."
         : `Le courriel n'est pas parti (${courrier.detail}) : prévenez-le.`),
   };
 }

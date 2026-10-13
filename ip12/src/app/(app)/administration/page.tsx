@@ -14,7 +14,6 @@ import {
   enregistrerReglages,
   reprendreHistorique,
   reprendrePenalites,
-  enregistrerSortie,
   corrigerSortie,
   envoyerCourrielEssai,
   inscrireRegleMembre,
@@ -33,6 +32,7 @@ import {
 } from "@/lib/courriel";
 import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Rubrique, Tuile, Vide } from "@/components/ui";
 import { Icone } from "@/components/icones";
+import { FormulaireSortie } from "@/components/formulaire-sortie";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 
 export const dynamic = "force-dynamic";
@@ -97,7 +97,7 @@ export default async function PageAdministration() {
     throw e;
   }
   const decomptes = await decomptesSortie().catch(() => []);
-  const arreteSortie = decomptes[0]?.arrete ?? null;
+  const releveSortie = decomptes[0]?.releve ?? null;
 
   /*
    * Le journal garde la trace de chaque essai : on peut donc en afficher l'issue
@@ -649,9 +649,9 @@ export default async function PageAdministration() {
         resume="Ce que chaque membre emporterait en partant aujourd'hui."
       >
         <p className="mb-3 text-xs" style={{ color: "var(--discret)" }}>
-          La sortie est arrêtée au dernier relevé
-          {arreteSortie ? ` (${dateCourte(arreteSortie)})` : ""} : portefeuille, caisse,
-          cotisations et virements de ce jour-là. Ses pénalités, inscrites ou en cours, sont
+          Calcul au jour de la sortie, ici aujourd&apos;hui : caisse, cotisations et virements de ce
+          jour, portefeuille au dernier relevé
+          {releveSortie ? ` (${dateCourte(releveSortie)})` : ""}. Ses pénalités, inscrites ou en cours, sont
           retranchées à leur montant (art. 9). S&apos;y retranchent une provision pour frais de
           cession de {pourcentage(REGLES.fraisVenteActions)} sur sa part en actions, au barème de
           la SGI, sa quote-part des frais de garde de l&apos;année, et le transfert vers son compte,
@@ -760,35 +760,22 @@ export default async function PageAdministration() {
         )}
 
         <Depliant titre="Enregistrer une sortie">
-          <FormulaireAction action={enregistrerSortie} libelle="Enregistrer la sortie">
-            <Selection
-              nom="membre"
-              libelle="Membre sortant"
-              options={membres.map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
-            />
-            <Champ
-              nom="date"
-              libelle="Date de sortie"
-              type="date"
-              valeur={new Date().toISOString().slice(0, 10)}
-            />
-            <Champ
-              nom="motif"
-              libelle="Motif"
-              aide="Démission, exclusion prononcée au vote, exclusion de plein droit (R5)…"
-            />
-            <Champ nom="note" libelle="Référence de la décision" requis={false} />
-            <p className="text-[11px]" style={{ color: "var(--discret)" }}>
-              Le site enregistre la ligne du tableau ci-dessus : sa part au relevé, ses
-              pénalités soldées par compensation avec ce motif, la provision de cession, la
-              garde et le transfert estimés. Corrigez les frais quand les frais réels sont connus.
-            </p>
-            <p className="text-[11px]" style={{ color: "var(--discret)" }}>
-              Le sortant reçoit aussitôt par courriel le détail du calcul expliqué pas à pas,
-              motif compris, avec le président et le trésorier en copie. Une correction des frais
-              lui est envoyée de la même façon.
-            </p>
-          </FormulaireAction>
+          <FormulaireSortie
+            membres={membres.map((m) => ({ valeur: String(m.id), libelle: m.nom }))}
+            aujourdhui={new Date().toISOString().slice(0, 10)}
+          />
+          <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
+            Le site calcule la sortie au jour de la date choisie : sa part, ses pénalités soldées
+            par compensation avec ce motif, la provision de cession, la garde et le transfert
+            estimés. Il montre d&apos;abord les données qu&apos;il va utiliser ; vous confirmez
+            qu&apos;elles sont à jour, ou vous saisissez ce qui manque et revenez. Corrigez les
+            frais quand les frais réels sont connus.
+          </p>
+          <p className="text-[11px]" style={{ color: "var(--discret)" }}>
+            Le sortant reçoit aussitôt par courriel le détail du calcul expliqué pas à pas, tous
+            les membres en copie, avec le droit de le contester preuve à l&apos;appui. Une
+            correction des frais est envoyée de la même façon.
+          </p>
         </Depliant>
       </Tuile>
 

@@ -39,8 +39,8 @@ export type DonneesCourrielSortie = {
   nom: string;
   dateSortie: string;
   motif: string;
-  /** Le releve auquel la sortie est arretee (AAAA-MM-JJ). */
-  arrete: string;
+  /** Le releve qui donne la valeur du portefeuille au jour de la sortie (AAAA-MM-JJ). */
+  releve: string;
   club: ContexteSortie;
   /** Ses cotisations des mois echus : le numerateur de sa part. */
   cotisations: number;
@@ -59,6 +59,23 @@ export type DonneesCourrielSortie = {
   fraisTransfert: number;
   net: number;
 };
+
+/**
+ * Le droit de contester, dit dans chaque courrier de sortie.
+ *
+ * Tous les membres sont en copie : le decompte du sortant deplace aussi leurs
+ * parts, et chacun peut le relire. Une contestation se tranche sur pieces ; et
+ * celui a qui il manque une piece pour verifier doit pouvoir la demander.
+ */
+const CONTESTER = [
+  "CONTESTER CE DÉCOMPTE : preuve à l'appui",
+  "Si un chiffre vous paraît faux, vous pouvez le contester en répondant à ce courriel, " +
+    "preuve à l'appui : reçu ou capture de versement, relevé de la SGI, échange avec le " +
+    "bureau. Chaque membre en copie peut en faire autant.",
+  "S'il vous manque une information pour vérifier (le relevé de la SGI, le détail de vos " +
+    "versements ou de vos pénalités), n'hésitez pas à la demander en répondant à ce courriel : " +
+    "le bureau vous la communiquera.",
+];
 
 /** 0,014 -> « 1,4 % ». */
 function taux(x: number, decimales = 2): string {
@@ -101,7 +118,8 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
     `Votre sortie du club ${CLUB.nom} prend effet au ${dateCourte(d.dateSortie)}, ` +
       `pour le motif suivant : ${d.motif.trim().replace(/[\s.…]+$/, "")}.`,
     "Ce courriel explique, étape par étape, comment le montant qui vous revient a été " +
-      "calculé. Chaque chiffre se vérifie avec une simple calculatrice.",
+      "calculé. Chaque chiffre se vérifie avec une simple calculatrice. Tous les membres du " +
+      "club sont en copie.",
     "",
     d.net > 0
       ? `En bref : ${fcfa(d.net)} vous reviennent, à vous verser au plus tard le ${dateCourte(limite)}.`
@@ -109,15 +127,21 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
         ? `En bref : rien ne vous revient, et il reste ${fcfa(reste)} de pénalités que vous devez au club.`
         : "En bref : rien ne vous revient.",
     "",
-    `1. CE QUE LE CLUB POSSÉDAIT : au relevé du ${dateCourte(d.arrete)}`,
-    `Le calcul part du dernier relevé de ${CLUB.sgi}, la société de bourse qui garde les ` +
-      "titres du club. C'est la dernière valeur connue et vérifiable du portefeuille : ce qui " +
-      "se passe après cette date ne change plus votre montant, ni en plus ni en moins.",
+    `1. CE QUE LE CLUB POSSÉDAIT : au ${dateCourte(d.dateSortie)}, jour de votre sortie`,
+    "Le calcul est arrêté au jour de votre sortie : ce qui se passe après ne change plus " +
+      "votre montant, ni en plus ni en moins. Le portefeuille y est compté à sa valeur du " +
+      `relevé de ${CLUB.sgi} du ${dateCourte(d.releve)}, la société de bourse qui garde les ` +
+      "titres du club : c'est la dernière valeur connue et vérifiable." +
+      (d.releve < d.dateSortie.slice(0, 10)
+        ? " Le bureau a confirmé qu'elle était toujours valable à la date de votre sortie."
+        : ""),
     `  - Compte chez ${CLUB.sgi} (les actions, et l'argent pas encore investi) : ` +
       fcfa(c.compteTitres),
   ];
   if (c.enTransit > 0) {
-    lignes.push(`  - Virements partis vers ${CLUB.sgi} après le relevé : ${fcfa(c.enTransit)}`);
+    lignes.push(
+      `  - Virements partis vers ${CLUB.sgi} entre ce relevé et votre sortie : ${fcfa(c.enTransit)}`,
+    );
   }
   lignes.push(`  - Argent en caisse : ${fcfa(c.caisse)}`);
   if (c.creances > 0) {
@@ -225,12 +249,7 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
     );
   }
 
-  lignes.push(
-    "",
-    "Pour toute question sur ce décompte, répondez à ce courriel : le bureau est en copie.",
-    "",
-    `Le bureau d'${CLUB.nom}`,
-  );
+  lignes.push("", ...CONTESTER, "", `Le bureau d'${CLUB.nom}`);
 
   return {
     sujet: `${CLUB.sigle} : décompte de votre sortie du club`,
@@ -263,8 +282,9 @@ export function courrielCorrectionSortie(d: {
     `Montant à vous verser : ${fcfa(d.netApres)}, au lieu de ${fcfa(d.netAvant)}.`,
     "Le reste du décompte est inchangé" +
       (d.netApres > 0 ? `, et le paiement reste dû au plus tard le ${dateCourte(limite)}.` : "."),
+    "Tous les membres du club sont en copie.",
     "",
-    "Pour toute question, répondez à ce courriel : le bureau est en copie.",
+    ...CONTESTER,
     "",
     `Le bureau d'${CLUB.nom}`,
   ];
@@ -272,4 +292,98 @@ export function courrielCorrectionSortie(d: {
     sujet: `${CLUB.sigle} : frais réels de votre sortie du club`,
     texte: lignes.join("\n"),
   };
+}
+
+/** Ce que le bureau doit savoir a jour avant d'enregistrer une sortie. */
+export type FaitsSortie = {
+  /** La date de sortie, a laquelle le calcul est arrete. */
+  jour: string;
+  /** Le releve qui donnera la valeur du portefeuille, ou null s'il n'y en a pas. */
+  releve: { date: string; total: number } | null;
+  enTransit: number;
+  versementsEnAttente: { nb: number; total: number; siens: number };
+  caisseEnAttente: number;
+  /** Reglements de penalite declares par le sortant, que le tresorier n'a pas verifies. */
+  reglementsEnAttente: number;
+  penalites: number;
+  penalitesEnCours: number;
+};
+
+/**
+ * Ce que le calcul va utiliser, dit au bureau avant qu'il n'enregistre.
+ *
+ * Le site ne sait pas ce qui manque : un versement recu mais pas declare, des
+ * cours qui ont bouge depuis le releve. Il montre ce qu'il a, en disant pour
+ * chaque point ce qu'il faut faire s'il n'est pas a jour. Le bureau confirme,
+ * ou saisit ce qui manque et revient.
+ */
+export function pointsAVerifier(f: FaitsSortie): string[] {
+  const points: string[] = [];
+  if (f.releve) {
+    const ecart = Math.round(
+      (Date.parse(`${f.jour}T00:00:00Z`) - Date.parse(`${f.releve.date}T00:00:00Z`)) / 86_400_000,
+    );
+    points.push(
+      ecart === 0
+        ? `Portefeuille : relevé du ${dateCourte(f.releve.date)} (${fcfa(f.releve.total)}), le jour même de la sortie.`
+        : `Portefeuille : relevé du ${dateCourte(f.releve.date)} (${fcfa(f.releve.total)}), ` +
+            `${ecart} ${ecart > 1 ? "jours" : "jour"} avant la sortie. Si les cours ont bougé depuis, ` +
+            `saisissez d'abord un relevé daté du ${dateCourte(f.jour)}.`,
+    );
+  }
+  if (f.enTransit > 0) {
+    points.push(`Virements vers la SGI après ce relevé : ${fcfa(f.enTransit)}, comptés à leur montant.`);
+  }
+  const v = f.versementsEnAttente;
+  points.push(
+    v.nb === 0
+      ? "Versements : aucun en attente de validation. Un versement reçu mais pas encore déclaré ne compte pas : faites-le saisir d'abord."
+      : `Versements : ${v.nb} ${v.nb > 1 ? "déclarés attendent" : "déclaré attend"} validation ` +
+          `(${fcfa(v.total)})` +
+          (v.siens > 0 ? `, dont ${v.siens} du sortant` : "") +
+          " : validez-les ou refusez-les d'abord, sinon ils ne comptent pas.",
+  );
+  points.push(
+    f.caisseEnAttente === 0
+      ? "Caisse : aucun mouvement en attente de validation."
+      : `Caisse : ${f.caisseEnAttente} ${f.caisseEnAttente > 1 ? "mouvements attendent" : "mouvement attend"} ` +
+          "validation : validez-les d'abord, sinon ils ne comptent pas.",
+  );
+  if (f.reglementsEnAttente > 0) {
+    points.push(
+      `Pénalités : le sortant a déclaré ${f.reglementsEnAttente} ` +
+        `${f.reglementsEnAttente > 1 ? "règlements" : "règlement"} que le trésorier n'a pas ` +
+        `${f.reglementsEnAttente > 1 ? "vérifiés" : "vérifié"}. Sans validation, ces pénalités ` +
+        "seront retenues sur sa part.",
+    );
+  }
+  points.push(
+    f.penalites === 0
+      ? "Pénalités du sortant : aucune."
+      : `Pénalités du sortant retenues : ${fcfa(f.penalites)}` +
+          (f.penalitesEnCours > 0
+            ? `, dont ${fcfa(f.penalitesEnCours)} qui courent sans être inscrites au registre. ` +
+              "Si vous les avez déjà saisies à la main, elles compteraient deux fois : dites-le avant de confirmer."
+            : "."),
+  );
+  return points;
+}
+
+/**
+ * L'empreinte de ce que le bureau a verifie. Si quoi que ce soit change entre la
+ * verification et la confirmation, l'empreinte change aussi, et le site redemande.
+ */
+export function empreinteSortie(membreId: string, f: FaitsSortie): string {
+  return [
+    membreId,
+    f.jour,
+    f.releve?.date ?? "",
+    f.releve?.total ?? "",
+    f.enTransit,
+    f.versementsEnAttente.nb,
+    f.versementsEnAttente.total,
+    f.caisseEnAttente,
+    f.reglementsEnAttente,
+    f.penalites,
+  ].join("|");
 }
