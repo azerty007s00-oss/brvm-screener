@@ -197,13 +197,15 @@ export default async function PagePenalites() {
       .filter((r) => r.statut === STATUT_REGLEMENT.enAttente)
       .map((r) => r.penalite_id),
   );
+  /* Les siennes et celles des parts rachetees qu'il detient : il les regle toutes. */
+  const miennes = new Set([membre.id, ...mesParts]);
   const mesLignesDues = penalites.filter(
     (p) =>
-      p.membre_id === membre.id &&
+      miennes.has(p.membre_id) &&
       p.statut === STATUT_PENALITE.due &&
       !enAttenteParLigne.has(p.id),
   );
-  const mesDeclarations = reglements.filter((r) => r.membre_id === membre.id);
+  const mesDeclarations = reglements.filter((r) => miennes.has(r.membre_id));
   const aExaminer = reglements.filter((r) => r.statut === STATUT_REGLEMENT.enAttente);
   /*
    * UN VERSEMENT, UNE LIGNE A EXAMINER.

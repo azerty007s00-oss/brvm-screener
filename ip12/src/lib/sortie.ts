@@ -582,7 +582,9 @@ export function lignesValorisation(v: {
             .join(" et ") +
           "."
         : "") +
-      ` Repère : un prix entre ${fcfa(plancher)} (ce que le club lui verserait) et ` +
+      ` Repère : un prix entre ${fcfa(plancher)} (ce que le club lui verserait` +
+      (v.avance > 0 ? ", avance mise à part" : "") +
+      `) et ` +
       `${fcfa(plafond)} (la valeur de sa part` +
       (v.penalites > 0 ? ", moins ses pénalités payées par l'acheteur" : "") +
       ") avantage le sortant comme l'acheteur.",

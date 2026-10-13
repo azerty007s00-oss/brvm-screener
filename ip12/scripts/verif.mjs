@@ -1998,6 +1998,44 @@ assert.equal(
   assert.equal(valeurDe(apres, "c"), valeurDe(avant, "c"), "C ne gagne ni ne perd");
   assert.equal(valeurDe(apres, "b"), valeurDe(avant, "b") + valeurDe(avant, "a"), "B porte la part de A");
 
+  /*
+   * L'INVARIANT, DE BOUT EN BOUT : un membre qui ne prend pas part a la sortie
+   * n'y perd rien et n'y gagne que sa quote-part de la provision de frais que
+   * le club garde. A sort ; B rachete la moitie de ses parts ; le club l'autre.
+   */
+  {
+    const avant = [
+      { membreId: "a", nom: "A", acquis: 300_000, avance: 20_000, dues: 24_000 },
+      { membreId: "b", nom: "B", acquis: 600_000, avance: 0, dues: 0 },
+      { membreId: "c", nom: "C", acquis: 300_000, avance: 40_000, dues: 6_000 },
+    ];
+    const avoirAvant = 1_750_000;
+    const partsAvant = repartirParts(avant, avoirAvant);
+    const a0 = partsAvant.find((x) => x.membreId === "a");
+    const quotePartA = Math.round(a0.avance + a0.part * potAPartager(avant, avoirAvant).aPartager) - a0.avance;
+    const sortie = partagerSortie(
+      { avance: 20_000, quotePart: quotePartA, part: a0.part, acquis: 300_000, penalites: 24_000 },
+      club, taux, [{ membreId: "b", fraction: 0.5, prix: 200_000 }],
+    );
+    const fraisSortie = sortie.fraisVente + sortie.fraisGarde + sortie.fraisTransfert;
+    // Le club verse son net ; B verse au club les penalites de sa moitie ; le prix va de B a A, hors du club.
+    const avoirApres = avoirAvant - sortie.netClub + sortie.acheteurs[0].auClub;
+    const apres = [
+      { membreId: "b", nom: "B", acquis: 600_000, avance: 0, dues: 0 },
+      { membreId: "c", nom: "C", acquis: 300_000, avance: 40_000, dues: 6_000 },
+      { membreId: "pb", nom: "part de B", acquis: sortie.acheteurs[0].poids, avance: 0, dues: 0 },
+    ];
+    const partsApres = repartirParts(apres, avoirApres);
+    const valeurDe = (l, id) => l.find((x) => x.membreId === id).valeur;
+    const gainC = valeurDe(partsApres, "c") - valeurDe(partsAvant, "c");
+    const attendu = (300_000 / (600_000 + 300_000 + sortie.acheteurs[0].poids)) * fraisSortie;
+    assert.ok(Math.abs(gainC - attendu) < 2, `C ne gagne que sa quote-part des frais : ${gainC} contre ${attendu}`);
+    // La part rachetee vaut ce que valait la moitie des parts de A, plus sa quote-part des frais.
+    const gainPart = valeurDe(partsApres, "pb") - sortie.acheteurs[0].valeur;
+    const attenduPart = (sortie.acheteurs[0].poids / (600_000 + 300_000 + sortie.acheteurs[0].poids)) * fraisSortie;
+    assert.ok(Math.abs(gainPart - attenduPart) < 2, "la part rachetee vaut ce que B a achete");
+  }
+
   // Le courrier avec acheteurs : qui rachete, qui paie quoi, et le total.
   const donnees = {
     nom: "SORTANT Test", dateSortie: "2026-10-13", motif: "démission", releve: "2026-10-13",

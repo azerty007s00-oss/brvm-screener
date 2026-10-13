@@ -19,9 +19,10 @@ alter table members alter column password_hash drop not null;
 
 -- Une ligne par acheteur. `weight` est le poids des cotisations du sortant qui
 -- passe a la part rachetee : il compte dans sa valeur comme des cotisations.
--- `price` est le prix convenu ; `paid_to_club` en est la part que l'acheteur
--- verse au club pour solder les penalites du sortant, le reste allant au
--- sortant directement.
+-- `price` est ce que l'acheteur paie pour le rachat : le prix convenu, qui va
+-- au sortant, plus `paid_to_club`, les penalites du sortant qu'il verse au
+-- club. Les cotisations impayees qu'il reprend s'inscrivent a part, comme
+-- cotisations de la part rachetee.
 create table if not exists share_buybacks (
   id uuid primary key default gen_random_uuid(),
   exit_id uuid not null references member_exits(id) on delete cascade,
