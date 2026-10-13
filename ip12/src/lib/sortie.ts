@@ -374,6 +374,16 @@ export type FaitsSortie = {
   reglementsEnAttente: number;
   penalites: number;
   penalitesEnCours: number;
+  /** La caisse a la date de sortie et aujourd'hui, et ce qui est date entre les deux. */
+  caisse?: {
+    auJour: number;
+    aujourdhui: number;
+    versements: number;
+    penalites: number;
+    recettes: number;
+    depenses: number;
+    virements: number;
+  };
 };
 
 /**
@@ -424,6 +434,26 @@ export function pointsAVerifier(f: FaitsSortie): string[] {
             ? "validation : validez-les d'abord, sinon ils ne comptent pas."
             : "validation : validez-le d'abord, sinon il ne compte pas."),
   );
+  const k = f.caisse;
+  if (k && Math.round(k.aujourdhui) !== Math.round(k.auJour)) {
+    const postes = [
+      k.versements ? `versements ${fcfa(k.versements)}` : "",
+      k.penalites ? `pénalités encaissées ${fcfa(k.penalites)}` : "",
+      k.recettes ? `recettes ${fcfa(k.recettes)}` : "",
+      k.depenses ? `dépenses, à retirer, ${fcfa(k.depenses)}` : "",
+      k.virements ? `virements vers la SGI, à retirer, ${fcfa(k.virements)}` : "",
+    ].filter(Boolean);
+    const explique = k.versements + k.penalites + k.recettes - k.depenses - k.virements;
+    const inexplique = Math.round(k.aujourdhui - k.auJour - explique);
+    points.push(
+      `Écart de caisse : ${fcfa(k.auJour)} au ${dateCourte(f.jour)}, contre ${fcfa(k.aujourdhui)} aujourd'hui. ` +
+        (postes.length > 0
+          ? `L'écart vient de ce qui est daté après la sortie, et ne compte donc pas : ${postes.join(", ")}. ` +
+            `Si cet argent était déjà en caisse le ${dateCourte(f.jour)}, corrigez la date de l'opération.`
+          : "") +
+        (inexplique !== 0 ? ` ${fcfa(Math.abs(inexplique))} d'écart ne viennent pas des dates : signalez-le.` : ""),
+    );
+  }
   if (f.reglementsEnAttente > 0) {
     points.push(
       `Pénalités : le sortant a déclaré ${f.reglementsEnAttente} ` +

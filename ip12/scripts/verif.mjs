@@ -2308,6 +2308,31 @@ assert.equal(
   assert.ok(val.some((l) => l.includes(`ses cotisations impayées (${fcfa(15_000)} : août, septembre et octobre 2026)`)));
 }
 
+{
+  /*
+   * L'ECART DE CAISSE ENTRE LA SORTIE ET AUJOURD'HUI. Le bureau compte 100 000
+   * en caisse, le decompte au 10/10 en lit 95 000 : l'ecran dit d'ou vient
+   * l'ecart, et quoi faire si l'argent etait deja la.
+   */
+  const faits = {
+    jour: "2026-10-10", releve: { date: "2026-10-10", total: 1 }, enTransit: 0,
+    versementsEnAttente: { nb: 0, total: 0, siens: 0 }, caisseEnAttente: 0, reglementsEnAttente: 0,
+    penalites: 0, penalitesEnCours: 0,
+    caisse: { auJour: 95_000, aujourdhui: 100_000, versements: 0, penalites: 5_000, recettes: 0, depenses: 0, virements: 0 },
+  };
+  const ligne = pointsAVerifier(faits).find((l) => l.startsWith("Écart de caisse :"));
+  assert.ok(ligne, "l'ecart de caisse est dit");
+  assert.ok(ligne.includes(`${fcfa(95_000)} au 10/10/2026, contre ${fcfa(100_000)} aujourd'hui`));
+  assert.ok(ligne.includes(`pénalités encaissées ${fcfa(5_000)}`));
+  assert.ok(ligne.includes("corrigez la date de l'opération"));
+  assert.ok(!ligne.includes("signalez-le"), "l'ecart est entierement explique");
+  // Un ecart que les dates n'expliquent pas se signale.
+  const inexplique = pointsAVerifier({ ...faits, caisse: { ...faits.caisse, penalites: 0 } }).find((l) => l.startsWith("Écart de caisse :"));
+  assert.ok(inexplique.includes(`${fcfa(5_000)} d'écart ne viennent pas des dates : signalez-le.`));
+  // Caisse identique : rien a dire.
+  assert.ok(!pointsAVerifier({ ...faits, caisse: { ...faits.caisse, aujourdhui: 95_000, penalites: 0 } }).some((l) => l.startsWith("Écart de caisse :")));
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +

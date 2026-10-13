@@ -190,6 +190,13 @@ async function soldeLigne(
   quantiteDemandee: number | null,
   auteurId: string,
   note: string | null,
+  /*
+   * Le jour ou l'argent a ete paye, quand on le connait. Une declaration validee
+   * trois jours apres le paiement portait la date de la validation : la caisse
+   * arretee a une date anterieure, celle d'une sortie, perdait un argent qui y
+   * etait deja.
+   */
+  payeLe: string | null = null,
 ): Promise<{ ok: true; quantite: number; reste: number; montant: number } | { ok: false; erreur: string }> {
   const sql = db();
   const lignes = (await sql`
@@ -241,7 +248,7 @@ async function soldeLigne(
   if (quantite === restant) {
     const faites = await sql`
       update penalties
-      set status = ${STATUT_PENALITE.payee}, settled_on = current_date,
+      set status = ${STATUT_PENALITE.payee}, settled_on = coalesce(${payeLe}::date, current_date),
           settlement_note = ${note}, resolved_by = ${auteurId}::uuid, resolved_at = now()
       where id = ${id}::uuid and status = ${STATUT_PENALITE.due} and quantity = ${restant}
       returning id
@@ -274,7 +281,8 @@ async function soldeLigne(
        settled_on, settlement_note, created_by, resolved_by, resolved_at)
     values (${ligne.member_id}::uuid, ${ligne.kind}, ${quantite}, ${unitaire},
             ${ligne.reason}, ${ligne.incurred_on}::date, ${STATUT_PENALITE.payee},
-            current_date, ${note}, ${ligne.created_by}::uuid, ${auteurId}::uuid, now())
+            coalesce(${payeLe}::date, current_date), ${note}, ${ligne.created_by}::uuid,
+            ${auteurId}::uuid, now())
   `;
   return { ok: true, quantite, reste, montant: quantite * unitaire };
 }
@@ -673,6 +681,7 @@ export async function validerReglementPenalite(
       Number(declaration.quantity),
       auteur.id,
       note,
+      declaration.paid_on,
     );
     /*
      * Une ligne qui ne se solde plus -- annulee entre-temps -- n'arrete pas les

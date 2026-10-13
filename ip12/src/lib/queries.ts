@@ -1318,13 +1318,26 @@ async function decomptesSortieBrut(dateSortie: string | null): Promise<DecompteS
  * va utiliser, et le bureau confirme ou complete.
  */
 export async function faitsAvantSortie(d: DecompteSortie): Promise<FaitsSortie> {
-  const [versements, caisse, reglements] = await Promise.all([
-    versementsEnAttente().catch(() => [] as Versement[]),
-    listerMouvementsCaisse().catch(() => [] as MouvementCaisse[]),
-    reglementsPenalite({ membreId: d.membreId, statut: STATUT_REGLEMENT.enAttente }).catch(
-      () => [] as ReglementPenalite[],
-    ),
-  ]);
+  const [versements, caisse, reglements, valides, apports, aujourdhui, encaisseesTout, encaisseesAuJour] =
+    await Promise.all([
+      versementsEnAttente().catch(() => [] as Versement[]),
+      listerMouvementsCaisse().catch(() => [] as MouvementCaisse[]),
+      reglementsPenalite({ membreId: d.membreId, statut: STATUT_REGLEMENT.enAttente }).catch(
+        () => [] as ReglementPenalite[],
+      ),
+      listerVersements({ statut: STATUT_VERSEMENT.valide }).catch(() => [] as Versement[]),
+      listerApports().catch(() => [] as Apport[]),
+      synthese(),
+      penalitesEncaissees(null),
+      penalitesEncaissees(d.arrete),
+    ]);
+  /*
+   * LA CAISSE A LA DATE DE SORTIE ET AUJOURD'HUI. Ce qui est date apres la
+   * sortie ne compte pas : le bureau qui lit 95 000 la ou il compte 100 000 doit
+   * savoir d'ou vient l'ecart, et corriger une date si l'argent etait deja la.
+   */
+  const apres = (date: string | null) => date !== null && date > d.arrete;
+  const mouvementsApres = caisse.filter((m) => m.statut === STATUT_CAISSE.valide && apres(m.date_mouvement));
   const enAttente = versements.filter((v) => v.date_versement <= d.arrete);
   return {
     jour: d.arrete,
@@ -1341,6 +1354,15 @@ export async function faitsAvantSortie(d: DecompteSortie): Promise<FaitsSortie> 
     reglementsEnAttente: reglements.length,
     penalites: d.penalitesDeduites,
     penalitesEnCours: d.penalitesEnCours,
+    caisse: {
+      auJour: d.club.caisse,
+      aujourdhui: aujourdhui.totalEnCaisse - aujourdhui.duAuxSortants,
+      versements: valides.filter((v) => apres(v.date_versement)).reduce((t, v) => t + v.montant, 0),
+      penalites: encaisseesTout - encaisseesAuJour,
+      recettes: mouvementsApres.filter((m) => m.sens === "recette").reduce((t, m) => t + m.montant, 0),
+      depenses: mouvementsApres.filter((m) => m.sens === "depense").reduce((t, m) => t + m.montant, 0),
+      virements: apports.filter((a) => apres(a.date_transfert)).reduce((t, a) => t + netApport(a), 0),
+    },
   };
 }
 
