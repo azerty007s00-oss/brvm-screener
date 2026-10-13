@@ -134,6 +134,32 @@ export type ApportMembre = {
 };
 
 /**
+ * Le pot que se partagent les membres, et ce qui le compose.
+ *
+ * Exporte a part parce que le courrier de sortie l'ecrit ligne a ligne : le
+ * sortant doit pouvoir refaire l'addition, et elle doit tomber sur le chiffre
+ * dont sa part est tiree. Une seule fonction, donc un seul calcul.
+ */
+export function potAPartager(
+  apports: ApportMembre[],
+  valeurTotale: number,
+): { avances: number; creances: number; aPartager: number; cotisations: number } {
+  const avances = apports.reduce((t, m) => t + m.avance, 0);
+  const creances = apports.reduce((t, m) => t + Math.max(0, m.dues), 0);
+  /*
+   * Les avances sortent du pot avant partage ; les penalites dues y entrent,
+   * comme creances du club. Le plancher a zero couvre le cas limite ou les
+   * avances excederaient l'avoir constate -- un releve de portefeuille en retard
+   * sur un gros versement d'avance : mieux vaut ne rien partager que repartir un
+   * montant negatif.
+   */
+  const aPartager = Math.max(0, valeurTotale + creances - avances);
+  /* Le poids de chacun : ses cotisations des mois echus, jamais negatives. */
+  const cotisations = apports.reduce((t, m) => t + Math.max(0, m.acquis), 0);
+  return { avances, creances, aPartager, cotisations };
+}
+
+/**
  * Repartition de l'avoir du club entre ses membres.
  *
  * Trois principes, decides par le club :
@@ -167,24 +193,12 @@ export function repartirParts(
   apports: ApportMembre[],
   valeurTotale: number,
 ): PartMembre[] {
-  const avances = apports.reduce((t, m) => t + m.avance, 0);
-  const creances = apports.reduce((t, m) => t + Math.max(0, m.dues), 0);
-
-  /*
-   * Les avances sortent du pot avant partage ; les penalites dues y entrent,
-   * comme creances du club. Le plancher a zero couvre le cas limite ou les
-   * avances excederaient l'avoir constate -- un releve de portefeuille en retard
-   * sur un gros versement d'avance : mieux vaut ne rien partager que repartir un
-   * montant negatif.
-   */
-  const aPartager = Math.max(0, valeurTotale + creances - avances);
-
+  const { aPartager, cotisations } = potAPartager(apports, valeurTotale);
   const poids = (m: ApportMembre) => Math.max(0, m.acquis);
-  const totalPoids = apports.reduce((t, m) => t + poids(m), 0);
 
   return apports
     .map((m) => {
-      const part = totalPoids > 0 ? poids(m) / totalPoids : 0;
+      const part = cotisations > 0 ? poids(m) / cotisations : 0;
       /*
        * Peut etre negative : un membre dont les penalites depassent sa part doit
        * au club plus qu'il n'y detient. La somme des parts reste l'avoir.
@@ -219,7 +233,13 @@ export function decompteSortie(
   club: { actions: number; fraisGardeCourus: number },
   taux: { venteActions: number; transfert: number },
 ): { pocheActions: number; fraisVente: number; fraisGarde: number; fraisTransfert: number; net: number } {
-  const cessible = Math.max(0, p.valeur - Math.max(0, p.avance));
+  /*
+   * Au franc pres d'abord : le courrier de sortie detaille chaque retenue, et le
+   * sortant qui refait le calcul a la calculatrice doit retomber sur les memes
+   * chiffres, sans centimes d'arrondi entre deux lignes.
+   */
+  const valeur = Math.round(p.valeur);
+  const cessible = Math.max(0, valeur - Math.max(0, p.avance));
   const pocheActions = Math.min(cessible, Math.round(p.part * Math.max(0, club.actions)));
   const fraisVente = Math.round(pocheActions * taux.venteActions);
   const fraisGarde = Math.min(
@@ -232,7 +252,7 @@ export function decompteSortie(
     fraisVente,
     fraisGarde,
     fraisTransfert,
-    net: Math.max(0, p.valeur - fraisVente - fraisGarde - fraisTransfert),
+    net: Math.max(0, valeur - fraisVente - fraisGarde - fraisTransfert),
   };
 }
 

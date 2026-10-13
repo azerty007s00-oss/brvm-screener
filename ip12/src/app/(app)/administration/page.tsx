@@ -783,6 +783,11 @@ export default async function PageAdministration() {
               pénalités soldées par compensation avec ce motif, la provision de cession, la
               garde et le transfert estimés. Corrigez les frais quand les frais réels sont connus.
             </p>
+            <p className="text-[11px]" style={{ color: "var(--discret)" }}>
+              Le sortant reçoit aussitôt par courriel le détail du calcul expliqué pas à pas,
+              motif compris, avec le président et le trésorier en copie. Une correction des frais
+              lui est envoyée de la même façon.
+            </p>
           </FormulaireAction>
         </Depliant>
       </Tuile>

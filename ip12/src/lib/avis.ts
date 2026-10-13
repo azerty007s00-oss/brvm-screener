@@ -482,3 +482,44 @@ export async function avertirDemandeReinitialisation(params: {
     detail: partis > 0 ? `${partis} destinataire(s)` : motifs.join(" ; ") || "aucun envoi",
   };
 }
+
+/**
+ * Le decompte de sa sortie, adresse au membre qui s'en va.
+ *
+ * Le president et le tresorier en copie : l'un a enregistre la sortie, l'autre
+ * paiera, et le sortant qui repond a ce courrier pour poser une question les
+ * trouve tous deux au bout du fil. Sans adresse connue du sortant, le courrier
+ * va au bureau, qui le lui transmet : il ne se perd pas en silence.
+ */
+export async function envoyerCourrielSortie(
+  membre: { nom: string; email: string | null },
+  courrier: { sujet: string; texte: string },
+): Promise<{ ok: boolean; detail: string }> {
+  const sienne = (membre.email ?? "").trim();
+  const bureau = [
+    ...(await joignablesPour("gererSorties")),
+    ...(await joignablesPour("validerVersement")),
+  ];
+  const vues = new Set(sienne ? [sienne.toLowerCase()] : []);
+  const copie: string[] = [];
+  for (const m of bureau) {
+    const adresse = m.email.toLowerCase();
+    if (vues.has(adresse)) continue;
+    vues.add(adresse);
+    copie.push(m.email);
+  }
+
+  if (sienne) {
+    return envoyerCourriel({ destinataire: sienne, copie, sujet: courrier.sujet, texte: courrier.texte });
+  }
+  const [premier, ...autres] = copie;
+  if (!premier) return { ok: false, detail: "ni le sortant ni le bureau n'ont d'adresse" };
+  return envoyerCourriel({
+    destinataire: premier,
+    copie: autres,
+    sujet: courrier.sujet,
+    texte:
+      `À TRANSMETTRE : ${membre.nom} n'a pas d'adresse sur le site, ce décompte lui est destiné.\n\n` +
+      courrier.texte,
+  });
+}

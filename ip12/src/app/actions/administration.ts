@@ -13,6 +13,8 @@ import {
   tracerRelances,
 } from "@/lib/relance";
 import { versionDeployee } from "@/lib/version";
+import { envoyerCourrielSortie } from "@/lib/avis";
+import { courrielCorrectionSortie, courrielSortie } from "@/lib/sortie";
 import { porterRetardsAuRegistre, resumeConstat, type IssueConstat } from "@/lib/constat";
 import { decomptesSortie, listerMembres, reglagesEffectifs } from "@/lib/queries";
 import { CLUB, REGLES, dateCourte, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
@@ -402,7 +404,7 @@ export async function enregistrerSortie(
   if (!motif) return { ok: false, erreur: "Indiquez le motif de la sortie." };
 
   const sql = db();
-  const membre = await sql`select full_name, is_active from members where id = ${membreId}::uuid`;
+  const membre = await sql`select full_name, email, is_active from members where id = ${membreId}::uuid`;
   if (!membre[0]) return { ok: false, erreur: "Membre introuvable." };
   if (!membre[0].is_active) return { ok: false, erreur: "Ce membre est déjà sorti." };
 
@@ -453,11 +455,38 @@ export async function enregistrerSortie(
     sql`update members set is_active = false where id = ${membreId}::uuid`,
   ]);
 
+  /*
+   * Le sortant recoit le detail du calcul, en mots : les montants qu'il lit sont
+   * ceux qui viennent d'etre enregistres. Un courrier qui ne part pas n'annule
+   * pas la sortie ; le message le dit, pour que le bureau le lui transmette.
+   */
+  const courrier = await envoyerCourrielSortie(
+    { nom: membre[0].full_name, email: membre[0].email },
+    courrielSortie({
+      nom: membre[0].full_name,
+      dateSortie: date,
+      motif,
+      arrete: d.arrete,
+      club: d.club,
+      cotisations: d.acquis,
+      avance: d.avance,
+      droits,
+      penalites: d.penalitesDeduites,
+      penalitesEnCours: d.penalitesEnCours,
+      compensees,
+      pocheActions: d.pocheActions,
+      fraisVente: d.fraisVente,
+      fraisGarde: d.fraisGarde,
+      fraisTransfert: d.fraisTransfert,
+      net,
+    }),
+  ).catch((e: unknown) => ({ ok: false, detail: e instanceof Error ? e.message : String(e) }));
+
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "sortie_membre",
     { entite: "member_exits", id: membreId },
-    { date, motif, arrete: d.arrete, droits, compensees, frais, net },
+    { date, motif, arrete: d.arrete, droits, compensees, frais, net, courriel: courrier.detail },
   );
   revalidatePath("/", "layout");
   return {
@@ -465,7 +494,11 @@ export async function enregistrerSortie(
     message:
       `Sortie enregistrée : ${fcfa(net)} à verser à ${membre[0].full_name}, sous ` +
       `${REGLES.delaiRemboursementMois} mois (R5). Ses pénalités sont soldées avec le motif de ` +
-      "sortie. Le jour du paiement, enregistrez-le dans Caisse en dépense « Remboursement " +
+      "sortie. " +
+      (courrier.ok
+        ? "Le détail du calcul lui a été envoyé par courriel, le bureau en copie. "
+        : `Le courriel de décompte n'est pas parti (${courrier.detail}) : transmettez-lui le détail. `) +
+      "Le jour du paiement, enregistrez-le dans Caisse en dépense « Remboursement " +
       "d'un membre sorti ».",
   };
 }
@@ -493,7 +526,8 @@ export async function corrigerSortie(
 
   const sql = db();
   const rows = await sql`
-    select e.gross_value, e.forfeited, e.fees, e.net_paid, m.full_name
+    select e.gross_value, e.forfeited, e.fees, e.net_paid, m.full_name, m.email,
+           to_char(e.exit_date, 'YYYY-MM-DD') as exit_date
     from member_exits e join members m on m.id = e.member_id
     where e.id = ${id}::uuid
   `;
@@ -513,16 +547,38 @@ export async function corrigerSortie(
         note = concat_ws(' · ', note, ${`frais réels ${fcfa(frais)} (${raison})`})
     where id = ${id}::uuid
   `;
+  const courrier = await envoyerCourrielSortie(
+    { nom: e.full_name, email: e.email },
+    courrielCorrectionSortie({
+      nom: e.full_name,
+      dateSortie: e.exit_date,
+      fraisAvant: Number(e.fees),
+      fraisApres: frais,
+      netAvant: Number(e.net_paid),
+      netApres: net,
+      raison,
+    }),
+  ).catch((x: unknown) => ({ ok: false, detail: x instanceof Error ? x.message : String(x) }));
+
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "sortie_frais_corriges",
     { entite: "member_exits", id },
-    { avant: { frais: Number(e.fees), net: Number(e.net_paid) }, apres: { frais, net }, raison },
+    {
+      avant: { frais: Number(e.fees), net: Number(e.net_paid) },
+      apres: { frais, net },
+      raison,
+      courriel: courrier.detail,
+    },
   );
   revalidatePath("/", "layout");
   return {
     ok: true,
-    message: `Frais corrigés : ${fcfa(net)} à verser à ${e.full_name} (au lieu de ${fcfa(Number(e.net_paid))}).`,
+    message:
+      `Frais corrigés : ${fcfa(net)} à verser à ${e.full_name} (au lieu de ${fcfa(Number(e.net_paid))}). ` +
+      (courrier.ok
+        ? "Il en a été averti par courriel, le bureau en copie."
+        : `Le courriel n'est pas parti (${courrier.detail}) : prévenez-le.`),
   };
 }
 

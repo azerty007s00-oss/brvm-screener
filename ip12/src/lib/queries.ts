@@ -28,11 +28,13 @@ import {
   dureeEnAnnees,
   etatCaisse,
   fraisGardeCourus,
+  potAPartager,
   repartirParts,
   tri,
   type Flux,
   type PartMembre,
 } from "./perf";
+import type { ContexteSortie } from "./sortie";
 
 /** bigint et numeric reviennent en chaine avec le pilote Postgres : on normalise. */
 const n = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
@@ -1101,6 +1103,10 @@ export type DecompteSortie = {
   netIndicatif: number;
   /** Le releve auquel la sortie est arretee (AAAA-MM-JJ), ou null sans releve. */
   arrete: string | null;
+  /** Ses cotisations des mois echus au releve : ce qui fixe sa part. */
+  acquis: number;
+  /** Ce que possedait le club au releve, pour que le courrier de sortie le detaille. */
+  club: ContexteSortie;
 };
 
 /**
@@ -1142,16 +1148,14 @@ async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
   const enCours = (id: string) => courues.get(id)?.montant ?? 0;
   const dette = (id: string) => (dues.get(id) ?? 0) + enCours(id);
 
-  const parts = repartirParts(
-    situationsAuReleve.map((s) => ({
-      membreId: s.membreId,
-      nom: s.nom,
-      acquis: s.acquis,
-      avance: s.avance,
-      dues: dette(s.membreId),
-    })),
-    auReleve.avoir,
-  );
+  const apports = situationsAuReleve.map((s) => ({
+    membreId: s.membreId,
+    nom: s.nom,
+    acquis: s.acquis,
+    avance: s.avance,
+    dues: dette(s.membreId),
+  }));
+  const parts = repartirParts(apports, auReleve.avoir);
 
   const actions = auReleve.valorisation?.actions ?? 0;
   const fraisGarde = arrete
@@ -1161,6 +1165,24 @@ async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
         taxe: REGLES.taxeCommissionsSGI,
       })
     : 0;
+
+  /*
+   * L'avoir est la somme du releve, de ce qui est en route vers la SGI et de la
+   * caisse : la caisse s'en deduit, et l'addition du courrier retombe ainsi sur
+   * l'avoir dont les parts sont tirees.
+   */
+  const pot = potAPartager(apports, auReleve.avoir);
+  const compteTitres = auReleve.valorisation?.total ?? 0;
+  const club: ContexteSortie = {
+    compteTitres,
+    enTransit: auReleve.enTransit,
+    caisse: auReleve.avoir - compteTitres - auReleve.enTransit,
+    creances: pot.creances,
+    avances: pot.avances,
+    aPartager: pot.aPartager,
+    cotisations: pot.cotisations,
+    fraisGardeCourus: fraisGarde,
+  };
 
   return parts.map((p) => {
     const d = decompteSortie(
@@ -1183,6 +1205,8 @@ async function decomptesSortieBrut(): Promise<DecompteSortie[]> {
       penalitesEnCours: enCours(p.membreId),
       netIndicatif: d.net,
       arrete,
+      acquis: p.acquis,
+      club,
     };
   });
 }

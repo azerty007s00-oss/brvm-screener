@@ -24,9 +24,10 @@ const assert = new Proxy(strict0, {
   },
 });
 
-const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie, etatCaisse, fraisGardeCourus } = await import(
+const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie, etatCaisse, fraisGardeCourus, potAPartager } = await import(
   "../.verif/perf.mjs"
 );
+const { courrielSortie, courrielCorrectionSortie, echeanceRemboursement } = await import("../.verif/sortie.mjs");
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
@@ -1724,6 +1725,130 @@ assert.equal(
   assert.equal(paye.aPartager, enregistree.aPartager, "le paiement ne touche plus aux parts");
 }
 
+{
+  /*
+   * LE COURRIER DE SORTIE SE REFAIT A LA CALCULATRICE.
+   *
+   * Le sortant n'est pas matheux : il lit une addition, une proportion, des
+   * retenues et un reste. Ce bloc rejoue une sortie de bout en bout -- parts,
+   * decompte, enregistrement -- puis relit le courrier comme lui : chaque total
+   * doit tomber sur la somme de ses lignes, au franc pres.
+   */
+  const taux = { venteActions: 0.014, transfert: 0.02 };
+  const apports = [
+    { membreId: "a", nom: "Sortant", acquis: 300_000, avance: 20_000, dues: 24_000 },
+    { membreId: "b", nom: "Restant", acquis: 600_000, avance: 0, dues: 0 },
+    { membreId: "c", nom: "Autre", acquis: 300_000, avance: 40_000, dues: 6_000 },
+  ];
+  const releve = { total: 1_500_000, actions: 1_400_000 };
+  const enTransit = 40_000;
+  const caisse = 210_000;
+  const avoir = releve.total + enTransit + caisse;
+  const fc = fraisGardeCourus(releve.actions, "2026-10-10", { conservation: 0.004, tenueCompte: 5_000, taxe: 0.1 });
+
+  const pot = potAPartager(apports, avoir);
+  assert.equal(pot.aPartager, 1_750_000 + 30_000 - 60_000, "avoir, plus les creances, moins les avances");
+  assert.equal(pot.cotisations, 1_200_000);
+
+  const p = repartirParts(apports, avoir).find((x) => x.membreId === "a");
+  const d = decompteSortie(p, { actions: releve.actions, fraisGardeCourus: fc }, taux);
+
+  // Ce que fait `enregistrerSortie`, a l'identique.
+  const frais = d.fraisVente + d.fraisGarde + d.fraisTransfert;
+  const droits = Math.max(0, Math.round(p.valeur + p.dues));
+  const compensees = Math.max(0, Math.min(p.dues, droits - frais));
+  const net = Math.max(0, droits - compensees - frais);
+  assert.equal(net, d.net, "le net enregistre est celui du tableau");
+
+  const donnees = {
+    nom: "SORTANT Test", dateSortie: "2026-10-13", motif: "exclusion de plein droit (R5).",
+    arrete: "2026-10-10",
+    club: {
+      compteTitres: releve.total, enTransit, caisse, creances: pot.creances, avances: pot.avances,
+      aPartager: pot.aPartager, cotisations: pot.cotisations, fraisGardeCourus: fc,
+    },
+    cotisations: 300_000, avance: 20_000, droits, penalites: 24_000, penalitesEnCours: 6_000,
+    compensees, pocheActions: d.pocheActions, fraisVente: d.fraisVente, fraisGarde: d.fraisGarde,
+    fraisTransfert: d.fraisTransfert, net,
+  };
+  const { sujet, texte } = courrielSortie(donnees);
+  const lignes = texte.split("\n");
+  const montant = (l) => Number(l.slice(l.lastIndexOf(" : ") + 3).replace(/[^\d]/g, ""));
+  const apres = (l, marque) => Number(l.slice(l.lastIndexOf(marque) + marque.length).replace(/[^\d]/g, ""));
+  const ligne = (debut) => {
+    const l = lignes.find((x) => x.trimStart().startsWith(debut));
+    assert.ok(l, `ligne attendue : ${debut}`);
+    return l;
+  };
+
+  // 1. L'addition de ce que possedait le club tombe sur le total a partager.
+  const debut1 = lignes.findIndex((l) => l.startsWith("1. "));
+  const fin1 = lignes.findIndex((l) => l.startsWith("Total à partager"));
+  const somme = lignes
+    .slice(debut1, fin1)
+    .filter((l) => l.startsWith("  - "))
+    .reduce((t, l) => t + (l.includes("Moins") ? -1 : 1) * montant(l), 0);
+  assert.equal(somme, montant(lignes[fin1]), "l'addition du club est juste");
+  assert.equal(montant(lignes[fin1]), pot.aPartager);
+
+  // 2. La proportion, puis la part : le calcul ecrit donne le chiffre ecrit.
+  assert.ok(texte.includes(`${nombre(300_000)} ÷ ${nombre(1_200_000)}, soit 25 %`), "la proportion en clair");
+  const quotePart = apres(ligne("- Votre part du total"), " = ");
+  assert.equal(quotePart, Math.round((pot.aPartager * 300_000) / 1_200_000), "la part se refait a la calculatrice");
+  assert.equal(quotePart + 20_000, montant(ligne("Vos droits")), "part et avance font les droits");
+
+  // 3. Les retenues : chacune juste, et leur total.
+  assert.equal(montant(ligne("- Vos pénalités").replace(/,.*$/, "")), 24_000);
+  assert.ok(texte.includes(`dont ${fcfa(6_000)} qui courent sans être encore inscrites`), "les penalites non inscrites sont dites");
+  const vente = ligne("- Frais de vente");
+  assert.ok(vente.includes(`1,4 % de ${fcfa(d.pocheActions)}`), "l'assiette de la cession");
+  assert.equal(apres(vente, " = "), Math.round(d.pocheActions * 0.014));
+  const transfert = ligne("- Frais de transfert");
+  const assiette = Number(transfert.slice(transfert.lastIndexOf(" de ", transfert.indexOf(" = ")) + 4, transfert.indexOf(" = ")).replace(/[^\d]/g, ""));
+  assert.equal(Math.round(assiette * 0.02), apres(transfert, " = "), "les 2 % se refont sur l'assiette ecrite");
+  assert.equal(montant(ligne("Total retiré")), 24_000 + frais, "le total des retenues");
+
+  // 4. Le reste, et la date limite de R5.
+  assert.equal(montant(ligne("Montant à vous verser")), droits - compensees - frais);
+  assert.ok(texte.includes(`En bref : ${fcfa(net)} vous reviennent, à vous verser au plus tard le 13/02/2027.`));
+  assert.ok(texte.includes("pour le motif suivant : exclusion de plein droit (R5)."), "le motif, sans double point");
+  assert.ok(texte.includes("Votre avance n'en supporte aucun."), "l'avance est hors transfert");
+  assert.equal(sujet, "IP12 : décompte de votre sortie du club");
+
+  // L'ecriture du club : accents, ni tiret cadratin ni double tiret, rien d'indefini.
+  assert.ok(!/—|--|undefined|NaN/.test(texte), "ni tiret cadratin ni valeur manquante");
+  assert.ok(texte.includes("CE QUI EN EST RETIRÉ") && texte.includes("Total à partager"), "les accents");
+
+  // Penalites superieures aux droits : rien ne revient, et le reste du est dit.
+  const endette = courrielSortie({
+    ...donnees, avance: 0, droits: 30_000, penalites: 50_000, penalitesEnCours: 0, compensees: 30_000,
+    pocheActions: 0, fraisVente: 0, fraisGarde: 0, fraisTransfert: 0, net: 0,
+  }).texte;
+  assert.ok(endette.includes(`En bref : rien ne vous revient, et il reste ${fcfa(20_000)} de pénalités que vous devez au club.`));
+  assert.ok(!endette.includes("Votre avance"), "pas de ligne d'avance sans avance");
+  assert.ok(!endette.includes("au plus tard"), "pas de date limite quand rien n'est du");
+
+  // Sans penalite, la ligne le dit plutot que de se taire.
+  assert.ok(courrielSortie({ ...donnees, penalites: 0, penalitesEnCours: 0, compensees: 0 }).texte.includes("Pénalités : aucune."));
+
+  // R5 : quatre mois, ramenes au dernier jour d'un mois plus court.
+  assert.equal(echeanceRemboursement("2026-10-13", 4), "2027-02-13");
+  assert.equal(echeanceRemboursement("2026-10-31", 4), "2027-02-28");
+
+  // La correction des frais : le nouveau montant, l'ancien, la raison.
+  const correction = courrielCorrectionSortie({
+    nom: "SORTANT Test", dateSortie: "2026-10-13", fraisAvant: 12_000, fraisApres: 9_500,
+    netAvant: 400_000, netApres: 402_500, raison: "avis d'opéré du 20/10",
+  }).texte;
+  assert.ok(correction.includes(`Montant à vous verser : ${fcfa(402_500)}, au lieu de ${fcfa(400_000)}.`));
+  assert.ok(correction.includes(`Frais réels : ${fcfa(9_500)} (avis d'opéré du 20/10)`));
+  assert.ok(!/—|--/.test(correction));
+
+  // Au franc pres : une valeur a centimes ne laisse pas de centimes au net.
+  const centimes = decompteSortie({ valeur: 100_000.4, avance: 0, part: 0.1 }, { actions: 0, fraisGardeCourus: 0 }, taux);
+  assert.ok(Number.isInteger(centimes.net), "le net est au franc");
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -1731,5 +1856,6 @@ console.log(
     + "net place et gain de gestion, reperes de l'abscisse, "
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
-    + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties",
+    + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
+    + "courrier de sortie",
 );
