@@ -27,7 +27,7 @@ const assert = new Proxy(strict0, {
 const { tri, dietzModifie, repartirParts, dureeEnAnnees, dureeEnClair, pourcent, decompteSortie, etatCaisse, fraisGardeCourus, potAPartager, partagerSortie } = await import(
   "../.verif/perf.mjs"
 );
-const { courrielSortie, courrielCorrectionSortie, echeanceRemboursement, pointsAVerifier, empreinteSortie, lignesValorisation, lignesPartage, premierMoisDeLaPart, nomDeLaPart, lignesNouvellesParts } = await import("../.verif/sortie.mjs");
+const { courrielSortie, courrielCorrectionSortie, echeanceRemboursement, pointsAVerifier, empreinteSortie, lignesValorisation, lignesPartage, premierMoisDeLaPart, nomDeLaPart, lignesNouvellesParts, courrielValorisation, lignesValeurDeLaPart } = await import("../.verif/sortie.mjs");
 const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
@@ -2217,6 +2217,60 @@ assert.equal(
   );
 }
 
+{
+  /*
+   * LA VALORISATION AVANT LA SORTIE. Le sortant peut contester la valeur de sa
+   * part : il la recoit avec tout le calcul, tant que rien n'est enregistre, et
+   * les membres qui pourraient racheter lisent la meme chose.
+   */
+  const club = {
+    compteTitres: 3_797_977, actions: 3_500_000, enTransit: 0, caisse: 0, creances: 9_500,
+    avances: 0, aPartager: 3_807_477, cotisations: 3_400_000, fraisGardeCourus: 12_500,
+  };
+  const base = {
+    nom: "KONÉ Bourama", dateSortie: "2026-10-10", releve: "2026-10-10", club,
+    cotisations: 325_350, avance: 0, quotePart: 364_350,
+    penalites: 9_500, penalitesEnCours: 0, arrieres: 15_000,
+    netClub: 342_940, compensees: 9_500, fraisVente: 5_000, fraisGarde: 1_200, fraisTransfert: 5_710,
+  };
+  const { sujet, texte } = courrielValorisation(base);
+  const lignes = texte.split("\n");
+  assert.equal(sujet, "IP12 : valeur de votre part, avant la sortie");
+  assert.ok(texte.startsWith("Bonjour KONÉ Bourama,"));
+  assert.ok(texte.includes("Rien n'est encore enregistré : si un chiffre vous paraît faux, c'est le moment de le dire."));
+  assert.ok(texte.includes(`En bref : votre part vaut ${fcfa(364_350)}.`));
+  assert.ok(texte.includes("1. CE QUE LE CLUB POSSÉDAIT") && texte.includes("2. VOTRE PART"), "le meme detail que le decompte");
+  assert.ok(texte.includes("3. CE QUI PEUT VOUS REVENIR"));
+  assert.ok(texte.includes("CONTESTER CE DÉCOMPTE : preuve à l'appui"), "le droit de contester");
+  // L'offre du club se refait a la calculatrice : la part, moins chaque retenue.
+  const debut = lignes.findIndex((l) => l.startsWith("Si le club rachète tout"));
+  const fin = lignes.findIndex((l) => l.startsWith("Soit "));
+  const montant = (l) => Number(l.slice(l.lastIndexOf(" : ") + 3).replace(/[^\d]/g, ""));
+  const calcul = lignes
+    .slice(debut + 1, fin)
+    .reduce((t, l) => t + (l.includes("Moins") ? -1 : 1) * montant(l.replace(/, dont.*$/, "")), 0);
+  assert.equal(calcul, 342_940, "part moins penalites moins frais = offre du club");
+  assert.ok(lignes[fin].startsWith(`Soit ${fcfa(342_940)}, au plus tard 4 mois après votre sortie (R5).`));
+  assert.ok(texte.includes(`entre ${fcfa(342_940)}, ce que le club vous verserait, et ${fcfa(354_850)}`));
+  assert.ok(texte.includes(`vos pénalités (${fcfa(9_500)}) et vos cotisations impayées (${fcfa(15_000)})`));
+  assert.ok(!/—|--|undefined|NaN/.test(texte));
+
+  // Avant l'enregistrement, un releve anterieur n'est pas encore confirme : le courrier le dit autrement.
+  const ancien = courrielValorisation({ ...base, releve: "2026-10-05" }).texte;
+  assert.ok(ancien.includes("le bureau saisira un relevé plus récent avant d'enregistrer la sortie"));
+  assert.ok(!ancien.includes("Le bureau a confirmé"));
+
+  // Le meme detail sert l'ecran : memes lignes, memes chiffres.
+  let n = 0;
+  const detail = lignesValeurDeLaPart(base, (t) => `${++n}. ${t}`, false);
+  assert.ok(detail.every((l) => texte.includes(l)), "l'ecran et le courrier disent la meme chose");
+
+  // Une part rachetee : le courrier va au detenteur, et dit laquelle.
+  const part = courrielValorisation({ ...base, nom: "SORO Tiélina", part: "SORO Tiélina · part de KONÉ Bourama" });
+  assert.equal(part.sujet, "IP12 : valeur de la part rachetée que vous détenez, avant la sortie");
+  assert.ok(part.texte.includes("Avant d'enregistrer la sortie de la part rachetée que vous détenez (SORO Tiélina · part de KONÉ Bourama)"));
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2225,5 +2279,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie",
 );

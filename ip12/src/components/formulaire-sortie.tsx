@@ -1,8 +1,14 @@
 "use client";
 
 import { useActionState, useState, type ReactNode } from "react";
-import { enregistrerSortie, type EtatSortie, type SaisieRachat } from "@/app/actions/administration";
-import { Champ, Selection } from "@/components/formulaires";
+import {
+  enregistrerSortie,
+  envoyerValorisation,
+  type EtatSortie,
+  type SaisieRachat,
+} from "@/app/actions/administration";
+import type { EtatFormulaire } from "@/app/actions/auth";
+import { Champ, Depliant, Selection } from "@/components/formulaires";
 import { Alerte } from "@/components/ui";
 import { dateCourte } from "@/lib/settings";
 
@@ -48,6 +54,7 @@ export function FormulaireSortie({
   };
 
   return (
+    <>
     <form
       key={suivi.tour}
       action={envoyer}
@@ -91,9 +98,20 @@ export function FormulaireSortie({
                 <li key={l}>{l}</li>
               ))}
             </ul>
+            {/*
+              * LE DETAIL DU CALCUL, dans les termes memes des courriers : le
+              * sortant peut contester la valeur de sa part, et le bureau doit
+              * pouvoir la lui expliquer ligne a ligne.
+              */}
+            <div className="mt-2 -ml-2.5">
+              <Depliant titre="Voir le détail du calcul">
+                <Detail lignes={verif.detail} />
+              </Depliant>
+            </div>
             <p className="mt-2 text-[12px]" style={{ color: "var(--ink-3)" }}>
-              Rien n&apos;est enregistré à cette étape : vous pouvez vous arrêter ici, en parler aux
-              membres, et revenir déclarer la sortie avec ou sans acheteurs.
+              Rien n&apos;est enregistré à cette étape : vous pouvez vous arrêter ici, envoyer
+              cette valorisation au sortant pour qu&apos;il la vérifie, en parler aux membres, et
+              revenir déclarer la sortie avec ou sans acheteurs.
             </p>
           </Encadre>
 
@@ -146,6 +164,8 @@ export function FormulaireSortie({
         </p>
       )}
     </form>
+    {verif && <EnvoiValorisation key={`${verif.membre}|${verif.date}`} membre={verif.membre} date={verif.date} nom={verif.nom} />}
+    </>
   );
 }
 
@@ -246,5 +266,78 @@ function Acheteurs({
         + Ajouter un acheteur
       </button>
     </fieldset>
+  );
+}
+
+/** Le detail du calcul, rendu comme dans les courriers : titres, lignes, totaux. */
+function Detail({ lignes }: { lignes: string[] }) {
+  return (
+    <div className="space-y-1.5 text-[13px]" style={{ color: "var(--ink)" }}>
+      {lignes
+        .filter((l) => l.trim() !== "")
+        .map((l, i) =>
+          /^\d+\. /.test(l) ? (
+            <p key={i} className="pt-2 text-[12px] font-semibold uppercase tracking-wide" style={{ color: "var(--ink-2)" }}>
+              {l}
+            </p>
+          ) : l.startsWith("  - ") ? (
+            <p key={i} className="pl-3">
+              {"\u2022 "}
+              {l.slice(4)}
+            </p>
+          ) : (
+            <p key={i}>{l}</p>
+          ),
+        )}
+    </div>
+  );
+}
+
+const ENVOI_INITIAL: EtatFormulaire = { ok: false };
+
+/**
+ * Envoie la valorisation au sortant, tous les membres en copie, sans rien
+ * enregistrer : il peut la verifier et la contester avant que sa sortie soit
+ * actee. Un formulaire a part, hors de celui de la sortie : l'envoyer ne doit
+ * jamais l'enregistrer.
+ */
+function EnvoiValorisation({ membre, date, nom }: { membre: string; date: string; nom: string }) {
+  const [etat, envoyer, enCours] = useActionState(envoyerValorisation, ENVOI_INITIAL);
+  return (
+    <form
+      action={envoyer}
+      className="mt-3"
+      onSubmit={(e) => {
+        if (
+          !window.confirm(
+            `Envoyer à ${nom} la valeur de sa part et le détail du calcul ? Tous les membres sont en copie. Rien n'est enregistré.`,
+          )
+        ) {
+          e.preventDefault();
+        }
+      }}
+    >
+      <input type="hidden" name="membre" value={membre} />
+      <input type="hidden" name="date" value={date} />
+      <button
+        type="submit"
+        disabled={enCours}
+        className="tapable inline-flex h-11 w-full items-center justify-center gap-2 rounded-xl border px-3.5 text-[14px] font-medium transition disabled:opacity-60 lg:h-9 lg:rounded-lg lg:text-[13px]"
+        style={{ background: "var(--page)", color: "var(--ink)", borderColor: "var(--line-2)" }}
+      >
+        {enCours && <span className="rouet" aria-hidden="true" />}
+        {enCours ? "Envoi en cours" : `Envoyer cette valorisation à ${nom}, tous les membres en copie`}
+      </button>
+      {etat.erreur && (
+        <p className="mt-2 text-xs" style={{ color: "var(--etat-manque)" }}>
+          {etat.erreur}
+        </p>
+      )}
+      {etat.ok && etat.message && (
+        <p className="mt-2 text-xs" style={{ color: "var(--etat-ok)" }}>
+          {etat.message}
+        </p>
+      )}
+    </form>
   );
 }

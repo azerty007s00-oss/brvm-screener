@@ -17,9 +17,11 @@ import { envoyerCourrielSortie } from "@/lib/avis";
 import {
   courrielCorrectionSortie,
   courrielSortie,
+  courrielValorisation,
   empreinteSortie,
   lignesNouvellesParts,
   lignesPartage,
+  lignesValeurDeLaPart,
   lignesValorisation,
   nomDeLaPart,
   pointsAVerifier,
@@ -429,6 +431,8 @@ export type EtatSortie = EtatFormulaire & {
     nom: string;
     /** La valeur de sa part et les reperes de prix : rien n'est encore enregistre. */
     valorisation: string[];
+    /** Le detail du calcul, dans les termes memes des courriers. */
+    detail: string[];
     points: string[];
     /** Qui paie quoi, quand des membres rachetent. */
     partage: string[];
@@ -438,6 +442,16 @@ export type EtatSortie = EtatFormulaire & {
 /** Un nombre saisi a la francaise : « 33,5 », « 150 000 ». */
 function nombreSaisi(texte: string): number {
   return Number(texte.replace(/[\s  ]/g, "").replace(",", "."));
+}
+
+/** Les mois que le sortant n'a pas payes a sa date de sortie, et ce qu'il y manque. */
+async function moisImpayes(membreId: string, date: string): Promise<{ mois: string; manque: number }[]> {
+  const situation = (await situationsClub(new Date(`${date}T23:59:59Z`), date)).find(
+    (x) => x.membreId === membreId,
+  );
+  return (situation?.cellules ?? [])
+    .filter((c) => situation?.moisEnRetard.includes(c.mois) && c.manque > 0)
+    .map((c) => ({ mois: c.mois, manque: c.manque }));
 }
 
 export async function enregistrerSortie(
@@ -551,12 +565,7 @@ export async function enregistrerSortie(
    * sa part rachetee, pour les mois qu'elles couvrent, et comptent dans son
    * poids. Le club, lui, ne reprend rien : ce qu'il rachete sort du partage.
    */
-  const situationSortant = (await situationsClub(new Date(`${date}T23:59:59Z`), date)).find(
-    (x) => x.membreId === membreId,
-  );
-  const impayes = (situationSortant?.cellules ?? [])
-    .filter((c) => situationSortant?.moisEnRetard.includes(c.mois) && c.manque > 0)
-    .map((c) => ({ mois: c.mois, manque: c.manque }));
+  const impayes = await moisImpayes(membreId, date);
   const arrieresTotal = impayes.reduce((t, x) => t + x.manque, 0);
   const arrieresDe = (i: number) =>
     impayes.map((x) => ({
@@ -617,6 +626,21 @@ export async function enregistrerSortie(
           fraisClub: fraisDe(tout),
           arrieres: arrieresTotal,
         }),
+        detail: lignesValeurDeLaPart(
+          {
+            dateSortie: date,
+            releve: d.releve,
+            club: d.club,
+            cotisations: d.acquis,
+            avance: d.avance,
+            quotePart: d.quotePart,
+          },
+          (() => {
+            let n = 0;
+            return (titre: string) => `${++n}. ${titre}`;
+          })(),
+          false,
+        ),
         points: pointsAVerifier(faits),
         partage:
           rachats.length === 0
@@ -816,6 +840,82 @@ export async function enregistrerSortie(
       "Le jour du paiement, enregistrez-le dans Caisse en dépense « Remboursement " +
       "d'un membre sorti ».",
   };
+}
+
+/**
+ * Envoie au sortant la valeur de sa part, avant d'enregistrer quoi que ce soit.
+ *
+ * Il a le droit de la contester, preuve a l'appui : il la recoit tant qu'elle
+ * peut encore changer, avec tout le calcul, et tous les membres en copie, parmi
+ * lesquels ses acheteurs eventuels. Rien n'est ecrit en base, sauf au journal.
+ */
+export async function envoyerValorisation(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererSorties");
+  const membreId = String(donnees.get("membre") ?? "");
+  const date = String(donnees.get("date") ?? "").slice(0, 10);
+  if (!membreId || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    return { ok: false, erreur: "Valorisez d'abord la part, puis envoyez-la." };
+  }
+  if (date > new Date().toISOString().slice(0, 10)) {
+    return { ok: false, erreur: "La date de sortie ne peut pas être dans le futur." };
+  }
+
+  const actifs = await listerMembres();
+  const sortant = actifs.find((m) => m.id === membreId);
+  if (!sortant) return { ok: false, erreur: "Ce membre n'est pas actif." };
+  const titulaire = sortant.titulaireId ? actifs.find((m) => m.id === sortant.titulaireId) : null;
+
+  const d = (await decomptesSortie(date)).find((x) => x.membreId === membreId);
+  if (!d || !d.releve) {
+    return { ok: false, erreur: `Aucun relevé de portefeuille au ${dateCourte(date)} ou avant.` };
+  }
+  const tout = partagerSortie(
+    { avance: d.avance, quotePart: d.quotePart, part: d.part, acquis: d.acquis, penalites: d.penalitesDeduites },
+    { actions: d.club.actions, fraisGardeCourus: d.club.fraisGardeCourus },
+    { venteActions: REGLES.fraisVenteActions, transfert: REGLES.fraisTransfertSortie },
+    [],
+  );
+  const arrieres = (await moisImpayes(membreId, date)).reduce((t, x) => t + x.manque, 0);
+
+  const courrier = await envoyerCourrielSortie(
+    titulaire ? { nom: titulaire.nom, email: titulaire.email } : { nom: sortant.nom, email: sortant.email },
+    courrielValorisation({
+      nom: titulaire ? titulaire.nom : sortant.nom,
+      part: titulaire ? sortant.nom : undefined,
+      dateSortie: date,
+      releve: d.releve,
+      club: d.club,
+      cotisations: d.acquis,
+      avance: d.avance,
+      quotePart: d.quotePart,
+      penalites: d.penalitesDeduites,
+      penalitesEnCours: d.penalitesEnCours,
+      arrieres,
+      netClub: tout.netClub,
+      compensees: tout.compensees,
+      fraisVente: tout.fraisVente,
+      fraisGarde: tout.fraisGarde,
+      fraisTransfert: tout.fraisTransfert,
+    }),
+  ).catch((e: unknown) => ({ ok: false, detail: e instanceof Error ? e.message : String(e) }));
+
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "valorisation_sortie_envoyee",
+    { entite: "members", id: membreId },
+    { date, releve: d.releve, quotePart: d.quotePart, netClub: tout.netClub, courriel: courrier.detail },
+  );
+  return courrier.ok
+    ? {
+        ok: true,
+        message:
+          `Valorisation envoyée à ${titulaire ? titulaire.nom : sortant.nom}, tous les membres en ` +
+          "copie. Rien n'est enregistré : la sortie se déclare ensuite, avec ou sans acheteurs.",
+      }
+    : { ok: false, erreur: `Le courriel n'est pas parti (${courrier.detail}).` };
 }
 
 /**
