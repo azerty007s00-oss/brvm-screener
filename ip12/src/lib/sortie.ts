@@ -78,12 +78,14 @@ export type RachatCourriel = {
   fraction: number;
   /** Ce que vaut cette fraction au jour de la sortie. */
   valeur: number;
-  /** Le prix convenu entre eux. */
+  /** Le prix convenu entre eux : ce que recoit le sortant. */
   prix: number;
-  /** Ce que l'acheteur verse au club, sur ce prix, pour solder les penalites. */
+  /** Ce que l'acheteur verse au club, en plus du prix, pour les penalites de ce qu'il rachete. */
   auClub: number;
-  /** Ce que l'acheteur verse au sortant. */
+  /** Ce que l'acheteur verse au sortant : le prix convenu. */
   auSortant: number;
+  /** Les cotisations impayees de ce qu'il rachete, qu'il verse au club en plus du prix. */
+  arrieres: number;
 };
 
 /**
@@ -253,6 +255,22 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
           `${fcfa(d.droits - d.avance)}, au calcul du site, frais déduits (ci-dessous).`,
       );
     }
+    const arrieres = d.rachats.reduce((t, r) => t + r.arrieres, 0);
+    if (parAcheteurs > 0 || arrieres > 0) {
+      lignes.push(
+        "Le prix convenu vous revient en entier. Chaque acheteur paie en plus au club, pour ce " +
+          "qu'il rachète, " +
+          [
+            parAcheteurs > 0 ? `vos pénalités (${fcfa(parAcheteurs)} en tout)` : "",
+            arrieres > 0
+              ? `vos cotisations impayées (${fcfa(arrieres)} en tout), qui comptent désormais dans la part qu'il rachète`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" et ") +
+          ".",
+      );
+    }
     lignes.push(
       "Chaque acheteur détient désormais ce qu'il a racheté comme une part distincte de la " +
         "sienne, qui cotise chaque mois à proportion de sa taille. La caisse du club ne débourse " +
@@ -277,9 +295,12 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
   } else if (d.compensees < d.penalites) {
     lignes.push(
       `  - Vos pénalités : ${fcfa(d.penalites)}${enCours}.`,
-      `    Le club en retient ${fcfa(d.compensees)} sur ce qu'il vous doit.` +
+      "   " +
+        (d.compensees > 0 ? ` Le club en retient ${fcfa(d.compensees)} sur ce qu'il vous doit.` : "") +
         (parAcheteurs > 0
-          ? ` Les acheteurs de vos parts lui versent les ${fcfa(parAcheteurs)} restants, pris sur leur prix.`
+          ? d.compensees > 0
+            ? ` Les acheteurs de vos parts lui paient les ${fcfa(parAcheteurs)} restants, en plus de leur prix.`
+            : " Les acheteurs de vos parts les paient au club, en plus de leur prix."
           : "") +
         (reste > 0 ? ` Il reste ${fcfa(reste)} que vous devez au club.` : " Vous ne les devez plus."),
     );
@@ -337,12 +358,7 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
     lignes.push(
       `  - Du club : ${nombre(d.droits)} − ${nombre(retire)} = ${fcfa(d.net)}`,
       ...d.rachats.map(
-        (r) =>
-          `  - De ${r.nom} : ` +
-          (r.auClub > 0
-            ? `${nombre(r.prix)} − ${nombre(r.auClub)} versés au club pour vos pénalités = ${fcfa(r.auSortant)}`
-            : fcfa(r.auSortant)) +
-          ", à régler directement entre vous",
+        (r) => `  - De ${r.nom} : ${fcfa(r.auSortant)}, le prix convenu, à régler directement entre vous`,
       ),
       `Montant total qui vous revient : ${fcfa(total)}`,
     );
@@ -528,18 +544,20 @@ export function lignesValorisation(v: {
   /** Si le club rachete tout : ce qu'il verse, et les frais retenus. */
   netClub: number;
   fraisClub: number;
+  /** Ses cotisations impayees, qu'un acheteur verserait au club. */
+  arrieres: number;
 }): string[] {
   /*
-   * LE PLANCHER EST LE PRIX OU LE SORTANT NE GAGNE NI NE PERD A VENDRE A UN
-   * MEMBRE PLUTOT QU'AU CLUB. Le club lui verserait sa part et son avance, moins
-   * ses penalites et les frais ; un acheteur lui verse le prix, moins ce que son
-   * avance ne couvre pas de ses penalites. Les deux se rejoignent au prix « sa
-   * part moins les frais du club ». Calcule sur la part seule, sans les
-   * penalites, ce plancher sortait plus bas que l'offre du club : les 2 % de
-   * transfert portent sur une somme que les penalites diminuent.
+   * LE PRIX CONVENU EST CE QUE RECOIT LE SORTANT ; l'acheteur paie en plus ses
+   * penalites et ses cotisations impayees, et le club lui rend son avance.
+   *
+   * En bas, le prix ou le sortant recoit autant que du club : l'offre du club,
+   * avance mise a part. En haut, le prix ou l'acheteur paie autant que ce qu'il
+   * recoit : la valeur de la part, moins les penalites qu'il paie en plus. Les
+   * cotisations impayees ne comptent pas : elles entrent dans sa part.
    */
-  const plancher = Math.max(0, v.quotePart - v.fraisClub);
-  const surLePrix = Math.max(0, v.penalites - v.avance);
+  const plancher = Math.max(0, v.netClub - v.avance);
+  const plafond = Math.max(plancher, v.quotePart - v.penalites);
   const lignes = [
     `Valeur de sa part : ${fcfa(v.quotePart)} (${taux(v.part)} du total à partager).`,
   ];
@@ -549,12 +567,25 @@ export function lignesValorisation(v: {
     `Si le club rachète tout : il lui verse ${fcfa(v.netClub)}, après ${fcfa(v.fraisClub)} de ` +
       "frais (cession, garde, transfert)" +
       (v.penalites > 0 || v.avance > 0 ? ", avance et pénalités comprises." : "."),
-    "Si des membres rachètent : ils lui paient un prix convenu entre eux, sans frais pour " +
-      `personne. Repère : un prix entre ${fcfa(plancher)} (ce que le club paierait pour sa part, ` +
-      `frais déduits) et ${fcfa(v.quotePart)} (sa valeur) avantage le sortant comme l'acheteur.` +
-      (surLePrix > 0
-        ? ` Sur ce prix, ${fcfa(surLePrix)} vont au club pour ses pénalités : le sortant reçoit le reste.`
-        : ""),
+    "Si des membres rachètent : le prix convenu va entier au sortant, sans frais pour personne" +
+      (v.avance > 0 ? ", et le club lui rend son avance" : "") +
+      "." +
+      (v.penalites > 0 || v.arrieres > 0
+        ? " L'acheteur verse en plus au club " +
+          [
+            v.penalites > 0 ? `ses pénalités (${fcfa(v.penalites)})` : "",
+            v.arrieres > 0
+              ? `ses cotisations impayées (${fcfa(v.arrieres)}), qui comptent dans la part rachetée`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" et ") +
+          "."
+        : "") +
+      ` Repère : un prix entre ${fcfa(plancher)} (ce que le club lui verserait) et ` +
+      `${fcfa(plafond)} (la valeur de sa part` +
+      (v.penalites > 0 ? ", moins ses pénalités payées par l'acheteur" : "") +
+      ") avantage le sortant comme l'acheteur.",
   );
   return lignes;
 }
@@ -572,9 +603,18 @@ export function lignesPartage(p: {
 }): string[] {
   const lignes = p.acheteurs.map(
     (r) =>
-      `${r.nom} rachète ${taux(r.fraction)} de ses parts (valeur ${fcfa(r.valeur)}) au prix de ` +
-      `${fcfa(r.prix)} : il verse ${fcfa(r.auSortant)} au sortant` +
-      (r.auClub > 0 ? ` et ${fcfa(r.auClub)} au club pour ses pénalités.` : "."),
+      `${r.nom} rachète ${taux(r.fraction)} de ses parts (valeur ${fcfa(r.valeur)}) : il verse ` +
+      `${fcfa(r.prix)} au sortant` +
+      (r.auClub > 0 || r.arrieres > 0
+        ? ", et en plus au club " +
+          [
+            r.auClub > 0 ? `${fcfa(r.auClub)} de pénalités` : "",
+            r.arrieres > 0 ? `${fcfa(r.arrieres)} de cotisations impayées` : "",
+          ]
+            .filter(Boolean)
+            .join(" et ") +
+          `, soit ${fcfa(r.prix + r.auClub + r.arrieres)} en tout.`
+        : "."),
   );
   lignes.push(
     p.fractionClub > 0
@@ -584,10 +624,11 @@ export function lignesPartage(p: {
       : `Le club lui rend son avance : ${fcfa(p.netClub)}` +
           (p.compensees > 0 ? `, après ${fcfa(p.compensees)} de pénalités retenues.` : "."),
   );
-  if (p.acheteurs.some((r) => r.auClub > 0)) {
+  if (p.acheteurs.some((r) => r.auClub > 0 || r.arrieres > 0)) {
     lignes.push(
-      "Ce que les acheteurs versent au club pour les pénalités est inscrit en caisse, en " +
-        "attente : validez-le dans Caisse à réception de l'argent.",
+      "Ce que les acheteurs versent au club est inscrit en attente : les pénalités dans Caisse, " +
+        "les cotisations impayées dans Versements, au nom de leur part rachetée. Validez-les à " +
+        "réception de l'argent.",
     );
   }
   if (p.resteDu > 0) {

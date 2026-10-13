@@ -270,9 +270,10 @@ export type Rachat = { membreId: string; fraction: number; prix: number };
  *   aucun frais n'y est retenu. Le poids des cotisations rachetees passe a
  *   l'acheteur, et les parts des autres membres n'en bougent pas.
  * - Le club rend l'avance et paie la fraction qu'il rachete, frais deduits.
- * - Les penalites du sortant sont payees au club : d'abord sur ce que le club
- *   lui doit, puis sur le prix des acheteurs, au prorata de leurs prix. Ce
- *   qu'un acheteur verse ainsi au club, il ne le verse pas au sortant.
+ * - Le prix convenu est ce que recoit le sortant. Les penalites du sortant
+ *   suivent ce qui est rachete : le club retient sa part des siennes sur ce
+ *   qu'il verse, chaque acheteur verse la sienne au club en plus du prix. Les
+ *   cotisations impayees, l'acheteur les verse aussi (voir `enregistrerSortie`).
  *
  * Sans acheteur, le resultat est exactement celui de `decompteSortie`.
  */
@@ -309,40 +310,44 @@ export function partagerSortie(
   );
   const partClub =
     fractionClub === 0 ? 0 : Math.max(0, p.quotePart - valeurs.reduce((t, v) => t + v, 0));
+
+  /*
+   * QUI RACHETE PAIE LES PENALITES DE CE QU'IL RACHETE, a proportion. Le club
+   * retient les siennes sur ce qu'il verse ; chaque acheteur verse les siennes
+   * au club, en plus du prix convenu, qui va entier au sortant. Au franc pres :
+   * le club prend le reste, ou le dernier acheteur si le club ne rachete rien.
+   */
+  const penalitesAcheteurs = rachats.map((r, i) =>
+    fractionClub === 0 && i === rachats.length - 1
+      ? p.penalites - rachats.slice(0, -1).reduce((t, x) => t + Math.round(x.fraction * p.penalites), 0)
+      : Math.round(r.fraction * p.penalites),
+  );
+  const penalitesClub = Math.max(0, p.penalites - penalitesAcheteurs.reduce((t, x) => t + x, 0));
+
   const d = decompteSortie(
-    { valeur: p.avance + partClub - p.penalites, avance: p.avance, part: fractionClub * p.part },
+    { valeur: p.avance + partClub - penalitesClub, avance: p.avance, part: fractionClub * p.part },
     club,
     taux,
   );
   const frais = d.fraisVente + d.fraisGarde + d.fraisTransfert;
   const droitsClub = p.avance + partClub;
-  const compensees = Math.max(0, Math.min(p.penalites, droitsClub - frais));
+  const compensees = Math.max(0, Math.min(penalitesClub, droitsClub - frais));
   const netClub = Math.max(0, droitsClub - compensees - frais);
 
-  /* Ce que le club n'a pas pu retenir se prend sur les prix, au prorata. */
-  const reste = p.penalites - compensees;
-  const totalPrix = rachats.reduce((t, r) => t + Math.max(0, r.prix), 0);
-  const surLesPrix = Math.min(reste, totalPrix);
-  let repartiPrix = 0;
   let repartiPoids = 0;
   const acheteurs = rachats.map((r, i) => {
-    const dernier = i === rachats.length - 1;
-    const auClub = dernier
-      ? surLesPrix - repartiPrix
-      : totalPrix > 0
-        ? Math.round((surLesPrix * Math.max(0, r.prix)) / totalPrix)
-        : 0;
-    repartiPrix += auClub;
     /* Tout rachete : le dernier acheteur prend l'arrondi, pour qu'aucun poids ne se perde. */
     const poids =
-      dernier && fractionClub === 0 ? p.acquis - repartiPoids : Math.round(r.fraction * p.acquis);
+      fractionClub === 0 && i === rachats.length - 1
+        ? p.acquis - repartiPoids
+        : Math.round(r.fraction * p.acquis);
     repartiPoids += poids;
     return {
       ...r,
       poids,
       valeur: valeurs[i],
-      auClub,
-      auSortant: Math.max(0, r.prix) - auClub,
+      auClub: penalitesAcheteurs[i],
+      auSortant: Math.max(0, r.prix),
     };
   });
 
@@ -356,7 +361,7 @@ export function partagerSortie(
     compensees,
     netClub,
     acheteurs,
-    resteDu: reste - surLesPrix,
+    resteDu: penalitesClub - compensees,
   };
 }
 

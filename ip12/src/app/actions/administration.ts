@@ -33,6 +33,7 @@ import {
   listerMembres,
   rachatsDisponibles,
   reglagesEffectifs,
+  situationsClub,
 } from "@/lib/queries";
 import { CLUB, REGLES, dateCourte, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
 import {
@@ -544,10 +545,36 @@ export async function enregistrerSortie(
   const fraisDe = (x: { fraisVente: number; fraisGarde: number; fraisTransfert: number }) =>
     x.fraisVente + x.fraisGarde + x.fraisTransfert;
   const partage = partagerSortie(base, club, taux, rachats);
-  const acheteurs = partage.acheteurs.map((a) => ({
-    ...a,
-    nom: nomDe.get(a.membreId) ?? "",
-  }));
+  /*
+   * LES COTISATIONS IMPAYEES DU SORTANT, que l'acheteur reprend a proportion de
+   * ce qu'il rachete. Il les verse au club ; elles deviennent des cotisations de
+   * sa part rachetee, pour les mois qu'elles couvrent, et comptent dans son
+   * poids. Le club, lui, ne reprend rien : ce qu'il rachete sort du partage.
+   */
+  const situationSortant = (await situationsClub(new Date(`${date}T23:59:59Z`), date)).find(
+    (x) => x.membreId === membreId,
+  );
+  const impayes = (situationSortant?.cellules ?? [])
+    .filter((c) => situationSortant?.moisEnRetard.includes(c.mois) && c.manque > 0)
+    .map((c) => ({ mois: c.mois, manque: c.manque }));
+  const arrieresTotal = impayes.reduce((t, x) => t + x.manque, 0);
+  const arrieresDe = (i: number) =>
+    impayes.map((x) => ({
+      mois: x.mois,
+      montant:
+        partage.fractionClub === 0 && i === rachats.length - 1
+          ? x.manque - rachats.slice(0, -1).reduce((t, r) => t + Math.round(r.fraction * x.manque), 0)
+          : Math.round(rachats[i].fraction * x.manque),
+    }));
+  const acheteurs = partage.acheteurs.map((a, i) => {
+    const mois = arrieresDe(i).filter((x) => x.montant > 0);
+    return {
+      ...a,
+      nom: nomDe.get(a.membreId) ?? "",
+      moisArrieres: mois,
+      arrieres: mois.reduce((t, x) => t + x.montant, 0),
+    };
+  });
   const frais = fraisDe(partage);
 
   /*
@@ -561,6 +588,7 @@ export async function enregistrerSortie(
   const parts = acheteurs.map((a) => ({
     ...a,
     partId: randomUUID(),
+    lotArrieres: randomUUID(),
     taille: Math.round(a.fraction * fractionSortant * 1e6) / 1e6,
     nomPart: nomDeLaPart(a.nom, nomSortant, a.fraction * fractionSortant),
   }));
@@ -587,6 +615,7 @@ export async function enregistrerSortie(
           penalites: d.penalitesDeduites,
           netClub: tout.netClub,
           fraisClub: fraisDe(tout),
+          arrieres: arrieresTotal,
         }),
         points: pointsAVerifier(faits),
         partage:
@@ -657,9 +686,25 @@ export async function enregistrerSortie(
         insert into share_buybacks (exit_id, seller_id, buyer_id, part_id, bought_on, fraction,
                                     weight, reference_value, price, paid_to_club, created_by)
         values (${sortieId}::uuid, ${membreId}::uuid, ${a.membreId}::uuid, ${a.partId}::uuid,
-                ${date}::date, ${a.fraction}, ${a.poids}, ${a.valeur}, ${a.prix}, ${a.auClub},
-                ${auteur.id}::uuid)
+                ${date}::date, ${a.fraction}, ${a.poids}, ${a.valeur}, ${a.prix + a.auClub},
+                ${a.auClub}, ${auteur.id}::uuid)
       `,
+      /*
+       * Les cotisations impayees reprises : une ligne par mois, au nom de la part,
+       * en attente jusqu'a ce que le tresorier constate l'argent.
+       */
+      ...a.moisArrieres.map(
+        (x) => sql`
+          insert into contributions
+            (member_id, period, kind, amount, paid_on, method, reference, note,
+             batch_id, status, declared_by)
+          values
+            (${a.partId}::uuid, ${x.mois}::date, ${KIND_VERSEMENT.cotisation}, ${x.montant},
+             ${date}::date, ${METHODE.mobileMoney}, null,
+             ${`Cotisation impayée de ${nomSortant}, reprise par ${a.nom} au rachat de ses parts`},
+             ${a.lotArrieres}::uuid, ${STATUT_VERSEMENT.enAttente}, ${auteur.id}::uuid)
+        `,
+      ),
     ]),
     ...acheteurs
       .filter((a) => a.auClub > 0)
@@ -710,6 +755,7 @@ export async function enregistrerSortie(
         prix: a.prix,
         auClub: a.auClub,
         auSortant: a.auSortant,
+        arrieres: a.arrieres,
       })),
       penalites: d.penalitesDeduites,
       penalitesEnCours: d.penalitesEnCours,
@@ -735,12 +781,19 @@ export async function enregistrerSortie(
       compensees: partage.compensees,
       frais,
       net: partage.netClub,
-      rachats: acheteurs.map((a) => ({ acheteur: a.membreId, fraction: a.fraction, prix: a.prix, auClub: a.auClub })),
+      rachats: acheteurs.map((a) => ({
+        acheteur: a.membreId,
+        fraction: a.fraction,
+        prix: a.prix,
+        penalites: a.auClub,
+        arrieres: a.arrieres,
+      })),
       courriel: courrier.detail,
     },
   );
   revalidatePath("/", "layout");
   const auClub = acheteurs.reduce((t, a) => t + a.auClub, 0);
+  const arrieresRepris = acheteurs.reduce((t, a) => t + a.arrieres, 0);
   return {
     ok: true,
     message:
@@ -751,6 +804,10 @@ export async function enregistrerSortie(
         : ". ") +
       (auClub > 0
         ? `Les ${fcfa(auClub)} que les acheteurs doivent au club pour ses pénalités attendent en caisse : validez-les à réception. `
+        : "") +
+      (arrieresRepris > 0
+        ? `Les ${fcfa(arrieresRepris)} de cotisations impayées qu'ils reprennent attendent dans Versements, ` +
+          "au nom de leur part : validez-les à réception. "
         : "") +
       "Ses pénalités sont soldées avec le motif de sortie. " +
       (courrier.ok
