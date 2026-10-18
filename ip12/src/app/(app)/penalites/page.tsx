@@ -22,7 +22,13 @@ import {
 } from "@/app/actions/penalites";
 import { dejaAuRegistre, issueR5, tranchesAbsence } from "@/lib/penalites";
 import { EFFET, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
-import { KIND_PENALITE, STATUT_PENALITE, STATUT_REGLEMENT, libelleMode } from "@/lib/valeurs";
+import {
+  KIND_PENALITE,
+  PREFIXE_SOLDE_SORTIE,
+  STATUT_PENALITE,
+  STATUT_REGLEMENT,
+  libelleMode,
+} from "@/lib/valeurs";
 import {
   Champ,
   ChampCache,
@@ -108,9 +114,20 @@ export default async function PagePenalites() {
     if (declarations && reglementsDesParts) declarations = [...declarations, ...reglementsDesParts.flat()];
   }
 
+  /*
+   * SOLDEE A LA SORTIE N'EST PAS REGLEE.
+   *
+   * Le club l'a retenue sur ce qu'il verse au sortant, ou l'acheteur de ses
+   * parts l'a reprise sur la sienne : le sortant ne la doit plus, mais aucun
+   * argent n'est entre a ce titre. Comptee parmi les « Reglees », elle laissait
+   * croire l'argent recu ; et la penalite reprise, une fois payee par
+   * l'acheteur, l'aurait ete deux fois.
+   */
+  const soldeeALaSortie = (p: { statut: string; note_reglement?: string | null }) =>
+    p.statut === STATUT_PENALITE.payee && (p.note_reglement ?? "").startsWith(PREFIXE_SOLDE_SORTIE);
   const total = (statut: string) =>
     penalites
-      .filter((p) => p.statut === statut)
+      .filter((p) => p.statut === statut && !soldeeALaSortie(p))
       .reduce((s, p) => s + p.montant, 0);
 
   /*
@@ -591,16 +608,20 @@ export default async function PagePenalites() {
                         ton={
                           p.statut === STATUT_PENALITE.due
                             ? "rouge"
-                            : p.statut === STATUT_PENALITE.payee
-                              ? "vert"
-                              : "neutre"
+                            : soldeeALaSortie(p)
+                              ? "neutre"
+                              : p.statut === STATUT_PENALITE.payee
+                                ? "vert"
+                                : "neutre"
                         }
                       >
                         {p.statut === STATUT_PENALITE.due
                           ? "Due"
-                          : p.statut === STATUT_PENALITE.payee
-                            ? "Réglée"
-                            : "Annulée"}
+                          : soldeeALaSortie(p)
+                            ? "Soldée à la sortie"
+                            : p.statut === STATUT_PENALITE.payee
+                              ? "Réglée"
+                              : "Annulée"}
                       </Badge>
                       {!p.auto && <Badge ton="ambre">Saisie</Badge>}
                     </p>

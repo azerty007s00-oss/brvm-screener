@@ -631,15 +631,24 @@ export function texteRelance(
        * penalite d'absence lisait « dont 0 de retard (0 FCFA) et 1 d'absence ».
        * Un zero annonce fait chercher ce qu'il cache.
        */
+      /*
+       * UNE PART RACHETEE N'A PAS D'ABSENCES : elle ne siege pas en reunion. Ses
+       * penalites d'une autre nature sont celles du sortant, reprises au rachat,
+       * et le courrier les nomme ainsi, sur cette part plutot qu'a son compte.
+       */
+      const part = Boolean(situation.titulaireNom);
+      const ou = part ? "sur cette part" : "à votre compte";
       lignes.push(
         autres > 0 && dette.nbRetard > 0
-          ? `Pénalités impayées inscrites à votre compte : ${dette.nb}, pour un total de ` +
+          ? `Pénalités impayées inscrites ${ou} : ${dette.nb}, pour un total de ` +
             `${fcfa(dette.montant)}, dont ${dette.nbRetard} de retard ` +
-            `(${fcfa(dette.montantRetard)}) et ${autres} d'absence ou autre ` +
+            `(${fcfa(dette.montantRetard)}) et ${autres} ` +
+            `${part ? `${accorde(autres, "reprise")} au rachat` : "d'absence ou autre"} ` +
             `(${fcfa(montantAutres)}).`
           : autres > 0
-            ? `${accorde(autres, "Pénalité")} d'absence ou autre, ` +
-              `${accorde(autres, "inscrite")} à votre compte : ${autres}, ` +
+            ? `${accorde(autres, "Pénalité")} ` +
+              `${part ? `${accorde(autres, "reprise")} au rachat` : "d'absence ou autre"}, ` +
+              `${accorde(autres, "inscrite")} ${ou} : ${autres}, ` +
               `pour un total de ${fcfa(montantAutres)}.`
             : `${accorde(dette.nbRetard, "Pénalité")} de retard ` +
               `${accorde(dette.nbRetard, "impayée")}, ` +

@@ -4,9 +4,11 @@ import { exigerMembre } from "@/lib/auth";
 import {
   listerMembres,
   listerVersements,
+  reglagesEffectifs,
   situationsClub,
   versementsEnAttente,
 } from "@/lib/queries";
+import { listeDesMois } from "@/lib/sortie";
 import { REGLES, dateCourte, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
 import { relancerMaintenant } from "@/app/actions/administration";
 import {
@@ -99,14 +101,15 @@ export default async function PageVersements({
   const membre = await exigerMembre();
   const ordre = (await searchParams).ordre === "nom" ? "nom" : "urgence";
 
-  let situations, enAttente, membres, pieces, valides;
+  let situations, enAttente, membres, pieces, valides, reglages;
   try {
-    [situations, enAttente, membres, pieces, valides] = await Promise.all([
+    [situations, enAttente, membres, pieces, valides, reglages] = await Promise.all([
       situationsClub(),
       versementsEnAttente(),
       listerMembres(),
       justificatifsParLot(),
       listerVersements({ statut: STATUT_VERSEMENT.valide, parSaisie: true }),
+      reglagesEffectifs(),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -172,6 +175,44 @@ export default async function PageVersements({
     if (deja) deja.push(v);
     else versementsDuMois.set(cle, [v]);
   }
+
+  /*
+   * UNE PART RACHETEE AVANT SON PREMIER MOIS N'A RIEN A MONTRER DANS LA GRILLE.
+   *
+   * Ses mois commencent a la premiere echeance qui suit le rachat ; d'ici la, sa
+   * frise etait une rangee de cases vides sous « A jour », et rien ne disait
+   * quand elle cotiserait, ni combien, ni ce que l'acheteur avait repris des
+   * impayes du sortant -- ces mois-la tombent avant son debut et n'ont pas de
+   * case. La ligne le dit en mots.
+   */
+  const partsRachetees = new Map(membres.filter((m) => m.titulaireId).map((m) => [m.id, m]));
+  const debutDeLaPart = (id: string): string | null => {
+    const part = partsRachetees.get(id);
+    if (!part) return null;
+    const montant = Math.round((part.fraction ?? 1) * reglages.cotisationMensuelle);
+    return `Cotise ${fcfa(montant)} par mois à partir de ${moisLong(part.date_adhesion)}.`;
+  };
+  const reprisAuRachat = (id: string): string | null => {
+    const part = partsRachetees.get(id);
+    if (!part) return null;
+    const repris = [...valides, ...enAttente].filter(
+      (v) => v.membre_id === id && v.mois < part.date_adhesion && v.statut !== STATUT_VERSEMENT.rejete,
+    );
+    if (repris.length === 0) return null;
+    const total = repris.reduce((t, v) => t + v.montant, 0);
+    const attente = repris
+      .filter((v) => v.statut === STATUT_VERSEMENT.enAttente)
+      .reduce((t, v) => t + v.montant, 0);
+    return (
+      `Cotisations impayées reprises au rachat : ${fcfa(total)} ` +
+      `(${listeDesMois([...new Set(repris.map((v) => v.mois))])})` +
+      (attente === 0
+        ? ", validées."
+        : attente === total
+          ? ", en attente de validation."
+          : `, dont ${fcfa(attente)} en attente de validation.`)
+    );
+  };
 
   /*
    * L'ordre d'urgence remonte ce qui reclame une action : ce qui manque, puis
@@ -570,7 +611,14 @@ export default async function PageVersements({
                       <Chevron />
                     </div>
                     <div className="mt-1.5">
-                      <Frise cellules={fenetre} taille={18} etiquette={s.nom} />
+                      {partsRachetees.has(s.membreId) &&
+                      fenetre.every((c) => c.statut === "hors_periode") ? (
+                        <p className="text-[12px]" style={{ color: "var(--discret)" }}>
+                          {debutDeLaPart(s.membreId)}
+                        </p>
+                      ) : (
+                        <Frise cellules={fenetre} taille={18} etiquette={s.nom} />
+                      )}
                     </div>
                   </summary>
 
@@ -629,6 +677,13 @@ export default async function PageVersements({
                           );
                         })}
                     </ul>
+                    {/* Le debut de la part ne se repete pas : la ligne fermee le dit deja tant qu'elle n'a aucun mois. */}
+                    {partsRachetees.has(s.membreId) && (
+                      <div className="text-[12px]" style={{ color: "var(--discret)" }}>
+                        {!fenetre.every((c) => c.statut === "hors_periode") && <p>{debutDeLaPart(s.membreId)}</p>}
+                        {reprisAuRachat(s.membreId) && <p className="mt-1">{reprisAuRachat(s.membreId)}</p>}
+                      </div>
+                    )}
                     <p className="mt-3 text-[12px]" style={{ color: "var(--discret)" }}>
                       Versé depuis le début :{" "}
                       <span className="font-semibold tabular-nums" style={{ color: "var(--texte)" }}>

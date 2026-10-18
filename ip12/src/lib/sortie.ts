@@ -603,9 +603,9 @@ export function lignesPartage(p: {
   );
   if (p.acheteurs.some((r) => r.auClub > 0 || r.arrieres > 0)) {
     lignes.push(
-      "Ce que les acheteurs versent au club est inscrit en attente : les pénalités dans Caisse, " +
-        "les cotisations impayées dans Versements, au nom de leur part rachetée. Validez-les à " +
-        "réception de l'argent.",
+      "Ce que les acheteurs doivent au club est inscrit au nom de leur part rachetée : les " +
+        "pénalités au registre des pénalités, dues et rappelées comme les autres, les cotisations " +
+        "impayées dans Versements, en attente : validez-les à réception de l'argent.",
     );
   }
   if (p.resteDu > 0) {

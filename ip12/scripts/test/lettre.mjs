@@ -1112,6 +1112,24 @@ verifier(
   sujetRelance(partRachetee, "2026-09-01", LE_30).endsWith("(SORO Tielina · 50 % de la part de KONE Bourama)"),
   "l'objet nomme la part, pour ne pas se confondre avec la relance de sa propre part",
 );
+/*
+ * Les penalites du sortant que l'acheteur a reprises sont inscrites sur sa part :
+ * le courrier les reclame sous ce nom, et une part a jour en recoit un pour elles.
+ */
+const partAvecReprise = {
+  ...partRachetee,
+  arrieres: [],
+  echeanceDuJour: null,
+  situation: { ...partRachetee.situation, cellules: [], moisEnRetard: [] },
+  dette: { nb: 1, montant: 4750, nbRetard: 0, montantRetard: 0 },
+};
+const lettreReprise = lettre(partAvecReprise);
+verifier(
+  lettreReprise.includes("Penalite reprise au rachat, inscrite sur cette part : 1, pour un total de 4 750 FCFA."),
+  "la penalite reprise au rachat se reclame sous son nom, sur la part",
+);
+verifier(!lettreReprise.includes("d'absence"), "une part n'a pas d'absences a se voir reprocher");
+verifier(doitRecevoir(partAvecReprise, LE_30), "une part a jour qui doit une penalite reprise recoit son rappel");
 verifier(
   !lettre(bourama).includes("part rachetee") && !sujetRelance(bourama, "2026-09-01", LE_30).includes("part de"),
   "une personne ne lit rien des parts rachetees",

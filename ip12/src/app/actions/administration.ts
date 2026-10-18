@@ -43,11 +43,8 @@ import {
   KIND_PENALITE,
   KIND_VERSEMENT,
   METHODE,
-  CATEGORIE_PENALITES_SORTANT,
   PREFIXE_SOLDE_SORTIE,
   REGLE_MEMBRE,
-  SENS_CAISSE,
-  STATUT_CAISSE,
   STATUT_PENALITE,
   STATUT_VERSEMENT,
 } from "@/lib/valeurs";
@@ -440,6 +437,11 @@ export type EtatSortie = EtatFormulaire & {
   };
 };
 
+/** « 50 % », « 33,33 % » : la fraction rachetee, telle qu'on la dit. */
+function pourcentLisible(fraction: number): string {
+  return `${(fraction * 100).toLocaleString("fr-FR", { maximumFractionDigits: 2 })} %`;
+}
+
 /** Un nombre saisi a la francaise : « 33,5 », « 150 000 ». */
 function nombreSaisi(texte: string): number {
   return Number(texte.replace(/[\s  ]/g, "").replace(",", "."));
@@ -693,11 +695,21 @@ export async function enregistrerSortie(
   /*
    * En une seule transaction : la sortie, les rachats et le poids qu'ils
    * transmettent, ce que les acheteurs doivent verser au club pour les
-   * penalites (en caisse, en attente de reception), les penalites soldees, le
+   * penalites (inscrit au registre, sur leur part), les penalites soldees, le
    * membre desactive. L'identifiant de la sortie est tire ici pour que les
    * rachats puissent s'y rattacher dans la meme transaction.
    */
   const sortieId = randomUUID();
+  /*
+   * Les penalites du sortant sont soldees a sa sortie ; celles que reprennent
+   * les acheteurs le disent, avec leurs noms, pour qu'on sache qui les doit.
+   */
+  const reprises = acheteurs.filter((a) => a.auClub > 0);
+  const noteSolde =
+    `${PREFIXE_SOLDE_SORTIE} : ${motif}` +
+    (reprises.length > 0
+      ? ` · reprises par ${reprises.map((a) => `${a.nom} (${fcfa(a.auClub)})`).join(", ")}, dues sur leurs parts`
+      : "");
   /*
    * UN REFUS DE LA BASE SE DIT, IL NE FAIT PAS TOMBER LA PAGE.
    *
@@ -744,21 +756,34 @@ export async function enregistrerSortie(
         `,
       ),
     ]),
-    ...acheteurs
+    /*
+     * LES PENALITES REPRISES SONT UNE DETTE DE L'ACHETEUR, INSCRITE A SON NOM.
+     *
+     * Elles attendaient en caisse comme une recette a recevoir : personne n'y
+     * etait nomme au registre, aucun rappel ne les reclamait, et la valeur du
+     * club les perdait de vue jusqu'a l'encaissement. Inscrites sur la part
+     * rachetee, elles se lisent au registre sous le nom de l'acheteur, partent
+     * dans ses rappels comme toute penalite due, comptent comme creance du club,
+     * et se reglent par le chemin ordinaire, depuis Versements. Nature « autre » :
+     * ce ne sont pas des retards de la part, elles ne comptent pas dans le seuil
+     * R5 de ses propres penalites de retard.
+     */
+    ...parts
       .filter((a) => a.auClub > 0)
       .map(
         (a) => sql`
-          insert into cash_movements (movement_date, direction, category, amount, note, status, created_by)
-          values (${date}::date, ${SENS_CAISSE.recette}, ${CATEGORIE_PENALITES_SORTANT}, ${a.auClub},
-                  ${`Pénalités de ${nomSortant}, payées par ${a.nom} sur le rachat de ses parts`},
-                  ${STATUT_CAISSE.enAttente}, ${auteur.id}::uuid)
+          insert into penalties (member_id, kind, quantity, unit_amount, reason,
+                                 incurred_on, status, created_by, auto)
+          values (${a.partId}::uuid, ${KIND_PENALITE.autre}, 1, ${a.auClub},
+                  ${`Pénalités de ${nomSortant} reprises au rachat de ${pourcentLisible(a.fraction)} de ses parts`},
+                  ${date}::date, ${STATUT_PENALITE.due}, ${auteur.id}::uuid, false)
         `,
       ),
     sql`
       update penalties
       set status = ${STATUT_PENALITE.payee},
           settled_on = ${date}::date,
-          settlement_note = ${`${PREFIXE_SOLDE_SORTIE} : ${motif}`},
+          settlement_note = ${noteSolde},
           resolved_by = ${auteur.id}::uuid,
           resolved_at = now()
       where member_id = ${membreId}::uuid and status = ${STATUT_PENALITE.due}
@@ -860,7 +885,8 @@ export async function enregistrerSortie(
         ? `, et ${fcfa(acheteurs.reduce((t, a) => t + a.auSortant, 0))} par les acheteurs de ses parts, directement. `
         : ". ") +
       (auClub > 0
-        ? `Les ${fcfa(auClub)} que les acheteurs doivent au club pour ses pénalités attendent en caisse : validez-les à réception. `
+        ? `Les ${fcfa(auClub)} que les acheteurs doivent au club pour ses pénalités sont inscrits au registre ` +
+          "des pénalités, au nom de leur part : ils figurent dans leurs rappels et se règlent depuis Versements. "
         : "") +
       (arrieresRepris > 0
         ? `Les ${fcfa(arrieresRepris)} de cotisations impayées qu'ils reprennent attendent dans Versements, ` +

@@ -124,6 +124,11 @@ export const CATEGORIES_RECETTE = [
   { valeur: "versements_acquis", libelle: "Versements acquis au club (art. 18)" },
   { valeur: "penalites_anterieures", libelle: "Pénalités antérieures, détail non disponible" },
   { valeur: "interets", libelle: "Intérêts et produits" },
+  /*
+   * Les penalites d'un sortant reprises par l'acheteur de ses parts attendaient
+   * ici. Elles s'inscrivent desormais au registre, sur la part rachetee ; la
+   * categorie reste pour lire les mouvements deja saisis.
+   */
   { valeur: "penalites_sortant", libelle: "Pénalités d'un sortant, payées par l'acheteur de ses parts" },
   { valeur: "regularisation", libelle: "Régularisation de caisse" },
   { valeur: "autre", libelle: "Autre recette" },
@@ -136,9 +141,3 @@ export function libelleCategorie(categorie: string): string {
   );
 }
 
-/**
- * Ce que l'acheteur des parts d'un sortant verse au club pour solder les
- * penalites de celui-ci. La recette est inscrite en attente a l'enregistrement
- * de la sortie ; le tresorier la valide a reception de l'argent.
- */
-export const CATEGORIE_PENALITES_SORTANT = "penalites_sortant";
