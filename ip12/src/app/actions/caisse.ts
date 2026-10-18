@@ -155,7 +155,9 @@ export async function regulariserCaisse(
 ): Promise<EtatFormulaire> {
   const auteur = await exigerDroit("gererCaisse");
   const soldeReel = Number(donnees.get("soldeReel") ?? NaN);
-  const date = String(donnees.get("date") ?? "").slice(0, 10);
+  /* Sans date saisie, le constat est du jour. */
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  const date = String(donnees.get("date") ?? "").slice(0, 10) || aujourdhui;
   const motif =
     String(donnees.get("motif") ?? "").trim() || "Pénalités historiques non documentées";
 
@@ -163,6 +165,7 @@ export async function regulariserCaisse(
     return { ok: false, erreur: "Solde constaté invalide." };
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return { ok: false, erreur: "Date invalide." };
+  if (date > aujourdhui) return { ok: false, erreur: "La date du constat ne peut pas être dans le futur." };
 
   const s = await synthese();
   const ecart = Math.round(soldeReel) - Math.round(s.totalEnCaisse);

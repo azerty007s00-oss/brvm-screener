@@ -126,7 +126,7 @@ export async function enregistrerPresences(
       absents > 0
         ? `Feuille enregistrée. ${absents} absence${absents > 1 ? "s" : ""}. ` +
           `${avertis > 0 ? `${avertis} ${accorde(avertis, "membre averti", "membres avertis")} par courriel. ` : ""}` +
-          "Vous pouvez les sanctionner depuis la page Pénalités."
+          `Vous pouvez ${absents > 1 ? "les" : "la"} sanctionner depuis la page Pénalités.`
         : "Feuille enregistrée.",
   };
 }

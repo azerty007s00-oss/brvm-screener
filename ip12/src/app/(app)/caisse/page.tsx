@@ -115,6 +115,16 @@ export default async function PageCaisse() {
             valeur={Math.max(0, Math.round(s.totalEnCaisse))}
             aide="Ce que vous comptez en caisse, ou ce qu'affiche votre relevé."
           />
+          {/*
+            * La date du constat : l'action l'exigeait, le formulaire ne l'envoyait
+            * pas, et chaque regularisation tombait sur « Date invalide ».
+            */}
+          <Champ
+            nom="date"
+            libelle="Date du constat"
+            type="date"
+            valeur={new Date().toISOString().slice(0, 10)}
+          />
           <Champ nom="motif" libelle="Motif" aide="Restera inscrit au journal." />
         </FormulaireAction>
       </Panneau>

@@ -183,10 +183,28 @@ export async function enregistrerReglages(
   ];
 
   const sql = db();
+  /*
+   * Les champs arrivent remplis des valeurs en vigueur : les reenregistrer
+   * telles quelles annoncait « Reglages enregistres, ils priment desormais »
+   * quand rien n'avait change. Seule une valeur differente s'ecrit, et le
+   * message dit laquelle.
+   */
+  const enVigueur = await reglagesEffectifs();
+  const actuelle: Record<string, number> = {
+    cotisation_mensuelle: enVigueur.cotisationMensuelle,
+    jour_echeance: enVigueur.jourEcheance,
+    taux_penalite: enVigueur.tauxPenalite,
+  };
+  const nomsReglages: Record<string, string> = {
+    cotisation_mensuelle: "cotisation mensuelle",
+    jour_echeance: "jour d'échéance",
+    taux_penalite: "taux de pénalité",
+  };
   const retenus: string[] = [];
   for (const [cle, brut] of couples) {
     const valeur = Number(brut);
     if (!brut || !Number.isFinite(valeur) || valeur <= 0) continue;
+    if (valeur === actuelle[cle]) continue;
     if (cle === "jour_echeance" && (valeur < 1 || valeur > 28)) {
       return { ok: false, erreur: "Le jour d'échéance doit tomber entre le 1 et le 28." };
     }
@@ -204,7 +222,12 @@ export async function enregistrerReglages(
     retenus.push(cle);
   }
 
-  if (retenus.length === 0) return { ok: false, erreur: "Aucune valeur exploitable." };
+  if (retenus.length === 0) {
+    const saisies = couples.filter(([, brut]) => brut.trim() !== "");
+    return saisies.length > 0 && saisies.every(([cle, brut]) => Number(brut) === actuelle[cle])
+      ? { ok: true, message: "Rien n'a changé : les valeurs en vigueur sont conservées." }
+      : { ok: false, erreur: "Aucune valeur exploitable." };
+  }
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
     "modification_reglages",
@@ -215,7 +238,8 @@ export async function enregistrerReglages(
   return {
     ok: true,
     message:
-      "Réglages enregistrés. Ils priment désormais sur les valeurs des statuts inscrites dans le code.",
+      `Réglages enregistrés : ${retenus.map((c) => nomsReglages[c]).join(", ")}. ` +
+      "Ils priment désormais sur les valeurs des statuts inscrites dans le code.",
   };
 }
 
