@@ -8,15 +8,8 @@ import { journaliser } from "@/lib/journal";
 import { avertirReglementPenalite } from "@/lib/avis";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
 import { penalitesNonInscrites, porterRetardsAuRegistre, resumeConstat } from "@/lib/constat";
-import {
-  absencesParMembre,
-  declarePour,
-  listerMembres,
-  reglagesEffectifs,
-  situationsClub,
-} from "@/lib/queries";
-import { DROITS } from "@/lib/droits";
-import { ROLES, accorde, dateCourte, fcfa } from "@/lib/settings";
+import { absencesParMembre, declarePour, reglagesEffectifs, situationsClub } from "@/lib/queries";
+import { accorde, dateCourte, fcfa } from "@/lib/settings";
 import { imputerPenalites, tranchesAbsence, type ImputationPenalite } from "@/lib/penalites";
 import {
   KIND_PENALITE, METHODE, STATUT_PENALITE, STATUT_REGLEMENT, libelleMode,
@@ -662,34 +655,15 @@ export async function validerReglementPenalite(
   }
 
   /*
-   * Personne ne valide sa propre declaration, meme titulaire du droit : le
-   * tresorier qui declare depuis son compte de membre voit son reglement
-   * examine par le president. La regle vaut deja pour les versements ; elle
-   * vaut ici pour la meme raison -- un encaissement se constate a deux. Un lot
-   * n'a qu'un declarant : il se refuse en entier.
+   * VALIDER SA PROPRE DECLARATION EST PERMIS, ET SE VOIT.
+   *
+   * Seuls les reglements de penalites l'interdisaient : le president et le
+   * tresorier validaient leurs propres versements et mouvements de caisse, pas
+   * leurs propres penalites. Le bureau a tranche pour la meme regle partout
+   * (octobre 2026). La validation par le declarant lui-meme reste lisible : la
+   * note de reglement le dit, et le journal le consigne.
    */
-  if (declarations.some((d) => String(d.declared_by) === auteur.id)) {
-    /*
-     * QUI S'EN CHARGE, NOMMEMENT.
-     *
-     * Le message disait « le president s'en charge » a tout le monde, president
-     * compris : il renvoyait a lui-meme celui qui ne peut pas. On nomme ceux qui
-     * le peuvent, l'auteur excepte ; s'il n'y en a aucun, on le dit, avec le
-     * moyen d'y remedier.
-     */
-    const roles: readonly string[] = DROITS.gererPenalites;
-    const autres = (await listerMembres().catch(() => []))
-      .filter((m) => m.actif && !m.titulaireId && m.id !== auteur.id && roles.includes(m.role))
-      .map((m) => `${m.nom} (${((ROLES as Record<string, string>)[m.role] ?? m.role).toLowerCase()})`);
-    return {
-      ok: false,
-      erreur:
-        autres.length > 0
-          ? `Vous ne pouvez pas valider votre propre déclaration : ${autres.join(" ou ")} s'en charge.`
-          : "Vous ne pouvez pas valider votre propre déclaration, et aucun autre membre du bureau " +
-            "n'en a le droit : désignez un trésorier dans la page Membres.",
-    };
-  }
+  const parLeDeclarant = declarations.some((d) => String(d.declared_by) === auteur.id);
 
   let soldees = 0;
   let montant = 0;
@@ -698,7 +672,7 @@ export async function validerReglementPenalite(
   for (const declaration of declarations) {
     const note =
       `Réglé le ${dateCourte(declaration.paid_on)} par ${libelleMode(declaration.method)}, ` +
-      "déclaré par le membre";
+      (parLeDeclarant ? `déclaré et validé par ${auteur.nom}` : "déclaré par le membre");
     const issue = await soldeLigne(
       String(declaration.penalty_id),
       Number(declaration.quantity),
@@ -723,7 +697,7 @@ export async function validerReglementPenalite(
       { id: auteur.id, nom: auteur.nom },
       "validation_reglement_penalite",
       { entite: "penalty_settlements", id: String(declaration.id) },
-      { quantite: issue.quantite, restant: issue.reste, montant: issue.montant, lot },
+      { quantite: issue.quantite, restant: issue.reste, montant: issue.montant, lot, parLeDeclarant },
     );
     soldees += issue.quantite;
     montant += issue.montant;

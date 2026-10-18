@@ -207,10 +207,9 @@ export const reglagesEffectifs = async () => ({
   penaliteAbsence: 2000, absencesParTranche: 3,
 });
 /* Ce que le controle veut faire lire au constat : il le pose avant d'appeler. */
-export const donnees: { situations: any[]; membres: any[] } = { situations: [], membres: [] };
+export const donnees: { situations: any[] } = { situations: [] };
 export const situationsClub = async (): Promise<any[]> => donnees.situations;
-/* Les membres que le controle pose : qui d'autre peut valider une declaration. */
-export const listerMembres = async (): Promise<any[]> => donnees.membres;
+export const listerMembres = async (): Promise<any[]> => [];
 /* Ce controle declare toujours pour soi : les parts rachetees n'y entrent pas. */
 export const declarePour = async (auteurId: string, cibleId: string) => auteurId === cibleId;
 /*
@@ -386,8 +385,12 @@ egal(lire(`select status from penalty_settlements where id='${declaration}';`), 
 r = await actions.validerReglementPenalite({}, formulaire({ id: declaration }));
 verifier(!r.ok, "une declaration deja examinee ne doit pas pouvoir etre validee a nouveau");
 
-/* ============================================== 3. personne ne se valide soi-meme */
+/* ===================================== 3. valider sa propre declaration, et le dire */
 
+/*
+ * Le bureau a tranche (octobre 2026) : la meme regle que pour les versements et
+ * la caisse. Le tresorier valide son propre reglement ; la note le dit.
+ */
 const sienne = nouvellePenalite(1, 500, tresorier.id);
 r = await actions.declarerReglementPenalite(
   {},
@@ -396,24 +399,13 @@ r = await actions.declarerReglementPenalite(
 verifier(r.ok, `le tresorier doit pouvoir declarer pour lui-meme : ${r.erreur ?? ""}`);
 const laSienne = lire(`select id from penalty_settlements where penalty_id='${sienne}';`);
 r = await actions.validerReglementPenalite({}, formulaire({ id: laSienne }));
-verifier(!r.ok && /votre propre déclaration/.test(r.erreur ?? ""),
-  "nul ne valide sa propre declaration, fut-il tresorier");
-verifier(/aucun autre membre du bureau/.test(r.erreur ?? ""),
-  "seul titulaire du droit, il apprend que personne d'autre ne peut valider");
-/* Le message nomme qui s'en charge : le president, pour le tresorier, et l'inverse. */
-donnees.membres = [
-  { id: tresorier.id, nom: "Tresorier", role: "tresorier", actif: true, titulaireId: null },
-  { id: "p", nom: "SORO Tielina", role: "president", actif: true, titulaireId: null },
-  { id: "m", nom: "KONE Bourama", role: "membre", actif: true, titulaireId: null },
-];
-r = await actions.validerReglementPenalite({}, formulaire({ id: laSienne }));
-verifier(/SORO Tielina \(président\) s'en charge/.test(r.erreur ?? ""),
-  "le tresorier est renvoye au president, nommement");
-verifier(!/Tresorier \(/.test(r.erreur ?? "") && !/KONE/.test(r.erreur ?? ""),
-  "ni a lui-meme, ni a un membre sans le droit");
-donnees.membres = [];
-egal(lire(`select status from penalties where id='${sienne}';`), "due",
-  "la penalite du tresorier reste due tant que le president n'a pas tranche");
+verifier(r.ok, `le tresorier valide son propre reglement : ${r.erreur ?? ""}`);
+egal(lire(`select status from penalties where id='${sienne}';`), "payee",
+  "sa penalite est soldee");
+verifier(
+  /déclaré et validé par Tresorier/.test(lire(`select settlement_note from penalties where id='${sienne}';`)),
+  "et la note dit qu'il l'a validee lui-meme",
+);
 
 /* ========================================================= 4. le refus */
 
@@ -531,7 +523,7 @@ egal(lire(`select count(*) from penalties
            where id in ('${l1}','${l2}') and status='due';`), "2",
   "et les deux penalites restent dues");
 
-// Nul ne valide son propre lot, fut-il tresorier.
+// Son propre lot, il le valide en entier, et chaque ligne le dit.
 const t1 = nouvellePenalite(1, 500, tresorier.id);
 nouvellePenalite(1, 500, tresorier.id);
 session.acteur = tresorier;
@@ -543,11 +535,10 @@ verifier(r.ok, `le tresorier declare pour lui-meme : ${r.erreur ?? ""}`);
 const lotTresorier = lire(`select batch_id from penalty_settlements
                            where penalty_id='${t1}' and status='en_attente';`);
 r = await actions.validerReglementPenalite({}, formulaire({ lot: lotTresorier }));
-verifier(!r.ok && /votre propre déclaration/.test(r.erreur ?? ""),
-  "un lot declare par le tresorier ne se valide pas par lui");
+verifier(r.ok, `un lot declare par le tresorier se valide par lui : ${r.erreur ?? ""}`);
 egal(lire(`select count(*) from penalty_settlements
-           where batch_id='${lotTresorier}' and status='en_attente';`), "2",
-  "aucune de ses lignes n'est touchee : le lot se refuse en entier");
+           where batch_id='${lotTresorier}' and status='validee';`), "2",
+  "ses deux lignes sont validees");
 
 /* ============================ 6. le constat, desormais automatique */
 

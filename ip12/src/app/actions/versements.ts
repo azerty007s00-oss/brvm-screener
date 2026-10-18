@@ -228,9 +228,10 @@ export async function declarerVersement(
 }
 
 /**
- * Validation d'un encaissement : competence du tresorier, qui tient la caisse.
- * Exception necessaire : le tresorier ne valide pas ses propres versements,
- * le president s'en charge pour eviter l'auto-validation.
+ * Validation d'un encaissement : competence du tresorier, qui tient la caisse,
+ * et du president. L'un comme l'autre valide aussi ses propres versements : le
+ * bureau a retenu cette regle partout, reglements de penalites compris
+ * (octobre 2026). Le journal garde qui a valide.
  */
 export async function validerVersement(
   _precedent: EtatFormulaire,
