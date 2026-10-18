@@ -207,9 +207,10 @@ export const reglagesEffectifs = async () => ({
   penaliteAbsence: 2000, absencesParTranche: 3,
 });
 /* Ce que le controle veut faire lire au constat : il le pose avant d'appeler. */
-export const donnees: { situations: any[] } = { situations: [] };
+export const donnees: { situations: any[]; membres: any[] } = { situations: [], membres: [] };
 export const situationsClub = async (): Promise<any[]> => donnees.situations;
-export const listerMembres = async (): Promise<any[]> => [];
+/* Les membres que le controle pose : qui d'autre peut valider une declaration. */
+export const listerMembres = async (): Promise<any[]> => donnees.membres;
 /* Ce controle declare toujours pour soi : les parts rachetees n'y entrent pas. */
 export const declarePour = async (auteurId: string, cibleId: string) => auteurId === cibleId;
 /*
@@ -397,6 +398,20 @@ const laSienne = lire(`select id from penalty_settlements where penalty_id='${si
 r = await actions.validerReglementPenalite({}, formulaire({ id: laSienne }));
 verifier(!r.ok && /votre propre déclaration/.test(r.erreur ?? ""),
   "nul ne valide sa propre declaration, fut-il tresorier");
+verifier(/aucun autre membre du bureau/.test(r.erreur ?? ""),
+  "seul titulaire du droit, il apprend que personne d'autre ne peut valider");
+/* Le message nomme qui s'en charge : le president, pour le tresorier, et l'inverse. */
+donnees.membres = [
+  { id: tresorier.id, nom: "Tresorier", role: "tresorier", actif: true, titulaireId: null },
+  { id: "p", nom: "SORO Tielina", role: "president", actif: true, titulaireId: null },
+  { id: "m", nom: "KONE Bourama", role: "membre", actif: true, titulaireId: null },
+];
+r = await actions.validerReglementPenalite({}, formulaire({ id: laSienne }));
+verifier(/SORO Tielina \(président\) s'en charge/.test(r.erreur ?? ""),
+  "le tresorier est renvoye au president, nommement");
+verifier(!/Tresorier \(/.test(r.erreur ?? "") && !/KONE/.test(r.erreur ?? ""),
+  "ni a lui-meme, ni a un membre sans le droit");
+donnees.membres = [];
 egal(lire(`select status from penalties where id='${sienne}';`), "due",
   "la penalite du tresorier reste due tant que le president n'a pas tranche");
 

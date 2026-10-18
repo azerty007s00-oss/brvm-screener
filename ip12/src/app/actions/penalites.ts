@@ -8,8 +8,15 @@ import { journaliser } from "@/lib/journal";
 import { avertirReglementPenalite } from "@/lib/avis";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
 import { penalitesNonInscrites, porterRetardsAuRegistre, resumeConstat } from "@/lib/constat";
-import { absencesParMembre, declarePour, reglagesEffectifs, situationsClub } from "@/lib/queries";
-import { accorde, dateCourte, fcfa } from "@/lib/settings";
+import {
+  absencesParMembre,
+  declarePour,
+  listerMembres,
+  reglagesEffectifs,
+  situationsClub,
+} from "@/lib/queries";
+import { DROITS } from "@/lib/droits";
+import { ROLES, accorde, dateCourte, fcfa } from "@/lib/settings";
 import { imputerPenalites, tranchesAbsence, type ImputationPenalite } from "@/lib/penalites";
 import {
   KIND_PENALITE, METHODE, STATUT_PENALITE, STATUT_REGLEMENT, libelleMode,
@@ -662,9 +669,25 @@ export async function validerReglementPenalite(
    * n'a qu'un declarant : il se refuse en entier.
    */
   if (declarations.some((d) => String(d.declared_by) === auteur.id)) {
+    /*
+     * QUI S'EN CHARGE, NOMMEMENT.
+     *
+     * Le message disait « le president s'en charge » a tout le monde, president
+     * compris : il renvoyait a lui-meme celui qui ne peut pas. On nomme ceux qui
+     * le peuvent, l'auteur excepte ; s'il n'y en a aucun, on le dit, avec le
+     * moyen d'y remedier.
+     */
+    const roles: readonly string[] = DROITS.gererPenalites;
+    const autres = (await listerMembres().catch(() => []))
+      .filter((m) => m.actif && !m.titulaireId && m.id !== auteur.id && roles.includes(m.role))
+      .map((m) => `${m.nom} (${((ROLES as Record<string, string>)[m.role] ?? m.role).toLowerCase()})`);
     return {
       ok: false,
-      erreur: "Vous ne pouvez pas valider votre propre déclaration : le président s'en charge.",
+      erreur:
+        autres.length > 0
+          ? `Vous ne pouvez pas valider votre propre déclaration : ${autres.join(" ou ")} s'en charge.`
+          : "Vous ne pouvez pas valider votre propre déclaration, et aucun autre membre du bureau " +
+            "n'en a le droit : désignez un trésorier dans la page Membres.",
     };
   }
 
