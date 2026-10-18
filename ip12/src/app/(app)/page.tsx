@@ -8,7 +8,7 @@ import {
 } from "@/lib/queries";
 import { STATUT_CAISSE, STATUT_REGLEMENT } from "@/lib/valeurs";
 import { couleurSigne, dureeEnClair, pourcent } from "@/lib/perf";
-import { CLUB, REGLES, dateCourte, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
+import { CLUB, REGLES, accorde, dateCourte, deMois, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
 import { Carte, CarteEtat, EnTeteEcran, ValeurChiffree, Vide } from "@/components/ui";
 import { LienBouton } from "@/components/boutons";
 import { Frise, GlypheEtat, LIBELLE_STATUT, STATUTS_LEGENDE, statutLigne } from "@/components/glyphe-etat";
@@ -139,7 +139,28 @@ export default async function TableauDeBord() {
   const detteDe = (membreId: string) =>
     s.parts.find((p) => p.membreId === membreId)?.dues ?? courues?.get(membreId)?.montant ?? 0;
   const maDette = maSituation ? detteDe(membre.id) : 0;
-  const aFaire = maSituation && (maSituation.nbMoisRetard > 0 || maDette > 0);
+  const aFaireMoi = Boolean(maSituation && (maSituation.nbMoisRetard > 0 || maDette > 0));
+  /*
+   * LES PARTS RACHETEES QUE CE MEMBRE DETIENT.
+   *
+   * Elles ont leurs propres mois et leurs propres penalites, et c'est lui qui
+   * les paie. L'accueil n'en disait rien : le detenteur d'une part qui devait la
+   * penalite reprise au rachat lisait « Rien a faire, vous etes a jour », et
+   * « Ma part » ignorait la valeur de ce qu'il avait rachete.
+   */
+  const partsDetenues = situations
+    .filter((x) => x.titulaireId === membre.id)
+    .map((x) => ({
+      situation: x,
+      valeur: s.parts.find((p) => p.membreId === x.membreId)?.valeur ?? 0,
+      dette: detteDe(x.membreId),
+      cotisations: cotisationsARegler(x.cellules).total,
+    }));
+  const partsAFaire = partsDetenues.filter(
+    (p) => p.situation.nbMoisRetard > 0 || p.dette > 0 || p.cotisations > 0,
+  );
+  const aFaire = aFaireMoi || partsAFaire.length > 0;
+  const valeurPartsDetenues = partsDetenues.reduce((t, p) => t + p.valeur, 0);
 
   const rangStatut = (st: StatutMois) => {
     const i = STATUTS_LEGENDE.indexOf(st);
@@ -157,8 +178,12 @@ export default async function TableauDeBord() {
     statut: st,
     nb: moisDuClub.filter((c) => c.statut === st).length,
   })).filter((x) => x.nb > 0);
+  /* « 5 payés », « 1 payé » : l'etat s'accorde avec le nombre de membres. */
   const compteEnClair = compteParEtat
-    .map((x) => `${x.nb} ${LIBELLE_STATUT[x.statut].toLowerCase()}`)
+    .map((x) => {
+      const libelle = LIBELLE_STATUT[x.statut].toLowerCase();
+      return `${x.nb} ${x.nb > 1 ? libelle.replace(/^(payé|incomplet)/, "$1s") : libelle}`;
+    })
     .join(", ");
 
   /*
@@ -197,9 +222,12 @@ export default async function TableauDeBord() {
           brut={maPart && s.valorisation ? maPart.valeur : undefined}
           unite={maPart && s.valorisation ? "FCFA" : undefined}
           detail={
-            maPart
+            (maPart
               ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % du portefeuille, au prorata de mes versements validés.`
-              : "Votre part se calcule dès votre premier versement validé."
+              : "Votre part se calcule dès votre premier versement validé.") +
+            (partsDetenues.length > 0
+              ? ` En plus, ${accorde(partsDetenues.length, "part rachetée", "parts rachetées")} : ${fcfa(valeurPartsDetenues)}.`
+              : "")
           }
         />
         {/*
@@ -237,10 +265,12 @@ export default async function TableauDeBord() {
         <div className="flex flex-col gap-11 xl:order-2">
           {maSituation && (
             <Carte titre={aFaire ? "À faire" : "Rien à faire"}>
-              {!aFaire ? (
+              {!aFaireMoi ? (
                 <p className="flex items-center gap-2.5 text-[13px]" style={{ color: "var(--ink-2)" }}>
                   <GlypheEtat statut="paye" taille={18} />
-                  Vous êtes à jour. Prochaine échéance le {REGLES.jourEcheance} du mois.
+                  {partsAFaire.length > 0
+                    ? "Votre part est à jour."
+                    : `Vous êtes à jour. Prochaine échéance le ${REGLES.jourEcheance} du mois.`}
                 </p>
               ) : (
                 <>
@@ -252,14 +282,17 @@ export default async function TableauDeBord() {
                       <p className="text-[14px] font-medium" style={{ color: "var(--etat-manque)" }}>
                         {maSituation.nbMoisRetard > 0
                           ? `${maSituation.nbMoisRetard} mois de cotisation en retard`
-                          : "Pénalités de retard à régler"}
+                          : "Pénalités à régler"}
                       </p>
+                      {/*
+                        * La phrase de l'art. 9 parle des retards : elle n'a rien a
+                        * faire sous une penalite d'absence, seule dette du membre.
+                        */}
                       <p className="mt-1 text-[13px] leading-relaxed" style={{ color: "var(--ink-2)" }}>
                         {maSituation.moisEnRetard.length > 0
-                          ? `${maSituation.moisEnRetard.map((m) => moisLong(m)).join(", ")}. `
-                          : ""}
-                        La pénalité de l&apos;art. 9 reste acquise au club, même après
-                        régularisation.
+                          ? `${maSituation.moisEnRetard.map((m) => moisLong(m)).join(", ")}. ` +
+                            "La pénalité de l'art. 9 reste acquise au club, même après régularisation."
+                          : "Déclarez leur règlement depuis Versements, en choisissant « une pénalité »."}
                       </p>
                     </div>
                   </div>
@@ -297,6 +330,39 @@ export default async function TableauDeBord() {
                     <LienBouton href="/versements">Déclarer mon versement</LienBouton>
                   </div>
                 </>
+              )}
+
+              {/*
+                * Chaque part rachetee qui doit quelque chose, a part : ses mois et
+                * ses penalites ne sont pas ceux de son detenteur.
+                */}
+              {partsAFaire.map((p) => (
+                <div
+                  key={p.situation.membreId}
+                  className="mt-4 border-t pt-4"
+                  style={{ borderColor: "var(--line)" }}
+                >
+                  <p className="text-[14px] font-medium" style={{ color: "var(--etat-manque)" }}>
+                    Part rachetée : {p.situation.nom}
+                  </p>
+                  <div className="mt-3">
+                    <Couple
+                      chiffres={[
+                        { libelle: "Cotisations à régler", brut: p.cotisations },
+                        { libelle: "Pénalités dues", brut: p.dette },
+                      ]}
+                    />
+                  </div>
+                  <p className="mt-2 text-[12.5px]" style={{ color: "var(--ink-2)" }}>
+                    Déclarez le versement en choisissant cette part : elle a ses propres mois et ses
+                    propres pénalités.
+                  </p>
+                </div>
+              ))}
+              {!aFaireMoi && partsAFaire.length > 0 && (
+                <div className="mt-5">
+                  <LienBouton href="/versements">Déclarer un versement</LienBouton>
+                </div>
               )}
 
               {maSituation.voteSuspendu && (
@@ -442,7 +508,7 @@ export default async function TableauDeBord() {
               <>
                 <div
                   role="img"
-                  aria-label={`Cotisations de ${moisLong(moisCourant)} : ${compteEnClair}`}
+                  aria-label={`Cotisations ${deMois(moisCourant)} : ${compteEnClair}`}
                   className="flex flex-wrap gap-1.5"
                 >
                   {moisDuClub.map((c, i) => (

@@ -2,7 +2,7 @@ import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { listerMembres, listerReunions, presencesParReunion } from "@/lib/queries";
 import { creerReunion, enregistrerPresences, supprimerReunion } from "@/app/actions/reunions";
-import { dateCourte } from "@/lib/settings";
+import { accorde, dateCourte } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { Badge, Carte, EnTeteEcran, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
@@ -98,9 +98,11 @@ export default async function PageReunions() {
                     </p>
                     <p className="text-xs" style={{ color: "var(--discret)" }}>
                       {pointee
-                        ? `${r.presents} présents · ${r.absents} absents · ${r.excuses} excusés`
+                        ? `${r.presents} ${accorde(r.presents, "présent")} · ` +
+                          `${r.absents} ${accorde(r.absents, "absent")} · ` +
+                          `${r.excuses} ${accorde(r.excuses, "excusé")}`
                         : "Feuille de présence à remplir"}
-                      {r.cree_par ? ` · ${r.cree_par}` : ""}
+                      {r.cree_par ? ` · saisie par ${r.cree_par}` : ""}
                     </p>
                     {r.note && <p className="mt-0.5 text-xs italic">{r.note}</p>}
                   </div>
@@ -145,9 +147,25 @@ export default async function PageReunions() {
                     </div>
                   ) : (
                     pointee && (
+                      /*
+                        * « Vous y etiez note present » : le code brut de la base, sans
+                        * accent, dans une phrase a laquelle il manquait le sien.
+                        */
                       <p className="mt-1 text-xs" style={{ color: "var(--discret)" }}>
-                        Vous y étiez note{" "}
-                        <strong>{pointees.get(membre.id) ?? "non pointé"}</strong>.
+                        {pointees.has(membre.id) ? (
+                          <>
+                            Vous y êtes noté{" "}
+                            <strong>
+                              {(
+                                OPTIONS_PRESENCE.find((o) => o.valeur === pointees.get(membre.id))?.libelle ??
+                                String(pointees.get(membre.id))
+                              ).toLowerCase()}
+                            </strong>
+                            .
+                          </>
+                        ) : (
+                          "Vous n'êtes pas sur la feuille de cette séance."
+                        )}
                       </p>
                     )
                   )}

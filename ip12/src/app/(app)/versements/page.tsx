@@ -9,7 +9,7 @@ import {
   versementsEnAttente,
 } from "@/lib/queries";
 import { listeDesMois } from "@/lib/sortie";
-import { REGLES, dateCourte, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
+import { REGLES, dateCourte, deMois, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
 import { relancerMaintenant } from "@/app/actions/administration";
 import {
   annulerVersementValide,
@@ -143,6 +143,16 @@ export default async function PageVersements({
   /* Passe le mois courant, c'est qu'il n'y a plus de retard : le ton change. */
   const enAvance = aRegler !== null && aRegler.mois > aujourdhui;
 
+  /*
+   * Sur combien : ceux a qui le mois est du. Une part rachetee qui ne cotise
+   * qu'a partir du mois suivant n'entre pas dans le compte ; l'accueil, lui,
+   * l'en ecartait deja, et les deux pages annoncaient « 5 sur 7 » et « 5 sur 9 ».
+   */
+  const dusCeMois = situations.filter((x) => {
+    const c = x.cellules.find((y) => y.mois === aujourdhui);
+    return c !== undefined && c.statut !== "hors_periode";
+  }).length;
+
   /* Combien de membres ont solde le mois en cours : l'etat des cellules le dit. */
   const payesCeMois = situations.filter((x) => {
     const c = x.cellules.find((y) => y.mois === aujourdhui);
@@ -190,7 +200,7 @@ export default async function PageVersements({
     const part = partsRachetees.get(id);
     if (!part) return null;
     const montant = Math.round((part.fraction ?? 1) * reglages.cotisationMensuelle);
-    return `Cotise ${fcfa(montant)} par mois à partir de ${moisLong(part.date_adhesion)}.`;
+    return `Cotise ${fcfa(montant)} par mois à partir ${deMois(part.date_adhesion)}.`;
   };
   const reprisAuRachat = (id: string): string | null => {
     const part = partsRachetees.get(id);
@@ -244,10 +254,10 @@ export default async function PageVersements({
     <>
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <EnTeteEcran
-          titre={`Cotisations de ${moisLong(aujourdhui)}`}
+          titre={`Cotisations ${deMois(aujourdhui)}`}
           chiffre={
             <>
-              <Chiffre valeur={payesCeMois} format="entier" /> sur {situations.length}
+              <Chiffre valeur={payesCeMois} format="entier" /> sur {dusCeMois}
             </>
           }
           detail={
@@ -412,9 +422,15 @@ export default async function PageVersements({
                         className="text-xs"
                         style={{ color: "var(--discret)" }}
                       >
-                        {moisLong(v.mois)} &middot; versé le{" "}
-                        {dateCourte(v.date_versement)} &middot;{" "}
-                        {libelleMode(v.mode)}
+                        {/*
+                          * Une cotisation reprise au rachat n'est pas encore payee :
+                          * la sortie l'inscrit en attente, a sa date. « Verse le … par
+                          * Mobile Money » le faisait croire recu.
+                          */}
+                        {moisLong(v.mois)} &middot;{" "}
+                        {(v.note ?? "").startsWith("Cotisation impayée de ")
+                          ? `reprise au rachat le ${dateCourte(v.date_versement)}, à valider à réception`
+                          : `versé le ${dateCourte(v.date_versement)} · ${libelleMode(v.mode)}`}
                         {v.saisi_par_nom && v.saisi_par_nom !== v.membre_nom
                           ? ` · saisi par ${v.saisi_par_nom}`
                           : ""}

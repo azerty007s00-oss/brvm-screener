@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
-import { listerVersements, situationsClub, synthese } from "@/lib/queries";
+import { listerMembres, listerVersements, reglagesEffectifs, situationsClub, synthese } from "@/lib/queries";
 import { changerMotDePasse, seDeconnecter } from "@/app/actions/auth";
 import { joindreJustificatif } from "@/app/actions/versements";
 import { ChampJustificatif } from "@/components/justificatif";
 import { justificatifsParLot } from "@/lib/justificatifs";
 import { penalitesNonInscrites } from "@/lib/constat";
-import { ROLES, dateCourte, fcfa, moisLong, nombre } from "@/lib/settings";
+import { ROLES, accorde, dateCourte, fcfa, moisLong, nombre } from "@/lib/settings";
 import { couleurSigne } from "@/lib/perf";
 import { Champ, ChampCache, Depliant, FormulaireAction } from "@/components/formulaires";
 import { libelleMode } from "@/lib/valeurs";
@@ -20,13 +20,15 @@ export const metadata = { title: "Mon compte" };
 export default async function PageMonCompte() {
   const membre = await exigerMembre();
 
-  let mesVersements, situations, s, pieces;
+  let mesVersements, situations, s, pieces, membres, reglages;
   try {
-    [mesVersements, situations, s, pieces] = await Promise.all([
+    [mesVersements, situations, s, pieces, membres, reglages] = await Promise.all([
       listerVersements({ membreId: membre.id }),
       situationsClub(),
       synthese(),
       justificatifsParLot(),
+      listerMembres(),
+      reglagesEffectifs(),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -124,7 +126,13 @@ export default async function PageMonCompte() {
           <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
             {mesParts.map((x) => {
               const valeur = s.parts.find((p) => p.membreId === x.membreId);
-              const cotisation = x.cellules.at(-1)?.requis ?? 0;
+              /*
+               * La cotisation de la part : sa fraction de la cotisation commune. Lue
+               * sur le dernier mois, elle valait 0 tant que la part n'avait pas
+               * commence a cotiser.
+               */
+              const fraction = membres.find((m) => m.id === x.membreId)?.fraction ?? 1;
+              const cotisation = Math.round(fraction * reglages.cotisationMensuelle);
               return (
                 <li key={x.membreId} className="py-2.5 text-sm">
                   <p className="flex flex-wrap items-center gap-1.5 font-medium">
@@ -259,7 +267,9 @@ export default async function PageMonCompte() {
         )}
         {lotsSansPiece.length > 0 && (
           <div className="mt-4">
-            <Depliant titre={`Joindre un justificatif (${lotsSansPiece.length} versement(s) sans pièce)`}>
+            <Depliant
+              titre={`Joindre un justificatif (${lotsSansPiece.length} ${accorde(lotsSansPiece.length, "versement")} sans pièce)`}
+            >
               {lotsSansPiece.map((lot) => (
                 <div key={lot.lot} className="mt-3 border-t pt-3" style={{ borderColor: "var(--bordure)" }}>
                   <p className="text-xs font-medium">

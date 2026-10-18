@@ -840,7 +840,7 @@ function Legende() {
             strokeLinecap="round"
           />
         </svg>
-        Net place en bourse
+        Net placé en bourse
       </span>
       <span className="flex items-center gap-1.5">
         <span

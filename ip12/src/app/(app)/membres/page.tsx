@@ -3,7 +3,7 @@ import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { listerMembres, situationsClub, synthese } from "@/lib/queries";
 import { basculerActivite, creerMembre, modifierMembre, reinitialiserMotDePasse } from "@/app/actions/membres";
-import { CLUB, ROLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { CLUB, ROLES, dateCourte, deMois, fcfa } from "@/lib/settings";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { Badge, Carte, EnTeteEcran, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
@@ -93,7 +93,7 @@ export default async function PageMembres() {
                       {m.titulaireId ? (
                         <p className="text-xs" style={{ color: "var(--discret)" }}>
                           Part rachetée, {String(Math.round((m.fraction ?? 1) * 1000) / 10).replace(".", ",")} %
-                          d&apos;une part &middot; cotise depuis {moisLong(m.date_adhesion)}, suivie à part de
+                          d&apos;une part &middot; cotise à partir {deMois(m.date_adhesion)}, suivie à part de
                           celle de son détenteur
                         </p>
                       ) : (

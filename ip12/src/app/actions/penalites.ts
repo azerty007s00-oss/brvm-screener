@@ -310,8 +310,9 @@ export async function reglerPenalite(
     ok: true,
     message:
       issue.reste === 0
-        ? `Pénalité soldée : ${issue.quantite} mois réglé(s).`
-        : `${issue.quantite} mois réglé(s). Il reste ${issue.reste} mois dû(s) sur cette ligne.`,
+        ? `Pénalité soldée : ${issue.quantite} mois ${accorde(issue.quantite, "réglé")}.`
+        : `${issue.quantite} mois ${accorde(issue.quantite, "réglé")}. ` +
+          `Il reste ${issue.reste} mois ${accorde(issue.reste, "dû", "dus")} sur cette ligne.`,
   };
 }
 

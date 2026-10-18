@@ -171,7 +171,7 @@ export default async function PageCompteTitres() {
     <>
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <EnTeteEcran
-          titre="Net place en bourse"
+          titre="Net placé en bourse"
           sous={`chez ${CLUB.sgi}`}
           brut={s.totalApports}
           unite="FCFA"
@@ -194,7 +194,7 @@ export default async function PageCompteTitres() {
       />
 
       {fraisTotaux > 0 && (
-        <Carte titre="Ce que les frais ont coûte">
+        <Carte titre="Ce que les frais ont coûté">
           <ul className="space-y-1 text-sm">
             <li className="flex justify-between gap-2">
               <span style={{ color: "var(--discret)" }}>

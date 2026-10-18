@@ -38,7 +38,17 @@ import {
   reglagesEffectifs,
   situationsClub,
 } from "@/lib/queries";
-import { CLUB, REGLES, dateCourte, debutMois, decalerMois, fcfa, moisLong, variable } from "@/lib/settings";
+import {
+  CLUB,
+  REGLES,
+  accorde,
+  dateCourte,
+  debutMois,
+  decalerMois,
+  fcfa,
+  moisLong,
+  variable,
+} from "@/lib/settings";
 import {
   KIND_PENALITE,
   KIND_VERSEMENT,
@@ -291,9 +301,10 @@ export async function reprendrePenalites(
   return {
     ok: true,
     message:
-      `${inscrites + remplacees} membre(s), ${total.toLocaleString("fr-FR")} FCFA de pénalités ` +
+      `${inscrites + remplacees} ${accorde(inscrites + remplacees, "membre")}, ` +
+      `${total.toLocaleString("fr-FR")} FCFA de pénalités ` +
       `au registre, arrêtées à ${moisLong(`${jusqua}-01`)}` +
-      `${remplacees > 0 ? `, dont ${remplacees} mise(s) à jour` : ""}. ` +
+      `${remplacees > 0 ? `, dont ${remplacees} ${accorde(remplacees, "mise", "mises")} à jour` : ""}. ` +
       `Le constat automatique ne recomptera aucun mois antérieur.`,
   };
 }
@@ -1226,7 +1237,8 @@ export async function relancerMaintenant(
   );
   revalidatePath("/", "layout");
 
-  const reste = echecs.length > 0 ? ` ${echecs.length} envoi(s) ont échoué.` : "";
+  const echoue = `${echecs.length} ${accorde(echecs.length, "envoi a échoué", "envois ont échoué")}.`;
+  const reste = echecs.length > 0 ? ` ${echoue}` : "";
   const doublon =
     dejaTouches > 0
       ? ` ${dejaTouches} d'entre eux avaient déjà reçu la relance automatique aujourd'hui : ` +
@@ -1239,7 +1251,10 @@ export async function relancerMaintenant(
       : "";
   return {
     ok: echecs.length === 0,
-    message: `${envoyes.length} relance(s) envoyée(s) sur ${destinataires.length} membre(s) concerné(s).${reste}${doublon}${porte}`,
-    erreur: echecs.length > 0 ? `${echecs.length} envoi(s) ont échoué.` : undefined,
+    message:
+      `${envoyes.length} ${accorde(envoyes.length, "relance envoyée", "relances envoyées")} sur ` +
+      `${destinataires.length} ${accorde(destinataires.length, "membre concerné", "membres concernés")}.` +
+      `${reste}${doublon}${porte}`,
+    erreur: echecs.length > 0 ? echoue : undefined,
   };
 }

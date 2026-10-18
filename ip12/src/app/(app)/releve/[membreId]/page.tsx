@@ -9,7 +9,7 @@ import {
   situationsClub,
   synthese,
 } from "@/lib/queries";
-import { CLUB, REGLES, ROLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { CLUB, REGLES, ROLES, dateCourte, deMois, fcfa, moisLong } from "@/lib/settings";
 import { pourcent } from "@/lib/perf";
 import { STATUT_PENALITE, STATUT_VERSEMENT, libelleMode } from "@/lib/valeurs";
 import { BoutonImprimer } from "@/components/impression";
@@ -126,9 +126,18 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
             {CLUB.nom} &middot; {CLUB.ville}
           </p>
           <h1 className="mt-1 text-xl font-semibold">Relevé individuel</h1>
+          {/*
+            * Une part rachetee n'est pas un membre : elle n'a ni role ni date
+            * d'adhesion. Son en-tete disait « Membre · membre depuis le 01/11/2026 »,
+            * une date a venir. Il dit desormais qui la detient et quand elle cotise.
+            */}
           <p className="mt-1 text-sm">
-            {membre.nom} &middot; {ROLES[membre.role]}
-            {membre.date_adhesion ? ` · membre depuis le ${dateCourte(membre.date_adhesion)}` : ""}
+            {membre.titulaireId
+              ? `${membre.nom} · part rachetée détenue par ${
+                  membres.find((m) => m.id === membre.titulaireId)?.nom ?? "son détenteur"
+                } · cotise à partir ${deMois(membre.date_adhesion)}`
+              : `${membre.nom} · ${ROLES[membre.role]}` +
+                (membre.date_adhesion ? ` · membre depuis le ${dateCourte(membre.date_adhesion)}` : "")}
           </p>
           <p className="text-xs" style={{ color: "var(--discret)" }}>
             Édité le {dateCourte(edite)}

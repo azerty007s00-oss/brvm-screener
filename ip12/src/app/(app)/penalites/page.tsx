@@ -21,7 +21,7 @@ import {
   validerReglementPenalite,
 } from "@/app/actions/penalites";
 import { dejaAuRegistre, issueR5, tranchesAbsence } from "@/lib/penalites";
-import { EFFET, REGLES, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { EFFET, REGLES, accorde, dateCourte, fcfa, moisLong } from "@/lib/settings";
 import {
   KIND_PENALITE,
   PREFIXE_SOLDE_SORTIE,
@@ -324,8 +324,8 @@ export default async function PagePenalites() {
           ton={regleEnVigueur ? "rouge" : "ambre"}
           titre={
             regleEnVigueur
-              ? `${exposes.length} membre(s) exclus de plein droit`
-              : `${exposes.length} membre(s) exposés à compter du ${dateEffet}`
+              ? `${exposes.length} ${accorde(exposes.length, "membre exclu", "membres exclus")} de plein droit`
+              : `${exposes.length} ${accorde(exposes.length, "membre exposé", "membres exposés")} à compter du ${dateEffet}`
           }
         >
           <p>
@@ -338,7 +338,8 @@ export default async function PagePenalites() {
           <ul className="mt-1 space-y-0.5">
             {exposes.map((x) => (
               <li key={x.membreId}>
-                {x.nom} &middot; {x.nbPenalitesImpayees} pénalités impayées
+                {x.nom} &middot; {x.nbPenalitesImpayees}{" "}
+                {accorde(x.nbPenalitesImpayees, "pénalité impayée", "pénalités impayées")}
                 {x.issue.applicable && (
                   <span className="block text-xs" style={{ color: "var(--discret)" }}>
                     {LIBELLE_VOIE[x.issue.voie ?? ""] ?? ""} : {x.issue.texte}
@@ -594,7 +595,11 @@ export default async function PagePenalites() {
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                      {gere && `${p.membre_nom} · `}
+                      {/*
+                        * Le detenteur d'une part rachetee voit ses penalites et celles
+                        * de sa part : sans le nom, il ne savait pas laquelle devait quoi.
+                        */}
+                      {(gere || p.membre_id !== membre.id) && `${p.membre_nom} · `}
                       {fcfa(p.montant)}
                       {p.quantite > 1 && (
                         <span
@@ -787,7 +792,7 @@ export default async function PagePenalites() {
                 action={constaterPenalitesRetard}
                 libelle="Porter au registre"
                 variante="discret"
-                confirmation={`Constater ${aConstater.length} pénalité(s) de retard ?`}
+                confirmation={`Constater ${aConstater.length} ${accorde(aConstater.length, "pénalité")} de retard ?`}
               />
             </>
           )}
@@ -855,7 +860,7 @@ export default async function PagePenalites() {
                     action={constaterPenalitesAbsence}
                     libelle="Porter au registre"
                     variante="discret"
-                    confirmation={`Constater ${absencesAConstater.length} pénalité(s) d'absence ?`}
+                    confirmation={`Constater ${absencesAConstater.length} ${accorde(absencesAConstater.length, "pénalité")} d'absence ?`}
                   />
                 </>
               )}

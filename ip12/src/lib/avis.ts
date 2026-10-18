@@ -1,7 +1,7 @@
 import "server-only";
 import { listerMembres, reglesIndisponibles } from "@/lib/queries";
 import { envoyerCourriel } from "@/lib/courriel";
-import { CLUB, accorde, dateCourte, fcfa, lienDuSite, moisLong, ROLES } from "@/lib/settings";
+import { CLUB, accorde, dateCourte, deMois, fcfa, lienDuSite, moisLong, ROLES } from "@/lib/settings";
 import { titulaires, DROITS } from "@/lib/droits";
 import { annonceFinAvance, type Destinataire } from "@/lib/relance";
 import type { Role } from "@/lib/settings";
@@ -70,10 +70,10 @@ export async function avertirLeBureau(
   const lignes: string[] = [
     "Bonjour,",
     "",
-    `Relance de ${moisLong(maintenant.toISOString().slice(0, 8) + "01")} : ` +
+    `Relance ${deMois(maintenant.toISOString().slice(0, 8) + "01")} : ` +
       `${destinataires.length} ${accorde(destinataires.length, "membre")} ` +
         `${accorde(destinataires.length, "vient", "viennent")} d'être ` +
-        `${accorde(destinataires.length, "relance")}.`,
+        `${accorde(destinataires.length, "relancé")}.`,
     "",
     "À ENCAISSER",
     `  Échéances du jour : ${attendus} ${accorde(attendus, "membre")}.`,
@@ -479,7 +479,7 @@ export async function avertirDemandeReinitialisation(params: {
   }
   return {
     partis,
-    detail: partis > 0 ? `${partis} destinataire(s)` : motifs.join(" ; ") || "aucun envoi",
+    detail: partis > 0 ? `${partis} ${accorde(partis, "destinataire")}` : motifs.join(" ; ") || "aucun envoi",
   };
 }
 

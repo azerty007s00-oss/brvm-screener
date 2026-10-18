@@ -6,6 +6,7 @@ import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { avertirAbsence } from "@/lib/avis";
 import { absencesParMembre, reglagesEffectifs } from "@/lib/queries";
+import { accorde } from "@/lib/settings";
 import type { EtatFormulaire } from "./auth";
 
 const PRESENCES = ["present", "absent", "excuse"] as const;
@@ -124,7 +125,7 @@ export async function enregistrerPresences(
     message:
       absents > 0
         ? `Feuille enregistrée. ${absents} absence${absents > 1 ? "s" : ""}. ` +
-          `${avertis > 0 ? `${avertis} membre(s) averti(s) par courriel. ` : ""}` +
+          `${avertis > 0 ? `${avertis} ${accorde(avertis, "membre averti", "membres avertis")} par courriel. ` : ""}` +
           "Vous pouvez les sanctionner depuis la page Pénalités."
         : "Feuille enregistrée.",
   };
