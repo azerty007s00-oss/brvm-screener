@@ -698,7 +698,15 @@ export async function enregistrerSortie(
    * rachats puissent s'y rattacher dans la meme transaction.
    */
   const sortieId = randomUUID();
-  await sql.transaction([
+  /*
+   * UN REFUS DE LA BASE SE DIT, IL NE FAIT PAS TOMBER LA PAGE.
+   *
+   * La transaction est d'un seul tenant : si la base refuse une ligne, rien
+   * n'est ecrit. Laissee filer, l'erreur affichait « This page couldn't load »
+   * sans un mot de la cause ; le president ne savait ni ce qui bloquait ni si
+   * la sortie etait passee. Le message de la base est rendu tel quel.
+   */
+  const ecrire = () => sql.transaction([
     sql`
       insert into member_exits (id, member_id, exit_date, reason, gross_value, fees,
                                 net_paid, forfeited, note, created_by)
@@ -757,46 +765,65 @@ export async function enregistrerSortie(
     `,
     sql`update members set is_active = false where id = ${membreId}::uuid`,
   ]);
+  try {
+    await ecrire();
+  } catch (e) {
+    const cause = e instanceof Error ? e.message : String(e);
+    console.error("enregistrerSortie : transaction refusée", e);
+    return refus(
+      `La base a refusé l'enregistrement, rien n'a été enregistré. Cause donnée par la base : ${cause}`,
+    );
+  }
 
   /*
    * Le sortant recoit le detail du calcul, en mots : les montants qu'il lit sont
    * ceux qui viennent d'etre enregistres. Un courrier qui ne part pas n'annule
    * pas la sortie ; le message le dit, pour que le bureau le lui transmette.
    */
-  const courrier = await envoyerCourrielSortie(
-    titulaire
-      ? { nom: titulaire.nom, email: titulaire.email }
-      : { nom: nomSortant, email: membre[0].email },
-    courrielSortie({
-      nom: titulaire ? titulaire.nom : nomSortant,
-      part: titulaire ? nomSortant : undefined,
-      dateSortie: date,
-      motif,
-      releve: d.releve,
-      club: d.club,
-      cotisations: d.acquis,
-      avance: d.avance,
-      quotePart: d.quotePart,
-      droits: partage.droitsClub,
-      rachats: acheteurs.map((a) => ({
-        nom: a.nom,
-        fraction: a.fraction,
-        valeur: a.valeur,
-        prix: a.prix,
-        auClub: a.auClub,
-        auSortant: a.auSortant,
-        arrieres: a.arrieres,
-      })),
-      penalites: d.penalitesDeduites,
-      penalitesEnCours: d.penalitesEnCours,
-      compensees: partage.compensees,
-      pocheActions: partage.pocheActions,
-      fraisVente: partage.fraisVente,
-      fraisGarde: partage.fraisGarde,
-      fraisTransfert: partage.fraisTransfert,
-      net: partage.netClub,
-    }),
-  ).catch((e: unknown) => ({ ok: false, detail: e instanceof Error ? e.message : String(e) }));
+  /*
+   * La sortie est ecrite : plus rien de ce qui suit ne doit faire tomber la page.
+   * Le courrier se compose dans la promesse, pour qu'une erreur en le composant
+   * soit rattrapee comme un envoi qui echoue.
+   */
+  const releve = d.releve;
+  const courrier = await Promise.resolve()
+    .then(() =>
+      envoyerCourrielSortie(
+        titulaire
+          ? { nom: titulaire.nom, email: titulaire.email }
+          : { nom: nomSortant, email: membre[0].email },
+        courrielSortie({
+          nom: titulaire ? titulaire.nom : nomSortant,
+          part: titulaire ? nomSortant : undefined,
+          dateSortie: date,
+          motif,
+          releve,
+          club: d.club,
+          cotisations: d.acquis,
+          avance: d.avance,
+          quotePart: d.quotePart,
+          droits: partage.droitsClub,
+          rachats: acheteurs.map((a) => ({
+            nom: a.nom,
+            fraction: a.fraction,
+            valeur: a.valeur,
+            prix: a.prix,
+            auClub: a.auClub,
+            auSortant: a.auSortant,
+            arrieres: a.arrieres,
+          })),
+          penalites: d.penalitesDeduites,
+          penalitesEnCours: d.penalitesEnCours,
+          compensees: partage.compensees,
+          pocheActions: partage.pocheActions,
+          fraisVente: partage.fraisVente,
+          fraisGarde: partage.fraisGarde,
+          fraisTransfert: partage.fraisTransfert,
+          net: partage.netClub,
+        }),
+      ),
+    )
+    .catch((e: unknown) => ({ ok: false, detail: e instanceof Error ? e.message : String(e) }));
 
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
