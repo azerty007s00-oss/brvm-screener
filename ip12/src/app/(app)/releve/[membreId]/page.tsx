@@ -149,6 +149,12 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
             <h2 className="mb-1 text-sm font-semibold">Part au capital (art. 12)</h2>
             <ul className="text-sm">
               {ligne("Capital acquis", part ? fcfa(part.acquis) : "--")}
+              {/*
+                * Une part rachetee porte le poids des cotisations du sortant ; sa
+                * plus-value se mesure sur le prix paye au rachat. Le dire evite de
+                * lire la plus-value contre le capital acquis.
+                */}
+              {part?.rachat ? ligne("Prix payé au rachat", fcfa(part.rachat.prix)) : null}
               {part && part.avance > 0 ? ligne("Avance en dépôt", fcfa(part.avance)) : null}
               {part && part.dues > 0 ? ligne("Pénalités déduites", `- ${fcfa(part.dues)}`) : null}
               {ligne("Quote-part", part ? pourcent(part.part, 2).replace("+", "") : "--")}

@@ -767,6 +767,8 @@ export type SituationClub = SituationMembre & {
    * `verse`. Zero pour une personne.
    */
   partsRachetees: number;
+  /** Pour une part rachetee : le prix paye au sortant par son detenteur. Zero pour une personne. */
+  prixRachat: number;
   /** Le detenteur, si cette ligne est une part rachetee. */
   titulaireId: string | null;
   /**
@@ -1246,6 +1248,7 @@ async function decomptesSortieBrut(dateSortie: string | null): Promise<DecompteS
     membreId: s.membreId,
     nom: s.nom,
     acquis: s.acquis + s.partsRachetees,
+    rachat: s.partsRachetees > 0 ? { poids: s.partsRachetees, prix: s.prixRachat } : undefined,
     avance: s.avance,
     dues: dette(s.membreId),
   }));
@@ -1375,15 +1378,21 @@ export async function faitsAvantSortie(d: DecompteSortie): Promise<FaitsSortie> 
  * La table n'existe qu'apres `scripts/migration-rachats.sql` : son absence veut
  * dire qu'aucun rachat n'a eu lieu, pas une panne.
  */
-async function poidsRachetes(arrete: string | null): Promise<Map<string, number>> {
+async function poidsRachetes(
+  arrete: string | null,
+): Promise<Map<string, { poids: number; prix: number }>> {
   try {
+    /*
+     * `price` compte aussi les penalites que l'acheteur a reprises (`paid_to_club`) :
+     * elles vont au club, non au sortant, et ne sont pas un apport a la part.
+     */
     const rows = await db()`
-      select part_id, sum(weight)::bigint as poids
+      select part_id, sum(weight)::bigint as poids, sum(price - paid_to_club)::bigint as prix
       from share_buybacks
       where ${arrete}::date is null or bought_on <= ${arrete}::date
       group by part_id
     `;
-    return new Map(rows.map((r) => [String(r.part_id), n(r.poids)]));
+    return new Map(rows.map((r) => [String(r.part_id), { poids: n(r.poids), prix: n(r.prix) }]));
   } catch {
     return new Map();
   }
@@ -1466,7 +1475,8 @@ async function situationsClubBrut(
       avance: siens
         .filter((v) => v.statut === "valide" && !estExigible(v.mois_couvert, aujourdhui))
         .reduce((s, v) => s + v.montant, 0),
-      partsRachetees: rachetees.get(m.id) ?? 0,
+      partsRachetees: rachetees.get(m.id)?.poids ?? 0,
+      prixRachat: rachetees.get(m.id)?.prix ?? 0,
       titulaireId: m.titulaireId,
       titulaireNom: titulaire?.nom ?? null,
       retardDeclare:
@@ -1626,6 +1636,7 @@ async function syntheseBrut(aujourdhui: Date, arrete: string | null = null): Pro
       membreId: s.membreId,
       nom: s.nom,
       acquis: s.acquis + s.partsRachetees,
+      rachat: s.partsRachetees > 0 ? { poids: s.partsRachetees, prix: s.prixRachat } : undefined,
       avance: s.avance,
       dues: dettePenalites(s.membreId),
     })),

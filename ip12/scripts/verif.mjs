@@ -104,6 +104,8 @@ assert.ok(d.rendement !== null && d.rendement > 0.2 && d.rendement < 0.32);
 /* ------------------------------------------- repartition : avances et penalites */
 
 const m = (membreId, nom, acquis, avance = 0, dues = 0) => ({ membreId, nom, acquis, avance, dues });
+const proche0 = (obtenu, attendu, quoi) =>
+  assert.ok(Math.abs(obtenu - attendu) < 1e-6, `${quoi} : attendu ${attendu}, obtenu ${obtenu}`);
 
 // Sans avance ni penalite : simple prorata du capital acquis.
 const simple = repartirParts([m("a", "A", 200_000), m("b", "B", 100_000)], 600_000);
@@ -125,6 +127,26 @@ assert.equal(aAvance.valeur + bAvance.valeur, 50);
 const gain = repartirParts([m("a", "A", 10, 5), m("b", "B", 10)], 105);
 assert.equal(gain.find((p) => p.membreId === "a").valeur, 5 + 50);
 assert.equal(gain.find((p) => p.membreId === "b").valeur, 50);
+
+/*
+ * Une part rachetee : son poids (les cotisations du sortant) fixe sa valeur, mais
+ * sa plus-value se mesure sur le prix paye au sortant et ses propres cotisations.
+ * Le rachat de KONE Bourama : 97 500 de poids recu, 175 000 payes ; elle affichait
+ * +78 490, le gain des cotisations du sortant depuis des annees.
+ */
+const avecPart = repartirParts(
+  [m("a", "A", 195_000), { ...m("p", "Part", 97_500 + 7_500), rachat: { poids: 97_500, prix: 175_000 } }],
+  550_000,
+);
+const laPart = avecPart.find((p) => p.membreId === "p");
+assert.equal(laPart.verse, 175_000 + 7_500, "verse d'une part : le prix paye et ses propres cotisations");
+proche0(laPart.plusValue, laPart.valeur - 182_500, "plus-value d'une part, sur le prix paye");
+assert.equal(
+  avecPart.find((p) => p.membreId === "a").verse,
+  195_000,
+  "une personne garde son verse : ses cotisations",
+);
+assert.ok(Math.abs(laPart.part - 105_000 / 300_000) < 1e-12, "le poids, lui, fixe toujours la part du pot");
 
 // Trois membres inegaux, une avance : le pot ampute se partage au prorata de l'acquis.
 const trois = repartirParts([m("a", "A", 30, 5), m("b", "B", 20), m("c", "C", 10)], 100);

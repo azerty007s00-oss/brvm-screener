@@ -116,7 +116,12 @@ export type PartMembre = {
    * club, retranchee de sa part a son montant.
    */
   dues: number;
-  /** Tout ce qu'il a verse : acquis + avance. Sert a mesurer la plus-value. */
+  /** Pour une part rachetee : le poids recu du sortant et le prix paye (voir `ApportMembre`). */
+  rachat?: { poids: number; prix: number };
+  /**
+   * Tout ce qu'il a verse : acquis + avance, le prix paye au rachat tenant lieu du
+   * poids recu pour une part rachetee. Sert a mesurer la plus-value.
+   */
   verse: number;
   /** Sa quote-part du pot a partager, hors avances. */
   part: number;
@@ -131,6 +136,13 @@ export type ApportMembre = {
   acquis: number;
   avance: number;
   dues: number;
+  /**
+   * Pour une part rachetee : le poids recu du sortant, compris dans `acquis`, et
+   * le prix que son detenteur a paye au sortant. Le poids fixe sa part du pot ;
+   * le prix est ce que le detenteur y a mis, et c'est sur lui que se mesure sa
+   * plus-value. Absent pour une personne.
+   */
+  rachat?: { poids: number; prix: number };
 };
 
 /**
@@ -204,7 +216,15 @@ export function repartirParts(
        * au club plus qu'il n'y detient. La somme des parts reste l'avoir.
        */
       const valeur = m.avance + part * aPartager - Math.max(0, m.dues);
-      const verse = m.acquis + m.avance;
+      /*
+       * CE QU'IL Y A MIS, NON CE QU'IL A RECU.
+       *
+       * Une part rachetee porte le poids des cotisations du sortant : compte comme
+       * verse, il affichait au detenteur le gain de ces cotisations depuis leur
+       * paiement, des annees avant son rachat. Ce qu'il a mis, c'est le prix paye
+       * au sortant, puis ses propres cotisations sur la part.
+       */
+      const verse = m.acquis - (m.rachat?.poids ?? 0) + (m.rachat?.prix ?? 0) + m.avance;
       return { ...m, verse, part, valeur, plusValue: valeur - verse };
     })
     .sort((a, b) => b.valeur - a.valeur);
