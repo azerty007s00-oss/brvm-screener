@@ -1,0 +1,61 @@
+name: BRVM Dividend Calendar Collection
+
+on:
+  schedule:
+    - cron: '20 6 3 * *'      # le 3 de chaque mois, 06:20 UTC
+  workflow_dispatch:
+    inputs:
+      pages:
+        description: 'Nombre de pages du calendrier à parcourir'
+        required: false
+        default: '12'
+      diagnostic:
+        description: 'Imprimer le HTML reçu dans les logs (pour corriger les URL)'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  collecte:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Collecte du calendrier
+        # Non bloquant : les sources peuvent refuser les IP des runners CI,
+        # comme c'est déjà le cas pour la mise à jour quotidienne des cours.
+        continue-on-error: true
+        run: |
+          python collecte_calendrier.py \
+            --pages "${{ inputs.pages || '12' }}" \
+            ${{ inputs.diagnostic == true && '--diagnostic' || '' }}
+
+      - name: Commit du calendrier mis à jour
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/dividendes_paiements.csv 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "Aucune nouvelle date de paiement."
+          else
+            git commit -m "data: calendrier des dividendes $(date -u '+%Y-%m-%d')"
+            git pull --rebase origin main
+            git push
+          fi
