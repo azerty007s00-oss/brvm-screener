@@ -159,8 +159,10 @@ export function montantsParMois(versements: VersementConnu[]): Map<string, numbe
 export function prochainReglement(
   cellules: CelluleMois[],
   porte: Map<string, number>,
-  requis: number,
+  /* La cotisation due : un montant, ou celui de chaque mois quand elle change en cours de route. */
+  requis: number | ((mois: string) => number),
 ): { mois: string; reste: number } | null {
+  const requisDe = typeof requis === "function" ? requis : () => requis;
   const ouvert = cellules.find((c) => c.manque > 0);
   if (ouvert) return { mois: ouvert.mois, reste: ouvert.manque };
 
@@ -169,11 +171,11 @@ export function prochainReglement(
 
   let mois = decalerMois(dernier, 1);
   for (let tour = 0; tour < 300; tour++) {
-    const reste = requis - (porte.get(mois) ?? 0);
+    const reste = requisDe(mois) - (porte.get(mois) ?? 0);
     if (reste > 0) return { mois, reste };
     mois = decalerMois(mois, 1);
   }
-  return { mois, reste: requis };
+  return { mois, reste: requisDe(mois) };
 }
 
 export type Imputation = { mois: string; montant: number };
@@ -203,17 +205,18 @@ export function imputer(
   montant: number,
   cellules: CelluleMois[],
   porte: Map<string, number>,
-  requis: number,
+  requis: number | ((mois: string) => number),
   moisMaximum = 24,
 ): Imputation[] {
+  const requisDe = typeof requis === "function" ? requis : () => requis;
   const depart = prochainReglement(cellules, porte, requis);
-  if (depart === null || requis <= 0) return [];
+  if (depart === null || requisDe(depart.mois) <= 0) return [];
 
   const grille = new Map(cellules.map((c) => [c.mois, c]));
   /* Ce qui manque pour solder un mois, dans la grille comme au-dela. */
   const manqueDu = (mois: string): number => {
     const c = grille.get(mois);
-    return c ? c.manque : Math.max(0, requis - (porte.get(mois) ?? 0));
+    return c ? c.manque : Math.max(0, requisDe(mois) - (porte.get(mois) ?? 0));
   };
 
   const imputations: Imputation[] = [];
@@ -380,11 +383,50 @@ export type VersementConnu = {
  */
 export type ReglesMembre = {
   cotisationMensuelle?: number;
+  /**
+   * Une cotisation particuliere datee : a partir de chaque `debut`, le montant
+   * du (`null` : retour a la cotisation de base). Sans palier, la cotisation
+   * vaut pour tous les mois, comme avant.
+   */
+  paliers?: { debut: string; montant: number | null }[];
+  /**
+   * Ce qui s'ajoute a la cotisation a partir d'un mois : la part rachetee
+   * fusionnee avec celle de son acheteur cotise avec elle, a proportion de sa
+   * taille, des la premiere echeance qui suit le rachat -- jamais avant.
+   */
+  supplements?: { debut: string; montant: number }[];
   /** Taux de l'art. 9, tel que regle par le bureau. Fraction, non pourcentage. */
   tauxPenalite?: number;
   /** Multiplie la penalite, par-dessus le doublement R4. 1 = regime commun. */
   multiplicateurPenalite?: number;
 };
+
+/**
+ * La cotisation due pour un mois.
+ *
+ * POURQUOI ELLE DEPEND DU MOIS.
+ *
+ * Une cotisation particuliere s'appliquait a tous les mois, passes compris, des
+ * qu'elle entrait en vigueur : un membre passe a 7 500 en novembre voyait ses
+ * mois anterieurs, payes 5 000, devenir incomplets, penalites a la cle. Elle
+ * vaut desormais a partir de son debut, et le passe garde la cotisation de son
+ * temps.
+ */
+export function cotisationDuMois(
+  propres: ReglesMembre,
+  mois: string,
+  base: number = REGLES.cotisationMensuelle,
+): number {
+  const cle = mois.slice(0, 7);
+  let montant = propres.cotisationMensuelle ?? base;
+  for (const p of [...(propres.paliers ?? [])].sort((a, b) => a.debut.localeCompare(b.debut))) {
+    if (p.debut.slice(0, 7) <= cle) montant = p.montant ?? propres.cotisationMensuelle ?? base;
+  }
+  for (const x of propres.supplements ?? []) {
+    if (x.debut.slice(0, 7) <= cle) montant += x.montant;
+  }
+  return montant;
+}
 
 export function situationMembre(
   membreId: string,
@@ -401,7 +443,7 @@ export function situationMembre(
    * Ce n'est couvert que lorsque la somme atteint la cotisation attendue --
    * verser 2 000 sur 5 000 ne libere pas de l'obligation de l'art. 8.
    */
-  const requis = propres.cotisationMensuelle ?? REGLES.cotisationMensuelle;
+  const requisDe = (mois: string) => cotisationDuMois(propres, mois);
   const parMois = new Map<string, VersementConnu[]>();
   for (const v of versements) {
     if (v.statut === "rejete") continue;
@@ -416,7 +458,7 @@ export function situationMembre(
    * non celle du premier acompte. Un acompte le 5 et le solde le 15 font un mois
    * regularise en retard, avec la penalite que l'art. 9 y attache.
    */
-  const dateDeSolde = (lignes: VersementConnu[]): string | null => {
+  const dateDeSolde = (lignes: VersementConnu[], requis: number): string | null => {
     let cumul = 0;
     for (const v of [...lignes].sort((a, b) =>
       (a.date_versement ?? "").localeCompare(b.date_versement ?? ""),
@@ -437,6 +479,7 @@ export function situationMembre(
       cellules.push({ mois, statut: "hors_periode", montant: 0, requis: 0, manque: 0, dateVersement: null });
       continue;
     }
+    const requis = requisDe(mois);
     const lignes = parMois.get(mois) ?? [];
     const connu = lignes.reduce((t, v) => t + v.montant, 0);
     const valide = lignes.filter((v) => v.statut === "valide").reduce((t, v) => t + v.montant, 0);
@@ -448,7 +491,7 @@ export function situationMembre(
      * attente -- c'est au tresorier de trancher, pas au declarant.
      */
     if (valide >= requis) {
-      const tardif = verseEnRetard(mois, dateDeSolde(lignes.filter((v) => v.statut === "valide")));
+      const tardif = verseEnRetard(mois, dateDeSolde(lignes.filter((v) => v.statut === "valide"), requis));
       if (tardif) moisRegularisesEnRetard.push(mois);
       cellules.push({
         mois,
@@ -456,7 +499,7 @@ export function situationMembre(
         montant: connu,
         requis,
         manque: 0,
-        dateVersement: dateDeSolde(lignes.filter((v) => v.statut === "valide")),
+        dateVersement: dateDeSolde(lignes.filter((v) => v.statut === "valide"), requis),
       });
       continue;
     }
@@ -467,7 +510,7 @@ export function situationMembre(
         montant: connu,
         requis,
         manque: 0,
-        dateVersement: dateDeSolde(lignes),
+        dateVersement: dateDeSolde(lignes, requis),
       });
       continue;
     }
@@ -549,7 +592,6 @@ export function calculerPenalites(
   moisRegularisesEnRetard: string[] = [],
   propres: ReglesMembre = {},
 ): PenaliteCalculee[] {
-  const cotisation = propres.cotisationMensuelle ?? REGLES.cotisationMensuelle;
   const tauxDeBase = propres.tauxPenalite ?? REGLES.tauxPenalite;
   const multiplicateur = propres.multiplicateurPenalite ?? 1;
 
@@ -559,7 +601,7 @@ export function calculerPenalites(
 
   const sur = (mois: string, doublee: boolean, figee: boolean): PenaliteCalculee => {
     const taux = (doublee ? tauxDeBase * 2 : tauxDeBase) * multiplicateur;
-    return { mois, taux, montant: Math.round(cotisation * taux), doublee, figee };
+    return { mois, taux, montant: Math.round(cotisationDuMois(propres, mois) * taux), doublee, figee };
   };
 
   return [

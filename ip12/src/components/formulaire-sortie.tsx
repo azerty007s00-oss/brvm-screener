@@ -217,8 +217,8 @@ function Acheteurs({
       <p className="mt-1 text-[12px]" style={{ color: "var(--ink-3)" }}>
         Laissez vide si le club rachète tout. Chaque acheteur indique la part qu&apos;il rachète,
         en pourcentage, et le prix convenu avec le sortant ; le club rachète le reste. Ce
-        qu&apos;il rachète devient chez lui une part distincte de la sienne, qui cotise à
-        proportion de sa taille, avec ses propres retards et pénalités.
+        qu&apos;il rachète s&apos;ajoute à sa part, et sa cotisation augmente d&apos;autant à
+        partir de l&apos;échéance suivante. Un acheteur en retard doit d&apos;abord se mettre à jour.
       </p>
       {lignes.map((l) => (
         <div

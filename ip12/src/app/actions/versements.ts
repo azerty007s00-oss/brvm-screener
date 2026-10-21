@@ -7,7 +7,7 @@ import { exigerMembre, exigerRole } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
 import { declarePour, derogationsParMembre, reglagesEffectifs, situationsClub } from "@/lib/queries";
-import { imputer, type ReglesMembre } from "@/lib/penalites";
+import { cotisationDuMois, imputer, type ReglesMembre } from "@/lib/penalites";
 import { fcfa, moisLong } from "@/lib/settings";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
@@ -126,8 +126,9 @@ export async function declarerVersement(
   if (!situation) return { ok: false, erreur: "Membre introuvable." };
 
   const derogations = await derogationsParMembre().catch(() => new Map<string, ReglesMembre>());
-  const requis =
-    derogations.get(membreCible)?.cotisationMensuelle ?? reglages.cotisationMensuelle;
+  /* La cotisation de chaque mois : elle peut changer en cours de route (part rachetee fusionnee). */
+  const requis = (mois: string) =>
+    cotisationDuMois(derogations.get(membreCible) ?? {}, mois, reglages.cotisationMensuelle);
 
   /*
    * Ce que chaque mois porte deja, le mois courant compris et les avances

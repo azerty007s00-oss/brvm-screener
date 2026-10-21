@@ -32,7 +32,7 @@ const {
   situationMembre, calculerPenalites, issueR5, moisARelancer, tranchesAbsence,
   dejaAuRegistre, cleRetard, echeanceDuMois, phaseSeuilR5,
   prochainReglement, montantsParMois, imputer, imputerPenalites, cotisationsARegler,
-  etatAvance,
+  etatAvance, cotisationDuMois,
 } = await import("../.verif/penalites.mjs");
 const {
   tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa,
@@ -254,6 +254,42 @@ assert.equal(enRetard.nbMoisRetard, 3, `attendu 3 mois impayes, obtenu ${enRetar
 assert.ok(enRetard.declarationRequise, "R3 doit etre exigee des le 2e mois");
 assert.ok(enRetard.voteSuspendu, "R2 doit suspendre le vote au-dela de 30 jours");
 assert.ok(enRetard.exclusionEncourue, "art. 20 encouru a 3 mois");
+
+/*
+ * LA COTISATION DATEE. Une part rachetee fusionnee ajoute sa fraction a partir
+ * de la premiere echeance qui suit le rachat, jamais avant : les mois anterieurs,
+ * payes 5 000, restent payes. Une cotisation particuliere a debut et fin ne
+ * vaut que dans sa periode.
+ */
+{
+  const fusion = { supplements: [{ debut: "2026-11-01", montant: 2_500 }] };
+  assert.equal(cotisationDuMois(fusion, "2026-10-01"), 5_000, "avant la fusion, la cotisation d'alors");
+  assert.equal(cotisationDuMois(fusion, "2026-11-01"), 7_500, "a partir de novembre, 5 000 + 2 500");
+  const datee = { paliers: [{ debut: "2026-06-01", montant: 7_000 }, { debut: "2026-09-01", montant: null }] };
+  assert.equal(cotisationDuMois(datee, "2026-05-01"), 5_000, "avant son debut, la cotisation commune");
+  assert.equal(cotisationDuMois(datee, "2026-07-01"), 7_000, "pendant sa periode, la cotisation particuliere");
+  assert.equal(cotisationDuMois(datee, "2026-09-01"), 5_000, "apres sa fin, retour a la commune");
+
+  const mois = ["2026-08-01", "2026-09-01", "2026-10-01", "2026-11-01"];
+  const vers = [
+    { mois_couvert: "2026-08-01", montant: 5000, statut: "valide", date_versement: "2026-08-05" },
+    /* La cotisation impayee du sortant, reprise au rachat le 11/10 : en plus des 5 000 du mois. */
+    { mois_couvert: "2026-08-01", montant: 2500, statut: "en_attente", date_versement: "2026-10-11" },
+    { mois_couvert: "2026-09-01", montant: 5000, statut: "valide", date_versement: "2026-09-05" },
+    { mois_couvert: "2026-10-01", montant: 5000, statut: "valide", date_versement: "2026-10-05" },
+    { mois_couvert: "2026-11-01", montant: 5000, statut: "valide", date_versement: "2026-10-10" },
+  ];
+  const avant = situationMembre("f", mois, vers, [], new Date("2026-11-05T12:00:00Z"), undefined, fusion);
+  assert.deepEqual(avant.cellules.map((c) => c.statut), ["paye", "paye", "paye", "a_venir"],
+    "les mois d'avant la fusion restent payes, la reprise ne les met pas en retard");
+  assert.equal(avant.cellules[3].manque, 2_500, "novembre : il manque les 2 500 de la part rachetee");
+  assert.equal(avant.totalPenalites, 0, "aucune penalite sur les mois d'avant");
+  const apres = situationMembre("f", mois, vers, [], new Date("2026-11-11T12:00:00Z"), undefined, fusion);
+  assert.equal(apres.cellules[3].statut, "partiel", "passe le 10, novembre a 5 000 sur 7 500 est en retard");
+  assert.equal(apres.penalites.find((x) => x.mois === "2026-11-01").montant, 750, "la penalite porte sur 7 500");
+  assert.equal(prochainReglement(apres.cellules, montantsParMois(vers), (m) => cotisationDuMois(fusion, m)).reste,
+    2_500, "le formulaire propose les 2 500 qui manquent");
+}
 
 // Le mois courant n'est pas exigible avant le 10.
 const avantEcheance = situationMembre("m3", ["2026-08-01"], [], [], new Date("2026-08-05T12:00:00Z"));
@@ -2148,7 +2184,7 @@ assert.equal(
     quotePart: 364_350, part: 0.0961, avance: 0, penalites: 9_500, netClub: 342_940, fraisClub: 11_910,
     arrieres: 15_000,
   });
-  assert.ok(avecArrieres.some((l) => l.includes(`ses cotisations impayées (${fcfa(15_000)}), qui comptent dans la part rachetée`)));
+  assert.ok(avecArrieres.some((l) => l.includes(`ses cotisations impayées (${fcfa(15_000)}), qui comptent dans sa part`)));
   assert.ok(val[0].startsWith(`Valeur de sa part : ${fcfa(430_000)} (25 % du total à partager).`));
   assert.ok(val.some((l) => l.includes(`un prix entre ${fcfa(plancher)}`) && l.includes(`et ${fcfa(406_000)} (la valeur de sa part`)));
   assert.ok(val.some((l) => l.includes("et le club lui rend son avance")), "l'avance reste au sortant");
@@ -2234,8 +2270,8 @@ assert.equal(
   const np = lignesNouvellesParts([{ nom: "SORO Tiélina", taille: 0.5 }], 5_000, "2026-11-01");
   assert.equal(
     np[0],
-    `SORO Tiélina détiendra une part distincte de la sienne (50 % d'une part) : ${fcfa(2_500)} par mois ` +
-      "à partir de novembre 2026, avec ses propres retards et pénalités.",
+    `SORO Tiélina : ce qu'il rachète (50 % d'une part) s'ajoute à sa part. Sa cotisation augmente de ` +
+      `${fcfa(2_500)} par mois à partir de novembre 2026.`,
   );
 }
 

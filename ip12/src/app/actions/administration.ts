@@ -24,7 +24,6 @@ import {
   lignesPartage,
   lignesValeurDeLaPart,
   lignesValorisation,
-  nomDeLaPart,
   pointsAVerifier,
   premierMoisDeLaPart,
 } from "@/lib/sortie";
@@ -570,6 +569,23 @@ export async function enregistrerSortie(
     if (!Number.isFinite(prix) || prix < 0) return refus(`Indiquez pour ${nom} le prix convenu.`);
     rachats.push({ membreId: r.membre, fraction: Math.round(pourcentage * 1e4) / 1e6, prix: Math.round(prix) });
   }
+  /*
+   * UN ACHETEUR A JOUR. Ce qu'il rachete s'ajoute a sa part, et les cotisations
+   * impayees du sortant qu'il reprend s'inscrivent a son nom sur leurs mois : en
+   * retard lui-meme, ces sommes viendraient combler ses propres mois.
+   */
+  if (rachats.length > 0) {
+    const courantes = await situationsClub();
+    for (const r of rachats) {
+      const sa = courantes.find((x) => x.membreId === r.membreId);
+      if (sa && sa.nbMoisRetard > 0) {
+        return refus(
+          `${nomDe.get(r.membreId)} a ${sa.nbMoisRetard} mois de cotisation en retard : ` +
+            "il doit se mettre à jour avant de racheter des parts.",
+        );
+      }
+    }
+  }
   if (rachats.reduce((t, r) => t + r.fraction, 0) > 1 + 1e-9) {
     return refus("Les acheteurs rachètent plus de 100 % des parts : corrigez les pourcentages.");
   }
@@ -629,19 +645,24 @@ export async function enregistrerSortie(
   const frais = fraisDe(partage);
 
   /*
-   * Chaque acheteur recoit une part distincte de la sienne : une ligne du
-   * registre, a son nom, qui cotise a proportion de sa taille a partir de la
-   * premiere echeance qui suit le rachat.
+   * CE QUE L'ACHETEUR RACHETE S'AJOUTE A SA PROPRE PART (decision du bureau,
+   * octobre 2026).
+   *
+   * Il recevait une part distincte, avec sa ligne, ses mois et ses rappels : deux
+   * versements, deux validations et deux courriers par mois pour un seul payeur.
+   * Le poids rachete s'ajoute desormais au sien, et sa cotisation augmente de la
+   * fraction rachetee a partir de la premiere echeance qui suit (voir
+   * `derogationsParMembre`). Ses cotisations impayees reprises s'inscrivent a son
+   * nom, sur les mois qu'elles couvrent.
    */
   const fractionSortant = sortant?.fraction ?? 1;
   const reglages = await reglagesEffectifs();
   const premierMois = premierMoisDeLaPart(date, reglages.jourEcheance);
   const parts = acheteurs.map((a) => ({
     ...a,
-    partId: randomUUID(),
+    partId: a.membreId,
     lotArrieres: randomUUID(),
     taille: Math.round(a.fraction * fractionSortant * 1e6) / 1e6,
-    nomPart: nomDeLaPart(a.nom, nomSortant, a.fraction * fractionSortant),
   }));
 
   const faits = await faitsAvantSortie(d);
@@ -730,7 +751,7 @@ export async function enregistrerSortie(
   /*
    * En une seule transaction : la sortie, les rachats et le poids qu'ils
    * transmettent, ce que les acheteurs doivent verser au club pour les
-   * penalites (inscrit au registre, sur leur part), les penalites soldees, le
+   * penalites (inscrit au registre, a leur nom), les penalites soldees, le
    * membre desactive. L'identifiant de la sortie est tire ici pour que les
    * rachats puissent s'y rattacher dans la meme transaction.
    */
@@ -743,7 +764,7 @@ export async function enregistrerSortie(
   const noteSolde =
     `${PREFIXE_SOLDE_SORTIE} : ${motif}` +
     (reprises.length > 0
-      ? ` · reprises par ${reprises.map((a) => `${a.nom} (${fcfa(a.auClub)})`).join(", ")}, dues sur leurs parts`
+      ? ` · reprises par ${reprises.map((a) => `${a.nom} (${fcfa(a.auClub)})`).join(", ")}, inscrites à leur nom`
       : "");
   /*
    * UN REFUS DE LA BASE SE DIT, IL NE FAIT PAS TOMBER LA PAGE.
@@ -762,12 +783,6 @@ export async function enregistrerSortie(
     `,
     ...parts.flatMap((a) => [
       sql`
-        insert into members (id, full_name, email, role, password_hash, must_change_password,
-                             is_active, joined_on, holder_id, part_fraction)
-        values (${a.partId}::uuid, ${a.nomPart}, null, 'membre', null, false,
-                true, ${premierMois}::date, ${a.membreId}::uuid, ${a.taille})
-      `,
-      sql`
         insert into share_buybacks (exit_id, seller_id, buyer_id, part_id, bought_on, fraction,
                                     weight, reference_value, price, paid_to_club, created_by)
         values (${sortieId}::uuid, ${membreId}::uuid, ${a.membreId}::uuid, ${a.partId}::uuid,
@@ -775,8 +790,8 @@ export async function enregistrerSortie(
                 ${a.auClub}, ${auteur.id}::uuid)
       `,
       /*
-       * Les cotisations impayees reprises : une ligne par mois, au nom de la part,
-       * en attente jusqu'a ce que le tresorier constate l'argent.
+       * Les cotisations impayees reprises : une ligne par mois, au nom de
+       * l'acheteur, en attente jusqu'a ce que le tresorier constate l'argent.
        */
       ...a.moisArrieres.map(
         (x) => sql`
@@ -796,12 +811,11 @@ export async function enregistrerSortie(
      *
      * Elles attendaient en caisse comme une recette a recevoir : personne n'y
      * etait nomme au registre, aucun rappel ne les reclamait, et la valeur du
-     * club les perdait de vue jusqu'a l'encaissement. Inscrites sur la part
-     * rachetee, elles se lisent au registre sous le nom de l'acheteur, partent
-     * dans ses rappels comme toute penalite due, comptent comme creance du club,
-     * et se reglent par le chemin ordinaire, depuis Versements. Nature « autre » :
-     * ce ne sont pas des retards de la part, elles ne comptent pas dans le seuil
-     * R5 de ses propres penalites de retard.
+     * club les perdait de vue jusqu'a l'encaissement. Inscrites au nom de
+     * l'acheteur, elles se lisent au registre, partent dans ses rappels comme
+     * toute penalite due, comptent comme creance du club, et se reglent par le
+     * chemin ordinaire, depuis Versements. Nature « autre » : ce ne sont pas ses
+     * retards, elles ne comptent pas dans le seuil R5 de ses penalites de retard.
      */
     ...parts
       .filter((a) => a.auClub > 0)
@@ -921,11 +935,11 @@ export async function enregistrerSortie(
         : ". ") +
       (auClub > 0
         ? `Les ${fcfa(auClub)} que les acheteurs doivent au club pour ses pénalités sont inscrits au registre ` +
-          "des pénalités, au nom de leur part : ils figurent dans leurs rappels et se règlent depuis Versements. "
+          "des pénalités, à leur nom : ils figurent dans leurs rappels et se règlent depuis Versements. "
         : "") +
       (arrieresRepris > 0
         ? `Les ${fcfa(arrieresRepris)} de cotisations impayées qu'ils reprennent attendent dans Versements, ` +
-          "au nom de leur part : validez-les à réception. "
+          "à leur nom : validez-les à réception. "
         : "") +
       "Ses pénalités sont soldées avec le motif de sortie. " +
       (courrier.ok

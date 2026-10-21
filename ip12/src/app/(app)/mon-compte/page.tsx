@@ -1,12 +1,20 @@
 import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
-import { listerMembres, listerVersements, reglagesEffectifs, situationsClub, synthese } from "@/lib/queries";
+import {
+  listerMembres,
+  listerVersements,
+  rachatsIntegres,
+  reglagesEffectifs,
+  situationsClub,
+  synthese,
+} from "@/lib/queries";
 import { changerMotDePasse, seDeconnecter } from "@/app/actions/auth";
 import { joindreJustificatif } from "@/app/actions/versements";
 import { ChampJustificatif } from "@/components/justificatif";
 import { justificatifsParLot } from "@/lib/justificatifs";
 import { penalitesNonInscrites } from "@/lib/constat";
-import { ROLES, accorde, dateCourte, fcfa, moisLong, nombre } from "@/lib/settings";
+import { ROLES, accorde, dateCourte, deMois, fcfa, moisLong, nombre } from "@/lib/settings";
+import { premierMoisDeLaPart } from "@/lib/sortie";
 import { couleurSigne } from "@/lib/perf";
 import { Champ, ChampCache, Depliant, FormulaireAction } from "@/components/formulaires";
 import { libelleMode } from "@/lib/valeurs";
@@ -20,15 +28,16 @@ export const metadata = { title: "Mon compte" };
 export default async function PageMonCompte() {
   const membre = await exigerMembre();
 
-  let mesVersements, situations, s, pieces, membres, reglages;
+  let mesVersements, situations, s, pieces, membres, reglages, mesRachats;
   try {
-    [mesVersements, situations, s, pieces, membres, reglages] = await Promise.all([
+    [mesVersements, situations, s, pieces, membres, reglages, mesRachats] = await Promise.all([
       listerVersements({ membreId: membre.id }),
       situationsClub(),
       synthese(),
       justificatifsParLot(),
       listerMembres(),
       reglagesEffectifs(),
+      rachatsIntegres(membre.id),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -156,6 +165,33 @@ export default async function PageMonCompte() {
           <p className="mt-2 text-[12px]" style={{ color: "var(--discret)" }}>
             Pour la payer, déclarez le versement en choisissant cette part : elle a ses propres mois
             et ses propres pénalités, distincts des vôtres.
+          </p>
+        </Carte>
+      )}
+
+      {/*
+        * CE QUE J'AI RACHETE ET INTEGRE A MA PART. Le poids s'ajoute au mien,
+        * ma cotisation augmente de la fraction rachetee : je dois pouvoir le lire.
+        */}
+      {mesRachats.length > 0 && (
+        <Carte titre={mesRachats.length > 1 ? "Parts rachetées, intégrées à la mienne" : "Part rachetée, intégrée à la mienne"}>
+          <ul className="space-y-1.5 text-sm">
+            {mesRachats.map((r) => (
+              <li key={`${r.vendeur}-${r.le}`}>
+                {String(Math.round(r.fraction * 1000) / 10).replace(".", ",")} % de la part de {r.vendeur},
+                rachetée le {dateCourte(r.le)} pour {fcfa(r.prix)}.
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[12px]" style={{ color: "var(--discret)" }}>
+            Votre cotisation est de{" "}
+            {fcfa(
+              Math.round(
+                (1 + mesRachats.reduce((t, r) => t + r.fraction, 0)) * reglages.cotisationMensuelle,
+              ),
+            )}{" "}
+            par mois à partir {deMois(premierMoisDeLaPart(mesRachats[0].le, reglages.jourEcheance))}. La
+            plus-value de votre part se mesure sur le prix payé, non sur les cotisations du vendeur.
           </p>
         </Carte>
       )}

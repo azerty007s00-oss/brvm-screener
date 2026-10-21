@@ -213,8 +213,8 @@ export function courrielSortie(d: DonneesCourrielSortie): { sujet: string; texte
       );
     }
     lignes.push(
-      "Chaque acheteur détient désormais ce qu'il a racheté comme une part distincte de la " +
-        "sienne, qui cotise chaque mois à proportion de sa taille. La caisse du club ne débourse " +
+      "Ce que chaque acheteur a racheté s'ajoute à sa propre part, et sa cotisation augmente " +
+        "d'autant chaque mois. La caisse du club ne débourse " +
         "rien pour ces parts et aucune action n'est vendue, donc aucun frais n'y est retenu. Les " +
         "parts des autres membres ne changent pas.",
     );
@@ -550,7 +550,7 @@ export function lignesValorisation(v: {
             v.arrieres > 0
               ? `ses cotisations impayées (${fcfa(v.arrieres)}` +
                 (v.moisArrieres?.length ? ` : ${listeDesMois(v.moisArrieres)}` : "") +
-                "), qui comptent dans la part rachetée"
+                "), qui comptent dans sa part"
               : "",
           ]
             .filter(Boolean)
@@ -603,7 +603,7 @@ export function lignesPartage(p: {
   );
   if (p.acheteurs.some((r) => r.auClub > 0 || r.arrieres > 0)) {
     lignes.push(
-      "Ce que les acheteurs doivent au club est inscrit au nom de leur part rachetée : les " +
+      "Ce que les acheteurs doivent au club est inscrit à leur nom : les " +
         "pénalités au registre des pénalités, dues et rappelées comme les autres, les cotisations " +
         "impayées dans Versements, en attente : validez-les à réception de l'argent.",
     );
@@ -635,8 +635,8 @@ export function nomDeLaPart(titulaire: string, sortant: string, fraction: number
 }
 
 /**
- * Ce que deviendra chaque part rachetee : une part distincte chez son acheteur,
- * qui cotise a proportion de sa taille des la premiere echeance qui suit.
+ * Ce que le rachat change pour chaque acheteur : la fraction rachetee s'ajoute a
+ * sa part, et sa cotisation augmente d'autant des la premiere echeance qui suit.
  */
 export function lignesNouvellesParts(
   parts: { nom: string; taille: number }[],
@@ -645,9 +645,9 @@ export function lignesNouvellesParts(
 ): string[] {
   return parts.map(
     (x) =>
-      `${x.nom} détiendra une part distincte de la sienne (${taux(x.taille)} d'une part) : ` +
-      `${fcfa(Math.round(x.taille * cotisationCommune))} par mois à partir de ` +
-      `${moisLong(premierMois)}, avec ses propres retards et pénalités.`,
+      `${x.nom} : ce qu'il rachète (${taux(x.taille)} d'une part) s'ajoute à sa part. Sa cotisation ` +
+      `augmente de ${fcfa(Math.round(x.taille * cotisationCommune))} par mois à partir de ` +
+      `${moisLong(premierMois)}.`,
   );
 }
 

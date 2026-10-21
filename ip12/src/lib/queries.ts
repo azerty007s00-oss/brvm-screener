@@ -2,9 +2,10 @@ import { cache } from "react";
 import "server-only";
 import { db } from "./db";
 import { estTableAbsente } from "./erreurs";
-import { CLUB, REGLES, debutMois, estExigible, moisDuClub, tauxNormalise } from "./settings";
+import { CLUB, REGLES, debutMois, decalerMois, estExigible, moisDuClub, tauxNormalise } from "./settings";
 import type { Role } from "./settings";
 import {
+  cotisationDuMois,
   etatAvance,
   montantsParMois,
   prochainReglement,
@@ -36,7 +37,7 @@ import {
   type Flux,
   type PartMembre,
 } from "./perf";
-import type { ContexteSortie, FaitsSortie } from "./sortie";
+import { premierMoisDeLaPart, type ContexteSortie, type FaitsSortie } from "./sortie";
 
 /** bigint et numeric reviennent en chaine avec le pilote Postgres : on normalise. */
 const n = (v: unknown): number => (v === null || v === undefined ? 0 : Number(v));
@@ -1053,11 +1054,54 @@ async function reglesImminentesBrut(
 }
 
 /** Les derogations en vigueur, indexees par membre, pretes pour le calcul. */
+/**
+ * Les rachats fusionnes : ce qu'un membre a rachete et integre a sa propre part.
+ * Une ligne de `share_buybacks` dont la part est l'acheteur lui-meme.
+ */
+async function rachatsFusionnes(): Promise<{ acheteur: string; le: string; fraction: number }[]> {
+  try {
+    const rows = await db()`
+      select buyer_id, to_char(bought_on, 'YYYY-MM-DD') as le, fraction
+      from share_buybacks
+      where part_id = buyer_id
+    `;
+    return rows.map((r) => ({ acheteur: String(r.buyer_id), le: String(r.le), fraction: Number(r.fraction) }));
+  } catch {
+    return [];
+  }
+}
+
+/** Les parts qu'un membre a rachetees et integrees a la sienne : a qui, combien, quand, pour quel prix. */
+export async function rachatsIntegres(
+  membreId: string,
+): Promise<{ vendeur: string; fraction: number; le: string; prix: number }[]> {
+  try {
+    const rows = await db()`
+      select s.full_name as vendeur, b.fraction, to_char(b.bought_on, 'YYYY-MM-DD') as le,
+             (b.price - b.paid_to_club)::bigint as prix
+      from share_buybacks b
+      join members s on s.id = b.seller_id
+      where b.buyer_id = ${membreId}::uuid and b.part_id = b.buyer_id
+      order by b.bought_on
+    `;
+    return rows.map((r) => ({
+      vendeur: String(r.vendeur),
+      fraction: Number(r.fraction),
+      le: String(r.le),
+      prix: n(r.prix),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 async function derogationsParMembreBrut(): Promise<Map<string, ReglesMembre>> {
-  const [regles, membres, reglages] = await Promise.all([
+  const [regles, toutes, membres, reglages, fusionnes] = await Promise.all([
     reglesIndividuelles(),
+    reglesIndividuelles(true),
     listerMembres(true).catch(() => [] as MembreListe[]),
     reglagesEffectifs(),
+    rachatsFusionnes(),
   ]);
   const index = new Map<string, ReglesMembre>();
   /*
@@ -1071,17 +1115,53 @@ async function derogationsParMembreBrut(): Promise<Map<string, ReglesMembre>> {
       index.set(m.id, { cotisationMensuelle: Math.round(m.fraction * reglages.cotisationMensuelle) });
     }
   }
-  for (const r of regles) {
+  /*
+   * LA COTISATION PARTICULIERE VAUT A PARTIR DE SON DEBUT.
+   *
+   * Lue parmi les regles en vigueur ce jour, elle s'appliquait a tous les mois,
+   * passes compris ; et une regle echue disparaissait des mois qu'elle avait
+   * pourtant regis. Elle devient un palier date : son montant de son debut a sa
+   * fin, la cotisation de base avant et apres. Sans date de debut, elle vaut pour
+   * tous les mois, comme avant.
+   */
+  for (const r of toutes) {
+    if (!r.actif || r.nature !== REGLE_MEMBRE.cotisationParticuliere) continue;
     if (r.valeur === null || !Number.isFinite(r.valeur) || r.valeur <= 0) continue;
     const courante = index.get(r.membreId) ?? {};
-    if (r.nature === REGLE_MEMBRE.cotisationParticuliere) {
+    if (!r.debut) {
       courante.cotisationMensuelle = r.valeur;
-    } else if (r.nature === REGLE_MEMBRE.multiplicateurPenalite) {
-      courante.multiplicateurPenalite = r.valeur;
     } else {
-      continue;
+      const paliers = courante.paliers ?? [];
+      paliers.push({ debut: r.debut, montant: r.valeur });
+      if (r.fin) paliers.push({ debut: decalerMois(`${r.fin.slice(0, 8)}01`, 1), montant: null });
+      courante.paliers = paliers;
     }
     index.set(r.membreId, courante);
+  }
+  for (const r of regles) {
+    if (r.nature !== REGLE_MEMBRE.multiplicateurPenalite) continue;
+    if (r.valeur === null || !Number.isFinite(r.valeur) || r.valeur <= 0) continue;
+    const courante = index.get(r.membreId) ?? {};
+    courante.multiplicateurPenalite = r.valeur;
+    index.set(r.membreId, courante);
+  }
+  /*
+   * LA PART RACHETEE FUSIONNEE COTISE AVEC CELLE DE SON ACHETEUR.
+   *
+   * Sa fraction de la cotisation commune s'ajoute a la sienne, a partir de la
+   * premiere echeance qui suit le rachat : 5 000 + 2 500 pour la moitie d'une
+   * part. Le passe garde sa cotisation d'alors.
+   */
+  for (const f of fusionnes) {
+    const courante = index.get(f.acheteur) ?? {};
+    courante.supplements = [
+      ...(courante.supplements ?? []),
+      {
+        debut: premierMoisDeLaPart(f.le, reglages.jourEcheance),
+        montant: Math.round(f.fraction * reglages.cotisationMensuelle),
+      },
+    ];
+    index.set(f.acheteur, courante);
   }
   return index;
 }
@@ -1482,10 +1562,8 @@ async function situationsClubBrut(
       retardDeclare:
         situation.moisEnRetard.length > 0 &&
         situation.moisEnRetard.every((mo) => declares.includes(mo)),
-      prochainReglement: prochainReglement(
-        situation.cellules,
-        montantsParMois(siens),
-        derogations.get(m.id)?.cotisationMensuelle ?? reglages.cotisationMensuelle,
+      prochainReglement: prochainReglement(situation.cellules, montantsParMois(siens), (mo) =>
+        cotisationDuMois(derogations.get(m.id) ?? {}, mo, reglages.cotisationMensuelle),
       ),
     };
   });
