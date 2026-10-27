@@ -76,6 +76,28 @@ export function BoutonVoile({ encre = "var(--ink-2)", taille = 20 }: { encre?: s
  */
 const MONTANT = /[+−-]?\s?\d{1,3}(?:[\s  .]\d{3})*(?:,\d+)?[\s  ]?FCFA/g;
 
+/** Un montant seul, du premier au dernier caractere : ce qu'une plage doit couvrir pour rester. */
+const MONTANT_SEUL = new RegExp(`^${MONTANT.source}$`);
+
+/**
+ * LES PLAGES QUI ONT GLISSE S'EFFACENT AVANT LA PEINTURE.
+ *
+ * Une plage suit son texte quand la page se recompose : une navigation, un
+ * tri, un formulaire envoye deplacent ou remplacent les noeuds, et une plage
+ * posee sur un montant peut se retrouver sur le texte voisin. Sur telephone,
+ * les noms des membres du registre des penalites sont ainsi passes sous la
+ * barre, a la place de leurs dettes. A chaque changement, avant la peinture,
+ * toute plage qui ne couvre plus exactement un montant est retiree ; le
+ * nouveau reperage suit, une fois l'agitation retombee.
+ */
+function elaguer(): void {
+  const surlignage = (CSS as unknown as { highlights?: Map<string, Set<Range>> }).highlights?.get("montant");
+  if (!surlignage) return;
+  for (const plage of [...surlignage]) {
+    if (!MONTANT_SEUL.test(plage.toString().trim())) surlignage.delete(plage);
+  }
+}
+
 function surligner(): void {
   const registre = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights;
   const Surlignage = (window as unknown as { Highlight?: new (...r: Range[]) => unknown }).Highlight;
@@ -92,7 +114,7 @@ function surligner(): void {
       const plage = document.createRange();
       plage.setStart(n, m.index ?? 0);
       plage.setEnd(n, (m.index ?? 0) + m[0].length);
-      plages.push(plage);
+      if (MONTANT_SEUL.test(plage.toString().trim())) plages.push(plage);
     }
   }
   registre.set("montant", new Surlignage(...plages));
@@ -119,6 +141,7 @@ export function SurligneurMontants() {
      */
     let attente: number | undefined;
     const observateur = new MutationObserver(() => {
+      elaguer();
       window.clearTimeout(attente);
       attente = window.setTimeout(surligner, 120);
     });
