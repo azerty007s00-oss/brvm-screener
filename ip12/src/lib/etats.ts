@@ -78,8 +78,7 @@ export function statutLigne(cellules: CelluleMois[]): {
    * membre avec. Deux mois et un compte disent la meme chose en tenant sur la
    * ligne -- le detail complet est a un doigt, dans le depliant.
    */
-  const liste = (mois: string[]) =>
-    mois.length <= 2 ? mois.join(", ") : `${mois.slice(0, 2).join(", ")} +${mois.length - 2}`;
+  const liste = listeCourte;
 
   const du = nomme("retard", "partiel");
   if (du.length > 0) {
@@ -104,6 +103,46 @@ export function statutLigne(cellules: CelluleMois[]): {
     texte: avance.length > 0 ? `À jour, avance ${avance.at(-1)}` : "À jour",
     encre: "var(--vert-encre)",
   };
+}
+
+/** Deux mois nommes, puis un compte : voir `statutLigne`. */
+function listeCourte(mois: string[]): string {
+  return mois.length <= 2 ? mois.join(", ") : `${mois.slice(0, 2).join(", ")} +${mois.length - 2}`;
+}
+
+/** Un mois a venir qui a deja recu une partie de sa cotisation : une avance a completer. */
+export function estEntame(c: CelluleMois): boolean {
+  return c.statut === "a_venir" && c.montant > 0;
+}
+
+/**
+ * L'etat d'une ligne vue du cote des mois a venir.
+ *
+ * Ce qui reclame un geste passe d'abord : un mois paye d'avance a l'ancien
+ * montant (5 000 quand la cotisation passe a 7 500 apres un rachat) attend son
+ * complement avant son echeance, sous peine de penalite. Puis ce qui attend une
+ * validation. Puis jusqu'ou l'avance couvre, sans trou.
+ */
+export function statutAvances(
+  avances: CelluleMois[],
+  maintenant: Date = new Date(),
+): { texte: string; encre: string } {
+  const entames = avances.filter(estEntame).map((c) => moisCourt(c.mois));
+  if (entames.length > 0) {
+    return { texte: `À compléter : ${listeCourte(entames)}`, encre: "var(--ambre-encre)" };
+  }
+  const attente = avances.filter((c) => c.statut === "en_attente").map((c) => moisCourt(c.mois));
+  if (attente.length > 0) {
+    return { texte: `En attente : ${listeCourte(attente)}`, encre: "var(--ambre-encre)" };
+  }
+  let dernier: string | null = null;
+  for (const c of avances) {
+    if (c.statut !== "paye" && c.statut !== "paye_en_retard") break;
+    dernier = c.mois;
+  }
+  if (dernier === null) return { texte: "Pas d'avance", encre: "var(--discret)" };
+  const annee = dernier.slice(0, 4) === String(maintenant.getUTCFullYear()) ? "" : ` ${dernier.slice(0, 4)}`;
+  return { texte: `Payé jusqu'à ${moisCourt(dernier)}${annee}`, encre: "var(--vert-encre)" };
 }
 
 /** Le compte en toutes lettres, pour qui ecoute la page au lieu de la voir. */

@@ -10,6 +10,7 @@ import {
   montantsParMois,
   prochainReglement,
   situationMembre,
+  type CelluleMois,
   type ReglesMembre,
   type SituationMembre,
   penalitesCourues,
@@ -787,7 +788,16 @@ export type SituationClub = SituationMembre & {
    * les deux ne peuvent donc pas dire deux choses differentes.
    */
   prochainReglement: { mois: string; reste: number } | null;
+  /**
+   * Les mois qui suivent le mois courant, tels que les avances les couvrent :
+   * payes, en attente, entames ou vides. Hors de `cellules`, que la relance,
+   * l'imputation et les penalites lisent et qui s'arretent au mois courant.
+   */
+  avances: CelluleMois[];
 };
+
+/** Combien de mois a venir la grille peut montrer : de quoi voir une avance d'un an. */
+export const HORIZON_AVANCES = 13;
 
 export type RegleMembre = {
   id: string;
@@ -1537,9 +1547,25 @@ async function situationsClubBrut(
       nbPenalites.get(m.id) ?? 0,
     );
 
+    /*
+     * Les mois a venir passent par le meme calcul, sur leur seule fenetre : une
+     * avance s'y lit avec la cotisation de chaque mois, 7 500 apres un rachat
+     * comme 5 000 avant.
+     */
+    const avances = situationMembre(
+      m.id,
+      Array.from({ length: HORIZON_AVANCES }, (_, i) => decalerMois(mois.at(-1) ?? debutMois(aujourdhui), i + 1)),
+      siens,
+      [],
+      aujourdhui,
+      `${m.date_adhesion.slice(0, 8)}01`,
+      { tauxPenalite: reglages.tauxPenalite, ...(derogations.get(m.id) ?? {}) },
+    ).cellules;
+
     const titulaire = m.titulaireId ? membres.find((x) => x.id === m.titulaireId) : undefined;
     return {
       ...situation,
+      avances,
       nom: m.nom,
       role: m.role,
       email: titulaire ? titulaire.email : m.email,

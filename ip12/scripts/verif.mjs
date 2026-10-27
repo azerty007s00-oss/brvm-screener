@@ -40,7 +40,7 @@ const {
 } = await import(
   "../.verif/settings.mjs"
 );
-const { statutLigne, moisCourt, initialeMois, resumeFrise, LIBELLE_STATUT } = await import(
+const { statutLigne, statutAvances, estEntame, moisCourt, initialeMois, resumeFrise, LIBELLE_STATUT } = await import(
   "../.verif/etats.mjs"
 );
 const { borne, retenus, tracable, reperesTemps } = await import("../.verif/horizons.mjs");
@@ -889,6 +889,32 @@ assert.equal(
 
 // Les mois hors periode -- avant l'entree du membre -- ne comptent pas.
 assert.equal(statutLigne([cel("2026-01-01", "hors_periode"), cel("2026-02-01", "paye")]).texte, "À jour");
+
+/* Les mois a venir : ce que la vue « À venir » du registre dit de chaque ligne. */
+{
+  const oct = new Date("2026-10-27T12:00:00Z");
+  const fut = (mois, montant, requis = 7500) => {
+    const statut = montant >= requis ? "paye" : "a_venir";
+    return { mois, statut, montant, requis, manque: Math.max(0, requis - montant), dateVersement: null };
+  };
+  // Une avance payee a 5 000 quand la cotisation passe a 7 500 : a completer, et le mois nomme.
+  const drame = [fut("2026-11-01", 5000), fut("2026-12-01", 5000), fut("2027-01-01", 5000), fut("2027-02-01", 0)];
+  assert.ok(estEntame(drame[0]) && !estEntame(drame[3]), "un mois vide n'est pas une avance entamée");
+  assert.equal(statutAvances(drame, oct).texte, "À compléter : nov., déc. +1");
+  // Une avance complete, sans trou : jusqu'ou elle va, l'annee dite quand elle change.
+  const soro = [fut("2026-11-01", 7500), fut("2026-12-01", 7500), fut("2027-01-01", 0)];
+  assert.equal(statutAvances(soro, oct).texte, "Payé jusqu'à déc.");
+  assert.equal(
+    statutAvances([fut("2026-11-01", 5000, 5000), fut("2026-12-01", 5000, 5000), fut("2027-01-01", 5000, 5000)], oct).texte,
+    "Payé jusqu'à janv. 2027",
+  );
+  // Un trou arrete la couverture : fevrier paye ne fait pas une avance jusqu'a fevrier.
+  assert.equal(statutAvances([fut("2026-11-01", 0, 5000), fut("2026-12-01", 5000, 5000)], oct).texte, "Pas d'avance");
+  assert.equal(
+    statutAvances([{ ...fut("2026-11-01", 7500), statut: "en_attente" }], oct).texte,
+    "En attente : nov.",
+  );
+}
 
 // Abreviations : avec leurs accents, comme le reste du site, et distinctes deux a deux.
 assert.equal(moisCourt("2026-08-01"), "août");

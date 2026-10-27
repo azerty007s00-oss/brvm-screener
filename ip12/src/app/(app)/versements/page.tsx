@@ -40,7 +40,9 @@ import {
   GlypheEtat,
   LegendeEtats,
   LIBELLE_STATUT,
+  estEntame,
   initialeMois,
+  statutAvances,
   statutLigne,
 } from "@/components/glyphe-etat";
 import { MODES_AFFICHES, STATUT_VERSEMENT, libelleMode } from "@/lib/valeurs";
@@ -71,8 +73,9 @@ function detailDuMois(c: CelluleMois): string {
     case "retard":
       return `Rien de versé : ${fcfa(c.manque > 0 ? c.manque : c.requis)} dus depuis le ${REGLES.jourEcheance}.`;
     case "a_venir":
-      return verse
-        ? `${verse} Mois payé d'avance.`
+      if (verse) return `${verse} Mois payé d'avance.`;
+      return c.montant > 0
+        ? `${fcfa(c.montant)} versés d'avance : il manque ${fcfa(c.manque)} avant le ${REGLES.jourEcheance}.`
         : `Pas encore dû : échéance au ${REGLES.jourEcheance}.`;
     case "hors_periode":
       return "";
@@ -96,10 +99,20 @@ function Chevron() {
 export default async function PageVersements({
   searchParams,
 }: {
-  searchParams: Promise<{ ordre?: string }>;
+  searchParams: Promise<{ ordre?: string; mois?: string }>;
 }) {
   const membre = await exigerMembre();
-  const ordre = (await searchParams).ordre === "nom" ? "nom" : "urgence";
+  const parametres = await searchParams;
+  const ordre = parametres.ordre === "nom" ? "nom" : "urgence";
+  /* Les mois passes, ou ceux qui viennent : la grille se deplace pour montrer les avances. */
+  const vue = parametres.mois === "avenir" ? "avenir" : "passes";
+  const lien = (o: typeof ordre, v: typeof vue) => {
+    const q = new URLSearchParams();
+    if (o === "nom") q.set("ordre", "nom");
+    if (v === "avenir") q.set("mois", "avenir");
+    const texte = q.toString();
+    return texte ? `/versements?${texte}` : "/versements";
+  };
 
   let situations, enAttente, membres, pieces, valides, reglages;
   try {
@@ -122,8 +135,14 @@ export default async function PageVersements({
   // Les corrections portent sur des saisies recentes : au-dela, on ne corrige plus, on regularise.
   const corrigibles = valides.slice(0, 40);
   const saisieDirecte = peut(membre, "saisirVersementValide");
-  // Les 14 derniers mois : au-dela, la grille devient illisible sur telephone.
-  const moisAffiches = (situations[0]?.cellules ?? []).slice(-14);
+  /*
+   * Quatorze mois : au-dela, la grille devient illisible sur telephone. Les
+   * quatorze derniers, ou le mois courant et les treize suivants : la meme
+   * grille, poussee vers la droite, montre jusqu'ou chacun a paye d'avance.
+   */
+  const fenetreDe = (s: { cellules: CelluleMois[]; avances: CelluleMois[] }) =>
+    vue === "avenir" ? [...s.cellules.slice(-1), ...s.avances] : s.cellules.slice(-14);
+  const moisAffiches = situations[0] ? fenetreDe(situations[0]) : [];
   const maSituation = situations.find((s) => s.membreId === membre.id);
   /* Les parts rachetees que ce membre detient : il les paie, chacune a part. */
   const mesParts = membres.filter((m) => m.titulaireId === membre.id);
@@ -230,15 +249,23 @@ export default async function PageVersements({
    * de mois concernes d'abord, puis le nom. C'est un ordre d'affichage : il ne
    * touche a aucun calcul, et le tri par nom rend la liste au classement connu.
    */
+  /* Le detail d'une ligne : les quatre mois les plus proches d'aujourd'hui, le plus proche en tete. */
+  const procheDAujourdhui = (mois: CelluleMois[]) =>
+    vue === "avenir" ? mois.slice(0, 4) : mois.slice(-4).reverse();
+
   const lignesRegistre = situations
     .map((s) => {
-      const fenetre = s.cellules.slice(-14);
-      const du = fenetre.filter((c) => c.statut === "retard" || c.statut === "partiel").length;
+      const fenetre = fenetreDe(s);
+      /* Vers l'avenir, ce qui reclame un geste est l'avance a completer avant son echeance. */
+      const du =
+        vue === "avenir"
+          ? fenetre.filter(estEntame).length
+          : fenetre.filter((c) => c.statut === "retard" || c.statut === "partiel").length;
       const attente = fenetre.filter((c) => c.statut === "en_attente").length;
       return {
         s,
         fenetre,
-        statut: statutLigne(fenetre),
+        statut: vue === "avenir" ? statutAvances(s.avances) : statutLigne(fenetre),
         moi: s.membreId === membre.id,
         rang: du > 0 ? 0 : attente > 0 ? 1 : 2,
         poids: du > 0 ? du : attente,
@@ -536,7 +563,7 @@ export default async function PageVersements({
             ).map(([cle, libelle]) => (
               <Link
                 key={cle}
-                href={cle === "urgence" ? "/versements" : "/versements?ordre=nom"}
+                href={lien(cle, vue)}
                 scroll={false}
                 aria-current={ordre === cle ? "true" : undefined}
                 className="grid min-h-11 place-items-center px-4 text-[13px] font-semibold"
@@ -551,6 +578,45 @@ export default async function PageVersements({
             ))}
           </div>
         </div>
+
+        {/* Meme principe : un lien, que le rechargement et le partage conservent. */}
+        <div className="sans-impression mb-3 flex items-center gap-2 text-xs">
+          <span style={{ color: "var(--discret)" }}>Mois affichés</span>
+          <div
+            className="ml-auto inline-flex overflow-hidden rounded-xl border"
+            style={{ borderColor: "var(--bordure)" }}
+          >
+            {(
+              [
+                ["passes", "Passés"],
+                ["avenir", "À venir"],
+              ] as const
+            ).map(([cle, libelle]) => (
+              <Link
+                key={cle}
+                href={lien(ordre, cle)}
+                scroll={false}
+                aria-current={vue === cle ? "true" : undefined}
+                className="grid min-h-11 place-items-center px-4 text-[13px] font-semibold"
+                style={
+                  vue === cle
+                    ? { background: "var(--ink)", color: "var(--page)" }
+                    : { color: "var(--discret)" }
+                }
+              >
+                {libelle}
+              </Link>
+            ))}
+          </div>
+        </div>
+        {vue === "avenir" && (
+          <p className="mb-3 flex items-center gap-2 text-[12px]" style={{ color: "var(--discret)" }}>
+            <GlypheEtat statut="a_venir" entame taille={16} />
+            <span>
+              À compléter : payé en partie d&apos;avance, le reste est dû avant le {REGLES.jourEcheance}.
+            </span>
+          </p>
+        )}
 
         <div
           className="overflow-hidden rounded-xl border"
@@ -643,11 +709,11 @@ export default async function PageVersements({
                     style={{ borderColor: "var(--bordure)", background: "var(--carte)" }}
                   >
                     <ul className="space-y-2.5">
-                      {fenetre
-                        .filter((c) => c.statut !== "hors_periode" && !(c.statut === "a_venir" && c.montant === 0))
-                        .slice(-4)
-                        .reverse()
-                        .map((c) => {
+                      {procheDAujourdhui(
+                        fenetre.filter(
+                          (c) => c.statut !== "hors_periode" && !(c.statut === "a_venir" && c.montant === 0),
+                        ),
+                      ).map((c) => {
                           const lignes = versementsDuMois.get(`${s.membreId}|${c.mois}`) ?? [];
                           const note = lignes.find((v) => v.note)?.note ?? null;
                           const justificatifs = lignes.flatMap((v) => pieces.get(v.lot) ?? []);
@@ -660,7 +726,7 @@ export default async function PageVersements({
                                 <div className="flex flex-wrap items-baseline gap-x-2 text-[13px]">
                                   <span className="font-semibold">{moisLong(c.mois)}</span>
                                   <span style={{ color: "var(--discret)" }}>
-                                    {LIBELLE_STATUT[c.statut]}
+                                    {estEntame(c) ? "À compléter" : LIBELLE_STATUT[c.statut]}
                                   </span>
                                   <span className="ml-auto font-semibold whitespace-nowrap tabular-nums">
                                     {c.manque > 0 && c.montant > 0

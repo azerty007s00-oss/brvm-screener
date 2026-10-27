@@ -1,9 +1,18 @@
 import type { CSSProperties } from "react";
 import type { CelluleMois, StatutMois } from "@/lib/penalites";
-import { LIBELLE_STATUT, STATUTS_LEGENDE, resumeFrise } from "@/lib/etats";
+import { LIBELLE_STATUT, STATUTS_LEGENDE, estEntame, resumeFrise } from "@/lib/etats";
 import { moisLong } from "@/lib/settings";
 
-export { LIBELLE_STATUT, STATUTS_LEGENDE, initialeMois, moisCourt, resumeFrise, statutLigne } from "@/lib/etats";
+export {
+  LIBELLE_STATUT,
+  STATUTS_LEGENDE,
+  estEntame,
+  initialeMois,
+  moisCourt,
+  resumeFrise,
+  statutAvances,
+  statutLigne,
+} from "@/lib/etats";
 
 /**
  * L'etat d'un mois, par sa forme avant sa couleur.
@@ -36,9 +45,12 @@ const coche: CSSProperties = {
 export function GlypheEtat({
   statut,
   taille = 20,
+  entame = false,
 }: {
   statut: StatutMois;
   taille?: number;
+  /** Un mois a venir deja paye en partie : la moitie basse pleine, en vert, sans alarme. */
+  entame?: boolean;
 }) {
   const s: CSSProperties = {
     width: taille,
@@ -142,7 +154,30 @@ export function GlypheEtat({
         </svg>
       );
 
+    /*
+     * Une avance a completer emprunte la silhouette de l'incomplet (la moitie
+     * basse pleine) mais pas son rouge : le mois n'est pas du, rien n'est en
+     * faute. Le vert dit l'argent deja la ; le contour, ce qui reste a venir.
+     */
     case "a_venir":
+      if (entame) {
+        return (
+          <svg viewBox="0 0 20 20" aria-hidden="true" style={s}>
+            <rect
+              x="2"
+              y="2"
+              width="16"
+              height="16"
+              rx="4"
+              style={{ fill: "var(--carte)", stroke: "var(--etat-paye)", strokeWidth: 1.8 }}
+            />
+            <path
+              d="M2 10.4 H18 V14 A4 4 0 0 1 14 18 H6 A4 4 0 0 1 2 14 Z"
+              style={{ fill: "var(--etat-paye)" }}
+            />
+          </svg>
+        );
+      }
       return (
         <svg viewBox="0 0 20 20" aria-hidden="true" style={s}>
           <circle
@@ -191,9 +226,9 @@ export function Frise({
         <span
           key={c.mois}
           className="flex justify-center"
-          title={`${moisLong(c.mois)} : ${LIBELLE_STATUT[c.statut]}`}
+          title={`${moisLong(c.mois)} : ${estEntame(c) ? "À compléter" : LIBELLE_STATUT[c.statut]}`}
         >
-          <GlypheEtat statut={c.statut} taille={taille} />
+          <GlypheEtat statut={c.statut} taille={taille} entame={estEntame(c)} />
         </span>
       ))}
     </div>
