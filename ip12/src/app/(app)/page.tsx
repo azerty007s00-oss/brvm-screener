@@ -11,7 +11,7 @@ import { couleurSigne, dureeEnClair, pourcent } from "@/lib/perf";
 import { CLUB, REGLES, accorde, dateCourte, deMois, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
 import { Carte, CarteEtat, EnTeteEcran, ValeurChiffree, Vide } from "@/components/ui";
 import { LienBouton } from "@/components/boutons";
-import { Frise, GlypheEtat, LIBELLE_STATUT, STATUTS_LEGENDE, statutLigne } from "@/components/glyphe-etat";
+import { Frise, GlypheEtat, LIBELLE_STATUT, STATUTS_LEGENDE, estEntame, statutLigne } from "@/components/glyphe-etat";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 import { penalitesNonInscrites } from "@/lib/constat";
 import type { ReactNode } from "react";
@@ -36,6 +36,72 @@ function Couple({ chiffres }: { chiffres: { libelle: string; brut: number }[] })
         </div>
       ))}
     </div>
+  );
+}
+
+/**
+ * Une tuile du bandeau : un libelle, le chiffre, et une ligne qui le situe.
+ *
+ * Quatre tuiles cote a cote disent l'etat du club d'un regard, avant tout
+ * texte. Une seule couleur y signale ce qui reclame un geste : l'accent, sur
+ * la tuile qui mene a une file a traiter. Le reste demeure a l'encre.
+ */
+function Tuile({
+  libelle,
+  brut,
+  valeur,
+  unite,
+  encre,
+  contexte,
+  href,
+  rang,
+}: {
+  libelle: string;
+  brut?: number;
+  valeur?: ReactNode;
+  unite?: string;
+  encre?: string;
+  contexte: ReactNode;
+  /** Une file a traiter : la tuile y mene, et porte l'accent. */
+  href?: string;
+  rang: number;
+}) {
+  const corps = (
+    <>
+      <p className="text-[12.5px]" style={{ color: href ? "var(--accent)" : "var(--ink-2)" }}>
+        {libelle}
+      </p>
+      <div className="mt-1.5">
+        <ValeurChiffree
+          brut={brut}
+          valeur={valeur}
+          unite={unite}
+          encre={encre ?? (href ? "var(--accent)" : undefined)}
+          retard={rang * 22}
+          taille="text-[20px] lg:text-[24px]"
+        />
+      </div>
+      <p className="mt-1 truncate text-[12px]" style={{ color: "var(--ink-3)" }}>
+        {contexte}
+      </p>
+    </>
+  );
+  const cadre = {
+    borderColor: href ? "var(--accent)" : "var(--line)",
+    background: "var(--carte)",
+  };
+  return (
+    <li>
+      {href ? (
+        <Link href={href} className="tapable block h-full rounded-xl border p-3.5" style={cadre}>
+          {corps}
+        </Link>
+      ) : (
+        <div className="h-full rounded-xl border p-3.5" style={cadre}>
+          {corps}
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -187,75 +253,105 @@ export default async function TableauDeBord() {
     .join(", ");
 
   /*
-   * Les deux chiffres poses a droite du heros. Le type est ecrit a la main : la
-   * premiere entree porte un montant, la seconde un taux et sa couleur, et sans
-   * annotation TypeScript en ferait une union ou chaque champ manque a l'une des
-   * deux -- exactement le genre de silence qui a laisse passer la cellule vide.
+   * Une avance payee a l'ancien montant : depuis la fusion des parts rachetees,
+   * un mois paye 5 000 d'avance en demande 7 500. Ce n'est pas un retard, mais
+   * le complement est du avant l'echeance, sous peine de penalite.
    */
-  const cles: {
-    libelle: string;
-    valeur?: ReactNode;
-    brut?: number;
-    unite?: string;
-    encre?: string;
-  }[] = [
-    {
-      libelle: "Portefeuille du club",
-      valeur: s.valorisation ? undefined : "--",
-      brut: s.valorisation ? s.valorisation.total : undefined,
-      unite: s.valorisation ? "FCFA" : undefined,
-    },
-    {
-      libelle: "Performance annualisée",
-      valeur: s.tri !== null ? pourcent(s.tri) : "--",
-      encre: couleurSigne(s.tri),
-    },
-  ];
+  const aCompleter = (maSituation?.avances ?? []).filter(estEntame);
+  const aValider = s.enAttenteValidation + reglementsEnAttente.length + mouvementsEnAttente.length;
+  const prochain = maSituation?.prochainReglement ?? null;
 
   return (
     <>
-      <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-5">
-        <EnTeteEcran
-          titre="Ma part"
-          sous={s.valorisation ? `au ${dateCourte(s.valorisation.date_valo)}` : "aucun relevé saisi"}
-          chiffre={maPart && s.valorisation ? undefined : "--"}
-          brut={maPart && s.valorisation ? maPart.valeur : undefined}
-          unite={maPart && s.valorisation ? "FCFA" : undefined}
-          detail={
-            (maPart
-              ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % du portefeuille, au prorata de mes versements validés.`
-              : "Votre part se calcule dès votre premier versement validé.") +
-            (partsDetenues.length > 0
-              ? ` En plus, ${accorde(partsDetenues.length, "part rachetée", "parts rachetées")} : ${fcfa(valeurPartsDetenues)}.`
-              : "")
+      <EnTeteEcran
+        titre="Ma part"
+        sous={s.valorisation ? `au ${dateCourte(s.valorisation.date_valo)}` : "aucun relevé saisi"}
+        chiffre={maPart && s.valorisation ? undefined : "--"}
+        brut={maPart && s.valorisation ? maPart.valeur : undefined}
+        unite={maPart && s.valorisation ? "FCFA" : undefined}
+        detail={
+          (maPart
+            ? `${(maPart.part * 100).toFixed(1).replace(".", ",")} % du portefeuille, au prorata de mes versements validés.`
+            : "Votre part se calcule dès votre premier versement validé.") +
+          (partsDetenues.length > 0
+            ? ` En plus, ${accorde(partsDetenues.length, "part rachetée", "parts rachetées")} : ${fcfa(valeurPartsDetenues)}.`
+            : "")
+        }
+      />
+
+      {/*
+        * LE BANDEAU : L'ETAT DU CLUB EN QUATRE CHIFFRES.
+        *
+        * Le portefeuille et la performance etaient poses a droite du heros, en
+        * petit ; le compte du mois et la file a traiter, plus bas, dans des
+        * cartes. Reunis en tuiles, ils se lisent d'un regard en ouvrant la page.
+        * La quatrieme tuile depend du lecteur : la file a valider pour le
+        * bureau, son prochain versement pour un membre.
+        */}
+      <ul className="apparait grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Tuile
+          rang={0}
+          libelle="Portefeuille du club"
+          brut={s.valorisation ? s.valorisation.total : undefined}
+          valeur={s.valorisation ? undefined : "--"}
+          unite={s.valorisation ? "FCFA" : undefined}
+          contexte={s.valorisation ? "selon le dernier relevé" : "aucun relevé saisi"}
+        />
+        <Tuile
+          rang={1}
+          libelle="Performance"
+          valeur={s.tri !== null ? pourcent(s.tri) : "--"}
+          encre={couleurSigne(s.tri)}
+          contexte={`par an, depuis ${(s.triPeriode?.debut ?? CLUB.dateCreation).slice(0, 4)}`}
+        />
+        <Tuile
+          rang={2}
+          libelle="Cotisations du mois"
+          valeur={`${payesCeMois} / ${moisDuClub.length}`}
+          contexte={
+            payesCeMois === moisDuClub.length
+              ? `${moisLong(moisCourant).split(" ")[0]} : toutes payées`
+              : `${moisLong(moisCourant).split(" ")[0]} : ${moisDuClub.length - payesCeMois} à recevoir`
           }
         />
-        {/*
-          * Ces deux chiffres passent par `ValeurChiffree`, comme ceux des
-          * bandeaux : la copie ecrite a la main qui vivait ici n'affichait ni
-          * les montants poses dans `brut` -- l'accueil annoncait « Portefeuille
-          * du club FCFA », sans chiffre -- ni la couleur de performance.
-          */}
-        <div className="flex gap-10 lg:gap-14">
-          {cles.map((c, i) => (
-            <div key={c.libelle}>
-              <p className="text-[12.5px]" style={{ color: "var(--ink-2)" }}>
-                {c.libelle}
-              </p>
-              <div className="mt-1">
-                <ValeurChiffree
-                  brut={c.brut}
-                  valeur={c.valeur}
-                  unite={c.unite}
-                  encre={c.encre}
-                  retard={i * 22}
-                  taille="text-[18px] lg:text-[22px]"
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
+        {estBureau ? (
+          <Tuile
+            rang={3}
+            libelle="À valider"
+            brut={aValider}
+            contexte={
+              aValider === 0
+                ? "rien en attente"
+                : [
+                    s.enAttenteValidation > 0 ? `${s.enAttenteValidation} ${accorde(s.enAttenteValidation, "versement", "versements")}` : null,
+                    reglementsEnAttente.length > 0 ? `${reglementsEnAttente.length} ${accorde(reglementsEnAttente.length, "pénalité", "pénalités")}` : null,
+                    mouvementsEnAttente.length > 0 ? `${mouvementsEnAttente.length} en caisse` : null,
+                  ]
+                    .filter(Boolean)
+                    .join(", ")
+            }
+            href={
+              aValider === 0
+                ? undefined
+                : s.enAttenteValidation > 0
+                  ? "/versements"
+                  : reglementsEnAttente.length > 0
+                    ? "/penalites"
+                    : "/caisse"
+            }
+          />
+        ) : (
+          <Tuile
+            rang={3}
+            libelle="Mon prochain versement"
+            brut={prochain?.reste}
+            valeur={prochain ? undefined : "--"}
+            unite={prochain ? "FCFA" : undefined}
+            contexte={prochain ? `pour ${moisLong(prochain.mois)}` : "rien à verser"}
+            href={aFaire || aCompleter.length > 0 ? "/versements" : undefined}
+          />
+        )}
+      </ul>
 
       <div className="grid grid-cols-1 gap-11 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] xl:items-start">
         {/*
@@ -264,8 +360,31 @@ export default async function TableauDeBord() {
           */}
         <div className="flex flex-col gap-11 xl:order-2">
           {maSituation && (
-            <Carte titre={aFaire ? "À faire" : "Rien à faire"}>
-              {!aFaireMoi ? (
+            <Carte titre={aFaire || aCompleter.length > 0 ? "À faire" : "Rien à faire"}>
+              {!aFaireMoi && aCompleter.length > 0 ? (
+                <>
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5">
+                      <GlypheEtat statut="a_venir" entame taille={22} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[14px] font-medium">
+                        {aCompleter.length} {accorde(aCompleter.length, "mois payé", "mois payés")} d&apos;avance à compléter
+                      </p>
+                      <p className="mt-1 text-[13px] leading-relaxed" style={{ color: "var(--ink-2)" }}>
+                        Votre cotisation est passée à {fcfa(aCompleter[0].requis)}. Il manque{" "}
+                        {fcfa(aCompleter.reduce((t, c) => t + c.manque, 0))} sur{" "}
+                        {aCompleter.map((c) => moisLong(c.mois)).join(", ")}, dont{" "}
+                        {fcfa(aCompleter[0].manque)} avant le {REGLES.jourEcheance}{" "}
+                        {moisLong(aCompleter[0].mois).split(" ")[0]}.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-5">
+                    <LienBouton href="/versements">Compléter mon avance</LienBouton>
+                  </div>
+                </>
+              ) : !aFaireMoi ? (
                 <p className="flex items-center gap-2.5 text-[13px]" style={{ color: "var(--ink-2)" }}>
                   <GlypheEtat statut="paye" taille={18} />
                   {partsAFaire.length > 0
