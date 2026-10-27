@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { dateCourte, fcfa, nombre } from "@/lib/settings";
+import { Voilable } from "@/components/voilable";
 import { couleurSigne } from "@/lib/perf";
 import { Selecteur } from "@/components/selecteur";
 import { reperesTemps, retenus, tracable, type Horizon } from "@/lib/horizons";
@@ -625,9 +626,8 @@ export function CourbePortefeuille({
             key={v}
             className="absolute text-[12px] tabular-nums"
             style={{ right: 0, top: `calc(${(y(v) / H) * 100}% - 0.5em)`, color: "var(--ink-3)" }}
-            data-montant=""
           >
-            {enMillions(v)}
+            <Voilable>{enMillions(v)}</Voilable>
           </span>
         ))}
       </div>
@@ -708,12 +708,12 @@ export function CourbePortefeuille({
             {point.actions !== undefined && point.liquidites !== undefined && (
               <span>
                 Actions{" "}
-                <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }} data-montant="">
-                  {nombre(point.actions)}
+                <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+                  <Voilable>{nombre(point.actions)}</Voilable>
                 </span>{" "}
                 &middot; liquidités{" "}
-                <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }} data-montant="">
-                  {nombre(point.liquidites)}
+                <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+                  <Voilable>{nombre(point.liquidites)}</Voilable>
                 </span>
               </span>
             )}
@@ -749,8 +749,8 @@ export function CourbePortefeuille({
         ) : (
           <span>
             Variation de la valeur{" "}
-            <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }} data-montant="">
-              {signe(part.ecartValeur)} FCFA
+            <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+              <Voilable>{signe(part.ecartValeur)}</Voilable> FCFA
             </span>
             , apports compris.
           </span>
@@ -806,9 +806,8 @@ function Poste({
       <span
         className="font-medium tabular-nums"
         style={{ color: performance ? couleurSigne(montant) : "var(--ink)" }}
-        data-montant=""
       >
-        {avecSigne ? signe(montant) : nombre(montant)}
+        <Voilable>{avecSigne ? signe(montant) : nombre(montant)}</Voilable>
       </span>
     </span>
   );

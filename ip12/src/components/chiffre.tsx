@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { fcfa, nombre } from "@/lib/settings";
+import { Voilable } from "@/components/voilable";
 
 /*
  * LE FORMAT SE NOMME, IL NE SE PASSE PAS.
@@ -116,9 +117,10 @@ export function Chiffre({
     return () => cancelAnimationFrame(image);
   }, [valeur, duree, retard, mettreEnForme]);
 
-  return (
-    <span ref={el} className="tabular-nums" data-montant={format === "fcfa" ? "" : undefined}>
+  const rendu = (
+    <span ref={el} className="tabular-nums">
       {mettreEnForme(valeur)}
     </span>
   );
+  return format === "fcfa" ? <Voilable>{rendu}</Voilable> : rendu;
 }

@@ -13,12 +13,15 @@ import { CLE_VOILE } from "@/lib/voile";
  * sur l'appareil -- c'est une preference de l'ecran, non du compte.
  *
  * Deux mecanismes, parce que les montants vivent sous deux formes. Les chiffres
- * poses comme tels (heros, tuiles, bandeaux) portent `data-montant` : une
- * feuille de style les floute. Ceux qui courent dans une phrase -- « il manque
- * 2 500 FCFA » -- sont reperes dans le texte et surlignes par l'API CSS Custom
+ * poses comme tels (heros, tuiles, bandeaux) passent par `Voilable` : six
+ * points prennent leur place. Ceux qui courent dans une phrase -- « il manque
+ * 2 500 FCFA » -- sont reperes dans le texte et couverts par l'API CSS Custom
  * Highlight, sans toucher au DOM : React garde la main sur ses noeuds, et rien
  * ne se casse au rendu suivant. Un navigateur sans cette API voile les
  * chiffres, mais laisse lire les phrases.
+ *
+ * L'oeil se pose a cote du montant principal de la page (voir `EnTeteEcran`),
+ * comme a cote d'un solde : on le trouve la ou l'on regarde.
  */
 
 const EVENEMENT = "ip12-voile";
@@ -83,7 +86,7 @@ function surligner(): void {
   for (let n = parcours.nextNode(); n; n = parcours.nextNode()) {
     const texte = n.nodeValue ?? "";
     if (!texte.includes("FCFA")) continue;
-    // Deja floute en entier par la feuille de style : inutile de le surligner.
+    // Deja remplace par des points : inutile de le couvrir.
     if (n.parentElement?.closest("[data-montant], script, style")) continue;
     for (const m of texte.matchAll(MONTANT)) {
       const plage = document.createRange();

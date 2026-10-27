@@ -18,6 +18,7 @@ import { penalitesNonInscrites } from "@/lib/constat";
 import type { ReactNode } from "react";
 import { cotisationsARegler, type StatutMois } from "@/lib/penalites";
 import { Chiffre } from "@/components/chiffre";
+import { Voilable } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Accueil" };
@@ -559,8 +560,8 @@ export default async function TableauDeBord() {
                     <span className="w-28 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>
                       {r.nbMoisRetard} mois &middot; {r.joursDeRetard} j
                     </span>
-                    <span className="w-24 text-right font-medium tabular-nums" data-montant="">
-                      {nombre(detteDe(r.membreId))}
+                    <span className="w-24 text-right font-medium tabular-nums">
+                      <Voilable>{nombre(detteDe(r.membreId))}</Voilable>
                     </span>
                   </li>
                 ))}

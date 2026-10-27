@@ -1,5 +1,7 @@
 import type { ReactNode } from "react";
 import { Chiffre } from "@/components/chiffre";
+import { Voilable } from "@/components/voilable";
+import { BoutonVoile } from "@/components/voile";
 
 /**
  * Une section : un titre, et ce qu'il annonce.
@@ -190,9 +192,14 @@ export function EnTeteEcran({
           <span
             className="text-[44px] leading-none font-medium tabular-nums sm:text-[60px]"
             style={{ color: "var(--ink)", letterSpacing: "-0.02em" }}
-            data-montant={unite === "FCFA" ? "" : undefined}
           >
-            {brut !== undefined ? <Chiffre valeur={brut} /> : chiffre}
+            {unite === "FCFA" ? (
+              <Voilable>{brut !== undefined ? <Chiffre valeur={brut} /> : chiffre}</Voilable>
+            ) : brut !== undefined ? (
+              <Chiffre valeur={brut} />
+            ) : (
+              chiffre
+            )}
           </span>
           {unite && (
             <span
@@ -200,6 +207,15 @@ export function EnTeteEcran({
               style={{ color: "var(--ink-3)" }}
             >
               {unite}
+            </span>
+          )}
+          {/*
+            * L'oeil se pose a cote du montant qu'il voile, comme a cote du solde
+            * d'une application de paiement : on le trouve la ou l'on regarde.
+            */}
+          {unite === "FCFA" && (
+            <span className="sans-impression ml-1.5 self-center">
+              <BoutonVoile />
             </span>
           )}
         </p>
@@ -251,9 +267,14 @@ export function ValeurChiffree({
       <span
         className={`${taille} font-medium tabular-nums`}
         style={{ color: encre ?? "var(--ink)", letterSpacing: "-0.015em" }}
-        data-montant={unite === "FCFA" ? "" : undefined}
       >
-        {brut !== undefined ? <Chiffre valeur={brut} retard={retard} /> : valeur}
+        {unite === "FCFA" ? (
+          <Voilable>{brut !== undefined ? <Chiffre valeur={brut} retard={retard} /> : valeur}</Voilable>
+        ) : brut !== undefined ? (
+          <Chiffre valeur={brut} retard={retard} />
+        ) : (
+          valeur
+        )}
       </span>
       {unite && (
         <span className="ml-1.5 text-[12.5px]" style={{ color: "var(--ink-3)" }}>

@@ -727,27 +727,28 @@ textarea:focus-visible {
 }
 
 /*
- * LE VOILE DES MONTANTS (voir components/voile.tsx).
+ * LE VOILE DES MONTANTS (voir components/voile.tsx et components/voilable.tsx).
  *
- * Les chiffres poses comme tels se floutent ; ceux d'une phrase sont surlignes
- * par l'API Custom Highlight, qui ne connait pas le flou : leur encre devient
- * transparente et une ombre floue en garde la silhouette, sur le fond creuse
- * des champs. Le papier, lui, ne garde pas le voile : on imprime un releve
- * pour le lire.
+ * Le flou se lisait en forcant les yeux. Voile, un chiffre cede la place a six
+ * points, comme le solde d'une application de paiement : le montant n'est plus
+ * a l'ecran. Dans une phrase, ou l'on ne peut pas remplacer le texte sans le
+ * toucher, son encre devient transparente sur une barre pleine : rien a
+ * deviner non plus. Le papier, lui, ne garde pas le voile : on imprime un
+ * releve pour le lire.
  */
-html.voile [data-montant] {
-  filter: blur(7px);
-  user-select: none;
+.montant-voile { display: none; }
+html.voile .montant-clair { display: none; }
+html.voile .montant-voile {
+  display: inline;
+  font-size: 0.72em;
+  letter-spacing: 0.06em;
 }
 html.voile ::highlight(montant) {
   color: transparent;
-  background-color: var(--sunk);
-  text-shadow: 0 0 7px var(--ink-2);
-}
-@media (prefers-reduced-motion: no-preference) {
-  [data-montant] { transition: filter 180ms var(--ease-doux, ease); }
+  background-color: var(--line-2);
 }
 @media print {
-  html.voile [data-montant] { filter: none; }
-  html.voile ::highlight(montant) { color: inherit; background-color: transparent; text-shadow: none; }
+  html.voile .montant-clair { display: inline; }
+  html.voile .montant-voile { display: none; }
+  html.voile ::highlight(montant) { color: inherit; background-color: transparent; }
 }

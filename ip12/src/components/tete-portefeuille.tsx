@@ -6,6 +6,7 @@ import { CourbePortefeuille } from "@/components/courbe";
 import { dateCourte, nombre } from "@/lib/settings";
 import { couleurSigne, pourcent } from "@/lib/perf";
 import type { Trace } from "@/lib/placement";
+import { Voilable } from "@/components/voilable";
 
 /**
  * Le haut de la page Portefeuille : le chiffre, les cles, et la courbe.
@@ -60,13 +61,16 @@ export function TetePortefeuille({
     <>
       {vise.actions !== undefined && vise.liquidites !== undefined ? (
         <>
-          Actions <span data-montant="">{nombre(vise.actions)}</span> &middot; liquidités{" "}
-          <span data-montant="">{nombre(vise.liquidites)}</span> &middot;{" "}
+          Actions <Voilable>{nombre(vise.actions)}</Voilable> &middot; liquidités{" "}
+          <Voilable>{nombre(vise.liquidites)}</Voilable> &middot;{" "}
         </>
       ) : null}
-      <span className="font-medium" style={{ color: couleurSigne(vise.valeur - vise.netPlace) }} data-montant="">
-        {vise.valeur - vise.netPlace >= 0 ? "+" : "−"}
-        {nombre(Math.abs(vise.valeur - vise.netPlace))} FCFA
+      <span className="font-medium" style={{ color: couleurSigne(vise.valeur - vise.netPlace) }}>
+        <Voilable>
+          {vise.valeur - vise.netPlace >= 0 ? "+" : "−"}
+          {nombre(Math.abs(vise.valeur - vise.netPlace))}
+        </Voilable>{" "}
+        FCFA
       </span>{" "}
       de gain de gestion depuis l&apos;ouverture.
     </>
@@ -75,9 +79,12 @@ export function TetePortefeuille({
   const detailCourant =
     ecart !== null && variation !== null && precedente ? (
       <>
-        <span className="font-medium" style={{ color: couleurSigne(ecart) }} data-montant="">
-          {ecart >= 0 ? "+" : "−"}
-          {nombre(Math.abs(ecart))} FCFA ({pourcent(variation)})
+        <span className="font-medium" style={{ color: couleurSigne(ecart) }}>
+          <Voilable>
+            {ecart >= 0 ? "+" : "−"}
+            {nombre(Math.abs(ecart))}
+          </Voilable>{" "}
+          FCFA ({pourcent(variation)})
         </span>{" "}
         depuis le relevé du {dateCourte(precedente.date)}.
       </>
