@@ -110,8 +110,39 @@ export type Releve = {
   echecs: string[];
 };
 
+/**
+ * Les canaux du registre des relances : qui a ecrit, et comment.
+ *
+ * Le passage automatique ecrit « email », la relance groupee du bureau
+ * « email-manuel ». La relance d'un seul membre, depuis le registre, a le sien :
+ * l'historique d'un membre dit ainsi qui l'a relance, et la relance
+ * automatique du jour ne la compte pas comme deja faite.
+ */
+export const CANAL_RELANCE = {
+  automatique: "email",
+  groupee: "email-manuel",
+  individuelle: "email-individuel",
+} as const;
+
 /** Qui doit etre relance aujourd'hui, et pourquoi. */
 export async function destinatairesDuJour(maintenant = new Date()): Promise<Destinataire[]> {
+  return (await situationsDeRelance(maintenant)).filter((d) => doitRecevoir(d, maintenant));
+}
+
+/**
+ * Le courrier qu'un membre recevrait aujourd'hui, s'il y en a un.
+ *
+ * Sert la relance individuelle du registre : le bureau lit le message avant de
+ * l'envoyer, et ce message est exactement celui du passage automatique -- la
+ * meme lecture, le meme texte. Null pour qui n'a rien a se voir reclamer.
+ */
+export async function destinatairesARelancer(maintenant = new Date()): Promise<Map<string, Destinataire>> {
+  const tous = await situationsDeRelance(maintenant);
+  return new Map(tous.filter((d) => doitRecevoir(d, maintenant)).map((d) => [d.situation.membreId, d]));
+}
+
+/** Tout ce que la relance sait de chaque membre, avant de decider qui l'on ecrit. */
+async function situationsDeRelance(maintenant: Date): Promise<Destinataire[]> {
   const moisCourant = debutMois(maintenant);
   const [situations, avances] = await Promise.all([
     situationsClub(maintenant),
@@ -162,8 +193,7 @@ export async function destinatairesDuJour(maintenant = new Date()): Promise<Dest
             ? avance
             : null,
       };
-    })
-    .filter((d) => doitRecevoir(d, maintenant));
+    });
 }
 
 /**

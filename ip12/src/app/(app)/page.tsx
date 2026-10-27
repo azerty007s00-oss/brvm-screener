@@ -5,6 +5,7 @@ import {
   reglementsPenalite,
   situationsClub,
   synthese,
+  versementsEnAttente,
 } from "@/lib/queries";
 import { STATUT_CAISSE, STATUT_REGLEMENT } from "@/lib/valeurs";
 import { couleurSigne, dureeEnClair, pourcent } from "@/lib/perf";
@@ -177,14 +178,15 @@ export default async function TableauDeBord() {
    * Lues pour le seul bureau, et sans jamais faire tomber la page : la table
    * des reglements peut manquer tant que sa migration n'a pas tourne.
    */
-  const [reglementsEnAttente, mouvementsEnAttente] = estBureau
+  const [versementsAValider, reglementsEnAttente, mouvementsEnAttente] = estBureau
     ? await Promise.all([
+        versementsEnAttente().catch(() => []),
         reglementsPenalite({ statut: STATUT_REGLEMENT.enAttente }).catch(() => []),
         listerMouvementsCaisse()
           .then((m) => m.filter((x) => x.statut === STATUT_CAISSE.enAttente))
           .catch(() => []),
       ])
-    : [[], []];
+    : [[], [], []];
 
   const maFenetre = maSituation?.cellules.slice(-14) ?? [];
   const moisCourant = debutMois();
@@ -258,7 +260,14 @@ export default async function TableauDeBord() {
    * le complement est du avant l'echeance, sous peine de penalite.
    */
   const aCompleter = (maSituation?.avances ?? []).filter(estEntame);
-  const aValider = s.enAttenteValidation + reglementsEnAttente.length + mouvementsEnAttente.length;
+  /*
+   * Des declarations, comme la boite « A valider » les compte : un versement de
+   * deux mois est une declaration, non deux lignes ; un reglement de trois
+   * penalites, une seule.
+   */
+  const nbVersements = new Set(versementsAValider.map((v) => v.lot)).size;
+  const nbReglements = new Set(reglementsEnAttente.map((r) => r.lot ?? r.id)).size;
+  const aValider = nbVersements + nbReglements + mouvementsEnAttente.length;
   const prochain = maSituation?.prochainReglement ?? null;
 
   return (
@@ -323,22 +332,14 @@ export default async function TableauDeBord() {
               aValider === 0
                 ? "rien en attente"
                 : [
-                    s.enAttenteValidation > 0 ? `${s.enAttenteValidation} ${accorde(s.enAttenteValidation, "versement", "versements")}` : null,
-                    reglementsEnAttente.length > 0 ? `${reglementsEnAttente.length} ${accorde(reglementsEnAttente.length, "pénalité", "pénalités")}` : null,
+                    nbVersements > 0 ? `${nbVersements} ${accorde(nbVersements, "versement", "versements")}` : null,
+                    nbReglements > 0 ? `${nbReglements} ${accorde(nbReglements, "pénalité", "pénalités")}` : null,
                     mouvementsEnAttente.length > 0 ? `${mouvementsEnAttente.length} en caisse` : null,
                   ]
                     .filter(Boolean)
                     .join(", ")
             }
-            href={
-              aValider === 0
-                ? undefined
-                : s.enAttenteValidation > 0
-                  ? "/versements"
-                  : reglementsEnAttente.length > 0
-                    ? "/penalites"
-                    : "/caisse"
-            }
+            href={aValider === 0 ? undefined : "/a-valider"}
           />
         ) : (
           <Tuile
@@ -512,26 +513,23 @@ export default async function TableauDeBord() {
             * telephone, on lisait deux fois de suite DROPOU, KONE, KOUADIO.
             * La liste suffit ; ce bloc ne garde que les validations.
             */}
-          {estBureau &&
-            (s.enAttenteValidation > 0 ||
-              reglementsEnAttente.length > 0 ||
-              mouvementsEnAttente.length > 0) && (
+          {estBureau && aValider > 0 && (
             <Carte titre="À traiter">
               <ul>
-                {s.enAttenteValidation > 0 && (
+                {nbVersements > 0 && (
                   <LigneATraiter
-                    compte={s.enAttenteValidation}
-                    titre={`Versement${s.enAttenteValidation > 1 ? "s" : ""} à valider`}
-                    detail="Déclarés par les membres, en attente de votre visa"
-                    href="/versements"
+                    compte={nbVersements}
+                    titre={`Versement${nbVersements > 1 ? "s" : ""} à valider`}
+                    detail={[...new Set(versementsAValider.map((v) => v.membre_nom))].join(", ")}
+                    href="/a-valider?type=versements"
                   />
                 )}
-                {reglementsEnAttente.length > 0 && (
+                {nbReglements > 0 && (
                   <LigneATraiter
-                    compte={reglementsEnAttente.length}
-                    titre={`Règlement${reglementsEnAttente.length > 1 ? "s" : ""} de pénalité à valider`}
+                    compte={nbReglements}
+                    titre={`Règlement${nbReglements > 1 ? "s" : ""} de pénalité à valider`}
                     detail={[...new Set(reglementsEnAttente.map((r) => r.membre_nom))].join(", ")}
-                    href="/penalites"
+                    href="/a-valider?type=penalites"
                   />
                 )}
                 {mouvementsEnAttente.length > 0 && (
@@ -539,7 +537,7 @@ export default async function TableauDeBord() {
                     compte={mouvementsEnAttente.length}
                     titre={`Mouvement${mouvementsEnAttente.length > 1 ? "s" : ""} de caisse à valider`}
                     detail="Saisis, en attente de votre visa"
-                    href="/caisse"
+                    href="/a-valider?type=caisse"
                   />
                 )}
               </ul>

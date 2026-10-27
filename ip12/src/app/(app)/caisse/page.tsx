@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { listerMouvementsCaisse, synthese } from "@/lib/queries";
@@ -5,7 +6,6 @@ import {
   enregistrerMouvement,
   regulariserCaisse,
   rejeterMouvement,
-  validerMouvement,
 } from "@/app/actions/caisse";
 import { dateCourte, fcfa } from "@/lib/settings";
 import {
@@ -237,56 +237,14 @@ export default async function PageCaisse() {
       </Carte>
 
       {valide && enAttente.length > 0 && (
+        /* Les mouvements a viser rejoignent la boite « A valider », avec les versements. */
         <Carte titre={`À valider (${enAttente.length})`}>
-          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
-            {enAttente.map((m) => (
-              <li
-                key={m.id}
-                className="flex flex-wrap items-start justify-between gap-2 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">
-                    {m.sens === SENS_CAISSE.depense ? "−" : "+"}{" "}
-                    {fcfa(m.montant)} &middot; {libelleCategorie(m.categorie)}
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--discret)" }}>
-                    {dateCourte(m.date_mouvement)}
-                    {m.saisi_par ? ` · saisi par ${m.saisi_par}` : ""}
-                  </p>
-                  {m.note && <p className="mt-0.5 text-xs italic">{m.note}</p>}
-                </div>
-                <div className="flex flex-wrap items-start gap-2">
-                  <FormulaireAction
-                    action={validerMouvement}
-                    libelle="Valider"
-                    compact
-                  >
-                    <ChampCache nom="id" valeur={m.id} />
-                  </FormulaireAction>
-                  <FormulaireAction
-                    action={rejeterMouvement}
-                    libelle="Rejeter"
-                    variante="danger"
-                    compact
-                    confirmation="Rejeter ce mouvement ?"
-                  >
-                    <ChampCache nom="id" valeur={m.id} />
-                    <input
-                      name="motif"
-                      placeholder="Motif"
-                      required
-                      className="mb-1 w-28 rounded border px-2 py-1 text-xs"
-                      style={{
-                        background: "var(--fond)",
-                        borderColor: "var(--bordure)",
-                        color: "var(--texte)",
-                      }}
-                    />
-                  </FormulaireAction>
-                </div>
-              </li>
-            ))}
-          </ul>
+          <p className="text-[13px]" style={{ color: "var(--ink-2)" }}>
+            {enAttente.length} {enAttente.length > 1 ? "mouvements" : "mouvement"} en attente de votre visa.{" "}
+            <Link href="/a-valider?type=caisse" className="font-medium underline" style={{ color: "var(--accent)" }}>
+              Ouvrir la boîte À valider
+            </Link>
+          </p>
         </Carte>
       )}
 

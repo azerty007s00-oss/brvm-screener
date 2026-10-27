@@ -2417,6 +2417,52 @@ assert.equal(
   assert.ok(!pointsAVerifier({ ...faits, caisse: { ...faits.caisse, aujourdhui: 95_000, penalites: 0 } }).some((l) => l.startsWith("Écart de caisse :")));
 }
 
+/* ------------------------------------------------- releve joint a une relance */
+{
+  const { relevePdf, nomFichierReleve } = await import("../.verif/releve-pdf.mjs");
+  const { largeur } = await import("../.verif/pdf.mjs");
+  const cellule = (mois, statut, montant, requis = 5000) => ({
+    mois, statut, montant, requis, manque: Math.max(0, requis - montant), dateVersement: null,
+  });
+  const octets = relevePdf({
+    nom: "KOUADIO Konan Marc",
+    date: "2026-10-27",
+    cellules: [
+      cellule("2025-09-01", "hors_periode", 0),
+      ...["2025-10-01", "2025-11-01", "2025-12-01", "2026-01-01", "2026-02-01", "2026-03-01", "2026-04-01",
+        "2026-05-01", "2026-06-01", "2026-07-01", "2026-08-01"].map((m) => cellule(m, "paye", 5000)),
+      cellule("2026-09-01", "retard", 0),
+      cellule("2026-10-01", "partiel", 2000),
+    ],
+    penalites: [
+      { date: "2026-09-11", nature: "Retard de versement", motif: "Retard de versement, septembre 2026 (réglé après l'échéance, pénalité acquise, art. 9)", montant: 500 },
+      { date: "2026-10-11", nature: "Retard de versement", motif: null, montant: 1000 },
+    ],
+    cotisationsARegler: 8000,
+    penalitesDues: 1500,
+    verse: 57000,
+  });
+  const texte = octets.toString("latin1");
+  assert.ok(texte.startsWith("%PDF-1.4"), "le releve est un PDF");
+  assert.ok(texte.trimEnd().endsWith("%%EOF"), "le releve se termine proprement");
+  // Chaque renvoi de la table pointe exactement sur le debut de son objet : sans cela, un lecteur strict refuse le fichier.
+  const table = texte.slice(texte.lastIndexOf("xref\n0 "));
+  const renvois = [...table.matchAll(/^(\d{10}) 00000 n $/gm)].map((m) => Number(m[1]));
+  assert.ok(renvois.length >= 7, "catalogue, pages, polices, informations, une page et son contenu");
+  renvois.forEach((pos, i) => assert.ok(texte.startsWith(`${i + 1} 0 obj`, pos), `l'objet ${i + 1} est la ou la table le dit`));
+  assert.equal(Number(texte.slice(texte.lastIndexOf("startxref") + 10).trim().split("\n")[0]), texte.lastIndexOf("xref\n0 "));
+  // Les accents passent en WinAnsi, octet par octet : « Relevé » et « Pénalités » ne deviennent pas « ? ».
+  assert.ok(octets.includes(Buffer.from([0x52, 0x65, 0x6c, 0x65, 0x76, 0xe9])), "« Relevé » encodé en WinAnsi");
+  assert.ok(!texte.includes("P?nalit"), "aucun accent perdu");
+  // Les parentheses du texte sont echappees : sinon la chaine se fermerait au milieu du motif.
+  assert.ok(texte.includes("\\(réglé".replace("é", "\xe9")), "parenthèse ouvrante échappée");
+  assert.equal(nomFichierReleve("DRAMÉ Khalil Yvan Zana", "2026-10-27"), "releve-drame-khalil-yvan-zana-2026-10-27.pdf");
+  // Les chiffres d'Helvetica ont tous la meme chasse : c'est ce qui permet d'aligner les montants a droite.
+  assert.equal(largeur("5 000", 10), largeur("9 999", 10));
+  const { writeFileSync } = await import("node:fs");
+  writeFileSync(".verif/releve-essai.pdf", octets);
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2425,5 +2471,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance",
 );

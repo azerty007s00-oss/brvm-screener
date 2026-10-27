@@ -144,7 +144,7 @@ export async function avertirLeBureau(
   }
 
   const siteUrl = lienDuSite();
-  if (siteUrl) lignes.push("", `Valider les encaissements : ${siteUrl}/versements`);
+  if (siteUrl) lignes.push("", `Valider les encaissements : ${siteUrl}/a-valider`);
   lignes.push("", `Le suivi du club ${CLUB.nom}`);
 
   const bureau = await joignablesPour("validerVersement");
@@ -264,7 +264,7 @@ export async function avertirDeclaration(params: {
       "tant que la validation n'a pas eu lieu.",
   ];
   const siteUrl = lienDuSite();
-  if (siteUrl) lignes.push("", `Valider : ${siteUrl}/versements`);
+  if (siteUrl) lignes.push("", `Valider : ${siteUrl}/a-valider`);
   lignes.push("", `Le suivi du club ${CLUB.nom}`);
 
   const { ok } = await envoyerCourriel({
@@ -311,7 +311,7 @@ export async function avertirReglementPenalite(params: {
       "parole, et la relance continue de la réclamer tant que la ligne n'est pas soldée.",
   ];
   const siteUrl = lienDuSite();
-  if (siteUrl) lignes.push("", `Vérifier : ${siteUrl}/penalites`);
+  if (siteUrl) lignes.push("", `Vérifier : ${siteUrl}/a-valider`);
   lignes.push("", `Le suivi du club ${CLUB.nom}`);
 
   const { ok } = await envoyerCourriel({
@@ -526,4 +526,44 @@ export async function envoyerCourrielSortie(
       `À TRANSMETTRE : ${membre.nom} n'a pas d'adresse sur le site, ce décompte lui est destiné.\n\n` +
       courrier.texte,
   });
+}
+
+/**
+ * Le membre dont la declaration est rejetee le sait, et sait pourquoi.
+ *
+ * Le rejet changeait un statut au registre, et rien d'autre : le membre qui
+ * avait declare son versement le croyait encaisse jusqu'a la relance suivante,
+ * qui le lui reclamait sans un mot du rejet. Le motif, obligatoire, part avec
+ * le courrier ; le membre repond ou declare a nouveau.
+ */
+export async function avertirRejet(params: {
+  membreId: string;
+  objet: string;
+  motif: string;
+  auteurNom: string;
+}): Promise<boolean> {
+  const membres = await listerMembres().catch(() => []);
+  const membre = membres.find((m) => m.id === params.membreId);
+  const titulaire = membre?.titulaireId ? membres.find((m) => m.id === membre.titulaireId) : membre;
+  if (!membre || !titulaire?.email) return false;
+
+  const lignes = [
+    `Bonjour ${titulaire.nom},`,
+    "",
+    `${params.objet} n'a pas été validé par ${params.auteurNom}.`,
+    `Motif : ${params.motif}`,
+    "",
+    "Rien n'a été porté au registre. Si c'est une erreur, répondez à ce courriel ; " +
+      "sinon, déclarez de nouveau votre versement, avec son justificatif.",
+  ];
+  const siteUrl = lienDuSite();
+  if (siteUrl) lignes.push("", `Déclarer : ${siteUrl}/versements`);
+  lignes.push("", `Le suivi du club ${CLUB.nom}`);
+
+  const { ok } = await envoyerCourriel({
+    destinataire: titulaire.email,
+    sujet: `${CLUB.sigle} : votre déclaration n'a pas été validée`,
+    texte: lignes.join("\n"),
+  });
+  return ok;
 }

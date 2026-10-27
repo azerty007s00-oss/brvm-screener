@@ -2,22 +2,27 @@ import Link from "next/link";
 import type { CelluleMois } from "@/lib/penalites";
 import { exigerMembre } from "@/lib/auth";
 import {
+  circuitReglementsPret,
   listerMembres,
   listerVersements,
   reglagesEffectifs,
+  relancesRecentes,
   situationsClub,
   versementsEnAttente,
+  type RelanceTracee,
 } from "@/lib/queries";
+import { CANAL_RELANCE, destinatairesARelancer, sujetRelance, texteRelance, type Destinataire } from "@/lib/relance";
+import { cotisationsARegler } from "@/lib/penalites";
+import { relancerMembre } from "@/app/actions/relances";
+import { RelanceMembre } from "@/components/relance-membre";
 import { listeDesMois } from "@/lib/sortie";
-import { REGLES, dateCourte, deMois, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
+import { REGLES, accorde, dateCourte, deMois, debutMois, fcfa, lienDuSite, moisLong, nombre } from "@/lib/settings";
 import { relancerMaintenant } from "@/app/actions/administration";
 import {
   annulerVersementValide,
   corrigerVersement,
   declarerRetard,
   declarerVersement,
-  rejeterVersement,
-  validerVersement,
 } from "@/app/actions/versements";
 import { ChampJustificatif } from "@/components/justificatif";
 import { justificatifsParLot } from "@/lib/justificatifs";
@@ -29,7 +34,7 @@ import {
   FormulaireAction,
   Selection,
 } from "@/components/formulaires";
-import { Carte, EnTeteEcran, Vide } from "@/components/ui";
+import { Carte, EnTeteEcran } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
 import {
   EcranInitialisation,
@@ -130,8 +135,66 @@ export default async function PageVersements({
   }
 
   const peutValider = peut(membre, "validerVersement");
+  /* Une declaration, un lot : le compte que la boite « A valider » montrera. */
+  const nbDeclarations = new Set(enAttente.map((v) => v.lot)).size;
   const peutCorriger = peut(membre, "corrigerVersement");
   const peutRelancer = peut(membre, "relancer");
+
+  /*
+   * LA RELANCE D'UN MEMBRE, DEPUIS SA LIGNE.
+   *
+   * Pour le bureau seulement : le courrier que chacun recevrait aujourd'hui,
+   * calcule comme au passage automatique, et ce qui lui est deja parti. Un
+   * membre a jour n'a rien a se voir reclamer : sa ligne n'a pas de bouton.
+   */
+  const [aRelancer, relances, circuit] = peutRelancer
+    ? await Promise.all([
+        destinatairesARelancer().catch(() => new Map<string, Destinataire>()),
+        relancesRecentes(),
+        circuitReglementsPret(),
+      ])
+    : [new Map<string, Destinataire>(), new Map<string, RelanceTracee[]>(), true];
+  const libelleRelance = (r: RelanceTracee) => {
+    const jour = Number(r.date.slice(8, 10));
+    const base =
+      r.canal === CANAL_RELANCE.individuelle
+        ? "Courriel envoyé par le bureau"
+        : r.canal === CANAL_RELANCE.groupee
+          ? "Relance de tous les retardataires, par le bureau"
+          : jour < reglages.jourEcheance
+            ? "Courriel automatique, avant l'échéance"
+            : jour === reglages.jourEcheance
+              ? "Courriel automatique, le jour de l'échéance"
+              : "Courriel automatique, après l'échéance";
+    return r.ok ? base : `${base} (échec d'envoi)`;
+  };
+  const relanceDe = (membreId: string) => {
+    const d = aRelancer.get(membreId);
+    if (!d) return null;
+    const traces = relances.get(membreId) ?? [];
+    const ceMois = traces.filter((r) => r.ok && r.date.slice(0, 7) === debutMois().slice(0, 7)).length;
+    const cotisations = cotisationsARegler(d.situation.cellules).total;
+    const penalites = d.dette.montant + d.nonInscrites.montant;
+    return (
+      <RelanceMembre
+        membreId={membreId}
+        nom={d.situation.nom}
+        sujet={sujetRelance(d, debutMois(), new Date())}
+        texte={texteRelance(d, lienDuSite(), new Date(), circuit)}
+        historique={traces.slice(0, 4).map((r) => ({
+          date: dateCourte(r.date).slice(0, 5),
+          libelle: libelleRelance(r),
+          echec: !r.ok,
+        }))}
+        ceMois={ceMois > 0 ? `${ceMois} en ${moisLong(debutMois()).split(" ")[0]}` : null}
+        du={
+          `Dû à ce jour : ${fcfa(cotisations)} de cotisations` +
+          (penalites > 0 ? ` et ${fcfa(penalites)} de pénalités.` : ".")
+        }
+        relancer={relancerMembre}
+      />
+    );
+  };
   // Les corrections portent sur des saisies recentes : au-dela, on ne corrige plus, on regularise.
   const corrigibles = valides.slice(0, 40);
   const saisieDirecte = peut(membre, "saisirVersementValide");
@@ -433,109 +496,17 @@ export default async function PageVersements({
         * attente ». Elle ne parait que lorsqu'elle a quelque chose a montrer.
         */}
       {peutValider && enAttente.length > 0 && (
-        <Carte titre={`En attente de validation (${enAttente.length})`}>
-          {enAttente.length === 0 ? (
-            <Vide>Rien à valider.</Vide>
-          ) : (
-            <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
-              {enAttente.map((v) => (
-                <li key={v.id} className="py-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-medium">
-                        {v.membre_nom} &middot; {fcfa(v.montant)}
-                      </p>
-                      <p
-                        className="text-xs"
-                        style={{ color: "var(--discret)" }}
-                      >
-                        {/*
-                          * Une cotisation reprise au rachat n'est pas encore payee :
-                          * la sortie l'inscrit en attente, a sa date. « Verse le … par
-                          * Mobile Money » le faisait croire recu.
-                          */}
-                        {moisLong(v.mois)} &middot;{" "}
-                        {(v.note ?? "").startsWith("Cotisation impayée de ")
-                          ? `reprise au rachat le ${dateCourte(v.date_versement)}, à valider à réception`
-                          : `versé le ${dateCourte(v.date_versement)} · ${libelleMode(v.mode)}`}
-                        {v.saisi_par_nom && v.saisi_par_nom !== v.membre_nom
-                          ? ` · saisi par ${v.saisi_par_nom}`
-                          : ""}
-                      </p>
-                      {v.note && (
-                        <p
-                          className="mt-1 text-xs italic"
-                          style={{ color: "var(--discret)" }}
-                        >
-                          {v.note}
-                        </p>
-                      )}
-                      <div className="mt-1">
-                        {(pieces.get(v.lot) ?? []).length > 0 ? (
-                          <span className="flex flex-wrap gap-2">
-                            {(pieces.get(v.lot) ?? []).map((j) => (
-                              <a
-                                key={j.id}
-                                href={`/api/justificatif/${j.id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center rounded px-2 py-0.5 text-xs underline"
-                                style={{
-                                  background: "var(--etat-ok-fond)",
-                                  color: "var(--etat-ok)",
-                                }}
-                              >
-                                {j.mime === "application/pdf"
-                                  ? "Bordereau PDF"
-                                  : "Voir le reçu"}
-                              </a>
-                            ))}
-                          </span>
-                        ) : (
-                          <span
-                            className="text-xs"
-                            style={{ color: "var(--etat-attente)" }}
-                          >
-                            Aucun justificatif joint : à vérifier avant de
-                            valider.
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-start gap-2">
-                      <FormulaireAction
-                        action={validerVersement}
-                        libelle="Valider"
-                        compact
-                      >
-                        <ChampCache nom="id" valeur={v.id} />
-                      </FormulaireAction>
-                      <FormulaireAction
-                        action={rejeterVersement}
-                        libelle="Rejeter"
-                        variante="danger"
-                        compact
-                        confirmation="Rejeter ce versement ? Le mois redeviendra disponible."
-                      >
-                        <ChampCache nom="id" valeur={v.id} />
-                        <input
-                          name="motif"
-                          placeholder="Motif"
-                          required
-                          className="mb-1 w-28 rounded border px-2 py-1 text-xs"
-                          style={{
-                            background: "var(--fond)",
-                            borderColor: "var(--bordure)",
-                            color: "var(--texte)",
-                          }}
-                        />
-                      </FormulaireAction>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+        /*
+         * La file se traite dans la boite « A valider », avec les reglements de
+         * penalites et la caisse : une seule page a ouvrir pour tout viser.
+         */
+        <Carte titre={`À valider (${nbDeclarations})`}>
+          <p className="text-[13px]" style={{ color: "var(--ink-2)" }}>
+            {nbDeclarations} {accorde(nbDeclarations, "déclaration", "déclarations")} en attente de votre visa.{" "}
+            <Link href="/a-valider" className="font-medium underline" style={{ color: "var(--accent)" }}>
+              Ouvrir la boîte À valider
+            </Link>
+          </p>
         </Carte>
       )}
 
@@ -759,6 +730,7 @@ export default async function PageVersements({
                           );
                         })}
                     </ul>
+                    {peutRelancer && relanceDe(s.membreId)}
                     {/* Le debut de la part ne se repete pas : la ligne fermee le dit deja tant qu'elle n'a aucun mois. */}
                     {partsRachetees.has(s.membreId) && (
                       <div className="text-[12px]" style={{ color: "var(--discret)" }}>

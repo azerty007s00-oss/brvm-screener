@@ -17,8 +17,9 @@ import { versionDeployee } from "@/lib/version";
  * deux mises en page a la fois : cinq entrees en bas sur telephone, et sur
  * ordinateur une barre laterale ou les groupes reprennent leur nom.
  *
- * « Comptes » et « Club » portent plusieurs pages ; les trois autres n'en ont
- * qu'une, et menent donc directement a elle.
+ * « Comptes » et « Club » portent plusieurs pages, « Versements » aussi pour le
+ * bureau, qui y trouve sa boite « A valider » ; les autres n'en ont qu'une, et
+ * menent donc directement a elle.
  */
 type Entree = { href: string; libelle: string; icone: NomIcone; droit?: Droit };
 type Modele = { cle: string; libelle: string; icone: NomIcone; pages: Entree[] };
@@ -29,7 +30,15 @@ const RUBRIQUES: Modele[] = [
     cle: "versements",
     libelle: "Versements",
     icone: "billets",
-    pages: [{ href: "/versements", libelle: "Versements", icone: "billets" }],
+    pages: [
+      { href: "/versements", libelle: "Versements", icone: "billets" },
+      /*
+       * La boite du bureau : versements, reglements de penalites et caisse a
+       * viser, dans une seule file. Un membre ne la voit pas : la rubrique
+       * reste pour lui une page unique.
+       */
+      { href: "/a-valider", libelle: "À valider", icone: "visa", droit: "validerVersement" },
+    ],
   },
   {
     cle: "comptes",

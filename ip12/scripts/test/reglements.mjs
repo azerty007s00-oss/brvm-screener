@@ -186,6 +186,7 @@ export const exigerDroit = async (_d?: unknown): Promise<Acteur> => session.acte
 export const journaliser = async (..._a: unknown[]) => {};
 export const revalidatePath = (..._a: unknown[]) => {};
 export const avertirReglementPenalite = async (..._a: unknown[]) => 0;
+export const avertirRejet = async (..._a: unknown[]) => false;
 export const enregistrerJustificatif = async (..._a: unknown[]) => ({ joint: false });
 /*
  * Les lectures qui n'alimentent que le constat, hors du chemin verifie ici :

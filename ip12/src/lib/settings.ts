@@ -205,6 +205,12 @@ export function moisLong(iso: string | Date): string {
   return d.toLocaleDateString("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
+/** Les jours pleins ecoules depuis une date ISO : l'attente d'une declaration. */
+export function joursDepuis(iso: string, maintenant: Date = new Date()): number {
+  const debut = Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);
+  return Math.max(0, Math.floor((maintenant.getTime() - debut) / 86_400_000));
+}
+
 export function dateCourte(iso: string | Date | null): string {
   if (!iso) return "--";
   const d = typeof iso === "string" ? new Date(`${iso.slice(0, 10)}T00:00:00Z`) : iso;

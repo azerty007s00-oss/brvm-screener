@@ -26,6 +26,8 @@ export type Courriel = {
   copie?: string[];
   sujet: string;
   texte: string;
+  /** Pieces jointes : le releve d'un membre, joint a sa relance. */
+  pieces?: { nom: string; contenu: Buffer; type: string }[];
 };
 
 export type Transport = "smtp" | "resend" | "aucun";
@@ -366,6 +368,15 @@ export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi
         subject: courriel.sujet,
         text: courriel.texte,
         html: enHtml(courriel.texte),
+        ...(courriel.pieces?.length
+          ? {
+              attachments: courriel.pieces.map((p) => ({
+                filename: p.nom,
+                content: p.contenu,
+                contentType: p.type,
+              })),
+            }
+          : {}),
       });
       /*
        * `accepted` porte les destinataires que le serveur a pris en charge. Une
@@ -389,6 +400,15 @@ export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi
         subject: courriel.sujet,
         text: courriel.texte,
         html: enHtml(courriel.texte),
+        ...(courriel.pieces?.length
+          ? {
+              attachments: courriel.pieces.map((p) => ({
+                filename: p.nom,
+                content: p.contenu,
+                contentType: p.type,
+              })),
+            }
+          : {}),
       });
       /*
        * Resend rend l'erreur plutot que de la lever : sans ce test, un refus du

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerDroit, exigerMembre } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
-import { avertirReglementPenalite } from "@/lib/avis";
+import { avertirRejet, avertirReglementPenalite } from "@/lib/avis";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
 import { penalitesNonInscrites, porterRetardsAuRegistre, resumeConstat } from "@/lib/constat";
 import { absencesParMembre, declarePour, reglagesEffectifs, situationsClub } from "@/lib/queries";
@@ -745,8 +745,9 @@ export async function rejeterReglementPenalite(
     where status = ${STATUT_REGLEMENT.enAttente}
       and (${lot}::uuid is null or batch_id = ${lot}::uuid)
       and (${id}::uuid is null or id = ${id}::uuid)
-    returning id
-  `) as { id: string }[];
+    returning id, member_id,
+      quantity * (select unit_amount from penalties p where p.id = penalty_id) as montant
+  `) as { id: string; member_id: string; montant: number | string }[];
   if (faites.length === 0) return { ok: false, erreur: "Déclaration introuvable ou déjà examinée." };
 
   for (const f of faites) {
@@ -757,12 +758,23 @@ export async function rejeterReglementPenalite(
       { motif, lot },
     );
   }
+  /* Le membre sait pourquoi : sans motif, rien a lui expliquer, et rien ne part. */
+  const averti =
+    motif && faites[0].member_id
+      ? await avertirRejet({
+          membreId: String(faites[0].member_id),
+          objet: `Votre règlement de pénalités de ${fcfa(faites.reduce((t, f) => t + Number(f.montant), 0))}`,
+          motif,
+          auteurNom: auteur.nom,
+        }).catch(() => false)
+      : false;
   revalidatePath("/", "layout");
+  const suite = averti ? " Le membre a reçu le motif par courriel." : "";
   return {
     ok: true,
     message:
-      faites.length === 1
+      (faites.length === 1
         ? "Déclaration refusée : la pénalité reste due."
-        : `Règlement refusé : les ${faites.length} pénalités restent dues.`,
+        : `Règlement refusé : les ${faites.length} pénalités restent dues.`) + suite,
   };
 }

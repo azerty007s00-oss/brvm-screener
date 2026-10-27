@@ -35,6 +35,13 @@ export const Icone = {
       <rect x="2" y="4" width="20" height="16" rx="2.5" />
     </Trait>
   ),
+  /* Le visa du tresorier : une case cochee, la boite « A valider ». */
+  visa: (p: Props) => (
+    <Trait {...p}>
+      <rect x="3.5" y="3.5" width="17" height="17" rx="3.5" />
+      <path d="M8 12.3 L10.8 15 L16 9.2" />
+    </Trait>
+  ),
   plus: (p: Props) => (
     <Trait {...p}>
       <path d="M12 5v14" />

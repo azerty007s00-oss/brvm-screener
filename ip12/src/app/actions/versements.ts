@@ -9,9 +9,10 @@ import { journaliser } from "@/lib/journal";
 import { declarePour, derogationsParMembre, reglagesEffectifs, situationsClub } from "@/lib/queries";
 import { cotisationDuMois, imputer, type ReglesMembre } from "@/lib/penalites";
 import { fcfa, moisLong } from "@/lib/settings";
+import { listeDesMois } from "@/lib/sortie";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
-import { avertirDeclaration } from "@/lib/avis";
+import { avertirDeclaration, avertirRejet } from "@/lib/avis";
 import { declarerReglementPenalite } from "./penalites";
 import type { EtatFormulaire } from "./auth";
 
@@ -291,6 +292,89 @@ export async function rejeterVersement(
   );
   revalidatePath("/", "layout");
   return { ok: true, message: "Versement rejeté. Le mois redevient disponible." };
+}
+
+/**
+ * UNE DECLARATION SE VALIDE D'UN GESTE, QUEL QUE SOIT LE NOMBRE DE MOIS.
+ *
+ * Un versement de 10 000 FCFA pour novembre et decembre ecrit deux lignes,
+ * reliees par leur lot. La boite « A valider » les presente comme le membre
+ * les a declarees -- un transfert, un montant -- et les valide ou les rejette
+ * ensemble : valider novembre et oublier decembre laisserait un mois en
+ * attente pour un argent deja recu.
+ */
+export async function validerDeclaration(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerRole("tresorier", "president");
+  const lot = String(donnees.get("lot") ?? "");
+  if (!lot) return { ok: false, erreur: "Déclaration introuvable." };
+
+  const sql = db();
+  const faites = (await sql`
+    update contributions
+    set status = ${STATUT_VERSEMENT.valide}, reviewed_by = ${auteur.id}::uuid,
+        reviewed_at = now(), review_note = null
+    where batch_id = ${lot}::uuid and status = ${STATUT_VERSEMENT.enAttente}
+    returning id, amount
+  `) as { id: string; amount: number | string }[];
+  if (faites.length === 0) return { ok: false, erreur: "Cette déclaration est déjà traitée." };
+
+  for (const f of faites) {
+    await journaliser({ id: auteur.id, nom: auteur.nom }, "validation_versement", {
+      entite: "contributions",
+      id: String(f.id),
+    });
+  }
+  revalidatePath("/", "layout");
+  const total = faites.reduce((t, f) => t + Number(f.amount), 0);
+  return { ok: true, message: `${fcfa(total)} validés.` };
+}
+
+/** Le rejet d'une declaration entiere : motif obligatoire, et le membre en est averti. */
+export async function rejeterDeclaration(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerRole("tresorier", "president");
+  const lot = String(donnees.get("lot") ?? "");
+  const motif = String(donnees.get("motif") ?? "").trim();
+  if (!lot) return { ok: false, erreur: "Déclaration introuvable." };
+  if (!motif) return { ok: false, erreur: "Indiquez le motif du rejet : il est envoyé au membre." };
+
+  const sql = db();
+  const faites = (await sql`
+    update contributions
+    set status = ${STATUT_VERSEMENT.rejete}, reviewed_by = ${auteur.id}::uuid,
+        reviewed_at = now(), review_note = ${motif}
+    where batch_id = ${lot}::uuid and status = ${STATUT_VERSEMENT.enAttente}
+    returning id, member_id, amount, to_char(period, 'YYYY-MM-DD') as mois
+  `) as { id: string; member_id: string; amount: number | string; mois: string }[];
+  if (faites.length === 0) return { ok: false, erreur: "Cette déclaration est déjà traitée." };
+
+  for (const f of faites) {
+    await journaliser(
+      { id: auteur.id, nom: auteur.nom },
+      "rejet_versement",
+      { entite: "contributions", id: String(f.id) },
+      { motif },
+    );
+  }
+  const total = faites.reduce((t, f) => t + Number(f.amount), 0);
+  const averti = await avertirRejet({
+    membreId: String(faites[0].member_id),
+    objet: `Votre versement de ${fcfa(total)} (${listeDesMois(faites.map((f) => f.mois))})`,
+    motif,
+    auteurNom: auteur.nom,
+  }).catch(() => false);
+  revalidatePath("/", "layout");
+  return {
+    ok: true,
+    message: averti
+      ? "Déclaration rejetée. Le membre a reçu le motif par courriel."
+      : "Déclaration rejetée. Le courriel au membre n'a pas pu partir : prévenez-le.",
+  };
 }
 
 /**

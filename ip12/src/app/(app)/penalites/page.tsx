@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import {
@@ -17,8 +18,6 @@ import {
   constaterPenalitesAbsence,
   constaterPenalitesRetard,
   reglerPenalite,
-  rejeterReglementPenalite,
-  validerReglementPenalite,
 } from "@/app/actions/penalites";
 import { dejaAuRegistre, issueR5, tranchesAbsence } from "@/lib/penalites";
 import { EFFET, REGLES, accorde, dateCourte, fcfa, moisLong } from "@/lib/settings";
@@ -27,7 +26,6 @@ import {
   PREFIXE_SOLDE_SORTIE,
   STATUT_PENALITE,
   STATUT_REGLEMENT,
-  libelleMode,
 } from "@/lib/valeurs";
 import {
   Champ,
@@ -35,7 +33,6 @@ import {
   FormulaireAction,
   Selection,
 } from "@/components/formulaires";
-import { justificatifsParLot } from "@/lib/justificatifs";
 import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
 import { ChampMenu, MenuLigne } from "@/components/menu-ligne";
@@ -65,11 +62,9 @@ export default async function PagePenalites() {
   const membre = await exigerMembre();
   const gere = peut(membre, "gererPenalites");
 
-  let penalites, membres, situations, absences, avances, bornes, declarations, pieces,
-    plansUtilises;
+  let penalites, membres, situations, absences, avances, bornes, declarations, plansUtilises;
   try {
-    [penalites, membres, situations, absences, avances, bornes, declarations, pieces,
-      plansUtilises] =
+    [penalites, membres, situations, absences, avances, bornes, declarations, plansUtilises] =
       await Promise.all([
         listerPenalites(gere ? undefined : { membreId: membre.id }),
         listerMembres(),
@@ -88,8 +83,6 @@ export default async function PagePenalites() {
           if (estTableAbsente(e)) return null;
           throw e;
         }),
-        /* Elle avale deja ses propres erreurs : la page s'affiche sans les vignettes. */
-        justificatifsParLot(),
         /* Qui a deja use de son plan unique : R5 ne l'accorde qu'une fois. */
         plansDejaAccordes().catch(() => new Set<string>()),
       ]);
@@ -585,117 +578,17 @@ export default async function PagePenalites() {
 
       {/* Vide, elle disait « aucun reglement en attente » : l'accueil compte deja cette file. */}
       {gere && circuitPret && lotsAExaminer.length > 0 && (
-        <Carte titre={`Règlements déclarés, à vérifier (${lotsAExaminer.length})`}>
-          {lotsAExaminer.length === 0 ? (
-            <Vide>Aucun règlement déclaré en attente.</Vide>
-          ) : (
-            <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
-              {lotsAExaminer.map(({ cle, parLot, premiere: r, lignes, montant, quantite }) => (
-                <li key={cle} className="py-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">
-                        {r.membre_nom} &middot; {fcfa(montant)}
-                        {quantite > 1 && (
-                          <span className="font-normal" style={{ color: "var(--discret)" }}>
-                            {" "}
-                            ({quantite} pénalités)
-                          </span>
-                        )}
-                      </p>
-                      <p className="text-xs" style={{ color: "var(--discret)" }}>
-                        Payé le {dateCourte(r.date_paiement)} &middot; {libelleMode(r.mode)}
-                        {r.reference ? ` · réf. ${r.reference}` : ""}
-                      </p>
-                      <ul className="mt-1 space-y-0.5">
-                        {lignes.map((l) => (
-                          <li key={l.id} className="text-xs" style={{ color: "var(--discret)" }}>
-                            {LIBELLE_NATURE[l.nature] ?? l.nature} constatée le{" "}
-                            {dateCourte(l.date_constat)} &middot; {l.quantite} ×{" "}
-                            {fcfa(l.montant_unitaire)}
-                            {l.quantite < l.quantite_ligne && (
-                              <span style={{ color: "var(--etat-attente)" }}>
-                                {" "}
-                                (partiel : {l.quantite} sur {l.quantite_ligne}, le reste restera dû)
-                              </span>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                      {r.note && (
-                        <p className="mt-1 text-xs italic" style={{ color: "var(--discret)" }}>
-                          {r.note}
-                        </p>
-                      )}
-                      <div className="mt-1">
-                        {(pieces.get(r.lot) ?? []).length > 0 ? (
-                          <span className="flex flex-wrap gap-2">
-                            {(pieces.get(r.lot) ?? []).map((j) => (
-                              <a
-                                key={j.id}
-                                href={`/api/justificatif/${j.id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center rounded px-2 py-0.5 text-xs underline"
-                                style={{
-                                  background: "var(--etat-ok-fond)",
-                                  color: "var(--etat-ok)",
-                                }}
-                              >
-                                {j.mime === "application/pdf" ? "Bordereau PDF" : "Voir le reçu"}
-                              </a>
-                            ))}
-                          </span>
-                        ) : (
-                          <span className="text-xs" style={{ color: "var(--etat-attente)" }}>
-                            Aucun justificatif joint : à vérifier avant de valider.
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap items-start gap-2">
-                      <FormulaireAction
-                        action={validerReglementPenalite}
-                        libelle="Valider"
-                        compact
-                        confirmation={
-                          lignes.length > 1
-                            ? `Valider ce règlement de ${fcfa(montant)} ? Les ${lignes.length} pénalités seront soldées.`
-                            : "Valider ce règlement ? La pénalité sera soldée."
-                        }
-                      >
-                        <ChampCache nom={parLot ? "lot" : "id"} valeur={cle} />
-                      </FormulaireAction>
-                      <FormulaireAction
-                        action={rejeterReglementPenalite}
-                        libelle="Refuser"
-                        variante="danger"
-                        compact
-                        confirmation={
-                          lignes.length > 1
-                            ? `Refuser ce règlement ? Les ${lignes.length} pénalités resteront dues.`
-                            : "Refuser ce règlement ? La pénalité restera due."
-                        }
-                      >
-                        <ChampCache nom={parLot ? "lot" : "id"} valeur={cle} />
-                        <input
-                          name="motif"
-                          placeholder="Motif"
-                          required
-                          className="mb-1 w-28 rounded border px-2 py-1 text-xs"
-                          style={{
-                            background: "var(--fond)",
-                            borderColor: "var(--bordure)",
-                            color: "var(--texte)",
-                          }}
-                        />
-                      </FormulaireAction>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
+        /*
+         * La file se traite dans la boite « A valider », avec les reglements de
+         * penalites et la caisse : une seule page a ouvrir pour tout viser.
+         */
+        <Carte titre={`À valider (${lotsAExaminer.length})`}>
+          <p className="text-[13px]" style={{ color: "var(--ink-2)" }}>
+            {lotsAExaminer.length} {accorde(lotsAExaminer.length, "règlement déclaré", "règlements déclarés")} en attente de votre visa.{" "}
+            <Link href="/a-valider" className="font-medium underline" style={{ color: "var(--accent)" }}>
+              Ouvrir la boîte À valider
+            </Link>
+          </p>
         </Carte>
       )}
 

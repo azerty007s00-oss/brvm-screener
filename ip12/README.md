@@ -135,6 +135,15 @@ Phoenix Capital Management.
   signale au président combien de destinataires avaient déjà reçu le courrier du jour. L'envoi
   passe par le SMTP du club (Gmail, Brevo) ou par Resend ; sans transport, seules les alertes du
   site subsistent.
+- **Une seule boîte « À valider » pour le bureau** — versements, règlements de pénalités et
+  mouvements de caisse attendaient chacun sur leur page. Ils arrivent maintenant dans une file
+  unique, sous Versements : une déclaration se valide d'un geste, quel que soit le nombre de mois
+  qu'elle couvre, avec son reçu à un toucher et ce qu'il faut vérifier (versé après le 10, remise
+  sans justificatif). Un rejet demande un motif, envoyé au membre par courriel.
+- **Relancer un membre depuis sa ligne du registre** — le bureau voit les relances déjà parties
+  (automatiques ou les siennes, avec leur date), lit le courrier tel que le membre le recevra, puis
+  l'envoie avec le bureau en copie et, s'il le souhaite, le relevé du membre en PDF ; ou le copie
+  pour WhatsApp. L'envoi s'inscrit au registre des relances sous son propre canal.
 - **Accès envoyés par courrier** — créer un membre ou réinitialiser son mot de passe lui envoie
   ses accès : lien du site, identifiant, mot de passe provisoire. Le mot de passe ne sert qu'une
   fois — l'écran de première connexion en exige un autre avant d'ouvrir quoi que ce soit. L'envoi
@@ -313,6 +322,9 @@ PGPORT_TEST=5433 npm run verif:sql
 | `src/lib/version.ts` | Révision déployée, lue dans l'environnement Vercel |
 | `src/lib/courriel.ts` | Envoi du courrier, par SMTP ou Resend |
 | `src/lib/relance.ts` | Qui relancer, et que leur écrire |
+| `src/lib/pdf.ts` | Un PDF minimal en Helvetica, sans bibliothèque |
+| `src/lib/releve-pdf.ts` | Le relevé d'un membre, joint à sa relance |
+| `src/app/(app)/a-valider/page.tsx` | La boîte « À valider » du bureau |
 | `src/lib/avis.ts` | Avis adressés au bureau et aux membres absents |
 | `src/lib/etats.ts` | Nom, ordre et résumé des six états d'un mois |
 | `src/lib/horizons.ts` | Quels relevés le graphique trace, selon la période |

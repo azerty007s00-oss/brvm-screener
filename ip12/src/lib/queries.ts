@@ -78,6 +78,8 @@ export type Versement = {
   valide_par_nom: string | null;
   note: string | null;
   motif_rejet: string | null;
+  /** Le jour de la saisie : ce que la boite « A valider » mesure en attente. */
+  declare_le: string;
 };
 
 export type Apport = {
@@ -228,7 +230,8 @@ const CHAMPS_VERSEMENT = `
   to_char(c.paid_on, 'YYYY-MM-DD') as date_versement,
   c.method as mode, c.reference, c.status as statut, c.batch_id as lot,
   c.note, c.review_note as motif_rejet,
-  d.full_name as saisi_par_nom, r.full_name as valide_par_nom
+  d.full_name as saisi_par_nom, r.full_name as valide_par_nom,
+  to_char(c.created_at, 'YYYY-MM-DD') as declare_le
 `;
 
 export async function listerVersements(filtre?: {
@@ -550,6 +553,37 @@ async function nbPenalitesRetardDuesBrut(): Promise<Map<string, number>> {
  * natures confondues, et les montants portent deja les regles individuelles
  * appliquees au moment du constat. C'est la dette, telle qu'elle est inscrite.
  */
+/** Une relance au registre : le jour, le canal, et si le courrier est parti. */
+export type RelanceTracee = { date: string; canal: string; ok: boolean };
+
+/**
+ * Les relances des deux derniers mois, par membre, la plus recente d'abord.
+ *
+ * Le registre des relances n'etait lu que pour eviter un doublon le jour meme.
+ * Le bureau qui s'apprete a relancer un membre doit savoir ce qui est deja
+ * parti : trois courriers ce mois-ci n'appellent pas un quatrieme, mais un
+ * appel. Sans la table, rien a montrer, et rien ne tombe.
+ */
+async function relancesRecentesBrut(): Promise<Map<string, RelanceTracee[]>> {
+  const parMembre = new Map<string, RelanceTracee[]>();
+  try {
+    const rows = (await db()`
+      select member_id, to_char(sent_at at time zone 'UTC', 'YYYY-MM-DD') as date, channel, ok
+      from reminder_log
+      where sent_at > now() - interval '62 days'
+      order by sent_at desc
+    `) as { member_id: string; date: string; channel: string; ok: boolean }[];
+    for (const r of rows) {
+      const id = String(r.member_id);
+      parMembre.set(id, [...(parMembre.get(id) ?? []), { date: r.date, canal: r.channel, ok: r.ok }]);
+    }
+  } catch {
+    // Table absente : l'historique se tait, la relance reste possible.
+  }
+  return parMembre;
+}
+export const relancesRecentes = cache(relancesRecentesBrut);
+
 export type DetteMembre = {
   /** Toutes natures : ce que le membre doit au club. */
   nb: number;
@@ -712,6 +746,8 @@ export type MouvementCaisse = {
   saisi_par: string | null;
   valide_par: string | null;
   motif_refus: string | null;
+  /** Le jour de la saisie, distinct de la date du mouvement qu'on peut antidater. */
+  saisi_le: string;
 };
 
 async function listerMouvementsCaisseBrut(): Promise<MouvementCaisse[]> {
@@ -720,7 +756,8 @@ async function listerMouvementsCaisseBrut(): Promise<MouvementCaisse[]> {
     select c.id, to_char(c.movement_date, 'YYYY-MM-DD') as date_mouvement,
            c.direction as sens, c.category as categorie, c.amount as montant,
            c.note, c.status as statut, c.review_note as motif_refus,
-           s.full_name as saisi_par, v.full_name as valide_par
+           s.full_name as saisi_par, v.full_name as valide_par,
+           to_char(c.created_at, 'YYYY-MM-DD') as saisi_le
     from cash_movements c
     left join members s on s.id = c.created_by
     left join members v on v.id = c.reviewed_by
