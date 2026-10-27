@@ -299,6 +299,172 @@ export default async function PagePenalites() {
     </Panneau>
   ) : null;
 
+  /* Une ligne du registre : la meme, dans le groupe d'un membre ou dans la liste du membre. */
+  const lignePenalite = (p: (typeof penalites)[number]) => (
+      <li key={p.id} className="py-3">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+              {/*
+                * Le detenteur d'une part rachetee voit ses penalites et celles
+                * de sa part : sans le nom, il ne savait pas laquelle devait quoi.
+                */}
+              {!gere && p.membre_id !== membre.id && `${p.membre_nom} · `}
+              {fcfa(p.montant)}
+              {p.quantite > 1 && (
+                <span
+                  className="font-normal"
+                  style={{ color: "var(--discret)" }}
+                >
+                  ({p.quantite} × {fcfa(p.montant_unitaire)})
+                </span>
+              )}
+              <Badge
+                ton={
+                  p.statut === STATUT_PENALITE.due
+                    ? "rouge"
+                    : soldeeALaSortie(p)
+                      ? "neutre"
+                      : p.statut === STATUT_PENALITE.payee
+                        ? "vert"
+                        : "neutre"
+                }
+              >
+                {p.statut === STATUT_PENALITE.due
+                  ? "Due"
+                  : soldeeALaSortie(p)
+                    ? "Soldée à la sortie"
+                    : p.statut === STATUT_PENALITE.payee
+                      ? "Réglée"
+                      : "Annulée"}
+              </Badge>
+              {!p.auto && <Badge ton="ambre">Saisie</Badge>}
+            </p>
+            <p className="text-xs" style={{ color: "var(--discret)" }}>
+              {LIBELLE_NATURE[p.nature] ?? p.nature} &middot; constatée
+              le {dateCourte(p.date_constat)}
+              {p.date_reglement
+                ? ` · soldée le ${dateCourte(p.date_reglement)}`
+                : ""}
+            </p>
+            {p.motif && (
+              <p className="mt-0.5 text-xs italic">{p.motif}</p>
+            )}
+            {p.note_reglement && (
+              <p
+                className="mt-0.5 text-xs italic"
+                style={{ color: "var(--discret)" }}
+              >
+                {p.note_reglement}
+              </p>
+            )}
+          </div>
+
+          {/*
+           * LES COMMANDES D'UNE LIGNE VIVENT DERRIERE LES TROIS POINTS.
+           *
+           * Chaque penalite portait jusqu'a deux boutons et deux boites
+           * de saisie -- « Reglee », « Annuler », un motif, un nombre de
+           * mois -- poses a demeure sur une page qu'on ouvre pour lire.
+           * Le motif et le nombre de mois n'apparaissent plus qu'au
+           * moment de repondre a la question, ou l'on sait quoi y
+           * mettre. Reprendre un reglement ou une annulation reste
+           * possible : une erreur de manipulation ne doit pas rester
+           * inscrite pour toujours.
+           */}
+          {gere && (
+            <MenuLigne
+              etiquette={`Actions sur la pénalité de ${p.membre_nom} du ${dateCourte(p.date_constat)}`}
+              actions={
+                p.statut === STATUT_PENALITE.due
+                  ? [
+                      {
+                        libelle: "Marquer réglée",
+                        action: reglerPenalite,
+                        champs: (
+                          <>
+                            <ChampCache nom="id" valeur={p.id} />
+                            {p.quantite > 1 && (
+                              <ChampMenu
+                                nom="quantite"
+                                libelle={`Mois réglés, sur ${p.quantite}`}
+                                type="number"
+                                min={1}
+                                max={p.quantite}
+                                requis={false}
+                                indication={`Vide : les ${p.quantite}`}
+                              />
+                            )}
+                          </>
+                        ),
+                        confirmation:
+                          p.quantite > 1
+                            ? `Combien des ${p.quantite} mois sont réglés ? Laissez vide pour tout solder.`
+                            : "Marquer cette pénalité comme réglée ?",
+                        confirmer: "Marquer réglée",
+                      },
+                      {
+                        libelle: "Annuler la pénalité",
+                        action: annulerPenalite,
+                        champs: (
+                          <>
+                            <ChampCache nom="id" valeur={p.id} />
+                            <ChampMenu
+                              nom="motif"
+                              libelle="Motif de l'annulation"
+                              indication="Dérogation, erreur de constat..."
+                            />
+                          </>
+                        ),
+                        confirmation: "Annuler cette pénalité ?",
+                        confirmer: "Annuler la pénalité",
+                      },
+                    ]
+                  : [
+                      {
+                        libelle: "Remettre en dû",
+                        action: rouvrirPenalite,
+                        champs: (
+                          <>
+                            <ChampCache nom="id" valeur={p.id} />
+                            <ChampMenu
+                              nom="motif"
+                              libelle="Motif de la reprise"
+                              indication="Règlement annulé, erreur..."
+                            />
+                          </>
+                        ),
+                        confirmation: "Remettre cette pénalité en du ?",
+                        confirmer: "Remettre en dû",
+                      },
+                    ]
+              }
+            />
+          )}
+        </div>
+      </li>
+  );
+
+  /* Le registre par membre : ce qu'il doit, ce qu'il a regle, sa jauge R5. */
+  const groupes = [...new Set(penalites.map((p) => p.membre_id))]
+    .map((id) => {
+      const lignes = penalites.filter((p) => p.membre_id === id);
+      const dues = lignes.filter((p) => p.statut === STATUT_PENALITE.due);
+      return {
+        membreId: id,
+        nom: lignes[0].membre_nom,
+        lignes,
+        du: dues.reduce((t, p) => t + p.montant, 0),
+        nbDues: dues.length,
+        regle: lignes
+          .filter((p) => p.statut === STATUT_PENALITE.payee && !soldeeALaSortie(p))
+          .reduce((t, p) => t + p.montant, 0),
+        r5: situations.find((x) => x.membreId === id)?.nbPenalitesImpayees ?? 0,
+      };
+    })
+    .sort((x, y) => y.du - x.du || x.nom.localeCompare(y.nom, "fr"));
+  const maxDu = Math.max(0, ...groupes.map((g) => g.du));
+
   return (
     <>
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
@@ -589,152 +755,78 @@ export default async function PagePenalites() {
         {penalites.length === 0 ? (
           <Vide>Aucune pénalité enregistrée.</Vide>
         ) : (
-          <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
-            {penalites.map((p) => (
-              <li key={p.id} className="py-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                      {/*
-                        * Le detenteur d'une part rachetee voit ses penalites et celles
-                        * de sa part : sans le nom, il ne savait pas laquelle devait quoi.
-                        */}
-                      {(gere || p.membre_id !== membre.id) && `${p.membre_nom} · `}
-                      {fcfa(p.montant)}
-                      {p.quantite > 1 && (
+          gere ? (
+            /*
+             * UN GROUPE PAR MEMBRE, ET NON UNE LISTE A PLAT.
+             *
+             * Le registre empilait toutes les lignes par date : pour savoir ce
+             * que doit DROPOU, il fallait les reperer une a une parmi celles des
+             * autres. Chaque membre a maintenant sa ligne, ce qu'il doit, sa
+             * jauge R5 et une barre a l'echelle du plus gros debiteur ; le
+             * detail s'ouvre d'un geste. Les plus endettes en tete.
+             */
+            <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
+              {groupes.map((g) => (
+                <li key={g.membreId}>
+                  <details name="penalites" className="ligne-registre">
+                    <summary className="tapable cursor-pointer py-3">
+                      <div className="flex items-baseline gap-2">
+                        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{g.nom}</span>
                         <span
-                          className="font-normal"
-                          style={{ color: "var(--discret)" }}
+                          className="flex-none text-[15px] font-semibold tabular-nums"
+                          style={{ color: g.du > 0 ? "var(--etat-manque)" : "var(--discret)" }}
                         >
-                          ({p.quantite} × {fcfa(p.montant_unitaire)})
+                          {g.du > 0 ? fcfa(g.du) : "Rien à payer"}
                         </span>
+                      </div>
+                      {g.du > 0 && (
+                      <div
+                        className="mt-1.5 h-1.5 overflow-hidden rounded-full"
+                        style={{ background: "var(--sunk)" }}
+                        aria-hidden="true"
+                      >
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${maxDu > 0 ? Math.round((g.du / maxDu) * 100) : 0}%`, background: "var(--etat-manque)" }}
+                        />
+                      </div>
                       )}
-                      <Badge
-                        ton={
-                          p.statut === STATUT_PENALITE.due
-                            ? "rouge"
-                            : soldeeALaSortie(p)
-                              ? "neutre"
-                              : p.statut === STATUT_PENALITE.payee
-                                ? "vert"
-                                : "neutre"
-                        }
-                      >
-                        {p.statut === STATUT_PENALITE.due
-                          ? "Due"
-                          : soldeeALaSortie(p)
-                            ? "Soldée à la sortie"
-                            : p.statut === STATUT_PENALITE.payee
-                              ? "Réglée"
-                              : "Annulée"}
-                      </Badge>
-                      {!p.auto && <Badge ton="ambre">Saisie</Badge>}
-                    </p>
-                    <p className="text-xs" style={{ color: "var(--discret)" }}>
-                      {LIBELLE_NATURE[p.nature] ?? p.nature} &middot; constatée
-                      le {dateCourte(p.date_constat)}
-                      {p.date_reglement
-                        ? ` · soldée le ${dateCourte(p.date_reglement)}`
-                        : ""}
-                    </p>
-                    {p.motif && (
-                      <p className="mt-0.5 text-xs italic">{p.motif}</p>
-                    )}
-                    {p.note_reglement && (
-                      <p
-                        className="mt-0.5 text-xs italic"
-                        style={{ color: "var(--discret)" }}
-                      >
-                        {p.note_reglement}
+                      <p className="mt-1.5 flex flex-wrap gap-x-3 text-[12px]" style={{ color: "var(--discret)" }}>
+                        {g.nbDues > 0 && (
+                          <span>
+                            {g.nbDues} {accorde(g.nbDues, "ligne due", "lignes dues")}
+                          </span>
+                        )}
+                        {g.regle > 0 && <span>{fcfa(g.regle)} réglés</span>}
+                        {g.r5 > 0 && (
+                          <span
+                            style={{
+                              color:
+                                g.r5 >= REGLES.penalitesImpayeesAvantExclusion
+                                  ? "var(--etat-manque)"
+                                  : g.r5 === REGLES.penalitesImpayeesAvantExclusion - 1
+                                    ? "var(--etat-attente)"
+                                    : undefined,
+                            }}
+                          >
+                            R5 : {g.r5} {accorde(g.r5, "retard impayé", "retards impayés")} (seuil{" "}
+                            {REGLES.penalitesImpayeesAvantExclusion})
+                          </span>
+                        )}
                       </p>
-                    )}
-                  </div>
-
-                  {/*
-                   * LES COMMANDES D'UNE LIGNE VIVENT DERRIERE LES TROIS POINTS.
-                   *
-                   * Chaque penalite portait jusqu'a deux boutons et deux boites
-                   * de saisie -- « Reglee », « Annuler », un motif, un nombre de
-                   * mois -- poses a demeure sur une page qu'on ouvre pour lire.
-                   * Le motif et le nombre de mois n'apparaissent plus qu'au
-                   * moment de repondre a la question, ou l'on sait quoi y
-                   * mettre. Reprendre un reglement ou une annulation reste
-                   * possible : une erreur de manipulation ne doit pas rester
-                   * inscrite pour toujours.
-                   */}
-                  {gere && (
-                    <MenuLigne
-                      etiquette={`Actions sur la pénalité de ${p.membre_nom} du ${dateCourte(p.date_constat)}`}
-                      actions={
-                        p.statut === STATUT_PENALITE.due
-                          ? [
-                              {
-                                libelle: "Marquer réglée",
-                                action: reglerPenalite,
-                                champs: (
-                                  <>
-                                    <ChampCache nom="id" valeur={p.id} />
-                                    {p.quantite > 1 && (
-                                      <ChampMenu
-                                        nom="quantite"
-                                        libelle={`Mois réglés, sur ${p.quantite}`}
-                                        type="number"
-                                        min={1}
-                                        max={p.quantite}
-                                        requis={false}
-                                        indication={`Vide : les ${p.quantite}`}
-                                      />
-                                    )}
-                                  </>
-                                ),
-                                confirmation:
-                                  p.quantite > 1
-                                    ? `Combien des ${p.quantite} mois sont réglés ? Laissez vide pour tout solder.`
-                                    : "Marquer cette pénalité comme réglée ?",
-                                confirmer: "Marquer réglée",
-                              },
-                              {
-                                libelle: "Annuler la pénalité",
-                                action: annulerPenalite,
-                                champs: (
-                                  <>
-                                    <ChampCache nom="id" valeur={p.id} />
-                                    <ChampMenu
-                                      nom="motif"
-                                      libelle="Motif de l'annulation"
-                                      indication="Dérogation, erreur de constat..."
-                                    />
-                                  </>
-                                ),
-                                confirmation: "Annuler cette pénalité ?",
-                                confirmer: "Annuler la pénalité",
-                              },
-                            ]
-                          : [
-                              {
-                                libelle: "Remettre en dû",
-                                action: rouvrirPenalite,
-                                champs: (
-                                  <>
-                                    <ChampCache nom="id" valeur={p.id} />
-                                    <ChampMenu
-                                      nom="motif"
-                                      libelle="Motif de la reprise"
-                                      indication="Règlement annulé, erreur..."
-                                    />
-                                  </>
-                                ),
-                                confirmation: "Remettre cette pénalité en du ?",
-                                confirmer: "Remettre en dû",
-                              },
-                            ]
-                      }
-                    />
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
+                    </summary>
+                    <ul className="divide-y border-t" style={{ borderColor: "var(--bordure)" }}>
+                      {g.lignes.map(lignePenalite)}
+                    </ul>
+                  </details>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <ul className="divide-y" style={{ borderColor: "var(--bordure)" }}>
+              {penalites.map(lignePenalite)}
+            </ul>
+          )
         )}
       </Carte>
 
