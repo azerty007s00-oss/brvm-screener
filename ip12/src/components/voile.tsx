@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import { Icone } from "@/components/icones";
 import { CLE_VOILE } from "@/lib/voile";
 
@@ -12,13 +12,12 @@ import { CLE_VOILE } from "@/lib/voile";
  * Comme dans les applications bancaires, un oeil les voile, et le choix reste
  * sur l'appareil -- c'est une preference de l'ecran, non du compte.
  *
- * Deux mecanismes, parce que les montants vivent sous deux formes. Les chiffres
- * poses comme tels (heros, tuiles, bandeaux) passent par `Voilable` : six
- * points prennent leur place. Ceux qui courent dans une phrase -- « il manque
- * 2 500 FCFA » -- sont reperes dans le texte et couverts par l'API CSS Custom
- * Highlight, sans toucher au DOM : React garde la main sur ses noeuds, et rien
- * ne se casse au rendu suivant. Un navigateur sans cette API voile les
- * chiffres, mais laisse lire les phrases.
+ * Un seul mecanisme, le meme sur tous les appareils : chaque montant passe par
+ * `Voilable` (les chiffres) ou `avecMontants` (les phrases), et six points
+ * prennent sa place. Une premiere version couvrait les montants des phrases
+ * apres coup, par l'API CSS Custom Highlight : gris sur un telephone, visibles
+ * sur un autre, et parfois poses sur le nom d'a cote. Le decoupage au rendu ne
+ * depend d'aucun navigateur.
  *
  * L'oeil se pose a cote du montant principal de la page (voir `EnTeteEcran`),
  * comme a cote d'un solde : on le trouve la ou l'on regarde.
@@ -68,89 +67,4 @@ export function BoutonVoile({ encre = "var(--ink-2)", taille = 20 }: { encre?: s
       <I taille={taille} trait={1.6} />
     </button>
   );
-}
-
-/*
- * Un montant dans le texte : des chiffres groupes par milliers, une virgule
- * eventuelle, puis « FCFA ». Le signe qui le precede est pris avec lui.
- */
-const MONTANT = /[+−-]?\s?\d{1,3}(?:[\s  .]\d{3})*(?:,\d+)?[\s  ]?FCFA/g;
-
-/** Un montant seul, du premier au dernier caractere : ce qu'une plage doit couvrir pour rester. */
-const MONTANT_SEUL = new RegExp(`^${MONTANT.source}$`);
-
-/**
- * LES PLAGES QUI ONT GLISSE S'EFFACENT AVANT LA PEINTURE.
- *
- * Une plage suit son texte quand la page se recompose : une navigation, un
- * tri, un formulaire envoye deplacent ou remplacent les noeuds, et une plage
- * posee sur un montant peut se retrouver sur le texte voisin. Sur telephone,
- * les noms des membres du registre des penalites sont ainsi passes sous la
- * barre, a la place de leurs dettes. A chaque changement, avant la peinture,
- * toute plage qui ne couvre plus exactement un montant est retiree ; le
- * nouveau reperage suit, une fois l'agitation retombee.
- */
-function elaguer(): void {
-  const surlignage = (CSS as unknown as { highlights?: Map<string, Set<Range>> }).highlights?.get("montant");
-  if (!surlignage) return;
-  for (const plage of [...surlignage]) {
-    if (!MONTANT_SEUL.test(plage.toString().trim())) surlignage.delete(plage);
-  }
-}
-
-function surligner(): void {
-  const registre = (CSS as unknown as { highlights?: Map<string, unknown> }).highlights;
-  const Surlignage = (window as unknown as { Highlight?: new (...r: Range[]) => unknown }).Highlight;
-  if (!registre || !Surlignage) return;
-
-  const plages: Range[] = [];
-  const parcours = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  for (let n = parcours.nextNode(); n; n = parcours.nextNode()) {
-    const texte = n.nodeValue ?? "";
-    if (!texte.includes("FCFA")) continue;
-    // Deja remplace par des points : inutile de le couvrir.
-    if (n.parentElement?.closest("[data-montant], script, style")) continue;
-    for (const m of texte.matchAll(MONTANT)) {
-      const plage = document.createRange();
-      plage.setStart(n, m.index ?? 0);
-      plage.setEnd(n, (m.index ?? 0) + m[0].length);
-      if (MONTANT_SEUL.test(plage.toString().trim())) plages.push(plage);
-    }
-  }
-  registre.set("montant", new Surlignage(...plages));
-}
-
-function effacer(): void {
-  (CSS as unknown as { highlights?: Map<string, unknown> }).highlights?.delete("montant");
-}
-
-/** Monte une fois dans la coque : suit le voile, et le texte qui change sous lui. */
-export function SurligneurMontants() {
-  const actif = useVoile();
-
-  useEffect(() => {
-    if (!actif) {
-      effacer();
-      return;
-    }
-    surligner();
-    /*
-     * Le texte change sans recharger la page : une navigation, un formulaire
-     * envoye, un chiffre qui monte jusqu'a sa valeur. On resurligne apres coup,
-     * une fois l'agitation retombee, plutot qu'a chaque caractere.
-     */
-    let attente: number | undefined;
-    const observateur = new MutationObserver(() => {
-      elaguer();
-      window.clearTimeout(attente);
-      attente = window.setTimeout(surligner, 120);
-    });
-    observateur.observe(document.body, { childList: true, subtree: true, characterData: true });
-    return () => {
-      observateur.disconnect();
-      window.clearTimeout(attente);
-    };
-  }, [actif]);
-
-  return null;
 }

@@ -53,7 +53,7 @@ import {
 } from "@/components/glyphe-etat";
 import { MODES_AFFICHES, STATUT_VERSEMENT, libelleMode } from "@/lib/valeurs";
 import { Chiffre } from "@/components/chiffre";
-import { Voilable } from "@/components/voilable";
+import { Voilable, avecMontants } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Versements" };
@@ -695,7 +695,7 @@ export default async function PageVersements({
                       {partsRachetees.has(s.membreId) &&
                       fenetre.every((c) => c.statut === "hors_periode") ? (
                         <p className="text-[12px]" style={{ color: "var(--discret)" }}>
-                          {debutDeLaPart(s.membreId)}
+                          {avecMontants(debutDeLaPart(s.membreId))}
                         </p>
                       ) : (
                         <Frise cellules={fenetre} taille={18} etiquette={s.nom} />
@@ -737,7 +737,7 @@ export default async function PageVersements({
                                   </span>
                                 </div>
                                 <p className="text-[12px]" style={{ color: "var(--discret)" }}>
-                                  {composition ?? detailDuMois(c)}
+                                  {avecMontants(composition ?? detailDuMois(c))}
                                   {note ? ` Note : ${note}` : ""}
                                 </p>
                                 {justificatifs.length > 0 && (
@@ -765,8 +765,8 @@ export default async function PageVersements({
                     {/* Le debut de la part ne se repete pas : la ligne fermee le dit deja tant qu'elle n'a aucun mois. */}
                     {partsRachetees.has(s.membreId) && (
                       <div className="text-[12px]" style={{ color: "var(--discret)" }}>
-                        {!fenetre.every((c) => c.statut === "hors_periode") && <p>{debutDeLaPart(s.membreId)}</p>}
-                        {reprisAuRachat(s.membreId) && <p className="mt-1">{reprisAuRachat(s.membreId)}</p>}
+                        {!fenetre.every((c) => c.statut === "hors_periode") && <p>{avecMontants(debutDeLaPart(s.membreId))}</p>}
+                        {reprisAuRachat(s.membreId) && <p className="mt-1">{avecMontants(reprisAuRachat(s.membreId))}</p>}
                       </div>
                     )}
                     <p className="mt-3 text-[12px]" style={{ color: "var(--discret)" }}>

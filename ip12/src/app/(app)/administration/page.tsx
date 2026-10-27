@@ -34,6 +34,7 @@ import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Rubrique, Tuile, Vide } f
 import { Icone } from "@/components/icones";
 import { FormulaireSortie } from "@/components/formulaire-sortie";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import { Voilable, avecMontants } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Administration" };
@@ -688,20 +689,24 @@ export default async function PageAdministration() {
                         */}
                       <span className="block text-[11px]" style={{ color: "var(--discret)" }}>
                         {(d.part * 100).toFixed(1).replace(".", ",")} % du capital
-                        {d.penalitesDeduites > 0
-                          ? ` · ${fcfa(d.penalitesDeduites)} de pénalités déduites`
-                          : ""}
-                        {d.penalitesEnCours > 0
-                          ? `, dont ${fcfa(d.penalitesEnCours)} pas encore inscrites`
-                          : ""}
+                        {avecMontants(
+                          d.penalitesDeduites > 0
+                            ? ` · ${fcfa(d.penalitesDeduites)} de pénalités déduites`
+                            : "",
+                        )}
+                        {avecMontants(
+                          d.penalitesEnCours > 0
+                            ? `, dont ${fcfa(d.penalitesEnCours)} pas encore inscrites`
+                            : "",
+                        )}
                       </span>
                     </td>
-                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.valeurBrute)}</td>
-                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisVente)}</td>
-                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisGarde)}</td>
-                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.fraisTransfert)}</td>
-                    <td className="py-1.5 text-right tabular-nums">{fcfa(d.avance)}</td>
-                    <td className="py-1.5 text-right font-medium tabular-nums">{fcfa(d.netIndicatif)}</td>
+                    <td className="py-1.5 text-right tabular-nums"><Voilable>{fcfa(d.valeurBrute)}</Voilable></td>
+                    <td className="py-1.5 text-right tabular-nums"><Voilable>{fcfa(d.fraisVente)}</Voilable></td>
+                    <td className="py-1.5 text-right tabular-nums"><Voilable>{fcfa(d.fraisGarde)}</Voilable></td>
+                    <td className="py-1.5 text-right tabular-nums"><Voilable>{fcfa(d.fraisTransfert)}</Voilable></td>
+                    <td className="py-1.5 text-right tabular-nums"><Voilable>{fcfa(d.avance)}</Voilable></td>
+                    <td className="py-1.5 text-right font-medium tabular-nums"><Voilable>{fcfa(d.netIndicatif)}</Voilable></td>
                   </tr>
                 ))}
               </tbody>
@@ -719,7 +724,7 @@ export default async function PageAdministration() {
         {synth.duAuxSortants > 0 && (
           <div className="mb-3">
             <Alerte ton="ambre">
-              Reste à verser aux membres sortis : {fcfa(synth.duAuxSortants)}. Le jour du
+              Reste à verser aux membres sortis : <Voilable>{fcfa(synth.duAuxSortants)}</Voilable>. Le jour du
               paiement, enregistrez-le dans Caisse comme dépense « Remboursement d&apos;un
               membre sorti » : la dette sera soldée.
             </Alerte>
@@ -731,12 +736,12 @@ export default async function PageAdministration() {
             {sorties.map((s) => (
               <li key={s.id} className="py-2">
                 <p className="text-sm font-medium">
-                  {s.membreNom} &middot; {dateCourte(s.date)} &middot; {fcfa(s.netVerse)} versés
+                  {s.membreNom} &middot; {dateCourte(s.date)} &middot; <Voilable>{fcfa(s.netVerse)}</Voilable> versés
                 </p>
                 <p className="text-xs" style={{ color: "var(--discret)" }}>
-                  {s.motif ?? "motif non précisé"} &middot; droits {fcfa(s.valeurBrute)} &minus;
-                  pénalités compensées {fcfa(s.acquisAuClub)} &minus; frais {fcfa(s.frais)}
-                  {s.note ? ` · ${s.note}` : ""}
+                  {s.motif ?? "motif non précisé"} &middot; droits <Voilable>{fcfa(s.valeurBrute)}</Voilable> &minus;
+                  pénalités compensées <Voilable>{fcfa(s.acquisAuClub)}</Voilable> &minus; frais <Voilable>{fcfa(s.frais)}</Voilable>
+                  {avecMontants(s.note ? ` · ${s.note}` : "")}
                 </p>
                 <div className="mt-1">
                   <Depliant titre="Corriger les frais (frais réels)">

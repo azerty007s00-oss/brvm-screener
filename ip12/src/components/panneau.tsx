@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, type ReactNode } from "react";
 import { styleBouton } from "@/components/boutons";
+import { avecMontants } from "@/components/voilable";
 
 /**
  * Le formulaire quitte la page.
@@ -144,7 +145,7 @@ export function Panneau({
           style={{ borderBottom: "1px solid var(--line)" }}
         >
           <h2 className="min-w-0 flex-1 truncate text-[17px] font-semibold lg:text-[15px]">
-            {titre}
+            {avecMontants(titre)}
           </h2>
           <button
             type="button"
@@ -168,7 +169,7 @@ export function Panneau({
         <div ref={corps} className="min-h-0 flex-1 overflow-y-auto px-5 py-6 lg:px-7">
           {introduction && (
             <p className="mb-5 text-[13px] leading-relaxed" style={{ color: "var(--ink-2)" }}>
-              {introduction}
+              {avecMontants(introduction)}
             </p>
           )}
           {children}

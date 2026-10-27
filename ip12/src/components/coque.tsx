@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icone, type NomIcone } from "@/components/icones";
 import { seDeconnecter } from "@/app/actions/auth";
-import { SurligneurMontants } from "@/components/voile";
 
 export type Page = { href: string; libelle: string; icone: NomIcone };
 export type Rubrique = {
@@ -484,7 +483,6 @@ export function Coque({
         </main>
       </div>
       <NavigationBasse rubriques={rubriques} alerte={alerte} />
-      <SurligneurMontants />
     </div>
   );
 }

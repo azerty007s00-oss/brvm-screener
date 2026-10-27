@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Chiffre } from "@/components/chiffre";
-import { Voilable } from "@/components/voilable";
+import { Voilable, avecMontants } from "@/components/voilable";
 import { BoutonVoile } from "@/components/voile";
 
 /**
@@ -76,7 +76,7 @@ export function Statistique({
       </p>
       {detail && (
         <p className="mt-1 text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-          {detail}
+          {avecMontants(detail)}
         </p>
       )}
     </div>
@@ -222,7 +222,7 @@ export function EnTeteEcran({
       )}
       {detail && (
         <p className="mt-2 text-[14px] leading-snug" style={{ color: "var(--ink-2)" }}>
-          {detail}
+          {avecMontants(detail)}
         </p>
       )}
     </div>
@@ -363,7 +363,7 @@ export function CarteEtat({
           />
           {c.contexte && (
             <p className="text-[12.5px]" style={{ color: "var(--ink-3)" }}>
-              {c.contexte}
+              {avecMontants(c.contexte)}
             </p>
           )}
         </div>

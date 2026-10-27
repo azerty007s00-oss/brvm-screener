@@ -41,7 +41,7 @@ import {
   EcranInitialisation,
   estTableAbsente,
 } from "@/components/initialisation";
-import { Voilable } from "@/components/voilable";
+import { Voilable, avecMontants } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Pénalités" };
@@ -349,7 +349,7 @@ export default async function PagePenalites() {
                 className="mt-0.5 text-xs italic"
                 style={{ color: "var(--discret)" }}
               >
-                {p.note_reglement}
+                {avecMontants(p.note_reglement)}
               </p>
             )}
           </div>

@@ -17,6 +17,7 @@ import { Alerte, Carte } from "@/components/ui";
 import { Frise, LegendeEtats, initialeMois, statutLigne } from "@/components/glyphe-etat";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 import { penalitesNonInscrites } from "@/lib/constat";
+import { Voilable, avecMontants } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 
@@ -105,7 +106,7 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
   const ligne = (libelle: string, valeur: string) => (
     <li className="flex justify-between gap-3 py-1">
       <span style={{ color: "var(--discret)" }}>{libelle}</span>
-      <span className="tabular-nums">{valeur}</span>
+      <span className="tabular-nums">{avecMontants(valeur)}</span>
     </li>
   );
 
@@ -224,7 +225,7 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
             <ul className="mt-2 text-xs" style={{ color: "var(--discret)" }}>
               {penalitesDues.map((p) => (
                 <li key={p.id}>
-                  {dateCourte(p.date_constat)} &middot; {p.motif ?? p.nature} &middot; {fcfa(p.montant)}
+                  {dateCourte(p.date_constat)} &middot; {p.motif ?? p.nature} &middot; <Voilable>{fcfa(p.montant)}</Voilable>
                 </li>
               ))}
             </ul>
@@ -253,7 +254,7 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
                   {versements.map((v) => (
                     <tr key={v.id} className="border-t" style={{ borderColor: "var(--bordure)" }}>
                       <td className="py-1">{moisLong(v.mois)}</td>
-                      <td className="py-1 text-right tabular-nums">{fcfa(v.montant)}</td>
+                      <td className="py-1 text-right tabular-nums"><Voilable>{fcfa(v.montant)}</Voilable></td>
                       <td className="py-1">{dateCourte(v.date_versement)}</td>
                       <td className="py-1">{libelleMode(v.mode)}</td>
                       <td className="py-1">
@@ -289,7 +290,7 @@ export default async function PageReleve({ params }: { params: Promise<{ membreI
               )}
               {totalDu + courant.montant > 0 && (
                 <li>
-                  {fcfa(totalDu + courant.montant)} de pénalités dues, indissociables des
+                  <Voilable>{fcfa(totalDu + courant.montant)}</Voilable> de pénalités dues, indissociables des
                   cotisations.
                 </li>
               )}

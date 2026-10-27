@@ -21,7 +21,7 @@ import { libelleMode } from "@/lib/valeurs";
 import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
 import { Bouton } from "@/components/boutons";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
-import { Voilable } from "@/components/voilable";
+import { Voilable, avecMontants } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mon compte" };
@@ -153,8 +153,8 @@ export default async function PageMonCompte() {
                   </p>
                   <p className="mt-0.5 text-xs" style={{ color: "var(--discret)" }}>
                     Cotisation <Voilable>{fcfa(cotisation)}</Voilable> par mois
-                    {valeur ? ` · valeur ${fcfa(valeur.valeur)}` : ""}
-                    {valeur && valeur.dues > 0 ? ` · ${fcfa(valeur.dues)} de pénalités dues` : ""}
+                    {avecMontants(valeur ? ` · valeur ${fcfa(valeur.valeur)}` : "")}
+                    {avecMontants(valeur && valeur.dues > 0 ? ` · ${fcfa(valeur.dues)} de pénalités dues` : "")}
                   </p>
                   <Link href={`/releve/${x.membreId}`} className="mt-1 inline-block text-xs underline">
                     Relevé de cette part

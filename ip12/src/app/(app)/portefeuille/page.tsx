@@ -11,6 +11,7 @@ import { Panneau } from "@/components/panneau";
 import { MenuLigne } from "@/components/menu-ligne";
 import { TetePortefeuille } from "@/components/tete-portefeuille";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import { Voilable } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Portefeuille" };
@@ -111,7 +112,7 @@ export default async function PagePortefeuille() {
           {derniere ? (
             <>
               {" "}
-              Dernier relevé : {fcfa(derniere.total)} le {dateCourte(derniere.date_valo)}.
+              Dernier relevé : <Voilable>{fcfa(derniere.total)}</Voilable> le {dateCourte(derniere.date_valo)}.
             </>
           ) : null}
         </>

@@ -26,7 +26,7 @@ import { EnTeteEcran, Vide } from "@/components/ui";
 import { GlypheEtat } from "@/components/glyphe-etat";
 import { Decision } from "@/components/decision";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
-import { Voilable } from "@/components/voilable";
+import { Voilable, avecMontants } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "À valider" };
@@ -299,7 +299,7 @@ export default async function PageAValider({
                     </div>
                     {l.objet && (
                       <p className="text-[13px] leading-snug" style={{ color: "var(--ink-2)" }}>
-                        {l.objet}
+                        {avecMontants(l.objet)}
                       </p>
                     )}
                     <div className="flex flex-wrap items-center gap-2.5">
@@ -334,7 +334,7 @@ export default async function PageAValider({
                         className="rounded-lg px-2.5 py-2 text-[12.5px] leading-snug"
                         style={{ background: "var(--etat-attente-fond)", color: "var(--etat-attente)" }}
                       >
-                        {l.alerte}
+                        {avecMontants(l.alerte)}
                       </p>
                     )}
                     {l.decision}

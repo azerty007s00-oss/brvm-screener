@@ -738,7 +738,7 @@ export function CourbePortefeuille({
           </>
         ) : part === null ? (
           <span>
-            Plus bas {fcfa(min)} &middot; plus haut {fcfa(max)}
+            Plus bas <Voilable>{fcfa(min)}</Voilable> &middot; plus haut <Voilable>{fcfa(max)}</Voilable>
           </span>
         ) : concorde ? (
           <>

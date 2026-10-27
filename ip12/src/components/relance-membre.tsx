@@ -2,6 +2,7 @@
 
 import { useActionState, useRef, useState } from "react";
 import type { EtatFormulaire } from "@/app/actions/auth";
+import { avecMontants } from "@/components/voilable";
 
 type Action = (etat: EtatFormulaire, donnees: FormData) => Promise<EtatFormulaire>;
 
@@ -94,7 +95,7 @@ export function RelanceMembre({
         </button>
       </div>
       <p className="text-[12px]" style={{ color: "var(--ink-3)" }}>
-        {du}
+        {avecMontants(du)}
       </p>
 
       <dialog
@@ -124,7 +125,7 @@ export function RelanceMembre({
             <p className="mb-2 text-[12px]" style={{ color: "var(--ink-2)" }}>
               Objet : <span className="font-semibold" style={{ color: "var(--ink)" }}>{sujet}</span>
             </p>
-            <p className="whitespace-pre-line">{texte}</p>
+            <p className="whitespace-pre-line">{avecMontants(texte)}</p>
           </div>
 
           <form action={envoyer} className="flex flex-col gap-2">

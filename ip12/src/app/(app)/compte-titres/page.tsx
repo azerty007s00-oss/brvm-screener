@@ -17,7 +17,7 @@ import {
   EcranInitialisation,
   estTableAbsente,
 } from "@/components/initialisation";
-import { Voilable } from "@/components/voilable";
+import { Voilable, avecMontants } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Titres" };
@@ -83,11 +83,13 @@ export default async function PageCompteTitres() {
           </p>
           <p className="text-xs" style={{ color: "var(--discret)" }}>
             {dateCourte(a.date_transfert)}
-            {a.montant === 0
-              ? " · prélevés dans le compte-titres"
-              : a.frais > 0
-                ? ` · dont ${fcfa(a.frais)} de frais`
-                : ""}
+            {avecMontants(
+              a.montant === 0
+                ? " · prélevés dans le compte-titres"
+                : a.frais > 0
+                  ? ` · dont ${fcfa(a.frais)} de frais`
+                  : "",
+            )}
             {a.saisi_par_nom ? ` · ${a.saisi_par_nom}` : ""}
             {a.note ? ` · ${a.note}` : ""}
           </p>

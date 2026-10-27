@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import type { ReactNode } from "react";
 import type { EtatFormulaire } from "@/app/actions/auth";
+import { avecMontants } from "@/components/voilable";
 
 type Action = (etat: EtatFormulaire, donnees: FormData) => Promise<EtatFormulaire>;
 
@@ -177,7 +178,7 @@ export function Depliant({ titre, children }: { titre: string; children: ReactNo
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" className="chevron flex-none">
           <path d="M9.5 6 L15.5 12 L9.5 18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        {titre}
+        {avecMontants(titre)}
       </summary>
       <div className="contenu-depliant pt-1 pb-2 pl-8">{children}</div>
     </details>
