@@ -625,6 +625,7 @@ export function CourbePortefeuille({
             key={v}
             className="absolute text-[12px] tabular-nums"
             style={{ right: 0, top: `calc(${(y(v) / H) * 100}% - 0.5em)`, color: "var(--ink-3)" }}
+            data-montant=""
           >
             {enMillions(v)}
           </span>
@@ -707,11 +708,11 @@ export function CourbePortefeuille({
             {point.actions !== undefined && point.liquidites !== undefined && (
               <span>
                 Actions{" "}
-                <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+                <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }} data-montant="">
                   {nombre(point.actions)}
                 </span>{" "}
                 &middot; liquidités{" "}
-                <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+                <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }} data-montant="">
                   {nombre(point.liquidites)}
                 </span>
               </span>
@@ -748,7 +749,7 @@ export function CourbePortefeuille({
         ) : (
           <span>
             Variation de la valeur{" "}
-            <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }}>
+            <span className="font-medium tabular-nums" style={{ color: "var(--ink)" }} data-montant="">
               {signe(part.ecartValeur)} FCFA
             </span>
             , apports compris.
@@ -805,6 +806,7 @@ function Poste({
       <span
         className="font-medium tabular-nums"
         style={{ color: performance ? couleurSigne(montant) : "var(--ink)" }}
+        data-montant=""
       >
         {avecSigne ? signe(montant) : nombre(montant)}
       </span>

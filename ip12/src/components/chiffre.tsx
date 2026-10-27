@@ -117,7 +117,7 @@ export function Chiffre({
   }, [valeur, duree, retard, mettreEnForme]);
 
   return (
-    <span ref={el} className="tabular-nums">
+    <span ref={el} className="tabular-nums" data-montant={format === "fcfa" ? "" : undefined}>
       {mettreEnForme(valeur)}
     </span>
   );

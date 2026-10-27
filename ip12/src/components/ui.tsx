@@ -190,6 +190,7 @@ export function EnTeteEcran({
           <span
             className="text-[44px] leading-none font-medium tabular-nums sm:text-[60px]"
             style={{ color: "var(--ink)", letterSpacing: "-0.02em" }}
+            data-montant={unite === "FCFA" ? "" : undefined}
           >
             {brut !== undefined ? <Chiffre valeur={brut} /> : chiffre}
           </span>
@@ -250,6 +251,7 @@ export function ValeurChiffree({
       <span
         className={`${taille} font-medium tabular-nums`}
         style={{ color: encre ?? "var(--ink)", letterSpacing: "-0.015em" }}
+        data-montant={unite === "FCFA" ? "" : undefined}
       >
         {brut !== undefined ? <Chiffre valeur={brut} retard={retard} /> : valeur}
       </span>

@@ -42,6 +42,21 @@ export const Icone = {
       <path d="M8 12.3 L10.8 15 L16 9.2" />
     </Trait>
   ),
+  /* Le voile des montants : l'oeil ouvert les montre, l'oeil barre les cache. */
+  oeil: (p: Props) => (
+    <Trait {...p}>
+      <path d="M2.5 12 C5 7 8.3 5 12 5 C15.7 5 19 7 21.5 12 C19 17 15.7 19 12 19 C8.3 19 5 17 2.5 12 Z" />
+      <circle cx="12" cy="12" r="3" />
+    </Trait>
+  ),
+  oeilBarre: (p: Props) => (
+    <Trait {...p}>
+      <path d="M9.9 5.2 C10.6 5.1 11.3 5 12 5 C15.7 5 19 7 21.5 12 C20.8 13.4 20 14.6 19.1 15.6" />
+      <path d="M6.6 6.6 C4.9 7.8 3.6 9.6 2.5 12 C5 17 8.3 19 12 19 C14 19 15.8 18.4 17.4 17.4" />
+      <path d="M9.9 9.9 A3 3 0 0 0 14.1 14.1" />
+      <path d="M3 3 L21 21" />
+    </Trait>
+  ),
   plus: (p: Props) => (
     <Trait {...p}>
       <path d="M12 5v14" />

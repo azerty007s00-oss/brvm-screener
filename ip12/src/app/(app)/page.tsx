@@ -559,7 +559,7 @@ export default async function TableauDeBord() {
                     <span className="w-28 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>
                       {r.nbMoisRetard} mois &middot; {r.joursDeRetard} j
                     </span>
-                    <span className="w-24 text-right font-medium tabular-nums">
+                    <span className="w-24 text-right font-medium tabular-nums" data-montant="">
                       {nombre(detteDe(r.membreId))}
                     </span>
                   </li>

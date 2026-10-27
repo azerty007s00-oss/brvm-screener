@@ -60,10 +60,11 @@ export function TetePortefeuille({
     <>
       {vise.actions !== undefined && vise.liquidites !== undefined ? (
         <>
-          Actions {nombre(vise.actions)} &middot; liquidités {nombre(vise.liquidites)} &middot;{" "}
+          Actions <span data-montant="">{nombre(vise.actions)}</span> &middot; liquidités{" "}
+          <span data-montant="">{nombre(vise.liquidites)}</span> &middot;{" "}
         </>
       ) : null}
-      <span className="font-medium" style={{ color: couleurSigne(vise.valeur - vise.netPlace) }}>
+      <span className="font-medium" style={{ color: couleurSigne(vise.valeur - vise.netPlace) }} data-montant="">
         {vise.valeur - vise.netPlace >= 0 ? "+" : "−"}
         {nombre(Math.abs(vise.valeur - vise.netPlace))} FCFA
       </span>{" "}
@@ -74,7 +75,7 @@ export function TetePortefeuille({
   const detailCourant =
     ecart !== null && variation !== null && precedente ? (
       <>
-        <span className="font-medium" style={{ color: couleurSigne(ecart) }}>
+        <span className="font-medium" style={{ color: couleurSigne(ecart) }} data-montant="">
           {ecart >= 0 ? "+" : "−"}
           {nombre(Math.abs(ecart))} FCFA ({pourcent(variation)})
         </span>{" "}

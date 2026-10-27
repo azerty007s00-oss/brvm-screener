@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { CLUB } from "@/lib/settings";
+import { SCRIPT_VOILE } from "@/lib/voile";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,7 +26,15 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    /*
+     * La classe « voile » est posee par le script avant la peinture, d'apres le
+     * choix garde sur l'appareil : le serveur ne la connait pas, d'ou l'ecart
+     * tolere a l'hydratation sur cet element-la, et sur lui seul.
+     */
+    <html lang="fr" suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_VOILE }} />
+      </head>
       <body className="min-h-screen antialiased">{children}</body>
     </html>
   );

@@ -725,3 +725,29 @@ textarea:focus-visible {
 @media (min-width: 1024px) {
   .panneau-relance { margin: auto; max-width: 32rem; border-radius: 16px; }
 }
+
+/*
+ * LE VOILE DES MONTANTS (voir components/voile.tsx).
+ *
+ * Les chiffres poses comme tels se floutent ; ceux d'une phrase sont surlignes
+ * par l'API Custom Highlight, qui ne connait pas le flou : leur encre devient
+ * transparente et une ombre floue en garde la silhouette, sur le fond creuse
+ * des champs. Le papier, lui, ne garde pas le voile : on imprime un releve
+ * pour le lire.
+ */
+html.voile [data-montant] {
+  filter: blur(7px);
+  user-select: none;
+}
+html.voile ::highlight(montant) {
+  color: transparent;
+  background-color: var(--sunk);
+  text-shadow: 0 0 7px var(--ink-2);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-montant] { transition: filter 180ms var(--ease-doux, ease); }
+}
+@media print {
+  html.voile [data-montant] { filter: none; }
+  html.voile ::highlight(montant) { color: inherit; background-color: transparent; text-shadow: none; }
+}

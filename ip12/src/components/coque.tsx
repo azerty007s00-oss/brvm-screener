@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Icone, type NomIcone } from "@/components/icones";
 import { seDeconnecter } from "@/app/actions/auth";
+import { BoutonVoile, SurligneurMontants } from "@/components/voile";
 
 export type Page = { href: string; libelle: string; icone: NomIcone };
 export type Rubrique = {
@@ -323,7 +324,10 @@ function BarreSuperieure({
           {page?.libelle ?? rubrique?.libelle}
         </span>
       </p>
-      <div className="ml-auto flex items-center gap-3">{actions}</div>
+      <div className="ml-auto flex items-center gap-3">
+        {actions}
+        <BoutonVoile taille={18} />
+      </div>
     </div>
   );
 }
@@ -342,6 +346,7 @@ function EnTeteTelephone({ rubriques, personne }: { rubriques: Rubrique[]; perso
       <h1 className="min-w-0 flex-1 truncate text-[20px] font-semibold" style={{ color: "var(--ink)" }}>
         {rubrique?.libelle ?? "IP12"}
       </h1>
+      <BoutonVoile />
       <Link
         href="/mon-compte"
         aria-label="Mon compte"
@@ -481,6 +486,7 @@ export function Coque({
         </main>
       </div>
       <NavigationBasse rubriques={rubriques} alerte={alerte} />
+      <SurligneurMontants />
     </div>
   );
 }
