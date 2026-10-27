@@ -833,8 +833,18 @@ export type SituationClub = SituationMembre & {
   avances: CelluleMois[];
 };
 
-/** Combien de mois a venir la grille peut montrer : de quoi voir une avance d'un an. */
+/** Combien de mois a venir la grille montre : le mois courant et les treize suivants. */
 export const HORIZON_AVANCES = 13;
+
+/**
+ * Combien de mois a venir se calculent : bien plus que la grille n'en montre.
+ *
+ * Calcules sur la seule largeur de la grille, les mois s'arretaient a
+ * novembre 2027 en octobre 2026, et un membre paye jusqu'en decembre 2027
+ * lisait « Paye jusqu'a nov. 2027 » : la phrase s'arretait au bord du dessin,
+ * non au bout de son avance. Cinq ans couvrent toute avance raisonnable.
+ */
+const PORTEE_AVANCES = 60;
 
 export type RegleMembre = {
   id: string;
@@ -1591,7 +1601,7 @@ async function situationsClubBrut(
      */
     const avances = situationMembre(
       m.id,
-      Array.from({ length: HORIZON_AVANCES }, (_, i) => decalerMois(mois.at(-1) ?? debutMois(aujourdhui), i + 1)),
+      Array.from({ length: PORTEE_AVANCES }, (_, i) => decalerMois(mois.at(-1) ?? debutMois(aujourdhui), i + 1)),
       siens,
       [],
       aujourdhui,

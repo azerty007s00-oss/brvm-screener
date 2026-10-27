@@ -26,6 +26,7 @@ import { EnTeteEcran, Vide } from "@/components/ui";
 import { GlypheEtat } from "@/components/glyphe-etat";
 import { Decision } from "@/components/decision";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import { Voilable } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "À valider" };
@@ -294,7 +295,7 @@ export default async function PageAValider({
                   >
                     <div className="flex items-baseline gap-3">
                       <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{l.nom}</span>
-                      <span className="flex-none text-[15px] font-semibold tabular-nums">{fcfa(l.montant)}</span>
+                      <span className="flex-none text-[15px] font-semibold tabular-nums"><Voilable>{fcfa(l.montant)}</Voilable></span>
                     </div>
                     {l.objet && (
                       <p className="text-[13px] leading-snug" style={{ color: "var(--ink-2)" }}>

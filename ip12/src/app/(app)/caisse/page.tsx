@@ -35,6 +35,7 @@ import {
   EcranInitialisation,
   estTableAbsente,
 } from "@/components/initialisation";
+import { Voilable } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Caisse" };
@@ -209,7 +210,7 @@ export default async function PageCaisse() {
                 {signe as string} {libelle as string}
               </span>
               <span className="whitespace-nowrap tabular-nums">
-                {fcfa(montant as number)}
+                <Voilable>{fcfa(montant as number)}</Voilable>
               </span>
             </li>
           ))}
@@ -219,13 +220,13 @@ export default async function PageCaisse() {
           >
             <span>Solde disponible</span>
             <span className="whitespace-nowrap tabular-nums">
-              {fcfa(s.totalEnCaisse)}
+              <Voilable>{fcfa(s.totalEnCaisse)}</Voilable>
             </span>
           </li>
           {s.duAuxSortants > 0 && (
             <li className="flex justify-between gap-2">
               <span style={{ color: "var(--discret)" }}>dont à verser aux membres sortis</span>
-              <span className="whitespace-nowrap tabular-nums">{fcfa(s.duAuxSortants)}</span>
+              <span className="whitespace-nowrap tabular-nums"><Voilable>{fcfa(s.duAuxSortants)}</Voilable></span>
             </li>
           )}
         </ul>
@@ -272,7 +273,7 @@ export default async function PageCaisse() {
                    */
                   total={
                     <span>
-                      {total < 0 ? "\u2212" : "+"} {fcfa(Math.abs(total))}
+                      {total < 0 ? "\u2212" : "+"} <Voilable>{fcfa(Math.abs(total))}</Voilable>
                     </span>
                   }
                 >
@@ -290,7 +291,7 @@ export default async function PageCaisse() {
                           <div className="min-w-0">
                             <p className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
                               <span className="tabular-nums">
-                                {depense ? "\u2212" : "+"} {fcfa(m.montant)}
+                                {depense ? "\u2212" : "+"} <Voilable>{fcfa(m.montant)}</Voilable>
                               </span>
                               {m.statut === STATUT_CAISSE.enAttente && (
                                 <Badge ton="ambre">En attente</Badge>

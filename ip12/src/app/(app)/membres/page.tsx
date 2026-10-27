@@ -9,6 +9,7 @@ import { Badge, Carte, EnTeteEcran, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 import { Chiffre } from "@/components/chiffre";
+import { Voilable } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Membres" };
@@ -105,9 +106,9 @@ export default async function PageMembres() {
                       )}
                       {part && (
                         <p className="mt-0.5 text-xs" style={{ color: "var(--discret)" }}>
-                          Versé {fcfa(part.verse)} &middot; part{" "}
+                          Versé <Voilable>{fcfa(part.verse)}</Voilable> &middot; part{" "}
                           {(part.part * 100).toFixed(1).replace(".", ",")} % &middot; valeur{" "}
-                          {fcfa(part.valeur)}
+                          <Voilable>{fcfa(part.valeur)}</Voilable>
                         </p>
                       )}
                     </div>

@@ -17,6 +17,7 @@ import {
   EcranInitialisation,
   estTableAbsente,
 } from "@/components/initialisation";
+import { Voilable } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Titres" };
@@ -70,12 +71,12 @@ export default async function PageCompteTitres() {
           <p className="flex items-center gap-1.5 text-sm font-medium">
             {a.montant === 0 ? (
               <>
-                - {fcfa(a.frais)}
+                - <Voilable>{fcfa(a.frais)}</Voilable>
                 <Badge ton="rouge">Frais</Badge>
               </>
             ) : (
               <>
-                {sortie ? "-" : "+"} {fcfa(a.montant)}
+                {sortie ? "-" : "+"} <Voilable>{fcfa(a.montant)}</Voilable>
                 {sortie && <Badge ton="ambre">Retrait</Badge>}
               </>
             )}
@@ -200,24 +201,24 @@ export default async function PageCompteTitres() {
               <span style={{ color: "var(--discret)" }}>
                 Retenus à l&apos;arrivée sur les virements
               </span>
-              <span className="tabular-nums">{fcfa(fraisRetenus)}</span>
+              <span className="tabular-nums"><Voilable>{fcfa(fraisRetenus)}</Voilable></span>
             </li>
             <li className="flex justify-between gap-2">
               <span style={{ color: "var(--discret)" }}>
                 Réglés depuis la caisse
               </span>
-              <span className="tabular-nums">{fcfa(fraisPayesEnCaisse)}</span>
+              <span className="tabular-nums"><Voilable>{fcfa(fraisPayesEnCaisse)}</Voilable></span>
             </li>
             <li
               className="flex justify-between gap-2 border-t pt-1 font-semibold"
               style={{ borderColor: "var(--bordure)" }}
             >
               <span>Total supporté par le club</span>
-              <span className="tabular-nums">{fcfa(fraisTotaux)}</span>
+              <span className="tabular-nums"><Voilable>{fcfa(fraisTotaux)}</Voilable></span>
             </li>
           </ul>
           <p className="mt-3 text-[11px]" style={{ color: "var(--discret)" }}>
-            Sur {fcfa(s.totalApports)} virés, {fcfa(netInvesti)} sont réellement
+            Sur <Voilable>{fcfa(s.totalApports)}</Voilable> virés, <Voilable>{fcfa(netInvesti)}</Voilable> sont réellement
             arrivés sur le compte-titres. Le TRI porte sur le montant viré,
             frais compris : ce sont des sommes engagées, et une performance qui
             les ignorerait flatterait sans rien vouloir dire.
@@ -249,7 +250,7 @@ export default async function PageCompteTitres() {
                   detail={`de ${dateCourte(datesSorties[0])} à ${dateCourte(datesSorties[datesSorties.length - 1])}`}
                   total={
                     <span style={{ color: "var(--etat-manque)" }}>
-                      &minus; {fcfa(sorties.reduce((t, a) => t + a.montant, 0))}
+                      &minus; <Voilable>{fcfa(sorties.reduce((t, a) => t + a.montant, 0))}</Voilable>
                     </span>
                   }
                 >

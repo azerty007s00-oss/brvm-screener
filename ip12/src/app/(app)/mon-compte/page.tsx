@@ -21,6 +21,7 @@ import { libelleMode } from "@/lib/valeurs";
 import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
 import { Bouton } from "@/components/boutons";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
+import { Voilable } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mon compte" };
@@ -151,7 +152,7 @@ export default async function PageMonCompte() {
                     )}
                   </p>
                   <p className="mt-0.5 text-xs" style={{ color: "var(--discret)" }}>
-                    Cotisation {fcfa(cotisation)} par mois
+                    Cotisation <Voilable>{fcfa(cotisation)}</Voilable> par mois
                     {valeur ? ` · valeur ${fcfa(valeur.valeur)}` : ""}
                     {valeur && valeur.dues > 0 ? ` · ${fcfa(valeur.dues)} de pénalités dues` : ""}
                   </p>
@@ -179,17 +180,17 @@ export default async function PageMonCompte() {
             {mesRachats.map((r) => (
               <li key={`${r.vendeur}-${r.le}`}>
                 {String(Math.round(r.fraction * 1000) / 10).replace(".", ",")} % de la part de {r.vendeur},
-                rachetée le {dateCourte(r.le)} pour {fcfa(r.prix)}.
+                rachetée le {dateCourte(r.le)} pour <Voilable>{fcfa(r.prix)}</Voilable>.
               </li>
             ))}
           </ul>
           <p className="mt-2 text-[12px]" style={{ color: "var(--discret)" }}>
             Votre cotisation est de{" "}
-            {fcfa(
+            <Voilable>{fcfa(
               Math.round(
                 (1 + mesRachats.reduce((t, r) => t + r.fraction, 0)) * reglages.cotisationMensuelle,
               ),
-            )}{" "}
+            )}</Voilable>{" "}
             par mois à partir {deMois(premierMoisDeLaPart(mesRachats[0].le, reglages.jourEcheance))}. La
             plus-value de votre part se mesure sur le prix payé, non sur les cotisations du vendeur.
           </p>
@@ -259,7 +260,7 @@ export default async function PageMonCompte() {
                   {maDette > 0 ? " · " : "."}
                 </>
               )}
-              {maDette > 0 && <>pénalités dues {fcfa(maDette)}.</>}
+              {maDette > 0 && <>pénalités dues <Voilable>{fcfa(maDette)}</Voilable>.</>}
             </Alerte>
           </div>
         )}
@@ -271,7 +272,7 @@ export default async function PageMonCompte() {
               <li key={v.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
                 <div>
                   <p className="text-sm font-medium">
-                    {moisLong(v.mois)} &middot; {fcfa(v.montant)}
+                    {moisLong(v.mois)} &middot; <Voilable>{fcfa(v.montant)}</Voilable>
                   </p>
                   <p className="text-xs" style={{ color: "var(--discret)" }}>
                     Versé le {dateCourte(v.date_versement)} &middot; {libelleMode(v.mode)}
@@ -309,7 +310,7 @@ export default async function PageMonCompte() {
               {lotsSansPiece.map((lot) => (
                 <div key={lot.lot} className="mt-3 border-t pt-3" style={{ borderColor: "var(--bordure)" }}>
                   <p className="text-xs font-medium">
-                    {moisLong(lot.mois)} &middot; {fcfa(lot.montant)}
+                    {moisLong(lot.mois)} &middot; <Voilable>{fcfa(lot.montant)}</Voilable>
                   </p>
                   <FormulaireAction action={joindreJustificatif} libelle="Joindre" compact>
                     <ChampCache nom="lot" valeur={lot.lot} />

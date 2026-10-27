@@ -374,10 +374,10 @@ export default async function TableauDeBord() {
                         {aCompleter.length} {accorde(aCompleter.length, "mois payé", "mois payés")} d&apos;avance à compléter
                       </p>
                       <p className="mt-1 text-[13px] leading-relaxed" style={{ color: "var(--ink-2)" }}>
-                        Votre cotisation est passée à {fcfa(aCompleter[0].requis)}. Il manque{" "}
-                        {fcfa(aCompleter.reduce((t, c) => t + c.manque, 0))} sur{" "}
+                        Votre cotisation est passée à <Voilable>{fcfa(aCompleter[0].requis)}</Voilable>. Il manque{" "}
+                        <Voilable>{fcfa(aCompleter.reduce((t, c) => t + c.manque, 0))}</Voilable> sur{" "}
                         {aCompleter.map((c) => moisLong(c.mois)).join(", ")}, dont{" "}
-                        {fcfa(aCompleter[0].manque)} avant le {REGLES.jourEcheance}{" "}
+                        <Voilable>{fcfa(aCompleter[0].manque)}</Voilable> avant le {REGLES.jourEcheance}{" "}
                         {moisLong(aCompleter[0].mois).split(" ")[0]}.
                       </p>
                     </div>
@@ -717,7 +717,7 @@ export default async function TableauDeBord() {
                 {s.exercice?.rendement != null && (
                   <p>
                     L&apos;exercice en cours suit la méthode Dietz modifiée : gain de gestion{" "}
-                    {fcfa(s.exercice.gain)} sur un capital moyen de {fcfa(s.exercice.capitalMoyen)}.
+                    <Voilable>{fcfa(s.exercice.gain)}</Voilable> sur un capital moyen de <Voilable>{fcfa(s.exercice.capitalMoyen)}</Voilable>.
                   </p>
                 )}
               </div>

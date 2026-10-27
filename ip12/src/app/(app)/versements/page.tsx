@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { CelluleMois } from "@/lib/penalites";
 import { exigerMembre } from "@/lib/auth";
 import {
+  HORIZON_AVANCES,
   circuitReglementsPret,
   listerMembres,
   listerVersements,
@@ -52,6 +53,7 @@ import {
 } from "@/components/glyphe-etat";
 import { MODES_AFFICHES, STATUT_VERSEMENT, libelleMode } from "@/lib/valeurs";
 import { Chiffre } from "@/components/chiffre";
+import { Voilable } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Versements" };
@@ -85,6 +87,32 @@ function detailDuMois(c: CelluleMois): string {
     case "hors_periode":
       return "";
   }
+}
+
+/**
+ * Un mois porte par plusieurs versements, dit versement par versement.
+ *
+ * Octobre lisait « 7 500 FCFA, verse le 10/10, Note : cotisation impayee de
+ * KONE Bourama reprise au rachat » : la note d'une seule des deux lignes, sous
+ * le total des deux. On croyait le mois paye par la reprise. Chaque versement
+ * dit maintenant ce qu'il est : le sien, a sa date, et la cotisation reprise
+ * au sortant, a part. Null pour un mois d'un seul versement : la phrase
+ * habituelle suffit.
+ */
+function compositionDuMois(
+  lignes: { montant: number; date_versement: string; note: string | null; statut: string }[],
+): string | null {
+  const valables = lignes.filter((v) => v.statut !== STATUT_VERSEMENT.rejete);
+  if (valables.length < 2) return null;
+  const morceaux = valables.map((v) => {
+    const reprise = /^Cotisation impayée de (.+?), reprise/.exec(v.note ?? "");
+    const attente = v.statut === STATUT_VERSEMENT.enAttente ? " (en attente de validation)" : "";
+    return reprise
+      ? `${fcfa(v.montant)} de cotisation impayée de ${reprise[1]}, reprise au rachat${attente}`
+      : `${fcfa(v.montant)} versés le ${dateCourte(v.date_versement)}${attente}` +
+          (v.note ? ` (${v.note})` : "");
+  });
+  return `${morceaux.join(", plus ")}.`;
 }
 
 /** Le chevron des lignes depliantes : tourne quand le detail s'ouvre. */
@@ -204,7 +232,7 @@ export default async function PageVersements({
    * grille, poussee vers la droite, montre jusqu'ou chacun a paye d'avance.
    */
   const fenetreDe = (s: { cellules: CelluleMois[]; avances: CelluleMois[] }) =>
-    vue === "avenir" ? [...s.cellules.slice(-1), ...s.avances] : s.cellules.slice(-14);
+    vue === "avenir" ? [...s.cellules.slice(-1), ...s.avances.slice(0, HORIZON_AVANCES)] : s.cellules.slice(-14);
   const moisAffiches = situations[0] ? fenetreDe(situations[0]) : [];
   const maSituation = situations.find((s) => s.membreId === membre.id);
   /* Les parts rachetees que ce membre detient : il les paie, chacune a part. */
@@ -686,7 +714,8 @@ export default async function PageVersements({
                         ),
                       ).map((c) => {
                           const lignes = versementsDuMois.get(`${s.membreId}|${c.mois}`) ?? [];
-                          const note = lignes.find((v) => v.note)?.note ?? null;
+                          const composition = compositionDuMois(lignes);
+                          const note = composition ? null : (lignes.find((v) => v.note)?.note ?? null);
                           const justificatifs = lignes.flatMap((v) => pieces.get(v.lot) ?? []);
                           return (
                             <li key={c.mois} className="flex gap-2">
@@ -700,13 +729,15 @@ export default async function PageVersements({
                                     {estEntame(c) ? "À compléter" : LIBELLE_STATUT[c.statut]}
                                   </span>
                                   <span className="ml-auto font-semibold whitespace-nowrap tabular-nums">
-                                    {c.manque > 0 && c.montant > 0
-                                      ? `${nombre(c.montant)} sur ${fcfa(c.requis)}`
-                                      : fcfa(c.montant > 0 ? c.montant : c.requis)}
+                                    <Voilable>
+                                      {c.manque > 0 && c.montant > 0
+                                        ? `${nombre(c.montant)} sur ${fcfa(c.requis)}`
+                                        : fcfa(c.montant > 0 ? c.montant : c.requis)}
+                                    </Voilable>
                                   </span>
                                 </div>
                                 <p className="text-[12px]" style={{ color: "var(--discret)" }}>
-                                  {detailDuMois(c)}
+                                  {composition ?? detailDuMois(c)}
                                   {note ? ` Note : ${note}` : ""}
                                 </p>
                                 {justificatifs.length > 0 && (
@@ -741,7 +772,7 @@ export default async function PageVersements({
                     <p className="mt-3 text-[12px]" style={{ color: "var(--discret)" }}>
                       Versé depuis le début :{" "}
                       <span className="font-semibold tabular-nums" style={{ color: "var(--texte)" }}>
-                        {fcfa(s.verse)}
+                        <Voilable>{fcfa(s.verse)}</Voilable>
                       </span>
                     </p>
                   </div>

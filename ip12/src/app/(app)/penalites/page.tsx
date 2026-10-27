@@ -41,6 +41,7 @@ import {
   EcranInitialisation,
   estTableAbsente,
 } from "@/components/initialisation";
+import { Voilable } from "@/components/voilable";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Pénalités" };
@@ -303,13 +304,13 @@ export default async function PagePenalites() {
                 * de sa part : sans le nom, il ne savait pas laquelle devait quoi.
                 */}
               {!gere && p.membre_id !== membre.id && `${p.membre_nom} · `}
-              {fcfa(p.montant)}
+              <Voilable>{fcfa(p.montant)}</Voilable>
               {p.quantite > 1 && (
                 <span
                   className="font-normal"
                   style={{ color: "var(--discret)" }}
                 >
-                  ({p.quantite} × {fcfa(p.montant_unitaire)})
+                  ({p.quantite} × <Voilable>{fcfa(p.montant_unitaire)}</Voilable>)
                 </span>
               )}
               <Badge
@@ -539,8 +540,8 @@ export default async function PagePenalites() {
                     {a.moisRequis < a.mois
                       ? `${a.moisRequis} mois restant${a.moisRequis > 1 ? "s" : ""} exigé${a.moisRequis > 1 ? "s" : ""} sur ${a.mois}`
                       : `${a.mois} mois exigés`}
-                    , soit {fcfa(a.montantExige)} &middot;
-                    détenu {fcfa(a.avanceDetenue)}
+                    , soit <Voilable>{fcfa(a.montantExige)}</Voilable> &middot;
+                    détenu <Voilable>{fcfa(a.avanceDetenue)}</Voilable>
                     {a.fin ? ` · jusqu'au ${dateCourte(a.fin)}` : ""}
                   </p>
                 </div>
@@ -599,11 +600,11 @@ export default async function PagePenalites() {
               <li key={r.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
                 <div className="min-w-0">
                   <p className="text-sm font-medium">
-                    {fcfa(r.montant)}
+                    <Voilable>{fcfa(r.montant)}</Voilable>
                     {r.quantite > 1 && (
                       <span className="font-normal" style={{ color: "var(--discret)" }}>
                         {" "}
-                        ({r.quantite} × {fcfa(r.montant_unitaire)})
+                        ({r.quantite} × <Voilable>{fcfa(r.montant_unitaire)}</Voilable>)
                       </span>
                     )}
                   </p>
@@ -669,7 +670,7 @@ export default async function PagePenalites() {
                           className="flex-none text-[15px] font-semibold tabular-nums"
                           style={{ color: g.du > 0 ? "var(--etat-manque)" : "var(--discret)" }}
                         >
-                          {g.du > 0 ? fcfa(g.du) : "Rien à payer"}
+                          {g.du > 0 ? <Voilable>{fcfa(g.du)}</Voilable> : "Rien à payer"}
                         </span>
                       </div>
                       {g.du > 0 && (
@@ -690,7 +691,7 @@ export default async function PagePenalites() {
                             {g.nbDues} {accorde(g.nbDues, "ligne due", "lignes dues")}
                           </span>
                         )}
-                        {g.regle > 0 && <span>{fcfa(g.regle)} réglés</span>}
+                        {g.regle > 0 && <span><Voilable>{fcfa(g.regle)}</Voilable> réglés</span>}
                         {g.r5 > 0 && (
                           <span
                             style={{
@@ -757,7 +758,7 @@ export default async function PagePenalites() {
                   {aConstater.slice(0, 8).map((p, i) => (
                     <li key={`${p.nom}-${p.mois}-${i}`}>
                       {p.nom} &middot; {moisLong(p.mois)} &middot;{" "}
-                      {fcfa(p.montant)}
+                      <Voilable>{fcfa(p.montant)}</Voilable>
                       {p.doublee ? " (doublée, R4)" : ""}
                     </li>
                   ))}
@@ -836,7 +837,7 @@ export default async function PagePenalites() {
                         <li key={`${t.nom}-${t.rang}-${i}`}>
                           {t.nom} &middot; tranche {t.rang} (
                           {t.absenceDeclenchante} absences) &middot;{" "}
-                          {fcfa(t.montant)}
+                          <Voilable>{fcfa(t.montant)}</Voilable>
                         </li>
                       ))}
                     </ul>
