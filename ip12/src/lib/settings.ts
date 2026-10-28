@@ -205,6 +205,27 @@ export function moisLong(iso: string | Date): string {
   return d.toLocaleDateString("fr-FR", { month: "long", year: "numeric", timeZone: "UTC" });
 }
 
+/**
+ * Le nom court d'un membre : le NOM, puis le premier prenom.
+ *
+ * Sur telephone, une colonne de liste tient quinze lettres ; « DJAUMAND Komena
+ * Elisee Japhet » y devenait « DJAUMAND ... », et « BLA Aime An... ». Le nom de
+ * famille, ecrit en capitales a l'ivoirienne, et le premier prenom suffisent a
+ * reconnaitre chacun : « DJAUMAND Komena », « BLA Aime ». Un texte qui ne
+ * commence pas par un nom en capitales -- « Depense : frais » -- reste entier.
+ */
+export function nomCourt(nom: string): string {
+  const mots = nom.trim().split(/\s+/);
+  const famille: string[] = [];
+  for (const mot of mots) {
+    if (mot.length < 2 || mot !== mot.toUpperCase() || !/\p{L}/u.test(mot)) break;
+    famille.push(mot);
+  }
+  const prenoms = mots.slice(famille.length);
+  if (famille.length === 0 || prenoms.length <= 1) return nom.trim();
+  return `${famille.join(" ")} ${prenoms[0]}`;
+}
+
 /** Les jours pleins ecoules depuis une date ISO : l'attente d'une declaration. */
 export function joursDepuis(iso: string, maintenant: Date = new Date()): number {
   const debut = Date.parse(`${iso.slice(0, 10)}T00:00:00Z`);

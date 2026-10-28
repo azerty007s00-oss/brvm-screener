@@ -35,7 +35,7 @@ import {
   FormulaireAction,
   Selection,
 } from "@/components/formulaires";
-import { Carte, EnTeteEcran } from "@/components/ui";
+import { Carte, EnTeteEcran, NomMembre } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
 import {
   EcranInitialisation,
@@ -668,7 +668,7 @@ export default async function PageVersements({
                 <details name="registre" className="ligne-registre">
                   <summary className="tapable cursor-pointer px-3 py-2.5">
                     <div className="flex items-center gap-2">
-                      <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{s.nom}</span>
+                      <span className="min-w-0 flex-1 truncate text-[15px] font-semibold"><NomMembre nom={s.nom} /></span>
                       {/*
                         * « vous » est un mot, non une pastille doree : c'est un
                         * reperage, pas une distinction. De meme, un nombre de

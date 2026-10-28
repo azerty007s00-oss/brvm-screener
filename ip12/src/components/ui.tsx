@@ -2,6 +2,26 @@ import type { ReactNode } from "react";
 import { Chiffre } from "@/components/chiffre";
 import { Voilable, avecMontants } from "@/components/voilable";
 import { BoutonVoile } from "@/components/voile";
+import { nomCourt } from "@/lib/settings";
+
+/**
+ * Le nom d'un membre dans une liste : court sur telephone, entier des l'ordinateur.
+ *
+ * Le nom entier reste dans l'infobulle et pour les lecteurs d'ecran : la forme
+ * courte n'est qu'une affaire de place.
+ */
+export function NomMembre({ nom }: { nom: string }) {
+  const court = nomCourt(nom);
+  if (court === nom) return <>{nom}</>;
+  return (
+    <span title={nom}>
+      <span className="lg:hidden" aria-hidden="true">
+        {court}
+      </span>
+      <span className="sr-only lg:not-sr-only">{nom}</span>
+    </span>
+  );
+}
 
 /**
  * Une section : un titre, et ce qu'il annonce.

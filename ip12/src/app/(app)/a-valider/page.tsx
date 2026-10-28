@@ -22,7 +22,7 @@ import {
   libelleCategorie,
   libelleMode,
 } from "@/lib/valeurs";
-import { EnTeteEcran, Vide } from "@/components/ui";
+import { EnTeteEcran, NomMembre, Vide } from "@/components/ui";
 import { GlypheEtat } from "@/components/glyphe-etat";
 import { Decision } from "@/components/decision";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
@@ -294,7 +294,7 @@ export default async function PageAValider({
                     style={{ borderTop: "1px solid var(--line)" }}
                   >
                     <div className="flex items-baseline gap-3">
-                      <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{l.nom}</span>
+                      <span className="min-w-0 flex-1 truncate text-[15px] font-semibold"><NomMembre nom={l.nom} /></span>
                       <span className="flex-none text-[15px] font-semibold tabular-nums"><Voilable>{fcfa(l.montant)}</Voilable></span>
                     </div>
                     {l.objet && (

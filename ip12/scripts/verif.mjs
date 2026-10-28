@@ -36,8 +36,7 @@ const {
 } = await import("../.verif/penalites.mjs");
 const {
   tauxNormalise, deMois, lienDuSite, premierDuMois, decalerMois, nombre, fcfa,
-  joursAvantEcheance, etatEcheance,
-} = await import(
+  joursAvantEcheance, etatEcheance, nomCourt } = await import(
   "../.verif/settings.mjs"
 );
 const { statutLigne, statutAvances, estEntame, moisCourt, initialeMois, resumeFrise, LIBELLE_STATUT } = await import(
@@ -2416,6 +2415,13 @@ assert.equal(
   // Caisse identique : rien a dire.
   assert.ok(!pointsAVerifier({ ...faits, caisse: { ...faits.caisse, aujourdhui: 95_000, penalites: 0 } }).some((l) => l.startsWith("Écart de caisse :")));
 }
+
+/* Le nom court d'une liste sur telephone : le NOM, puis le premier prenom. */
+assert.equal(nomCourt("DJAUMAND Komena Elisée Japhet"), "DJAUMAND Komena");
+assert.equal(nomCourt("BLA Aimé Ange David"), "BLA Aimé");
+assert.equal(nomCourt("KONÉ Bourama"), "KONÉ Bourama", "deux mots : rien a couper");
+assert.equal(nomCourt("YOUSSOUF Mohamed Nakeen D."), "YOUSSOUF Mohamed");
+assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense", "pas un nom : intact");
 
 /* ------------------------------------------------- releve joint a une relance */
 {

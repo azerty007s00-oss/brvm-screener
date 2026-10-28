@@ -10,7 +10,7 @@ import {
 import { STATUT_CAISSE, STATUT_REGLEMENT } from "@/lib/valeurs";
 import { couleurSigne, dureeEnClair, pourcent } from "@/lib/perf";
 import { CLUB, REGLES, accorde, dateCourte, deMois, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
-import { Carte, CarteEtat, EnTeteEcran, ValeurChiffree, Vide } from "@/components/ui";
+import { Carte, CarteEtat, EnTeteEcran, NomMembre, ValeurChiffree, Vide } from "@/components/ui";
 import { LienBouton } from "@/components/boutons";
 import { Frise, GlypheEtat, LIBELLE_STATUT, STATUTS_LEGENDE, estEntame, statutLigne } from "@/components/glyphe-etat";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
@@ -556,7 +556,7 @@ export default async function TableauDeBord() {
                     className="flex items-baseline gap-3 py-2.5 text-[13.5px]"
                     style={{ borderTop: "1px solid var(--line)" }}
                   >
-                    <span className="min-w-0 flex-1 truncate">{r.nom}</span>
+                    <span className="min-w-0 flex-1 truncate"><NomMembre nom={r.nom} /></span>
                     <span className="w-28 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>
                       {r.nbMoisRetard} mois &middot; {r.joursDeRetard} j
                     </span>

@@ -6,7 +6,7 @@ import { enregistrerValorisation, supprimerValorisation } from "@/app/actions/ti
 import { couleurSigne, pourcent } from "@/lib/perf";
 import { CLUB, REGLES, dateCourte, fcfa, nombre } from "@/lib/settings";
 import { Champ, ChampCache, FormulaireAction } from "@/components/formulaires";
-import { Carte, CarteEtat, Vide } from "@/components/ui";
+import { Carte, CarteEtat, NomMembre, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
 import { MenuLigne } from "@/components/menu-ligne";
 import { TetePortefeuille } from "@/components/tete-portefeuille";
@@ -76,7 +76,7 @@ export default async function PagePortefeuille() {
       style={{ borderTop: "1px solid var(--line)" }}
     >
       <span className="min-w-0 flex-1 tabular-nums">{dateCourte(v.date_valo)}</span>
-      <span className="text-right font-medium tabular-nums">{nombre(v.total)}</span>
+      <span className="text-right font-medium tabular-nums"><Voilable>{nombre(v.total)}</Voilable></span>
       <span
         className="w-16 text-right tabular-nums"
         style={{ color: couleurSigne(ecartLigne) }}
@@ -209,7 +209,7 @@ export default async function PagePortefeuille() {
                 valeur: s.exercice?.rendement != null ? pourcent(s.exercice.rendement) : "--",
                 encre: couleurSigne(s.exercice?.rendement),
                 contexte:
-                  s.exercice?.gain != null ? `Dietz modifié · gain ${nombre(s.exercice.gain)}` : undefined,
+                  s.exercice?.gain != null ? `Dietz modifié · gain ${fcfa(s.exercice.gain)}` : undefined,
               },
             ]}
           />
@@ -269,16 +269,25 @@ export default async function PagePortefeuille() {
                 {s.parts.map((p) => {
                   const moi = p.membreId === membre.id;
                   return (
+                    /*
+                     * DEUX ETAGES SUR TELEPHONE, UNE RANGEE SUR ORDINATEUR.
+                     *
+                     * Quatre colonnes sur 350 px ne laissaient au nom qu'une
+                     * dizaine de lettres : « BLA Aime An... », « DJAUMAND ... ».
+                     * Sur telephone, le nom et la part tiennent la premiere
+                     * ligne, la valeur et la plus-value la seconde ; des
+                     * l'ordinateur, la rangee unique revient.
+                     */
                     <li
                       key={p.membreId}
-                      className="flex items-baseline gap-3 py-2.5 text-[13.5px]"
+                      className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-0.5 py-2.5 text-[13.5px] lg:flex lg:items-baseline lg:gap-3"
                       style={{ borderTop: "1px solid var(--line)" }}
                     >
                       <span
-                        className="min-w-0 flex-1 truncate"
+                        className="min-w-0 truncate lg:flex-1"
                         style={{ fontWeight: moi ? 600 : 400 }}
                       >
-                        {p.nom}
+                        <NomMembre nom={p.nom} />
                         {moi && (
                           <span
                             className="ml-2 text-[12px] font-medium"
@@ -288,19 +297,23 @@ export default async function PagePortefeuille() {
                           </span>
                         )}
                       </span>
-                      <span className="w-24 text-right font-medium tabular-nums">
-                        {nombre(p.valeur)}
-                      </span>
-                      {/* Une plus-value EST une performance : elle prend sa couleur. */}
-                      <span
-                        className="w-24 text-right tabular-nums"
-                        style={{ color: couleurSigne(p.plusValue) }}
-                      >
-                        {p.plusValue >= 0 ? "+" : "\u2212"}
-                        {nombre(Math.abs(p.plusValue))}
-                      </span>
-                      <span className="w-12 text-right tabular-nums" style={{ color: "var(--ink-2)" }}>
+                      <span className="text-right tabular-nums lg:order-last lg:w-12" style={{ color: "var(--ink-2)" }}>
                         {(p.part * 100).toFixed(1).replace(".", ",")} %
+                      </span>
+                      <span className="col-span-2 flex gap-4 text-[12.5px] lg:contents lg:text-[13.5px]">
+                        <span className="font-medium tabular-nums lg:w-24 lg:text-right">
+                          <Voilable>{nombre(p.valeur)}</Voilable>
+                        </span>
+                        {/* Une plus-value EST une performance : elle prend sa couleur. */}
+                        <span
+                          className="tabular-nums lg:w-24 lg:text-right"
+                          style={{ color: couleurSigne(p.plusValue) }}
+                        >
+                          <Voilable>
+                            {p.plusValue >= 0 ? "+" : "\u2212"}
+                            {nombre(Math.abs(p.plusValue))}
+                          </Voilable>
+                        </span>
                       </span>
                     </li>
                   );

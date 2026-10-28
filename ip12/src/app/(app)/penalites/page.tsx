@@ -33,7 +33,7 @@ import {
   FormulaireAction,
   Selection,
 } from "@/components/formulaires";
-import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components/ui";
+import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, NomMembre, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
 import { ChampMenu, MenuLigne } from "@/components/menu-ligne";
 import { LienBouton } from "@/components/boutons";
@@ -665,7 +665,7 @@ export default async function PagePenalites() {
                   <details name="penalites" className="ligne-registre">
                     <summary className="tapable cursor-pointer py-3">
                       <div className="flex items-baseline gap-2">
-                        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold">{g.nom}</span>
+                        <span className="min-w-0 flex-1 truncate text-[15px] font-semibold"><NomMembre nom={g.nom} /></span>
                         <span
                           className="flex-none text-[15px] font-semibold tabular-nums"
                           style={{ color: g.du > 0 ? "var(--etat-manque)" : "var(--discret)" }}
