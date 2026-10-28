@@ -517,6 +517,17 @@ details[open] > summary .chevron { transform: rotate(90deg); }
   .relief, .relief-fort { box-shadow: none !important; }
 }
 
+/*
+ * Ecran d'attente entre deux pages (app/(app)/loading.tsx) : des aplats a la
+ * couleur des filets, qui respirent doucement. Il n'apparait qu'apres 150 ms,
+ * pour ne pas clignoter quand la page arrive aussitot.
+ */
+.squelette { animation: squelette-parait 200ms ease-out 150ms both; }
+@keyframes squelette-parait { from { opacity: 0; } }
+.squelette span { background: var(--line); animation: respire 1.4s ease-in-out infinite; }
+@keyframes respire { 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .squelette, .squelette span { animation: none; } }
+
 /* Anneau d'attente des boutons. Il disparait si le systeme demande moins d'animation. */
 .rouet {
   width: 13px;

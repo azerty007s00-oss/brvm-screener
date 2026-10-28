@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { cache } from "react";
 import { createHmac, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import { db } from "./db";
 /*
@@ -131,8 +132,16 @@ export async function fermerSession(): Promise<void> {
   jar.delete(COOKIE);
 }
 
-/** Membre connecte, ou null. Ne leve jamais : sert aussi aux pages publiques. */
-export async function membreCourant(): Promise<Membre | null> {
+/**
+ * Membre connecte, ou null. Ne leve jamais : sert aussi aux pages publiques.
+ *
+ * Memoise le temps d'une requete : la coquille le lit pour dessiner le menu, la
+ * page le relit pour verifier ses droits, et chaque lecture etait un aller-retour
+ * de plus vers la base avant le premier octet.
+ */
+export const membreCourant = cache(membreCourantBrut);
+
+async function membreCourantBrut(): Promise<Membre | null> {
   try {
     const jar = await cookies();
     const jeton = jar.get(COOKIE)?.value;
