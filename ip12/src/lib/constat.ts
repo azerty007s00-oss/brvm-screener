@@ -57,7 +57,7 @@ export function motifPenalite(p: { mois: string; doublee: boolean; figee: boolea
  * compte puisque R4 double les trois derniers mois des que le retard atteint
  * trois mois.
  *
- * UN MONTANT INSCRIT NE BAISSE JAMAIS (decision du bureau, octobre 2026).
+ * UN PAIEMENT NE DEFAIT PAS R4 (decision du bureau, octobre 2026).
  *
  * Le calcul ne double que tant que trois mois restent impayes. Le registre
  * suivait le calcul dans les deux sens : un membre a 3 000 FCFA de penalites
@@ -65,9 +65,14 @@ export function motifPenalite(p: { mois: string; doublee: boolean; figee: boolea
  * redescendaient a 500 -- 1 500 FCFA effaces par le paiement d'une cotisation.
  * Payer ses cotisations avant ses penalites suffisait a defaire R4. Comme la
  * penalite de l'art. 9, « definitivement acquise au benefice du club », le
- * doublement une fois inscrit reste du : le constat hausse, il ne baisse plus.
- * Une erreur se corrige par la main du bureau (annuler, rouvrir), jamais par
- * un recalcul silencieux.
+ * doublement une fois inscrit reste du : un paiement ne le defait plus.
+ *
+ * Une seule baisse demeure, celle que R4 prevoit lui-meme : la regle ne double
+ * que les TROIS DERNIERS mois. Quand un quatrieme mois impaye arrive, le plus
+ * ancien sort de la fenetre et revient a 10 % : le retard dure, le doublement
+ * glisse avec lui. Un mois regle, ou un retard retombe sous trois mois, garde
+ * en revanche le montant inscrit. Toute autre erreur se corrige par la main du
+ * bureau (annuler, rouvrir), jamais par un recalcul silencieux.
  *
  * `auteurId` porte la signature de l'ecriture. Appele par la relance, c'est le
  * titulaire du droit sur les penalites -- l'ecriture reste nominative, et le
@@ -81,6 +86,8 @@ export async function porterRetardsAuRegistre(auteurId: string): Promise<IssueCo
 
   for (const s of situations) {
     const borne = bornes.get(s.membreId);
+    /* R4 frappe encore ce membre : un mois impaye hors des trois derniers peut redescendre. */
+    const doublementEnCours = s.penalites.some((q: { doublee: boolean }) => q.doublee);
     for (const p of s.penalites) {
       // Deja compte dans la reprise du tresorier : ne pas le compter une seconde fois.
       if (borne && p.mois <= borne) {
@@ -131,8 +138,19 @@ export async function porterRetardsAuRegistre(auteurId: string): Promise<IssueCo
         `;
         issue.reajustees++;
       } else if (Number(courante.unit_amount) > p.montant) {
-        // Acquise a son montant inscrit : voir plus haut.
-        issue.maintenues++;
+        if (doublementEnCours && !p.figee) {
+          // Sorti des trois derniers mois d'un retard qui dure : R4 ne le double plus.
+          await sql`
+            update penalties
+            set unit_amount = ${p.montant},
+                reason = ${motifPenalite(p)}
+            where id = ${courante.id}::uuid
+          `;
+          issue.reajustees++;
+        } else {
+          // Acquise a son montant inscrit : voir plus haut.
+          issue.maintenues++;
+        }
       }
     }
   }

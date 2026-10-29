@@ -614,6 +614,31 @@ egal(lire(`select reason from penalties where member_id='${seul}' and incurred_o
   "Retard de versement, août 2026 (doublée, R4)",
   "le motif reste celui du doublement : il dit pourquoi la ligne vaut 1 000");
 
+/*
+ * Mais R4 ne double que les TROIS DERNIERS mois : quand le retard dure, le
+ * plus ancien sort de la fenetre et redescend. Aout est toujours impaye, et
+ * trois mois plus recents sont doubles : sa ligne revient a 500.
+ */
+donnees.situations[0].penalites = [
+  { mois: "2026-08-01", montant: 500, doublee: false, figee: false },
+  { mois: "2026-09-01", montant: 1000, doublee: true, figee: false },
+  { mois: "2026-10-01", montant: 1000, doublee: true, figee: false },
+  { mois: "2026-11-01", montant: 1000, doublee: true, figee: false },
+];
+issue = await constat.porterRetardsAuRegistre(tresorier.id);
+egal(issue.maintenues, 0, "un mois sorti de la fenetre de R4 n'est pas maintenu");
+egal(lire(`select unit_amount from penalties where member_id='${seul}' and incurred_on='2026-08-10';`),
+  "500", "le plus ancien des quatre mois impayes revient a 10 %");
+egal(lire(`select coalesce(sum(quantity*unit_amount),0) from penalties
+           where member_id='${seul}' and status='due';`), "3500",
+  "quatre mois impayes : 500 + 3 x 1 000, les trois derniers seuls doubles");
+/* On revient aux deux mois de depart pour la suite du controle. */
+psql(BASE, `delete from penalties where member_id='${seul}' and incurred_on > '2026-09-10';`);
+donnees.situations[0].penalites = [
+  { mois: "2026-08-01", montant: 500, doublee: false, figee: false },
+  { mois: "2026-09-01", montant: 500, doublee: false, figee: false },
+];
+
 /* ------------------------- une penalite reglee n'est jamais ressuscitee */
 
 const aout = lire(`select id from penalties
