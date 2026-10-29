@@ -31,6 +31,11 @@ export type IssueConstat = {
   creees: number;
   /** Montants revus, R4 ayant double les trois derniers mois. */
   reajustees: number;
+  /**
+   * Doublees par R4 et laissees a leur montant inscrit, alors que le calcul
+   * du jour ne les doublerait plus : le membre a regle un mois depuis.
+   */
+  maintenues: number;
   /** Deja reglees ou annulees : jamais retouchees. */
   intactes: number;
   /** Mois couverts par la reprise du tresorier, non recomptes. */
@@ -52,6 +57,18 @@ export function motifPenalite(p: { mois: string; doublee: boolean; figee: boolea
  * compte puisque R4 double les trois derniers mois des que le retard atteint
  * trois mois.
  *
+ * UN MONTANT INSCRIT NE BAISSE JAMAIS (decision du bureau, octobre 2026).
+ *
+ * Le calcul ne double que tant que trois mois restent impayes. Le registre
+ * suivait le calcul dans les deux sens : un membre a 3 000 FCFA de penalites
+ * doublees reglait un seul mois, n'en devait plus que deux, et ses trois lignes
+ * redescendaient a 500 -- 1 500 FCFA effaces par le paiement d'une cotisation.
+ * Payer ses cotisations avant ses penalites suffisait a defaire R4. Comme la
+ * penalite de l'art. 9, « definitivement acquise au benefice du club », le
+ * doublement une fois inscrit reste du : le constat hausse, il ne baisse plus.
+ * Une erreur se corrige par la main du bureau (annuler, rouvrir), jamais par
+ * un recalcul silencieux.
+ *
  * `auteurId` porte la signature de l'ecriture. Appele par la relance, c'est le
  * titulaire du droit sur les penalites -- l'ecriture reste nominative, et le
  * journal dit sous quel titre elle a eu lieu.
@@ -60,7 +77,7 @@ export async function porterRetardsAuRegistre(auteurId: string): Promise<IssueCo
   const sql = db();
   const [situations, bornes] = await Promise.all([situationsClub(), bornesReprisePenalites()]);
 
-  const issue: IssueConstat = { creees: 0, reajustees: 0, intactes: 0, couvertes: 0 };
+  const issue: IssueConstat = { creees: 0, reajustees: 0, maintenues: 0, intactes: 0, couvertes: 0 };
 
   for (const s of situations) {
     const borne = bornes.get(s.membreId);
@@ -105,7 +122,7 @@ export async function porterRetardsAuRegistre(auteurId: string): Promise<IssueCo
       if (courante.status !== STATUT_PENALITE.due || courante.source_key !== cle) {
         // Soldee, ou ecrite par une autre version : on n'y touche pas.
         issue.intactes++;
-      } else if (Number(courante.unit_amount) !== p.montant) {
+      } else if (Number(courante.unit_amount) < p.montant) {
         await sql`
           update penalties
           set unit_amount = ${p.montant},
@@ -113,6 +130,9 @@ export async function porterRetardsAuRegistre(auteurId: string): Promise<IssueCo
           where id = ${courante.id}::uuid
         `;
         issue.reajustees++;
+      } else if (Number(courante.unit_amount) > p.montant) {
+        // Acquise a son montant inscrit : voir plus haut.
+        issue.maintenues++;
       }
     }
   }

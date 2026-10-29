@@ -586,6 +586,7 @@ egal(lire(`select count(*) from penalties where member_id='${seul}';`), "2",
 /* ------------------------------- R4 : le montant se reajuste, la ligne reste */
 
 donnees.situations[0].penalites[0].montant = 1000;
+donnees.situations[0].penalites[0].doublee = true;
 issue = await constat.porterRetardsAuRegistre(tresorier.id);
 egal(issue.reajustees, 1, "un montant double par R4 doit etre reajuste");
 egal(lire(`select count(*) from penalties where member_id='${seul}';`), "2",
@@ -593,6 +594,25 @@ egal(lire(`select count(*) from penalties where member_id='${seul}';`), "2",
 egal(lire(`select coalesce(sum(quantity*unit_amount),0) from penalties
            where member_id='${seul}' and status='due';`), "1500",
   "le total doit suivre le doublement de R4");
+
+/*
+ * --------------- R4 : le doublement inscrit reste du, meme si le calcul le perd
+ *
+ * Le membre regle un mois : il n'en doit plus trois, et le calcul du jour ne
+ * double plus. Le registre suivait, et 1 500 FCFA de penalites s'effacaient par
+ * le paiement d'une cotisation. Decision du bureau (octobre 2026) : comme la
+ * penalite de l'art. 9, le doublement inscrit est acquis.
+ */
+donnees.situations[0].penalites[0] = { mois: "2026-08-01", montant: 500, doublee: false, figee: true };
+issue = await constat.porterRetardsAuRegistre(tresorier.id);
+egal(issue.reajustees, 0, "le constat ne baisse pas un montant inscrit");
+egal(issue.maintenues, 1, "la ligne doublee est maintenue a son montant, et comptee comme telle");
+egal(lire(`select coalesce(sum(quantity*unit_amount),0) from penalties
+           where member_id='${seul}' and status='due';`), "1500",
+  "regler un mois n'efface pas le doublement deja inscrit");
+egal(lire(`select reason from penalties where member_id='${seul}' and incurred_on='2026-08-10';`),
+  "Retard de versement, août 2026 (doublée, R4)",
+  "le motif reste celui du doublement : il dit pourquoi la ligne vaut 1 000");
 
 /* ------------------------- une penalite reglee n'est jamais ressuscitee */
 
@@ -785,7 +805,7 @@ psql("postgres", `drop database if exists ${BASE};`);
 console.log(
   `OK - ${controles} controles du reglement declare, executes sur PostgreSQL : ` +
     "declaration sans effet sur la dette, unicite de l'attente, quantites, " +
-    "scission a la validation, refus, solde total, constat rejouable, R4, " +
+    "scission a la validation, refus, solde total, constat rejouable, R4, doublement acquis, " +
     "lignes soldees intactes, borne de reprise, ce qui court sans etre inscrit, " +
     "plafond des demandes de reinitialisation, demandes en attente",
 );

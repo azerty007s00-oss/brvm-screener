@@ -742,7 +742,8 @@ export default async function PagePenalites() {
             qui le porte au registre. Cette action est rejouable : une pénalité
             déjà réglée ou annulée n&apos;est jamais retouchée, seules celles
             encore dues voient leur montant réajusté si R4 vient à
-            s&apos;appliquer.
+            s&apos;appliquer. Un doublement inscrit reste dû : il ne
+            redescend pas quand le membre règle ensuite un mois.
           </p>
           {aConstater.length === 0 ? (
             <Alerte ton="vert">

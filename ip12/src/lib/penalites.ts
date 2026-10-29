@@ -586,6 +586,10 @@ function joursDepuisEcheance(mois: string, aujourdhui: Date): number {
  * R4 : des 3 mois encore impayes, les penalites des 3 mois les plus recents
  * doublent (leur cumul passe de 30 % a 60 % du versement du). La majoration ne
  * frappe que le retard en cours : un mois deja regle ne peut plus s'aggraver.
+ *
+ * Ce calcul dit ce qui est du AUJOURD'HUI. Le registre, lui, ne redescend pas :
+ * un doublement inscrit reste acquis meme si le calcul le perd apres le
+ * paiement d'un mois (voir `porterRetardsAuRegistre`, lib/constat).
  */
 export function calculerPenalites(
   moisEnRetard: string[],

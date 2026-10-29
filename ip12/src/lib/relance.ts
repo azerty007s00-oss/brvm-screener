@@ -580,7 +580,8 @@ export function texteRelance(
       lignes.push(
         "",
         "Rappel R4 : au-delà de 3 mois de retard, les pénalités des 3 derniers mois sont doublées " +
-          "(de 30 % à 60 % du versement dû).",
+          "(de 30 % à 60 % du versement dû). Une fois inscrit, le doublement reste dû, même si vous " +
+          "réglez ensuite une partie de vos mois.",
       );
     }
     /*
