@@ -179,6 +179,22 @@ Phoenix Capital Management.
   désactivée, en disant pourquoi. La règle vit dans `src/lib/horizons.ts`, hors du dessin, parce
   qu'elle a deux pièges qu'un coup d'œil ne voit pas : trois mois en arrière depuis le 31 mai, et
   un exercice dont le premier relevé tombe le 1er janvier.
+- **L'objectif du club** — le président fixe, dans *Administration*, un portefeuille à atteindre
+  et un mois. L'accueil de chaque membre montre le chemin parcouru, un repère de là où il
+  faudrait en être, et le mois d'arrivée au seul rythme des cotisations, sans compter la bourse.
+  Pendant la saisie, le formulaire dit ce que l'objectif demande : par mois, ce que les
+  cotisations en couvrent, et le rendement que la bourse devra fournir pour le reste. La mesure
+  est la valeur du dernier relevé, celle de la tuile « Portefeuille du club ».
+- **Moi › Historique** — tout ce qui touche à la part d'un membre, du plus récent au plus
+  ancien : ses versements et leur sort (déclaré, validé, refusé avec le motif), ses pénalités,
+  leurs règlements et les rappels reçus. Les versements validés le même jour, par la même
+  personne et de la même façon, ne font qu'une ligne.
+- **Alertes sur le téléphone** — dans *Mon compte*, un membre active les alertes de son
+  téléphone (Web Push ; sur iPhone, le site doit d'abord être ajouté à l'écran d'accueil). Il est
+  prévenu quand son versement ou son règlement est validé ou refusé, et la veille de l'échéance
+  s'il doit encore le mois ; le bureau l'est de chaque déclaration à valider. Avec le voile des
+  montants, l'alerte ne montre aucun montant. Le courriel reste le canal de référence : une alerte
+  perdue ne fait jamais échouer le geste qui l'a déclenchée.
 
 ## Règles appliquées
 
@@ -213,6 +229,7 @@ Deux migrations la complètent, toutes deux purement additives :
 |---|---|
 | `scripts/migration-r3.sql` | La table des déclarations de retard exigées par R3, absente du schéma d'origine |
 | `scripts/migration-frais.sql` | `securities_transfers.fees`, la part d'un virement retenue en frais de dépôt |
+| `scripts/migration-alertes.sql` | `push_subscriptions`, les téléphones où un membre a activé les alertes. Sans elle, la carte des alertes ne s'affiche pas |
 
 Tant que `migration-frais.sql` n'a pas été exécutée, la lecture des mouvements retombe sur une
 projection sans `fees` : le site continue de fonctionner, les frais s'affichent à zéro.

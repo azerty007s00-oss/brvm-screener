@@ -131,7 +131,7 @@ const brancher = (texte) =>
     .replace('"use server";\n', "")
     .replace(/from "next\/cache"/g, 'from "./doublures.js"')
     .replace(
-      /from "@\/lib\/(db|auth|journal|avis|justificatifs|queries|droits)"/g,
+      /from "@\/lib\/(db|auth|journal|avis|alertes|justificatifs|queries|droits)"/g,
       'from "./doublures.js"',
     )
     .replace(/from "@\/lib\/constat"/g, 'from "./constat.js"')
@@ -187,6 +187,9 @@ export const journaliser = async (..._a: unknown[]) => {};
 export const revalidatePath = (..._a: unknown[]) => {};
 export const avertirReglementPenalite = async (..._a: unknown[]) => 0;
 export const avertirRejet = async (..._a: unknown[]) => false;
+/* Les alertes du telephone partent apres la reponse : rien a verifier ici. */
+export const alerter = (..._a: unknown[]) => {};
+export const alerterAValider = (..._a: unknown[]) => {};
 export const enregistrerJustificatif = async (..._a: unknown[]) => ({ joint: false });
 /*
  * Les lectures qui n'alimentent que le constat, hors du chemin verifie ici :

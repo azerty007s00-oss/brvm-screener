@@ -141,3 +141,16 @@ export function libelleCategorie(categorie: string): string {
   );
 }
 
+/**
+ * Les canaux du registre des relances : qui a ecrit, et comment.
+ *
+ * Le passage automatique ecrit « email », la relance groupee du bureau
+ * « email-manuel ». La relance d'un seul membre, depuis le registre, a le sien :
+ * l'historique d'un membre dit ainsi qui l'a relance, et la relance
+ * automatique du jour ne la compte pas comme deja faite.
+ */
+export const CANAL_RELANCE = {
+  automatique: "email",
+  groupee: "email-manuel",
+  individuelle: "email-individuel",
+} as const;

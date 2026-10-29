@@ -2,6 +2,7 @@ import { cache } from "react";
 import "server-only";
 import { db } from "./db";
 import { estTableAbsente } from "./erreurs";
+import { lireObjectif, type Objectif } from "./objectif";
 import { CLUB, REGLES, debutMois, decalerMois, estExigible, moisDuClub, tauxNormalise } from "./settings";
 import type { Role } from "./settings";
 import {
@@ -125,9 +126,7 @@ function normaliser(champ: keyof Reglages, valeur: number): number | null {
  */
 async function reglagesEffectifsBrut(): Promise<Reglages> {
   try {
-    const sql = db();
-    const rows = await sql`select key, value from settings`;
-    const table = new Map(rows.map((r) => [String(r.key), String(r.value)]));
+    const table = await tableReglages();
     const sortie: Reglages = { ...REGLES };
     for (const [champ, cles] of Object.entries(CLES_REGLAGES) as [keyof Reglages, string[]][]) {
       for (const cle of cles) {
@@ -143,6 +142,24 @@ async function reglagesEffectifsBrut(): Promise<Reglages> {
     return sortie;
   } catch {
     return REGLES;
+  }
+}
+
+/**
+ * La table `settings`, lue une fois par requete : les reglages et l'objectif
+ * du club s'y trouvent ensemble, et l'accueil les demande tous les deux.
+ */
+const tableReglages = cache(async (): Promise<Map<string, string>> => {
+  const rows = await db()`select key, value from settings`;
+  return new Map(rows.map((r) => [String(r.key), String(r.value)]));
+});
+
+/** L'objectif fixe par le president, ou null. Ne fait jamais tomber une page. */
+export async function objectifDuClub(): Promise<Objectif | null> {
+  try {
+    return lireObjectif(await tableReglages());
+  } catch {
+    return null;
   }
 }
 

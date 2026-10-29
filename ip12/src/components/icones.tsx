@@ -169,6 +169,28 @@ export const Icone = {
       <path d="m9 6 6 6-6 6" />
     </Trait>
   ),
+  /* L'objectif du club : une cible. */
+  cible: (p: Props) => (
+    <Trait {...p}>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="0.8" />
+    </Trait>
+  ),
+  /* Les alertes sur le telephone : une cloche, barree quand le telephone les refuse. */
+  cloche: (p: Props) => (
+    <Trait {...p}>
+      <path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15Z" />
+      <path d="M10 20.5a2 2 0 0 0 4 0" />
+    </Trait>
+  ),
+  clocheBarree: (p: Props) => (
+    <Trait {...p}>
+      <path d="M6 16v-5a6 6 0 0 1 10.5-4M18 11v5l1.5 2h-15" />
+      <path d="M10 20.5a2 2 0 0 0 4 0" />
+      <path d="M4 4l16 16" />
+    </Trait>
+  ),
 };
 
 export type NomIcone = keyof typeof Icone;

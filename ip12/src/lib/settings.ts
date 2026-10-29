@@ -238,6 +238,11 @@ export function dateCourte(iso: string | Date | null): string {
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
 }
 
+/** Le jour, au format AAAA-MM-JJ (UTC, l'heure d'Abidjan). */
+export function jourIso(d: Date = new Date()): string {
+  return d.toISOString().slice(0, 10);
+}
+
 /** Premier jour du mois, au format AAAA-MM-01. */
 export function debutMois(d: Date = new Date()): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;

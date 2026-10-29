@@ -3,6 +3,7 @@ import { peut } from "@/lib/droits";
 import {
   decomptesSortie,
   listerSorties,
+  objectifDuClub,
   reglagesEffectifs,
   reglesIndividuelles,
   situationsClub,
@@ -11,8 +12,10 @@ import {
 import { demandesEnAttente, journalRecent } from "@/lib/journal";
 import { joignablesPour } from "@/lib/avis";
 import {
+  enregistrerObjectif,
   enregistrerReglages,
   reprendreHistorique,
+  retirerObjectif,
   reprendrePenalites,
   corrigerSortie,
   envoyerCourrielEssai,
@@ -20,7 +23,8 @@ import {
   leverRegleMembre,
 } from "@/app/actions/administration";
 import { listerMembres, rachatsDisponibles } from "@/lib/queries";
-import { CLUB, REGLES, ROLES, accorde, dateCourte, fcfa, moisLong } from "@/lib/settings";
+import { CLUB, REGLES, ROLES, accorde, dateCourte, fcfa, jourIso, moisLong } from "@/lib/settings";
+import { ChampsObjectif } from "@/components/formulaire-objectif";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { REGLE_MEMBRE } from "@/lib/valeurs";
 import {
@@ -98,7 +102,7 @@ export default async function PageAdministration() {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
     throw e;
   }
-  const decomptes = await decomptesSortie().catch(() => []);
+  const [decomptes, objectif] = await Promise.all([decomptesSortie().catch(() => []), objectifDuClub()]);
   const releveSortie = decomptes[0]?.releve ?? null;
   const rachatsPossibles = await rachatsDisponibles();
 
@@ -131,6 +135,13 @@ export default async function PageAdministration() {
     };
   });
 
+
+  /* Ce que les cotisations du mois apportent, toutes parts comprises : le rythme de l'objectif. */
+  const moisEnCours = situations[0]?.cellules.at(-1)?.mois ?? null;
+  const rythme = situations.reduce((t, x) => {
+    const c = x.cellules.find((m) => m.mois === moisEnCours);
+    return t + (c && c.statut !== "hors_periode" ? c.requis : 0);
+  }, 0);
 
   const moisDecouverts = situations.reduce((total, s) => total + s.nbMoisRetard, 0);
   const penalitesDues = situations.reduce((total, s) => total + s.nbPenalitesImpayees, 0);
@@ -461,6 +472,51 @@ export default async function PageAdministration() {
       </Tuile>
 
       <Rubrique>Le club</Rubrique>
+
+      {/*
+        * L'OBJECTIF DU CLUB : un cap que chaque membre voit sur l'accueil. Le
+        * calcul de ce qu'il demande se fait pendant la saisie, pour ne pas
+        * afficher a tous un cap intenable.
+        */}
+      <Tuile
+        icone={<Icone.cible />}
+        titre="Objectif du club"
+        resume={
+          objectif
+            ? avecMontants(`${fcfa(objectif.montant)} pour ${moisLong(objectif.echeance)}, affiché sur l'accueil.`)
+            : "Aucun objectif : l'accueil n'en montre pas."
+        }
+      >
+        <p className="mb-3 text-[13px] leading-relaxed" style={{ color: "var(--ink-2)" }}>
+          Un cap que tous les membres voient sur l&apos;accueil : le portefeuille à atteindre, et
+          pour quand. Le site suit le chemin parcouru, d&apos;après la valeur du dernier relevé.
+        </p>
+        <FormulaireAction action={enregistrerObjectif} libelle="Enregistrer l'objectif">
+          <ChampsObjectif
+            valeur={synth.valorisation?.total ?? null}
+            dateValeur={synth.valorisation?.date_valo ?? null}
+            rythme={rythme}
+            tri={synth.tri}
+            aujourdhui={jourIso()}
+            montant={objectif?.montant ?? null}
+            echeance={objectif?.echeance ?? null}
+            intitule={objectif?.intitule ?? null}
+          />
+        </FormulaireAction>
+        {objectif && (
+          <div className="mt-2">
+            <FormulaireAction
+              action={retirerObjectif}
+              libelle="Retirer l'objectif de l'accueil"
+              variante="discret"
+              confirmation="Retirer l'objectif ? L'accueil ne le montrera plus ; le journal garde sa trace."
+            />
+          </div>
+        )}
+        <p className="mt-3 text-[12px]" style={{ color: "var(--ink-3)" }}>
+          Chaque changement est inscrit au journal, avec l&apos;ancien et le nouvel objectif.
+        </p>
+      </Tuile>
 
       <Tuile
         icone={<Icone.reglages />}

@@ -22,6 +22,10 @@ import { Alerte, Badge, Carte, CarteEtat, EnTeteEcran, Vide } from "@/components
 import { Bouton } from "@/components/boutons";
 import { EcranInitialisation, estTableAbsente } from "@/components/initialisation";
 import { Voilable, avecMontants } from "@/components/voilable";
+import { CarteAlertes } from "@/components/alertes";
+import { abonnerAlertes, desabonnerAlertes, essayerAlerte } from "@/app/actions/alertes";
+import { alertesPretes, appareilsDe, clesAlertes } from "@/lib/alertes";
+import { peut } from "@/lib/droits";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mon compte" };
@@ -45,7 +49,9 @@ export default async function PageMonCompte() {
     throw e;
   }
   /* Apres `situations`, dont elle a besoin. Elle rend `null` si le registre resiste. */
-  const courues = await penalitesNonInscrites(situations);
+  const [courues, pretes] = await Promise.all([penalitesNonInscrites(situations), alertesPretes()]);
+  /* La carte des alertes n'apparait qu'une fois la table en place et les cles pretes. */
+  const [cles, appareils] = pretes ? await Promise.all([clesAlertes(), appareilsDe(membre.id)]) : [null, []];
 
   const maSituation = situations.find((x) => x.membreId === membre.id);
   const maPart = s.parts.find((p) => p.membreId === membre.id);
@@ -194,6 +200,19 @@ export default async function PageMonCompte() {
             par mois à partir {deMois(premierMoisDeLaPart(mesRachats[0].le, reglages.jourEcheance))}. La
             plus-value de votre part se mesure sur le prix payé, non sur les cotisations du vendeur.
           </p>
+        </Carte>
+      )}
+
+      {cles && (
+        <Carte titre="Alertes">
+          <CarteAlertes
+            clePublique={cles.publique}
+            appareils={appareils}
+            bureau={peut(membre, "validerVersement")}
+            abonner={abonnerAlertes}
+            desabonner={desabonnerAlertes}
+            essayer={essayerAlerte}
+          />
         </Carte>
       )}
 

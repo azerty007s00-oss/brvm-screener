@@ -518,6 +518,16 @@ details[open] > summary .chevron { transform: rotate(90deg); }
 }
 
 /*
+ * Les pastilles du fil (Moi › Historique) : le sort d'un geste en couleur,
+ * doublee d'un trait different pour qui ne distingue pas les teintes.
+ */
+.pastille-ok { color: var(--etat-paye); background: color-mix(in srgb, var(--etat-paye) 15%, var(--page)); }
+.pastille-attente { color: var(--etat-attente); background: var(--etat-attente-fond); }
+.pastille-refus { color: var(--etat-manque); background: var(--etat-manque-fond); }
+.pastille-penalite, .pastille-info { color: var(--ink-2); background: var(--sunk); }
+.pastille-courrier { color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--page)); }
+
+/*
  * Ecran d'attente entre deux pages (app/(app)/loading.tsx) : des aplats a la
  * couleur des filets, qui respirent doucement. Il n'apparait qu'apres 150 ms,
  * pour ne pas clignoter quand la page arrive aussitot.

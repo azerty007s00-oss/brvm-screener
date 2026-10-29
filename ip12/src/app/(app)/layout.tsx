@@ -66,6 +66,7 @@ const RUBRIQUES: Modele[] = [
     icone: "personne",
     pages: [
       { href: "/mon-compte", libelle: "Mon compte", icone: "personne" },
+      { href: "/historique", libelle: "Historique", icone: "horloge" },
       { href: "/administration", libelle: "Administration", icone: "reglages", droit: "gererReglages" },
     ],
   },

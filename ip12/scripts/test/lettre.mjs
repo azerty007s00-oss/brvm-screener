@@ -38,7 +38,8 @@ const source = readFileSync(`${RACINE}/src/lib/relance.ts`, "utf8")
   .replace('import "server-only";\n', "")
   .replace(/from "@\/lib\/(db|queries|courriel|constat)"/g, 'from "./doublures.js"')
   .replace('from "@/lib/settings"', 'from "../src/lib/settings.js"')
-  .replace('from "@/lib/penalites"', 'from "../src/lib/penalites.js"');
+  .replace('from "@/lib/penalites"', 'from "../src/lib/penalites.js"')
+  .replace('from "./valeurs"', 'from "../src/lib/valeurs.js"');
 writeFileSync(`${RACINE}/${ATELIER}/relance.ts`, source);
 
 /*

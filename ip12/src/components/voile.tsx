@@ -39,6 +39,22 @@ function useVoile(): boolean {
   return useSyncExternalStore(abonner, voileActif, () => false);
 }
 
+/**
+ * Le voile vaut aussi pour les alertes du telephone : un montant sur l'ecran
+ * verrouille se lit par-dessus l'epaule aussi bien que sur le site. Le service
+ * qui recoit les alertes (public/sw.js) ne voit pas `localStorage` ; il lit
+ * cette copie, rangee la ou il a acces.
+ */
+export async function ecrireVoileAlertes(): Promise<void> {
+  try {
+    if (!("caches" in window)) return;
+    const reserve = await caches.open("ip12-preferences");
+    await reserve.put("/__voile", new Response(voileActif() ? "1" : "0"));
+  } catch {
+    // Sans cette copie, l'alerte montre le montant : le defaut d'avant le voile.
+  }
+}
+
 export function basculerVoile(): void {
   const actif = !voileActif();
   document.documentElement.classList.toggle("voile", actif);
@@ -48,6 +64,7 @@ export function basculerVoile(): void {
     // Navigation privee : le voile vaut pour cette page, sans etre retenu.
   }
   window.dispatchEvent(new Event(EVENEMENT));
+  void ecrireVoileAlertes();
 }
 
 export function BoutonVoile({ encre = "var(--ink-2)", taille = 20 }: { encre?: string; taille?: number }) {

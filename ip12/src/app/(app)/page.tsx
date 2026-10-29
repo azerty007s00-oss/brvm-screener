@@ -2,6 +2,7 @@ import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import {
   listerMouvementsCaisse,
+  objectifDuClub,
   reglementsPenalite,
   situationsClub,
   synthese,
@@ -9,7 +10,9 @@ import {
 } from "@/lib/queries";
 import { STATUT_CAISSE, STATUT_REGLEMENT } from "@/lib/valeurs";
 import { couleurSigne, dureeEnClair, pourcent } from "@/lib/perf";
-import { CLUB, REGLES, accorde, dateCourte, deMois, debutMois, fcfa, moisLong, nombre } from "@/lib/settings";
+import { CLUB, REGLES, accorde, dateCourte, deMois, debutMois, fcfa, jourIso, moisLong, nombre } from "@/lib/settings";
+import { avancement } from "@/lib/objectif";
+import { TuileObjectif } from "@/components/objectif";
 import { Carte, CarteEtat, EnTeteEcran, NomMembre, ValeurChiffree, Vide } from "@/components/ui";
 import { LienBouton } from "@/components/boutons";
 import { Frise, GlypheEtat, LIBELLE_STATUT, STATUTS_LEGENDE, estEntame, statutLigne } from "@/components/glyphe-etat";
@@ -150,9 +153,9 @@ function LigneATraiter({
 export default async function TableauDeBord() {
   const membre = await exigerMembre();
 
-  let s, situations;
+  let s, situations, objectif;
   try {
-    [s, situations] = await Promise.all([synthese(), situationsClub()]);
+    [s, situations, objectif] = await Promise.all([synthese(), situationsClub(), objectifDuClub()]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
     throw e;
@@ -269,6 +272,17 @@ export default async function TableauDeBord() {
   const nbVersements = new Set(versementsAValider.map((v) => v.lot)).size;
   const nbReglements = new Set(reglementsEnAttente.map((r) => r.lot ?? r.id)).size;
   const aValider = nbVersements + nbReglements + mouvementsEnAttente.length;
+
+  /*
+   * Le rythme du club : ce que les cotisations du mois en cours apportent,
+   * toutes parts comprises. C'est la seule entree d'argent sur laquelle
+   * l'objectif peut compter ; la bourse est dite a part.
+   */
+  const rythme = moisDuClub.reduce((t, c) => t + c.requis, 0);
+  const cap =
+    objectif && s.valorisation
+      ? avancement(objectif, s.valorisation.total, s.valorisation.date_valo, rythme, jourIso())
+      : null;
   const prochain = maSituation?.prochainReglement ?? null;
 
   return (
@@ -314,6 +328,20 @@ export default async function TableauDeBord() {
           encre={couleurSigne(s.tri)}
           contexte={`par an, depuis ${(s.triPeriode?.debut ?? CLUB.dateCreation).slice(0, 4)}`}
         />
+        {/*
+          * L'objectif juste sous le portefeuille qu'il mesure, sur telephone ;
+          * sur grand ecran, ou les quatre tuiles tiennent sur une ligne, en
+          * dessous d'elles, sur toute la largeur.
+          */}
+        {objectif && cap && s.valorisation && (
+          <TuileObjectif
+            objectif={objectif}
+            a={cap}
+            valeur={s.valorisation.total}
+            dateValeur={s.valorisation.date_valo}
+            rythme={rythme}
+          />
+        )}
         <Tuile
           rang={2}
           libelle="Cotisations du mois"

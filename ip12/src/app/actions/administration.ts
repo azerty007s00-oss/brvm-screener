@@ -29,10 +29,13 @@ import {
 } from "@/lib/sortie";
 import { partagerSortie, type Rachat } from "@/lib/perf";
 import { porterRetardsAuRegistre, resumeConstat, type IssueConstat } from "@/lib/constat";
+import { CLES_OBJECTIF, lireMontant } from "@/lib/objectif";
 import {
   decomptesSortie,
+  derniereValorisation,
   faitsAvantSortie,
   listerMembres,
+  objectifDuClub,
   rachatsDisponibles,
   reglagesEffectifs,
   situationsClub,
@@ -46,6 +49,7 @@ import {
   decalerMois,
   fcfa,
   moisLong,
+  premierDuMois,
   variable,
 } from "@/lib/settings";
 import {
@@ -1295,4 +1299,96 @@ export async function relancerMaintenant(
       `${reste}${doublon}${porte}`,
     erreur: echecs.length > 0 ? echoue : undefined,
   };
+}
+
+/* ---------------------------------------------------------- objectif du club */
+
+/** Ecrit une cle de `settings`, sans supposer sa cle primaire (voir `enregistrerReglages`). */
+async function ecrireReglage(cle: string, valeur: string): Promise<void> {
+  const sql = db();
+  const existe = await sql`select 1 from settings where key = ${cle} limit 1`;
+  if (existe.length > 0) {
+    await sql`update settings set value = ${valeur}, updated_at = now() where key = ${cle}`;
+  } else {
+    await sql`insert into settings (key, value) values (${cle}, ${valeur})`;
+  }
+}
+
+/**
+ * Fixer l'objectif du club : un montant de portefeuille et un mois.
+ *
+ * Le jour et la valeur du portefeuille au moment ou il est fixe sont gardes
+ * avec lui : ils tracent la ligne droite qui dit, sur l'accueil, ou il
+ * faudrait en etre. Re-fixer l'objectif repart donc d'aujourd'hui ; le journal
+ * garde l'ancien.
+ */
+export async function enregistrerObjectif(
+  _precedent: EtatFormulaire,
+  donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererReglages");
+  const montant = lireMontant(String(donnees.get("montant") ?? ""));
+  const echeance = premierDuMois(String(donnees.get("echeance") ?? ""));
+  const intitule = String(donnees.get("intitule") ?? "").trim().replace(/\s+/g, " ");
+
+  if (montant === null) return { ok: false, erreur: "Montant visé invalide : un nombre de FCFA, sans décimale." };
+  if (!echeance) return { ok: false, erreur: "Choisissez le mois de l'échéance." };
+  if (echeance <= debutMois()) return { ok: false, erreur: "L'échéance doit tomber après le mois en cours." };
+  if (intitule.length > 60) return { ok: false, erreur: "L'intitulé tient en 60 caractères au plus." };
+
+  const [ancien, valo] = await Promise.all([objectifDuClub(), derniereValorisation().catch(() => null)]);
+  if (valo && montant <= valo.total) {
+    return {
+      ok: false,
+      erreur: `Le portefeuille vaut déjà ${fcfa(valo.total)} au dernier relevé : visez plus haut.`,
+    };
+  }
+
+  const aujourdhui = new Date().toISOString().slice(0, 10);
+  await ecrireReglage(CLES_OBJECTIF.montant, String(montant));
+  await ecrireReglage(CLES_OBJECTIF.echeance, echeance);
+  await ecrireReglage(CLES_OBJECTIF.intitule, intitule);
+  await ecrireReglage(CLES_OBJECTIF.fixeLe, aujourdhui);
+  if (valo) {
+    await ecrireReglage(CLES_OBJECTIF.depart, String(valo.total));
+  } else {
+    await db()`delete from settings where key = ${CLES_OBJECTIF.depart}`;
+  }
+
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "objectif_club",
+    { entite: "settings" },
+    {
+      montant,
+      echeance,
+      intitule: intitule || null,
+      ancien_montant: ancien?.montant ?? null,
+      ancienne_echeance: ancien?.echeance ?? null,
+    },
+  );
+  revalidatePath("/", "layout");
+  return {
+    ok: true,
+    message: `Objectif enregistré : ${fcfa(montant)} pour ${moisLong(echeance)}. Il s'affiche sur l'accueil de chaque membre.`,
+  };
+}
+
+/** Retirer l'objectif de l'accueil. Le journal garde ce qu'il etait. */
+export async function retirerObjectif(
+  _precedent: EtatFormulaire,
+  _donnees: FormData,
+): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererReglages");
+  const ancien = await objectifDuClub();
+  if (!ancien) return { ok: true, message: "Aucun objectif n'était fixé." };
+  await db()`delete from settings where key = any(${Object.values(CLES_OBJECTIF)}::text[])`;
+  await journaliser(
+    { id: auteur.id, nom: auteur.nom },
+    "objectif_club_retire",
+    { entite: "settings" },
+    { montant: ancien.montant, echeance: ancien.echeance },
+  );
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Objectif retiré : l'accueil ne l'affiche plus." };
 }

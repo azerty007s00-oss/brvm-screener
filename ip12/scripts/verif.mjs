@@ -2469,6 +2469,132 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   writeFileSync(".verif/releve-essai.pdf", octets);
 }
 
+{
+  /* L'objectif du club : le cas des maquettes, refait a la main. */
+  const { avancement, lireObjectif, lireMontant, ecartMois, CLES_OBJECTIF } = await import("../.verif/objectif.mjs");
+  const o = { montant: 5_000_000, echeance: "2027-12-01", intitule: null, fixeLe: "2026-01-15", depart: 2_200_000 };
+  const a = avancement(o, 3_010_000, "2026-10-17", 97_500, "2026-10-28");
+  assert.equal(a.reste, 1_990_000);
+  assert.equal(a.moisRestants, 14, "de novembre 2026 a decembre 2027 compris");
+  assert.ok(Math.abs(a.atteint - 0.602) < 1e-9);
+  assert.equal(a.arrivee, "2028-07-01", "21 mois de cotisations depuis octobre 2026");
+  assert.equal(a.aTemps, false);
+  assert.equal(a.parMois, 142_143);
+  assert.equal(a.cotisationsSeules, 4_375_000);
+  assert.equal(a.partBourse, 625_000);
+  assert.ok(Math.abs(a.tauxRequis - 625_000 / (4_005_000 * 14 / 12)) < 1e-12);
+  // Sur la ligne droite du 15/01/2026 (2,2 M) au 31/12/2027 (5 M), le 17/10/2026 tombe vers 3,28 M.
+  assert.ok(Math.abs(a.attendu - (2_200_000 + (275 / 715) * 2_800_000) / 5_000_000) < 1e-9);
+  assert.equal(a.echu, false);
+
+  const fait = avancement(o, 5_100_000, "2027-06-30", 97_500, "2027-07-02");
+  assert.equal(fait.reste, 0);
+  assert.equal(fait.arrivee, null);
+  assert.equal(fait.aTemps, true);
+  assert.equal(fait.partBourse, 0);
+  assert.equal(fait.tauxRequis, 0);
+
+  const echu = avancement(o, 4_000_000, "2028-01-03", 97_500, "2028-01-05");
+  assert.equal(echu.echu, true);
+  assert.equal(echu.moisRestants, 0);
+  assert.equal(echu.tauxRequis, null);
+  assert.equal(echu.parMois, 1_000_000);
+  assert.equal(echu.attendu, 1, "a l'echeance, il faudrait y etre");
+
+  const sansRythme = avancement({ ...o, depart: null }, 3_010_000, "2026-10-17", 0, "2026-10-28");
+  assert.equal(sansRythme.arrivee, null);
+  assert.equal(sansRythme.aTemps, false);
+  assert.equal(sansRythme.attendu, null, "sans valeur de depart, pas de repere");
+  const toutJuste = avancement({ ...o, fixeLe: "2026-10-29", depart: 3_010_000 }, 3_010_000, "2026-10-17", 97_500, "2026-10-29");
+  assert.equal(toutJuste.attendu, null, "aucun releve depuis la fixation : pas de repere");
+
+  assert.equal(ecartMois("2026-10-01", "2027-12-01"), 14);
+  assert.equal(ecartMois("2026-10-01", "2026-10-01"), 0);
+
+  assert.equal(lireObjectif(new Map()), null);
+  const table = new Map([
+    [CLES_OBJECTIF.montant, "5000000"], [CLES_OBJECTIF.echeance, "2027-12-01"],
+    [CLES_OBJECTIF.fixeLe, "2026-01-15"], [CLES_OBJECTIF.intitule, "  "],
+  ]);
+  assert.deepEqual(lireObjectif(table), { montant: 5_000_000, echeance: "2027-12-01", intitule: null, fixeLe: "2026-01-15", depart: null });
+  table.set(CLES_OBJECTIF.depart, "2200000");
+  table.set(CLES_OBJECTIF.intitule, "5 millions fin 2027");
+  assert.equal(lireObjectif(table).depart, 2_200_000);
+  assert.equal(lireObjectif(table).intitule, "5 millions fin 2027");
+  table.set(CLES_OBJECTIF.echeance, "2027-13");
+  assert.equal(lireObjectif(table), null, "une echeance illisible n'affiche rien");
+
+  assert.equal(lireMontant("5 000 000"), 5_000_000);
+  assert.equal(lireMontant("5\u202f000\u202f000"), 5_000_000);
+  assert.equal(lireMontant("5.000.000"), 5_000_000);
+  assert.equal(lireMontant("0"), null);
+  assert.equal(lireMontant("5 000 FCFA"), null);
+  assert.equal(lireMontant("-5000"), null);
+}
+
+{
+  /* Le fil d'un membre : chaque geste une fois, avec ce qu'il est devenu. */
+  const { filDuMembre, parMois, periode } = await import("../.verif/fil.mjs");
+  const moi = "m1";
+  const v = (o) => ({ lot: "L1", membre_id: moi, mois: "2026-11-01", montant: "7500", mode: "mobile_money", reference: null, note: null,
+    statut: "valide", motif: null, cree_le: "2026-10-21T09:00:00", vise_le: "2026-10-22T10:00:00", declare_par: moi,
+    declare_par_nom: "SORO Tiélina Aboudramane", vise_par_nom: "TRAORÉ Awa Mariam", ...o });
+  const fil = filDuMembre(moi, {
+    versements: [
+      v({}),
+      v({ lot: "L2", mois: "2026-12-01", statut: "en_attente", vise_le: null, cree_le: "2026-10-26T08:00:00" }),
+      v({ lot: "L2", mois: "2027-01-01", statut: "en_attente", vise_le: null, cree_le: "2026-10-26T08:00:00" }),
+      v({ lot: "L3", mois: "2026-09-01", statut: "rejete", motif: "reçu illisible", vise_le: "2026-09-12T08:00:00", cree_le: "2026-09-11T08:00:00" }),
+      v({ lot: "L4", mois: "2026-08-01", declare_par: "t1", declare_par_nom: "TRAORÉ Awa Mariam", cree_le: "2026-08-09T08:00:00", vise_le: "2026-08-09T08:00:00" }),
+      v({ lot: "R", mois: "2023-06-01", note: "Reprise de l'historique", cree_le: "2026-09-01T08:00:00", vise_le: "2026-09-01T08:00:00" }),
+      v({ lot: "R", mois: "2023-07-01", note: "Reprise de l'historique", cree_le: "2026-09-01T08:00:00", vise_le: "2026-09-01T08:00:00" }),
+    ],
+    penalites: [
+      { id: "p1", membre_id: moi, nature: "retard", montant: "500", motif: null, constatee_le: "2026-10-11", statut: "payee", reglee_le: "2026-10-20", note_reglement: null, resolue_le: null, resolu_par_nom: null },
+      { id: "p2", membre_id: moi, nature: "absence", montant: "1000", motif: null, constatee_le: "2026-09-05", statut: "payee", reglee_le: "2026-09-20", note_reglement: "Espèces en réunion", resolue_le: "2026-09-20T18:00:00", resolu_par_nom: "TRAORÉ Awa Mariam" },
+      { id: "p3", membre_id: moi, nature: "autre", montant: "2000", motif: "Erreur de saisie", constatee_le: "2026-09-02", statut: "annulee", reglee_le: null, note_reglement: null, resolue_le: "2026-09-03T08:00:00", resolu_par_nom: "SORO Tiélina Aboudramane" },
+    ],
+    reglements: [
+      { lot: "S1", penalite_id: "p1", membre_id: moi, montant: "500", mode: "mobile_money", statut: "validee", motif_rejet: null, cree_le: "2026-10-19T08:00:00", vise_le: "2026-10-20T08:00:00", vise_par_nom: "TRAORÉ Awa Mariam", nature: "retard", motif_penalite: null },
+    ],
+    rappels: [{ membre_id: moi, canal: "email", mois: "2026-10-01", envoye_le: "2026-10-09T08:00:00" }],
+    rachats: [],
+  });
+  const titres = fil.map((e) => e.titre);
+  assert.equal(titres.filter((t) => t === "Versement déclaré").length, 1, "deux mois d'un meme lot font une seule declaration");
+  const attente = fil.find((e) => e.titre === "Versement déclaré");
+  assert.equal(attente.montant, 15000);
+  assert.ok(attente.detail.startsWith("Décembre 2026 à janvier 2027 (2 mois), payé d'avance · Mobile Money."), attente.detail);
+  assert.equal(fil[0], attente, "le plus recent d'abord");
+  const valide = fil.find((e) => e.cle === "v:m1:L1");
+  assert.equal(valide.titre, "Versement validé");
+  assert.ok(valide.detail.includes("Visé par TRAORÉ Awa."));
+  assert.equal(valide.quand, "déclaré le 21/10 · validé le 22/10");
+  assert.equal(fil.find((e) => e.cle === "v:m1:L3").motif, "Motif : reçu illisible");
+  const saisi = fil.find((e) => e.cle === "v:m1:L4");
+  assert.equal(saisi.titre, "Versement enregistré", "saisi par le bureau, pas declare par le membre");
+  assert.equal(saisi.quand, "saisi par TRAORÉ Awa le 09/08");
+  const reprise = fil.find((e) => e.titre === "Historique repris");
+  assert.equal(reprise.montant, 15000);
+  assert.ok(reprise.detail.startsWith("2 mois marqués payés : Juin 2023 à juillet 2023"));
+  // La penalite reglee par declaration ne se dit qu'une fois : par son reglement.
+  assert.equal(fil.filter((e) => e.titre === "Pénalité réglée").length, 2, "p1 par son reglement, p2 par le bureau");
+  assert.equal(fil.find((e) => e.cle === "p:p2:reglee").quand, "réglée le 20/09 · enregistré par TRAORÉ Awa");
+  assert.equal(fil.find((e) => e.titre === "Pénalité annulée").quand, "annulée le 03/09 par SORO Tiélina");
+  assert.ok(fil.find((e) => e.cle === "p:p1").detail.includes("art. 9"));
+  assert.equal(fil.find((e) => e.famille === "rappels").titre, "Rappel automatique");
+  assert.equal(fil.find((e) => e.famille === "rappels").detail, "Par courriel, au sujet de la cotisation d'octobre 2026.");
+  const groupes = parMois(fil);
+  assert.deepEqual(groupes.map((g) => g.mois), ["2026-10-01", "2026-09-01", "2026-08-01"]);
+  assert.equal(groupes.reduce((t, g) => t + g.evenements.length, 0), fil.length);
+  assert.equal(periode(["2026-08-01", "2026-10-01"]), "Août 2026 et octobre 2026");
+  assert.equal(periode(["2026-11-01"]), "Novembre 2026");
+  // Deux mois declares a part le meme soir, valides ensemble : une seule ligne.
+  const deux = filDuMembre(moi, { versements: [v({ lot: "A" }), v({ lot: "B", mois: "2026-12-01" }), v({ lot: "C", mois: "2027-01-01", vise_le: "2026-10-23T08:00:00" })], penalites: [], reglements: [], rappels: [], rachats: [] });
+  assert.equal(deux.length, 2, "A et B fusionnes, C valide un autre jour");
+  assert.equal(deux.find((e) => e.montant === 15000).detail.split(".")[0], "Novembre 2026 à décembre 2026 (2 mois), payé d'avance · Mobile Money");
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2477,5 +2603,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre",
 );

@@ -6,10 +6,11 @@ import { db } from "@/lib/db";
 import { exigerDroit, exigerMembre } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { avertirRejet, avertirReglementPenalite } from "@/lib/avis";
+import { alerter, alerterAValider } from "@/lib/alertes";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
 import { penalitesNonInscrites, porterRetardsAuRegistre, resumeConstat } from "@/lib/constat";
 import { absencesParMembre, declarePour, reglagesEffectifs, situationsClub } from "@/lib/queries";
-import { accorde, dateCourte, fcfa } from "@/lib/settings";
+import { accorde, dateCourte, fcfa, nomCourt } from "@/lib/settings";
 import { imputerPenalites, tranchesAbsence, type ImputationPenalite } from "@/lib/penalites";
 import {
   KIND_PENALITE, METHODE, STATUT_PENALITE, STATUT_REGLEMENT, libelleMode,
@@ -594,6 +595,12 @@ export async function declarerReglementPenalite(
     montant: total,
     avecJustificatif: pieces.joint,
   }).catch(() => 0);
+  alerterAValider({
+    droit: "gererPenalites",
+    auteurId: auteur.id,
+    declarant: nomCourt(membreCible === auteur.id ? auteur.nom : (mienne?.nom ?? auteur.nom)),
+    objet: `le règlement de ${quantite} ${accorde(quantite, "pénalité")} (${fcfa(total)})`,
+  });
 
   await journaliser(
     { id: auteur.id, nom: auteur.nom },
@@ -639,7 +646,7 @@ export async function validerReglementPenalite(
   const sql = db();
   /* De la plus ancienne penalite a la plus recente, comme a l'imputation. */
   const declarations = (await sql`
-    select r.id, r.penalty_id, r.quantity, r.declared_by,
+    select r.id, r.penalty_id, r.quantity, r.declared_by, r.member_id,
            to_char(r.paid_on, 'YYYY-MM-DD') as paid_on, r.method
     from penalty_settlements r
     join penalties p on p.id = r.penalty_id
@@ -649,7 +656,7 @@ export async function validerReglementPenalite(
     order by p.incurred_on, p.created_at, r.id
   `) as {
     id: string; penalty_id: string; quantity: number;
-    declared_by: string; paid_on: string; method: string;
+    declared_by: string; member_id: string; paid_on: string; method: string;
   }[];
   if (declarations.length === 0) {
     return { ok: false, erreur: "Déclaration introuvable ou déjà examinée." };
@@ -705,6 +712,18 @@ export async function validerReglementPenalite(
     resteDu += issue.reste;
   }
   revalidatePath("/", "layout");
+
+  const membreVise = String(declarations[0].member_id);
+  if (soldees > 0 && membreVise !== auteur.id) {
+    alerter([membreVise], {
+      titre: soldees > 1 ? "Pénalités réglées" : "Pénalité réglée",
+      corps:
+        `${fcfa(montant)} validés par ${nomCourt(auteur.nom)}.` +
+        (resteDu > 0 ? ` Il reste ${resteDu} ${accorde(resteDu, "pénalité")} ${accorde(resteDu, "due")}.` : ""),
+      corpsVoile: "Votre règlement de pénalités est validé.",
+      url: "/historique?type=penalites",
+    });
+  }
 
   if (echecs.length > 0) {
     return {
@@ -768,6 +787,15 @@ export async function rejeterReglementPenalite(
           auteurNom: auteur.nom,
         }).catch(() => false)
       : false;
+  if (faites[0].member_id && String(faites[0].member_id) !== auteur.id) {
+    const total = faites.reduce((t, f) => t + Number(f.montant), 0);
+    alerter([String(faites[0].member_id)], {
+      titre: "Règlement refusé",
+      corps: `Votre règlement de pénalités de ${fcfa(total)} n'est pas validé.` + (motif ? ` Motif : ${motif}` : ""),
+      corpsVoile: "Votre règlement de pénalités n'est pas validé." + (motif ? ` Motif : ${motif}` : ""),
+      url: "/historique?type=penalites",
+    });
+  }
   revalidatePath("/", "layout");
   const suite = averti ? " Le membre a reçu le motif par courriel." : "";
   return {

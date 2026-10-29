@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/relance",
       "schedule": "0 8 7,9,10,11 * *"
+    },
+    {
+      "path": "/api/cron/alertes",
+      "schedule": "0 18 * * *"
     }
   ]
 }

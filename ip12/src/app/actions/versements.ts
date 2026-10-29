@@ -8,11 +8,12 @@ import { peut } from "@/lib/droits";
 import { journaliser } from "@/lib/journal";
 import { declarePour, derogationsParMembre, reglagesEffectifs, situationsClub } from "@/lib/queries";
 import { cotisationDuMois, imputer, type ReglesMembre } from "@/lib/penalites";
-import { fcfa, moisLong } from "@/lib/settings";
+import { fcfa, moisLong, nomCourt } from "@/lib/settings";
 import { listeDesMois } from "@/lib/sortie";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
 import { avertirDeclaration, avertirRejet } from "@/lib/avis";
+import { alerter, alerterAValider } from "@/lib/alertes";
 import { declarerReglementPenalite } from "./penalites";
 import type { EtatFormulaire } from "./auth";
 
@@ -199,6 +200,12 @@ export async function declarerVersement(
       montant,
       avecJustificatif: pieces.joint,
     }).catch(() => 0);
+    alerterAValider({
+      droit: "validerVersement",
+      auteurId: auteur.id,
+      declarant: nomCourt(nomCible),
+      objet: `${fcfa(montant)} pour ${listeDesMois(mois)}`,
+    });
   }
 
   await journaliser(
@@ -317,8 +324,8 @@ export async function validerDeclaration(
     set status = ${STATUT_VERSEMENT.valide}, reviewed_by = ${auteur.id}::uuid,
         reviewed_at = now(), review_note = null
     where batch_id = ${lot}::uuid and status = ${STATUT_VERSEMENT.enAttente}
-    returning id, amount
-  `) as { id: string; amount: number | string }[];
+    returning id, amount, member_id, to_char(period, 'YYYY-MM-DD') as mois
+  `) as { id: string; amount: number | string; member_id: string; mois: string }[];
   if (faites.length === 0) return { ok: false, erreur: "Cette déclaration est déjà traitée." };
 
   for (const f of faites) {
@@ -329,6 +336,17 @@ export async function validerDeclaration(
   }
   revalidatePath("/", "layout");
   const total = faites.reduce((t, f) => t + Number(f.amount), 0);
+  /* Le membre l'apprend sur son telephone ; qui valide son propre versement n'a pas besoin qu'on le lui dise. */
+  const membreVise = String(faites[0].member_id);
+  if (membreVise !== auteur.id) {
+    const periode = listeDesMois(faites.map((f) => f.mois));
+    alerter([membreVise], {
+      titre: "Versement validé",
+      corps: `${fcfa(total)} pour ${periode}, visé par ${nomCourt(auteur.nom)}.`,
+      corpsVoile: `Votre versement pour ${periode} est validé.`,
+      url: "/historique?type=versements",
+    });
+  }
   return { ok: true, message: `${fcfa(total)} validés.` };
 }
 
@@ -368,6 +386,15 @@ export async function rejeterDeclaration(
     motif,
     auteurNom: auteur.nom,
   }).catch(() => false);
+  if (String(faites[0].member_id) !== auteur.id) {
+    const periode = listeDesMois(faites.map((f) => f.mois));
+    alerter([String(faites[0].member_id)], {
+      titre: "Versement refusé",
+      corps: `${fcfa(total)} pour ${periode}. Motif : ${motif}`,
+      corpsVoile: `Votre versement pour ${periode} n'est pas validé. Motif : ${motif}`,
+      url: "/versements",
+    });
+  }
   revalidatePath("/", "layout");
   return {
     ok: true,
