@@ -12,6 +12,7 @@ import {
   prochainReglement,
   situationMembre,
   type CelluleMois,
+  type PenalitesDuesR4,
   type ReglesMembre,
   type SituationMembre,
   penalitesCourues,
@@ -630,6 +631,40 @@ async function penalitesDuesDetailleesBrut(): Promise<Map<string, DetteMembre>> 
         d.nbRetard += n(r.nb);
         d.montantRetard += n(r.total);
       }
+      index.set(cle, d);
+    }
+    return index;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Les penalites de retard encore dues, mois par mois : ce que R4 compte comme
+ * impayes une fois les penalites indissociables des cotisations (10/01/2027).
+ *
+ * Le mois se lit dans la cle du constat (`retard:<membre>:<mois>`, ou l'ancienne
+ * forme `retard:<mois>`). La reprise du tresorier (`reprise_penalites:`) porte
+ * plusieurs mois sans les nommer : elle compte pour le seuil, par sa quantite,
+ * sans pouvoir etre doublee. Les autres lignes -- majorations ecrites par une
+ * version anterieure, saisies a la main -- ne sont pas des mois et ne comptent
+ * pas.
+ */
+async function penalitesDuesR4Brut(): Promise<Map<string, PenalitesDuesR4>> {
+  try {
+    const rows = await db()`
+      select member_id, source_key, quantity
+      from penalties
+      where status = ${STATUT_PENALITE.due} and kind = ${KIND_PENALITE.retard}
+    `;
+    const index = new Map<string, PenalitesDuesR4>();
+    for (const r of rows) {
+      const cle = String(r.member_id);
+      const d = index.get(cle) ?? { mois: [], sansMois: 0 };
+      const source = String(r.source_key ?? "");
+      const mois = /^retard:(?:[^:]+:)?(\d{4}-\d{2})/.exec(source);
+      if (mois) d.mois.push(`${mois[1]}-01`);
+      else if (source.startsWith("reprise_penalites:")) d.sansMois += n(r.quantity);
       index.set(cle, d);
     }
     return index;
@@ -1568,13 +1603,14 @@ async function situationsClubBrut(
   arrete: string | null = null,
 ): Promise<SituationClub[]> {
   const sql = db();
-  const [membres, declarations, derogations, nbPenalites, reglages, rachetees] = await Promise.all([
+  const [membres, declarations, derogations, nbPenalites, reglages, rachetees, duesR4] = await Promise.all([
     listerMembres(),
     declarationsRetard(),
     derogationsParMembre(),
     nbPenalitesRetardDues(),
     reglagesEffectifs(),
     poidsRachetes(arrete),
+    penalitesDuesR4(),
   ]);
   const mois = moisDuClub(debutMois(aujourdhui));
 
@@ -1609,6 +1645,7 @@ async function situationsClubBrut(
       // Le reglage du bureau vaut defaut ; la derogation individuelle le surcharge.
       { tauxPenalite: reglages.tauxPenalite, ...(derogations.get(m.id) ?? {}) },
       nbPenalites.get(m.id) ?? 0,
+      duesR4.get(m.id),
     );
 
     /*
@@ -1945,6 +1982,7 @@ export const bornesReprisePenalites = cache(bornesReprisePenalitesBrut);
 export const nbPenalitesRetardDues = cache(nbPenalitesRetardDuesBrut);
 export const penalitesDuesParMembre = cache(penalitesDuesParMembreBrut);
 export const penalitesDuesDetaillees = cache(penalitesDuesDetailleesBrut);
+export const penalitesDuesR4 = cache(penalitesDuesR4Brut);
 /*
  * Non memoisee : elle prend un filtre, et deux appels de filtres differents dans
  * un meme rendu ne doivent pas se rendre la reponse l'un de l'autre.

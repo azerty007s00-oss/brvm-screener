@@ -1018,6 +1018,42 @@ verifier(
   "une avance tenue n'efface pas le rappel d'une autre regle",
 );
 
+/* -------------------- R4 depuis le 10/01/2027 : des penalites, sans mois de retard */
+
+/*
+ * DECISION DU BUREAU : a partir du 10/01/2027, une penalite impayee compte comme
+ * un mois impaye pour R4. Un membre a jour de ses cotisations, avec trois
+ * penalites impayees doublees, n'a pas de paragraphe des arrieres : il doit
+ * lire le rappel R4 avec ses penalites.
+ */
+const LE_15_JAN_2027 = new Date("2027-01-15T08:00:00Z");
+const aJourDoublees = {
+  ...bourama,
+  situation: {
+    ...bourama.situation,
+    cellules: [cellule("2026-10-01", 5000, 5000), cellule("2026-11-01", 5000, 5000), cellule("2026-12-01", 5000, 5000)],
+    moisEnRetard: [], joursDeRetard: 0, nbPenalitesImpayees: 3, totalPenalites: 3000,
+    penalites: ["2026-10-01", "2026-11-01", "2026-12-01"].map((mois) => ({ mois, montant: 1000, doublee: true, figee: true, impaye: true })),
+  },
+  arrieres: [],
+  echeanceDuJour: null,
+  dette: { nb: 3, montant: 3000, nbRetard: 3, montantRetard: 3000 },
+  nonInscrites: { nb: 0, montant: 0, mois: [] },
+};
+const texteJanvier = lettre(aJourDoublees, LE_15_JAN_2027);
+verifier(
+  /Rappel R4 : depuis le 10\/01\/2027, une penalite impayee compte comme un mois\s+impaye/.test(texteJanvier),
+  "a jour de ses cotisations, il lit le rappel R4 avec ses penalites",
+);
+verifier(
+  (texteJanvier.match(/Rappel R4/g) ?? []).length === 1,
+  "un seul rappel R4 : le paragraphe des arrieres n'existe pas pour lui",
+);
+verifier(
+  !lettre({ ...aJourDoublees, situation: { ...aJourDoublees.situation, penalites: aJourDoublees.situation.penalites.map((p) => ({ ...p, montant: 500, doublee: false })) } }, LE_15_JAN_2027).includes("Rappel R4"),
+  "sans doublement, pas de rappel R4",
+);
+
 /* --------------------------------------- la fin de la mesure, annoncee */
 
 /*

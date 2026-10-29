@@ -2595,6 +2595,43 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(deux.find((e) => e.montant === 15000).detail.split(".")[0], "Novembre 2026 à décembre 2026 (2 mois), payé d'avance · Mobile Money");
 }
 
+{
+  /* R4 a partir du 10/01/2027 : une penalite impayee compte comme un mois impaye. */
+  const oct = "2026-10-01", nov = "2026-11-01", dec = "2026-12-01", jan = "2027-01-01";
+  // Trois mois regles en retard, penalites encore dues : doublees.
+  const toutes = calculerPenalites([], [oct, nov, dec], {}, { mois: [oct, nov, dec], sansMois: 0 });
+  assert.deepEqual(toutes.map((p) => p.montant), [1000, 1000, 1000], "3 penalites impayees declenchent R4");
+  assert.ok(toutes.every((p) => p.doublee && p.figee && p.impaye));
+  // Sans le registre (avant la date d'effet), rien ne change.
+  const avant = calculerPenalites([], [oct, nov, dec]);
+  assert.deepEqual(avant.map((p) => p.montant), [500, 500, 500]);
+  assert.ok(avant.every((p) => !p.doublee && !p.impaye));
+  // Une penalite deja payee ne compte plus : deux impayes, pas de doublement.
+  const deux = calculerPenalites([], [oct, nov, dec], {}, { mois: [nov, dec], sansMois: 0 });
+  assert.deepEqual(deux.map((p) => [p.montant, p.impaye]), [[500, false], [500, true], [500, true]]);
+  // Cotisation et penalites melangees : janvier impaye, novembre et decembre penalites dues.
+  const melange = calculerPenalites([jan], [oct, nov, dec], {}, { mois: [nov, dec], sansMois: 0 });
+  assert.deepEqual(melange.map((p) => p.montant), [500, 1000, 1000, 1000], "octobre, penalite payee, reste a 10 %");
+  // Quatre impayes : seuls les trois derniers doublent, l'ancien reste a 10 % mais compte.
+  const quatre = calculerPenalites([jan], [oct, nov, dec], {}, { mois: [oct, nov, dec], sansMois: 0 });
+  assert.deepEqual(quatre.map((p) => p.montant), [500, 1000, 1000, 1000]);
+  assert.ok(quatre[0].impaye && !quatre[0].doublee, "octobre impaye, sorti de la fenetre");
+  // La reprise en bloc compte pour le seuil, sans jamais etre doublee (ses mois sont inconnus).
+  const bloc = calculerPenalites([], [dec], {}, { mois: [dec], sansMois: 11 });
+  assert.equal(bloc[0].montant, 1000, "11 reprises + decembre : decembre est parmi les trois derniers");
+  const seule = calculerPenalites([], [], {}, { mois: [], sansMois: 11 });
+  assert.equal(seule.length, 0, "rien d'identifiable a doubler");
+
+  // La date d'effet decide : la veille rien, le lendemain le doublement.
+  const versesEnRetard = [oct, nov, dec].map((m) => ({ mois_couvert: m, montant: 5000, statut: "valide", date_versement: `${m.slice(0, 7)}-25` }));
+  const dues = { mois: [oct, nov, dec], sansMois: 0 };
+  const veille = situationMembre("m", [oct, nov, dec], versesEnRetard, [], new Date("2027-01-09T12:00:00Z"), undefined, {}, 3, dues);
+  assert.equal(veille.totalPenalites, 1500, "le 9 janvier, les penalites ne comptent pas encore");
+  const lendemain = situationMembre("m", [oct, nov, dec], versesEnRetard, [], new Date("2027-01-11T12:00:00Z"), undefined, {}, 3, dues);
+  assert.equal(lendemain.totalPenalites, 3000, "le 11 janvier, trois penalites impayees doublent");
+  assert.equal(lendemain.nbMoisRetard, 0, "les cotisations, elles, sont a jour");
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2603,5 +2640,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables",
 );

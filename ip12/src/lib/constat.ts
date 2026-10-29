@@ -45,6 +45,7 @@ export type IssueConstat = {
 /** Motif lisible, qui dit pourquoi la penalite est due et a quel titre. */
 export function motifPenalite(p: { mois: string; doublee: boolean; figee: boolean }): string {
   const base = `Retard de versement, ${moisLong(p.mois)}`;
+  if (p.figee && p.doublee) return `${base} (réglé après l'échéance, pénalité impayée doublée, R4)`;
   if (p.figee) return `${base} (réglé après l'échéance, pénalité acquise, art. 9)`;
   return p.doublee ? `${base} (doublée, R4)` : base;
 }
@@ -138,7 +139,7 @@ export async function porterRetardsAuRegistre(auteurId: string): Promise<IssueCo
         `;
         issue.reajustees++;
       } else if (Number(courante.unit_amount) > p.montant) {
-        if (doublementEnCours && !p.figee) {
+        if (doublementEnCours && p.impaye) {
           // Sorti des trois derniers mois d'un retard qui dure : R4 ne le double plus.
           await sql`
             update penalties

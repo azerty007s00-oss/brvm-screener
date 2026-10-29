@@ -603,7 +603,7 @@ egal(lire(`select coalesce(sum(quantity*unit_amount),0) from penalties
  * le paiement d'une cotisation. Decision du bureau (octobre 2026) : comme la
  * penalite de l'art. 9, le doublement inscrit est acquis.
  */
-donnees.situations[0].penalites[0] = { mois: "2026-08-01", montant: 500, doublee: false, figee: true };
+donnees.situations[0].penalites[0] = { mois: "2026-08-01", montant: 500, doublee: false, figee: true, impaye: false };
 issue = await constat.porterRetardsAuRegistre(tresorier.id);
 egal(issue.reajustees, 0, "le constat ne baisse pas un montant inscrit");
 egal(issue.maintenues, 1, "la ligne doublee est maintenue a son montant, et comptee comme telle");
@@ -620,10 +620,10 @@ egal(lire(`select reason from penalties where member_id='${seul}' and incurred_o
  * trois mois plus recents sont doubles : sa ligne revient a 500.
  */
 donnees.situations[0].penalites = [
-  { mois: "2026-08-01", montant: 500, doublee: false, figee: false },
-  { mois: "2026-09-01", montant: 1000, doublee: true, figee: false },
-  { mois: "2026-10-01", montant: 1000, doublee: true, figee: false },
-  { mois: "2026-11-01", montant: 1000, doublee: true, figee: false },
+  { mois: "2026-08-01", montant: 500, doublee: false, figee: false, impaye: true },
+  { mois: "2026-09-01", montant: 1000, doublee: true, figee: false, impaye: true },
+  { mois: "2026-10-01", montant: 1000, doublee: true, figee: false, impaye: true },
+  { mois: "2026-11-01", montant: 1000, doublee: true, figee: false, impaye: true },
 ];
 issue = await constat.porterRetardsAuRegistre(tresorier.id);
 egal(issue.maintenues, 0, "un mois sorti de la fenetre de R4 n'est pas maintenu");
@@ -632,6 +632,20 @@ egal(lire(`select unit_amount from penalties where member_id='${seul}' and incur
 egal(lire(`select coalesce(sum(quantity*unit_amount),0) from penalties
            where member_id='${seul}' and status='due';`), "3500",
   "quatre mois impayes : 500 + 3 x 1 000, les trois derniers seuls doubles");
+/*
+ * Depuis le 10/01/2027, un mois regle en retard dont la penalite reste due est
+ * un impaye : parmi les trois derniers, sa penalite double, motif a l'appui.
+ */
+psql(BASE, `update penalties set unit_amount = 500,
+              reason = 'Retard de versement, septembre 2026 (réglé après l''échéance, pénalité acquise, art. 9)'
+            where member_id='${seul}' and incurred_on='2026-09-10';`);
+donnees.situations[0].penalites[1] = { mois: "2026-09-01", montant: 1000, doublee: true, figee: true, impaye: true };
+issue = await constat.porterRetardsAuRegistre(tresorier.id);
+egal(lire(`select unit_amount from penalties where member_id='${seul}' and incurred_on='2026-09-10';`),
+  "1000", "la penalite impayee d'un mois regle en retard double");
+egal(lire(`select reason from penalties where member_id='${seul}' and incurred_on='2026-09-10';`),
+  "Retard de versement, septembre 2026 (réglé après l'échéance, pénalité impayée doublée, R4)",
+  "le motif dit pourquoi un mois regle porte une penalite doublee");
 /* On revient aux deux mois de depart pour la suite du controle. */
 psql(BASE, `delete from penalties where member_id='${seul}' and incurred_on > '2026-09-10';`);
 donnees.situations[0].penalites = [

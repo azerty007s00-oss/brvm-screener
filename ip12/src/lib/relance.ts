@@ -576,7 +576,8 @@ export function texteRelance(
           "Cette déclaration conditionne votre droit au plan de redressement prévu par R5.",
       );
     }
-    if (arrieres.length >= REGLES.doublementApresMois) {
+    /* Depuis le 10/01/2027, des penalites impayees suffisent a declencher R4 : le calcul le dit. */
+    if (arrieres.length >= REGLES.doublementApresMois || situation.penalites.some((p) => p.doublee)) {
       lignes.push(
         "",
         "Rappel R4 : au-delà de 3 mois de retard, les pénalités des 3 derniers mois sont doublées " +
@@ -733,6 +734,19 @@ export function texteRelance(
      * ses penalites impayees en font partie, celles-ci etant indissociables des
      * cotisations ».
      */
+    /*
+     * R4 SANS AUCUN MOIS DE RETARD. Depuis le 10/01/2027, une penalite impayee
+     * compte comme un mois impaye : un membre a jour de ses cotisations peut
+     * voir ses penalites doublees. Le rappel R4 du paragraphe des arrieres ne
+     * parait pas pour lui ; il le lit ici.
+     */
+    if (arrieres.length === 0 && situation.penalites.some((p) => p.doublee)) {
+      lignes.push(
+        `Rappel R4 : depuis le ${dateCourte(effet)}, une pénalité impayée compte comme un mois ` +
+          "impayé. Dès 3 mois impayés, les pénalités des 3 derniers sont doublées, et le " +
+          "doublement inscrit reste dû.",
+      );
+    }
     if (plan && phase !== "sous_le_seuil") {
       lignes.push(
         `Vos ${dette.nbRetard} pénalités de retard impayées atteignent le seuil de ${seuil} ` +

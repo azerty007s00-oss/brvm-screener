@@ -354,10 +354,32 @@ export type PenaliteCalculee = {
   doublee: boolean;
   /**
    * Penalite d'un mois finalement regle, mais apres l'echeance. L'art. 9 la dit
-   * "definitivement acquise au benefice du club" : elle reste due, et la
-   * majoration R4 ne s'y applique pas puisque le retard a cesse.
+   * "definitivement acquise au benefice du club" : elle reste due. Avant le
+   * 10/01/2027, la majoration R4 ne s'y applique pas puisque le retard a cesse ;
+   * apres, elle s'y applique tant que la penalite elle-meme reste impayee.
    */
   figee: boolean;
+  /**
+   * Le mois compte parmi les impayes de R4 : sa cotisation manque, ou, depuis
+   * que les penalites sont indissociables des cotisations, sa penalite reste
+   * due. Le constat ne ramene a 10 % qu'un mois encore impaye sorti des trois
+   * derniers.
+   */
+  impaye: boolean;
+};
+
+/**
+ * Ce que le registre dit des penalites de retard encore dues, pour R4 une fois
+ * les penalites indissociables des cotisations (10/01/2027).
+ */
+export type PenalitesDuesR4 = {
+  /** Les mois dont la penalite de retard, inscrite mois par mois, reste due. */
+  mois: string[];
+  /**
+   * Les penalites reprises en bloc par le tresorier, sans mois precis : elles
+   * comptent pour atteindre les trois impayes, mais ne peuvent etre doublees.
+   */
+  sansMois: number;
 };
 
 export type VersementConnu = {
@@ -437,6 +459,8 @@ export function situationMembre(
   moisAdhesion?: string,
   propres: ReglesMembre = {},
   nbPenalitesImpayees = 0,
+  /** Les penalites dues au registre : ne comptent pour R4 qu'a partir du 10/01/2027. */
+  penalitesDues?: PenalitesDuesR4,
 ): SituationMembre {
   /*
    * Un mois peut porter plusieurs versements : un acompte, puis le complement.
@@ -548,7 +572,13 @@ export function situationMembre(
 
   const nbMoisRetard = moisEnRetard.length;
   const joursDeRetard = nbMoisRetard === 0 ? 0 : joursDepuisEcheance(moisEnRetard[0], aujourdhui);
-  const penalites = calculerPenalites(moisEnRetard, moisRegularisesEnRetard, propres);
+  const indissociables = aujourdhui.toISOString().slice(0, 10) >= EFFET.penalitesIndissociables;
+  const penalites = calculerPenalites(
+    moisEnRetard,
+    moisRegularisesEnRetard,
+    propres,
+    indissociables ? penalitesDues : undefined,
+  );
 
   return {
     membreId,
@@ -587,6 +617,13 @@ function joursDepuisEcheance(mois: string, aujourdhui: Date): number {
  * doublent (leur cumul passe de 30 % a 60 % du versement du). La majoration ne
  * frappe que le retard en cours : un mois deja regle ne peut plus s'aggraver.
  *
+ * A PARTIR DU 10/01/2027, LA PENALITE COMPTE COMME LA COTISATION. L'assemblee a
+ * rendu les penalites indissociables des cotisations : un mois regle en retard
+ * dont la penalite reste impayee est un mois impaye. Il compte pour atteindre
+ * les trois mois, et sa penalite est doublee s'il est parmi les trois derniers
+ * (decision du bureau, octobre 2026). Avant cette date, seules les cotisations
+ * comptent.
+ *
  * Ce calcul dit ce qui est du AUJOURD'HUI. Le registre, lui, ne redescend pas :
  * un doublement inscrit reste acquis meme si le calcul le perd apres le
  * paiement d'un mois (voir `porterRetardsAuRegistre`, lib/constat).
@@ -595,22 +632,40 @@ export function calculerPenalites(
   moisEnRetard: string[],
   moisRegularisesEnRetard: string[] = [],
   propres: ReglesMembre = {},
+  /**
+   * Les penalites encore dues, a partir du 10/01/2027 seulement : un mois regle
+   * en retard dont la penalite reste impayee compte alors parmi les impayes de
+   * R4, et peut etre double. Absent, R4 ne compte que les cotisations.
+   */
+  dues?: PenalitesDuesR4,
 ): PenaliteCalculee[] {
   const tauxDeBase = propres.tauxPenalite ?? REGLES.tauxPenalite;
   const multiplicateur = propres.multiplicateurPenalite ?? 1;
 
   const impayes = [...moisEnRetard].sort();
-  const doublement = impayes.length >= REGLES.doublementApresMois;
-  const aDoubler = impayes.slice(-REGLES.moisPenalitesDoublees);
+  const regularises = [...moisRegularisesEnRetard].sort();
+  const duesParMois = new Set((dues?.mois ?? []).map((m) => `${m.slice(0, 7)}-01`));
+  const regularisesImpayes = regularises.filter((m) => duesParMois.has(m));
+  /*
+   * La fenetre de R4 : les mois impayes, cotisation ou penalite, du plus ancien
+   * au plus recent. La reprise en bloc compte pour le seuil ; ses mois, inconnus,
+   * sont anterieurs a tout ce que le constat inscrit, et ne sont jamais doubles.
+   */
+  const fenetre = [...impayes, ...regularisesImpayes].sort();
+  const doublement = fenetre.length + (dues?.sansMois ?? 0) >= REGLES.doublementApresMois;
+  const aDoubler = fenetre.slice(-REGLES.moisPenalitesDoublees);
 
-  const sur = (mois: string, doublee: boolean, figee: boolean): PenaliteCalculee => {
+  const sur = (mois: string, doublee: boolean, figee: boolean, impaye: boolean): PenaliteCalculee => {
     const taux = (doublee ? tauxDeBase * 2 : tauxDeBase) * multiplicateur;
-    return { mois, taux, montant: Math.round(cotisationDuMois(propres, mois) * taux), doublee, figee };
+    return { mois, taux, montant: Math.round(cotisationDuMois(propres, mois) * taux), doublee, figee, impaye };
   };
 
   return [
-    ...impayes.map((mois) => sur(mois, doublement && aDoubler.includes(mois), false)),
-    ...[...moisRegularisesEnRetard].sort().map((mois) => sur(mois, false, true)),
+    ...impayes.map((mois) => sur(mois, doublement && aDoubler.includes(mois), false, true)),
+    ...regularises.map((mois) => {
+      const impaye = regularisesImpayes.includes(mois);
+      return sur(mois, impaye && doublement && aDoubler.includes(mois), true, impaye);
+    }),
   ].sort((a, b) => a.mois.localeCompare(b.mois));
 }
 
