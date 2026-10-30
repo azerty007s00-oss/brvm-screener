@@ -15,7 +15,7 @@ import {
   alerteRappelPresident,
   alerteRelance,
   alerteVeille,
-  clotureEffective,
+  clotureDuSondage,
   decompte,
   duMois,
   jourEnClair,
@@ -281,7 +281,7 @@ export type BilanPassage = {
 };
 
 /**
- * Le passage du matin : ouvre, relance, clot, rappelle.
+ * Le passage du soir : ouvre, relance, clot, rappelle.
  *
  * Chaque etape se reconnait a son horodatage (`reminded_at`, `asked_at`...)
  * pose par une mise a jour conditionnelle : deux passages simultanes, ou un
@@ -302,7 +302,7 @@ export async function passageQuotidien(maintenant: Date): Promise<BilanPassage> 
   /* 1. Ouvrir le sondage du mois. */
   const aOuvrir = moisAOuvrir(maintenant, rythme);
   if (aOuvrir) {
-    const cloture = clotureEffective(aOuvrir, maintenant);
+    const cloture = clotureDuSondage(aOuvrir);
     const cree = await avecTables(() => sql`
       insert into meeting_polls (month, closes_at) values (${aOuvrir}::date, ${cloture.toISOString()}::timestamptz)
       on conflict (month) do nothing returning id

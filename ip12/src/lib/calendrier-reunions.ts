@@ -4,10 +4,14 @@
  * Le club se reunit tous les deux mois, entre le 10 et le 17. Fixer le jour
  * prenait une soiree de messages WhatsApp ou chacun repondait a une question
  * differente. Le site pose donc la question lui-meme, le 3 du mois de
- * reunion : chaque membre coche les jours qui lui vont, le sondage ferme le 7
- * au soir, et le 8 au matin le president recoit le jour qui reunit le plus de
+ * reunion : chaque membre coche les jours qui lui vont, le sondage ferme le 9
+ * a 20 h, et le soir meme le president recoit le jour qui reunit le plus de
  * monde. Il valide d'un toucher ; tout le monde est prevenu, et rappele la
  * veille.
+ *
+ * Le site passe une fois par jour, a 21 h : apres la cloture du 9, pour que
+ * le president ait le resultat le soir meme, et la veille d'une seance, pour
+ * que le rappel tombe quand on prepare sa journee du lendemain.
  *
  * Tout ce qui suit est un calcul pur, sans base ni horloge : les dates
  * arrivent en arguments, pour que la verification puisse le rejouer. Les
@@ -34,10 +38,10 @@ export const CLE_RYTHME = "reunions_rythme";
 
 /** Les jours du mois qui bornent le sondage, et l'heure de sa cloture. */
 export const FENETRE = {
-  /** Le sondage s'ouvre ce jour-la, au passage du matin. */
+  /** Le sondage s'ouvre ce jour-la, au passage du soir. */
   ouverture: 3,
-  /** ... et ferme ce jour-la, a `heureCloture` heures. */
-  cloture: 7,
+  /** ... et ferme ce jour-la, a `heureCloture` heures : la veille du premier jour propose. */
+  cloture: 9,
   heureCloture: 20,
   /** Les jours proposes : du 10 au 17 inclus. */
   premier: 10,
@@ -46,11 +50,11 @@ export const FENETRE = {
 
 /**
  * La relance des retardataires part quand il reste moins de 36 heures : le
- * passage du matin, la veille de la cloture.
+ * passage du soir, la veille de la cloture.
  */
 export const RELANCE_AVANT_CLOTURE_MS = 36 * 3_600_000;
 
-/** Le president qui n'a pas valide est relance une fois, le lendemain matin. */
+/** Le president qui n'a pas valide est relance une fois, le lendemain soir. */
 export const RAPPEL_PRESIDENT_APRES_MS = 20 * 3_600_000;
 
 export function lireRythme(brut: string | null | undefined): Rythme {
@@ -91,36 +95,23 @@ export function joursDuSondage(mois: string): string[] {
   return jours;
 }
 
-/** Le moment ou le sondage d'un mois ferme : le 7 a 20 h. */
+/** Le moment ou le sondage d'un mois ferme : le 9 a 20 h. */
 export function clotureDuSondage(mois: string): Date {
   return new Date(`${mois.slice(0, 7)}-${String(FENETRE.cloture).padStart(2, "0")}T${String(FENETRE.heureCloture).padStart(2, "0")}:00:00Z`);
 }
 
 /**
  * Le sondage a ouvrir ce jour, s'il y en a un : le mois de reunion en cours,
- * entre le 3 et la veille du premier jour propose. Un passage manque le 3 se
- * rattrape le 4 ; au-dela du 9, il est trop tard pour demander leur avis aux
+ * entre le 3 et la veille de la cloture. Un passage manque le 3 se rattrape
+ * le 4 ; le jour de la cloture, il est trop tard pour demander leur avis aux
  * membres, et le president convoque lui-meme.
  */
 export function moisAOuvrir(maintenant: Date, r: Rythme): string | null {
   const mois = maintenant.toISOString().slice(0, 7) + "-01";
   const jour = maintenant.getUTCDate();
   if (!estMoisDeReunion(mois, r)) return null;
-  if (jour < FENETRE.ouverture || jour >= FENETRE.premier) return null;
+  if (jour < FENETRE.ouverture || jour >= FENETRE.cloture) return null;
   return mois;
-}
-
-/**
- * La cloture d'un sondage ouvert a `maintenant` : le 7 a 20 h, sauf s'il
- * s'ouvre si tard qu'il resterait moins d'une journee pour repondre. Il ferme
- * alors 24 heures apres, sans jamais depasser la veille du premier jour.
- */
-export function clotureEffective(mois: string, maintenant: Date): Date {
-  const prevue = clotureDuSondage(mois);
-  const auPlusTot = new Date(maintenant.getTime() + 24 * 3_600_000);
-  if (prevue >= auPlusTot) return prevue;
-  const limite = new Date(`${mois.slice(0, 7)}-${String(FENETRE.premier - 1).padStart(2, "0")}T${String(FENETRE.heureCloture).padStart(2, "0")}:00:00Z`);
-  return auPlusTot < limite ? auPlusTot : limite;
 }
 
 /* ----------------------------------------------------------------- decompte */

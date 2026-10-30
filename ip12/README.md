@@ -136,10 +136,10 @@ Phoenix Capital Management.
   passe par le SMTP du club (Gmail, Brevo) ou par Resend ; sans transport, seules les alertes du
   site subsistent.
 - **Sondage de date de réunion** : le club se réunit tous les deux mois (novembre, janvier,
-  mars...), entre le 10 et le 17. Le 3 du mois de réunion, un passage quotidien de 9 h
+  mars...), entre le 10 et le 17. Le 3 du mois de réunion, un passage quotidien de 21 h
   (`/api/cron/reunions`) ouvre un sondage : chaque membre coche les jours qui lui vont, par
   alerte et par courriel. La veille de la clôture, ceux qui n'ont pas répondu sont relancés ;
-  le 7 à 20 h le sondage ferme, et le 8 au matin le président reçoit le jour qui réunit le plus
+  le 9 à 20 h le sondage ferme, et le soir même le président reçoit le jour qui réunit le plus
   de monde. Il le valide (ou en choisit un autre) avec l'heure et le lieu : la séance s'inscrit
   dans Réunions, tout le monde est convoqué, et rappelé la veille. Le rythme se règle par la clé
   `reunions_rythme` de `settings` (« 2:2026-11-01 » par défaut).

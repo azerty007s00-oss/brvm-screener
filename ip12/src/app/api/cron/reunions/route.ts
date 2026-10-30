@@ -7,12 +7,13 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Le passage du matin, a 9 h, pour le sondage de date de reunion.
+ * Le passage du soir, a 21 h, pour le sondage de date de reunion.
  *
  * Il ouvre le sondage le 3 du mois de reunion, relance la veille de la
- * cloture ceux qui n'ont pas repondu, clot et sollicite le president le 8,
- * le rappelle une fois s'il n'a pas valide, et previent tout le monde la
- * veille de la seance. Les autres jours, il ne fait rien.
+ * cloture ceux qui n'ont pas repondu, clot le 9 apres 20 h et sollicite le
+ * president le soir meme, le rappelle une fois s'il n'a pas valide, et
+ * previent tout le monde la veille de la seance. Les autres jours, il ne
+ * fait rien.
  */
 export async function GET(requete: Request) {
   /* Meme garde que la relance : sans secret, personne ne declenche rien. */

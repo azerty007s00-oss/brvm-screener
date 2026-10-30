@@ -230,8 +230,8 @@ async function sectionSondage({ membre }: { membre: Membre }): Promise<{ section
 
   if (!s) {
     const rythme = await lireRythmeReunions();
-    /* Passe le 9, le sondage du mois en cours n'aura plus lieu : on regarde plus loin. */
-    const depuis = maintenant.getUTCDate() < FENETRE.premier ? debutMois(maintenant) : decalerMois(debutMois(maintenant), 1);
+    /* Le jour de la cloture passe, le sondage du mois en cours n'aura plus lieu : on regarde plus loin. */
+    const depuis = maintenant.getUTCDate() < FENETRE.cloture ? debutMois(maintenant) : decalerMois(debutMois(maintenant), 1);
     const mois = prochainMoisDeReunion(depuis, rythme);
     return {
       section: null,

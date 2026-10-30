@@ -2648,27 +2648,27 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.deepEqual(C.lireRythme("n'importe quoi"), r);
   assert.deepEqual(C.lireRythme(C.ecrireRythme({ intervalle: 1, depart: "2027-02-01" })), { intervalle: 1, depart: "2027-02-01" });
 
-  // Ouverture : du 3 au 9 du mois de reunion, au passage du matin.
-  assert.equal(C.moisAOuvrir(new Date("2026-11-03T09:00:00Z"), r), "2026-11-01");
-  assert.equal(C.moisAOuvrir(new Date("2026-11-02T09:00:00Z"), r), null);
-  assert.equal(C.moisAOuvrir(new Date("2026-11-04T09:00:00Z"), r), "2026-11-01", "un passage manque se rattrape");
-  assert.equal(C.moisAOuvrir(new Date("2026-11-10T09:00:00Z"), r), null, "trop tard pour demander");
-  assert.equal(C.moisAOuvrir(new Date("2026-12-03T09:00:00Z"), r), null, "decembre n'a pas de reunion");
+  // Ouverture : du 3 au 8 du mois de reunion, au passage du soir.
+  assert.equal(C.moisAOuvrir(new Date("2026-11-03T21:00:00Z"), r), "2026-11-01");
+  assert.equal(C.moisAOuvrir(new Date("2026-11-02T21:00:00Z"), r), null);
+  assert.equal(C.moisAOuvrir(new Date("2026-11-04T21:00:00Z"), r), "2026-11-01", "un passage manque se rattrape");
+  assert.equal(C.moisAOuvrir(new Date("2026-11-08T21:00:00Z"), r), "2026-11-01");
+  assert.equal(C.moisAOuvrir(new Date("2026-11-09T21:00:00Z"), r), null, "le jour de la cloture, trop tard pour demander");
+  assert.equal(C.moisAOuvrir(new Date("2026-12-03T21:00:00Z"), r), null, "decembre n'a pas de reunion");
 
-  // Cloture le samedi 7 a 20 h ; ouvert trop tard, il laisse 24 heures.
+  // Cloture le lundi 9 a 20 h, la veille du premier jour propose.
   const cloture = C.clotureDuSondage("2026-11-01");
-  assert.equal(cloture.toISOString(), "2026-11-07T20:00:00.000Z");
-  assert.equal(C.momentEnClair(cloture), "samedi 7/11 à 20 h");
-  assert.equal(C.clotureEffective("2026-11-01", new Date("2026-11-03T09:00:00Z")).toISOString(), "2026-11-07T20:00:00.000Z");
-  assert.equal(C.clotureEffective("2026-11-01", new Date("2026-11-07T09:00:00Z")).toISOString(), "2026-11-08T09:00:00.000Z");
-  assert.equal(C.clotureEffective("2026-11-01", new Date("2026-11-09T09:00:00Z")).toISOString(), "2026-11-09T20:00:00.000Z",
-    "jamais au-dela de la veille du premier jour propose");
-  assert.equal(C.clotureRelative(cloture, new Date("2026-11-03T09:00:00Z")), "samedi soir");
-  assert.equal(C.clotureRelative(cloture, new Date("2026-11-06T09:00:00Z")), "demain soir");
-  assert.equal(C.clotureRelative(cloture, new Date("2026-11-07T09:00:00Z")), "ce soir");
-  // La relance part au passage du vendredi 6, pas avant.
-  assert.ok(cloture - new Date("2026-11-06T09:00:00Z") <= C.RELANCE_AVANT_CLOTURE_MS);
-  assert.ok(cloture - new Date("2026-11-05T09:00:00Z") > C.RELANCE_AVANT_CLOTURE_MS);
+  assert.equal(cloture.toISOString(), "2026-11-09T20:00:00.000Z");
+  assert.equal(C.momentEnClair(cloture), "lundi 9/11 à 20 h");
+  assert.equal(C.clotureRelative(cloture, new Date("2026-11-03T21:00:00Z")), "lundi soir");
+  assert.equal(C.clotureRelative(cloture, new Date("2026-11-08T21:00:00Z")), "demain soir");
+  assert.equal(C.clotureRelative(cloture, new Date("2026-11-09T09:00:00Z")), "ce soir");
+  // La relance part au passage du dimanche 8, pas avant.
+  assert.ok(cloture - new Date("2026-11-08T21:00:00Z") <= C.RELANCE_AVANT_CLOTURE_MS);
+  assert.ok(cloture - new Date("2026-11-07T21:00:00Z") > C.RELANCE_AVANT_CLOTURE_MS);
+  // Le passage du 9 au soir trouve le sondage clos ; le rappel au president tombe le 10 au soir.
+  assert.ok(new Date("2026-11-09T21:00:00Z") >= cloture);
+  assert.ok(new Date("2026-11-10T21:00:00Z") - new Date("2026-11-09T21:59:00Z") >= C.RAPPEL_PRESIDENT_APRES_MS);
 
   // Le decompte des maquettes, et l'egalite tranchee au plus tot.
   const jours = C.joursDuSondage("2026-11-01");
@@ -2700,7 +2700,7 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(C.alertePresident({ jour: "2026-11-15", n: 1, membres: ["a"] }, 9).corps.startsWith("1 membre sur 9 est dispo"), true);
   assert.equal(C.alerteCalee("2026-11-15", "19 h", true).titre, "C'est calé : dimanche 15/11 à 19 h");
   // Aucun tiret cadratin dans ce que lit un membre.
-  for (const t of [C.alerteOuverture(cloture, new Date("2026-11-03T09:00:00Z")), C.alerteRelance(cloture, new Date("2026-11-06T09:00:00Z")),
+  for (const t of [C.alerteOuverture(cloture, new Date("2026-11-03T21:00:00Z")), C.alerteRelance(cloture, new Date("2026-11-08T21:00:00Z")),
     C.alertePresident(null, 9), C.alerteRappelPresident("2026-11-01", null), C.alerteCalee("2026-11-15", "19 h", false), C.alerteVeille("19 h", "Cocody")]) {
     assert.ok(!/[—]|--/.test(t.titre + t.corps), t.titre);
   }
