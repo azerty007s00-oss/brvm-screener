@@ -135,6 +135,13 @@ Phoenix Capital Management.
   signale au président combien de destinataires avaient déjà reçu le courrier du jour. L'envoi
   passe par le SMTP du club (Gmail, Brevo) ou par Resend ; sans transport, seules les alertes du
   site subsistent.
+- **Préparer la réunion, et son rapport** (Réunions › une séance) : les chiffres du club depuis la
+  séance précédente (portefeuille et sa variation hors apports, versements reçus, membres à jour,
+  objectif), l'ordre du jour posé d'office (chaque retard avec R2 et R3, chaque vote en cours,
+  pénalités, caisse), puis les points ajoutés par le secrétaire ou le président. Le tout en PDF,
+  en texte pour WhatsApp, et en envoi à tous (courriel avec le rapport joint, et alerte). Après
+  la séance, le rapport reprend la feuille de présence. Un vote clos a aussi son procès-verbal en
+  PDF. Table `meeting_points`, créée par le site.
 - **Vote en ligne, pondéré par les parts** (Club › Votes) : tout membre soumet une question,
   avec la majorité requise (simple, 3/4, unanimité) et une clôture à 20 h GMT. Chacun vote pour,
   contre ou s'abstient, et peut changer d'avis jusqu'à la clôture ; le vote est public. Les voix
@@ -261,6 +268,7 @@ Des migrations la complètent, toutes purement additives :
 | `scripts/migration-fuseaux.sql` | `member_time_zones`, le fuseau de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
 | `scripts/migration-wave.sql` | `member_wave`, le numéro Wave de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
 | `scripts/migration-votes.sql` | `votes` et `vote_ballots`, le vote en ligne. **Inutile de l'exécuter** : le site les crée lui-même |
+| `scripts/migration-rapports.sql` | `meeting_points`, les points du bureau à l'ordre du jour. **Inutile de l'exécuter** : le site la crée lui-même |
 
 Tant que `migration-frais.sql` n'a pas été exécutée, la lecture des mouvements retombe sur une
 projection sans `fees` : le site continue de fonctionner, les frais s'affichent à zéro.

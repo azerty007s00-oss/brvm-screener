@@ -120,6 +120,18 @@ export default async function PageVote({ params }: { params: Promise<{ id: strin
         <Votants electeurs={liste} bulletins={bulletins} clos={!ouvert} />
       </Carte>
 
+      {clos && (
+        <a
+          href={`/votes/${v.id}/pv`}
+          target="_blank"
+          rel="noopener"
+          className="tapable inline-flex h-11 items-center justify-center rounded-lg px-4 text-[14px] font-medium lg:h-9"
+          style={{ background: "var(--page)", color: "var(--ink)", border: "1px solid var(--line-2)" }}
+        >
+          Télécharger le procès-verbal (PDF)
+        </a>
+      )}
+
       {peutAnnuler && (
         <div className="sans-impression">
           <Depliant titre="Annuler ce vote">

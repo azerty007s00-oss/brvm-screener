@@ -524,3 +524,12 @@ export async function appelDuSondage(membreId: string, fixeLaDate: boolean, main
     bouton: "Fixer la date",
   };
 }
+
+/** L'heure et le lieu d'une seance fixee par sondage ; null si elle n'en vient pas. */
+export async function heureLieuDeReunion(reunionId: string): Promise<{ heure: string | null; lieu: string | null } | null> {
+  const sql = db();
+  const rows = await avecTables(() => sql`
+    select meeting_time as heure, place as lieu from meeting_polls where meeting_id = ${reunionId}::uuid limit 1
+  `).catch(() => []);
+  return rows[0] ? { heure: (rows[0].heure as string | null) ?? null, lieu: (rows[0].lieu as string | null) ?? null } : null;
+}

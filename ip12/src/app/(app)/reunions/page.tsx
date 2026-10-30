@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { listerMembres, listerReunions, presencesParReunion } from "@/lib/queries";
@@ -139,6 +140,11 @@ export default async function PageReunions() {
                       {r.cree_par ? ` · saisie par ${r.cree_par}` : ""}
                     </p>
                     {r.note && <p className="mt-0.5 text-xs italic">{r.note}</p>}
+                    <p className="mt-1 text-[13px]">
+                      <Link href={`/reunions/${r.id}`} className="font-medium underline" style={{ color: "var(--accent)" }}>
+                        {r.date_reunion >= new Date().toISOString().slice(0, 10) ? "Préparer : ordre du jour et rapport" : "Rapport de la séance"}
+                      </Link>
+                    </p>
                   </div>
 
                   {gere ? (

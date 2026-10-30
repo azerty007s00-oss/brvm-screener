@@ -2882,6 +2882,61 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(V.alerteResultat("Q ?", r, "trois_quarts").titre, "Adopté !");
 }
 
+{
+  /* Le rapport de reunion : ordre du jour d'office, texte pour WhatsApp, PDF. */
+  const R = await import("../.verif/rapport-reunion.mjs");
+  const d = {
+    date: "2026-11-15", heure: "21 h", lieu: "chez Khalil", depuis: "2026-09-13", arrete: "2026-11-14",
+    portefeuille: { valeur: 3008750, dateValeur: "2026-11-13", variation: 0.02 },
+    objectif: { taux: 0.6, intitule: "5 millions fin 2027" },
+    cotisations: [
+      { mois: "2026-10-01", attendu: 50000, encaisse: 45000, aLHeure: 8, dus: 9, impayes: 1 },
+      { mois: "2026-11-01", attendu: 50000, encaisse: 50000, aLHeure: 9, dus: 9, impayes: 0 },
+    ],
+    encaisse: 95000, aJour: { n: 8, total: 9 },
+    retards: [{ nom: "KOUADIO Konan", mois: ["2026-10-01"], jours: 47, suspendu: true, declarationExigee: true, declare: false }],
+    penalites: { inscrites: 3500, reglees: 1000, absences: 2 },
+    caisse: { mouvements: [{ date: "2026-10-20", libelle: "frais de tenue de compte SGI", montant: 2500, depense: true }], solde: 50000 },
+    votes: [{ question: "Cotisation 2027", etat: "en cours, clôture le 15/11/2026 à 20 h GMT, 6 votants sur 8" }],
+    points: ["Achats de titres : SNTS ou ORGT ?", "  "],
+    presences: null,
+  };
+  assert.equal(R.variationEnClair(0.02), "+2,0 %");
+  assert.equal(R.variationEnClair(-0.013), "−1,3 %");
+  assert.equal(R.phraseRetard(d.retards[0]), "octobre impayé, 47 jours de retard. Droit de vote suspendu (R2). Retard non déclaré au groupe (R3).");
+  assert.deepEqual(R.ordreDuJour(d), [
+    "Point sur le portefeuille et les cotisations",
+    "Retard de KOUADIO Konan",
+    "Vote en cours : Cotisation 2027",
+    "Achats de titres : SNTS ou ORGT ?",
+  ]);
+  /* Les montants s'ecrivent avec des espaces insecables : on les ramene a des espaces pour comparer. */
+  const texte = R.rapportTexte(d).replace(/[\u202f\u00a0]/g, " ");
+  assert.ok(texte.startsWith("*IP12 · Réunion du 15/11/2026* à 21 h GMT, chez Khalil"));
+  assert.ok(texte.includes("Versements reçus : 95 000 FCFA · À jour : 8 sur 9"), texte);
+  assert.ok(texte.includes("dont 2 absences"));
+  assert.ok(!/[—]|--/.test(texte), "pas de tiret cadratin dans le texte des membres");
+  const pdf = R.rapportPdf(d);
+  assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
+  assert.ok(pdf.length > 1500);
+  assert.equal(R.rapportPdf({ ...d, retards: [], votes: [], cotisations: [], portefeuille: null, objectif: null, presences: { presents: ["A"], excuses: [], absents: ["B"] } }).subarray(0, 5).toString(), "%PDF-");
+  assert.equal(R.nomFichierRapport("2026-11-15"), "rapport-ip12-2026-11-15.pdf");
+}
+
+{
+  /* Le proces-verbal d'un vote clos. */
+  const P = await import("../.verif/pv-vote.mjs");
+  const V = await import("../.verif/scrutin.mjs");
+  const liste = V.electeurs([{ id: "a", nom: "SORO" }, { id: "b", nom: "KOUADIO" }], new Map([["a", 0.6], ["b", 0.4]]), new Set(["b"]), null);
+  const bulletins = [{ membreId: "a", choix: "pour" }];
+  const pdf = P.pvVotePdf({
+    question: "Passer la cotisation à 7 500 FCFA", details: null, majorite: "trois_quarts", auteur: "DRAMÉ Khalil",
+    ouvertLe: "2026-10-30", closLe: "2026-11-06", vise: null, electeurs: liste, bulletins, resultat: V.depouiller(liste, bulletins, "trois_quarts"),
+  });
+  assert.equal(pdf.subarray(0, 5).toString(), "%PDF-");
+  assert.ok(pdf.length > 1200);
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2890,5 +2945,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts, rapport de reunion",
 );
