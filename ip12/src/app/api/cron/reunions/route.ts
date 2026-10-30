@@ -7,13 +7,15 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Le passage du soir, a 21 h, pour le sondage de date de reunion.
+ * Les passages du sondage de date de reunion : a 12 h GMT (sous /midi) et a
+ * 21 h GMT, ici.
  *
- * Il ouvre le sondage le 3 du mois de reunion, relance la veille de la
- * cloture ceux qui n'ont pas repondu, clot le 9 apres 20 h et sollicite le
- * president le soir meme, le rappelle une fois s'il n'a pas valide, et
- * previent tout le monde la veille de la seance. Les autres jours, il ne
- * fait rien.
+ * Chaque etape part au premier passage qui suit son heure. Midi ouvre le
+ * sondage le 3, relance la veille de la cloture ceux qui n'ont pas repondu,
+ * et previent tout le monde la veille de la seance : 13 h a Paris, 20 h a
+ * Pekin, personne n'est reveille. Le soir clot le sondage le 9 apres 20 h et
+ * sollicite le president le soir meme, puis le rappelle une fois s'il n'a pas
+ * valide. Les autres jours, rien.
  */
 export async function GET(requete: Request) {
   /* Meme garde que la relance : sans secret, personne ne declenche rien. */

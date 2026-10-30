@@ -23,6 +23,7 @@ import { cotisationsARegler, type StatutMois } from "@/lib/penalites";
 import { Chiffre } from "@/components/chiffre";
 import { Voilable } from "@/components/voilable";
 import { appelDuSondage } from "@/lib/sondage";
+import { HeureChezVous } from "@/components/fuseau";
 import { peut } from "@/lib/droits";
 
 export const dynamic = "force-dynamic";
@@ -396,7 +397,10 @@ export default async function TableauDeBord() {
         <div className="flex flex-col gap-11 xl:order-2">
           {appel && (
             <Carte titre={appel.titre}>
-              <p className="text-[14px] leading-relaxed">{appel.texte}</p>
+              <p className="text-[14px] leading-relaxed">
+                {appel.texte}
+                {appel.instant && <HeureChezVous instant={appel.instant} avant=" Soit " apres=" chez vous." />}
+              </p>
               <div className="mt-5">
                 <LienBouton href="/reunions">{appel.bouton}</LienBouton>
               </div>

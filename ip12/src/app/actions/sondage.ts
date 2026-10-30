@@ -5,8 +5,8 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { exigerDroit, exigerMembre } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
-import { envoyerAlertes } from "@/lib/alertes";
 import {
+  alerterAvecHeure,
   courrielConvocation,
   enregistrerReponse,
   participants,
@@ -132,17 +132,17 @@ export async function validerDateReunion(_precedent: EtatFormulaire, donnees: Fo
     after(async () => {
       try {
         const gens = await participants();
-        await envoyerAlertes(
-          gens.map((m) => m.id),
-          {
-            ...alerteCalee(jour, heure, retenu !== null && retenu.n === disponibles),
-            url: "/reunions",
-            etiquette: `sondage-${sondage.mois}`,
-          },
-        );
         /* Relu apres l'ecriture : la convocation porte la nouvelle version de l'invitation. */
         const fixe = await sondageParId(sondage.id);
-        if (fixe) await courrielConvocation(gens, fixe, disponibles);
+        if (!fixe) return;
+        const majorite = retenu !== null && retenu.n === disponibles;
+        await alerterAvecHeure(
+          gens.map((m) => m.id),
+          fixe,
+          (h, chezToi) => alerteCalee(jour, h, majorite, chezToi),
+          `sondage-${sondage.mois}`,
+        );
+        await courrielConvocation(gens, fixe, disponibles);
       } catch {
         // La seance est inscrite ; un avis perdu se rattrape par la page Reunions.
       }

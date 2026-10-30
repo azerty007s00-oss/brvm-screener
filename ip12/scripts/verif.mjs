@@ -2659,16 +2659,18 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   // Cloture le lundi 9 a 20 h, la veille du premier jour propose.
   const cloture = C.clotureDuSondage("2026-11-01");
   assert.equal(cloture.toISOString(), "2026-11-09T20:00:00.000Z");
-  assert.equal(C.momentEnClair(cloture), "lundi 9/11 à 20 h");
+  assert.equal(C.momentEnClair(cloture), "lundi 9/11 à 20 h GMT");
   assert.equal(C.clotureRelative(cloture, new Date("2026-11-03T21:00:00Z")), "lundi soir");
   assert.equal(C.clotureRelative(cloture, new Date("2026-11-08T21:00:00Z")), "demain soir");
   assert.equal(C.clotureRelative(cloture, new Date("2026-11-09T09:00:00Z")), "ce soir");
-  // La relance part au passage du dimanche 8, pas avant.
-  assert.ok(cloture - new Date("2026-11-08T21:00:00Z") <= C.RELANCE_AVANT_CLOTURE_MS);
+  // La relance part au passage de midi du dimanche 8, pas avant.
+  assert.ok(cloture - new Date("2026-11-08T12:00:00Z") <= C.RELANCE_AVANT_CLOTURE_MS);
   assert.ok(cloture - new Date("2026-11-07T21:00:00Z") > C.RELANCE_AVANT_CLOTURE_MS);
   // Le passage du 9 au soir trouve le sondage clos ; le rappel au president tombe le 10 au soir.
   assert.ok(new Date("2026-11-09T21:00:00Z") >= cloture);
   assert.ok(new Date("2026-11-10T21:00:00Z") - new Date("2026-11-09T21:59:00Z") >= C.RAPPEL_PRESIDENT_APRES_MS);
+  assert.ok(new Date("2026-11-10T12:59:00Z") - new Date("2026-11-09T21:00:00Z") < C.RAPPEL_PRESIDENT_APRES_MS,
+    "pas de rappel au president le lendemain midi : il a eu la nuit");
 
   // Le decompte des maquettes, et l'egalite tranchee au plus tot.
   const jours = C.joursDuSondage("2026-11-01");
@@ -2757,6 +2759,35 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(new URL(A.lienGoogleAgenda({ ...inv, heure: null })).searchParams.get("dates"), "20261115/20261116");
 }
 
+{
+  /* Quatre fuseaux : Abidjan, la France, le Canada, la Chine. La reunion est a 21 h GMT. */
+  const F = await import("../.verif/fuseaux.mjs");
+  const C = await import("../.verif/calendrier-reunions.mjs");
+  const hiver = new Date("2026-11-15T21:00:00Z");
+  assert.equal(F.heureChezSoi(hiver, "Africa/Abidjan"), null, "a Abidjan, l'heure GMT suffit");
+  assert.equal(F.heureChezSoi(hiver, "Europe/Paris"), "22 h");
+  assert.equal(F.heureChezSoi(hiver, "America/Toronto"), "16 h");
+  assert.equal(F.heureChezSoi(hiver, "Asia/Shanghai"), "5 h le lendemain");
+  assert.equal(F.heureChezSoi(new Date("2027-07-15T21:00:00Z"), "Europe/Paris"), "23 h", "heure d'ete");
+  assert.equal(F.heureChezSoi(new Date("2026-11-15T21:30:00Z"), "Asia/Kolkata"), "3 h le lendemain");
+  assert.equal(F.heureChezSoi(new Date("2026-11-15T02:00:00Z"), "America/Vancouver"), "18 h la veille");
+  assert.equal(F.heureChezSoi(hiver, null), null);
+  assert.equal(F.heurePour("21 h", hiver, "Europe/Paris"), "21 h GMT (22 h chez vous)");
+  assert.equal(F.heurePour("21 h", hiver, "Asia/Shanghai", "chez toi"), "21 h GMT (5 h le lendemain chez toi)");
+  assert.equal(F.heurePour("21 h", hiver, "Africa/Abidjan"), "21 h");
+  assert.equal(F.heurePour("21 h", hiver, null), "21 h GMT", "fuseau inconnu : l'heure dit au moins lequel");
+  assert.equal(F.heurePour("après la prière", null, "Europe/Paris"), "après la prière");
+  assert.equal(F.fuseauValide("Europe/Paris"), true);
+  assert.equal(F.fuseauValide("America/Argentina/Buenos_Aires"), true);
+  assert.equal(F.fuseauValide("Mars/Olympus"), false);
+  assert.equal(F.fuseauValide("Europe/Paris'; drop table members"), false);
+  const calee = C.alerteCalee("2026-11-15", "21 h GMT", true, "22 h");
+  assert.equal(calee.titre, "C'est calé : dimanche 15/11 à 21 h GMT");
+  assert.ok(calee.corps.startsWith("Chez toi, ça fait 22 h. La majorité a parlé."));
+  assert.equal(C.alerteVeille("21 h", null).corps, "Viens avec tes idées, pas avec tes excuses.");
+  assert.equal(C.HEURE_HABITUELLE, "21 h");
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2765,5 +2796,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres",
 );

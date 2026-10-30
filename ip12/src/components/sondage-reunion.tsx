@@ -191,8 +191,8 @@ export function ValidationDate({
       </label>
       <div className="mt-3 grid grid-cols-2 gap-2.5">
         <label className="block">
-          <span className="text-[13px] font-medium">Heure</span>
-          <input name="heure" required maxLength={20} defaultValue={heure} placeholder="19 h" className={styleChamp} style={couleursChamp} />
+          <span className="text-[13px] font-medium">Heure (GMT)</span>
+          <input name="heure" required maxLength={20} defaultValue={heure} placeholder="21 h" className={styleChamp} style={couleursChamp} />
         </label>
         <label className="block">
           <span className="text-[13px] font-medium">Lieu ou lien</span>

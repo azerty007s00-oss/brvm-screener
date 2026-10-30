@@ -12,10 +12,12 @@ import {
   sondageEnCours,
   type Sondage,
 } from "@/lib/sondage";
-import { lienGoogleAgenda } from "@/lib/agenda";
+import { bornes, lienGoogleAgenda } from "@/lib/agenda";
+import { HeureChezVous } from "@/components/fuseau";
 import { styleBouton } from "@/components/boutons";
 import {
   FENETRE,
+  HEURE_HABITUELLE,
   STATUT_SONDAGE,
   decompte,
   duMois,
@@ -263,7 +265,7 @@ async function sectionSondage({ membre }: { membre: Membre }): Promise<{ section
   const participe = gens.some((m) => m.id === membre.id);
   const miens = reponses.find((r) => r.membreId === membre.id)?.jours ?? null;
   const ouvert = s.statut === STATUT_SONDAGE.ouvert && maintenant < s.cloture;
-  const heure = s.heure ?? derniers.heure ?? "";
+  const heure = s.heure ?? derniers.heure ?? HEURE_HABITUELLE;
   const lieu = s.lieu ?? derniers.lieu ?? "";
   const titre = `Réunion ${duMois(s.mois)}`;
 
@@ -275,13 +277,20 @@ async function sectionSondage({ membre }: { membre: Membre }): Promise<{ section
   let corps: ReactNode;
   if (s.statut === STATUT_SONDAGE.valide && s.jourChoisi) {
     const invitation = invitationReunion(s, null, maintenant);
+    const debut = invitation ? (bornes(invitation)?.debut ?? null) : null;
     const dispo = comptes.find((c) => c.jour === s.jourChoisi)?.n ?? 0;
     corps = (
       <>
         <p className="text-[13px]" style={discret}>Prochaine réunion</p>
         <p className="mt-1 text-[24px] font-semibold leading-tight">
           {premiereMajuscule(jourEnClair(s.jourChoisi))} à {s.heure}
+          {debut && " GMT"}
         </p>
+        {debut && (
+          <p className="text-[14px]" style={discret}>
+            <HeureChezVous instant={debut.toISOString()} avant="Soit " apres=" chez vous." />
+          </p>
+        )}
         {s.lieu && <p className="mt-1 text-[15px]">{s.lieu}</p>}
         <p className="mt-2 text-[13px] leading-relaxed" style={discret}>
           {dispo > 0
@@ -321,8 +330,9 @@ async function sectionSondage({ membre }: { membre: Membre }): Promise<{ section
         <p className="text-[13px]" style={discret}>Sondage ouvert jusqu&apos;au {momentEnClair(s.cloture)}</p>
         <h3 className="mt-1 text-[19px] font-semibold leading-snug">Quels jours pouvez-vous venir ?</h3>
         <p className="mt-1 mb-4 text-[14px] leading-relaxed" style={discret}>
-          Cochez tous les jours qui vous vont. Le président fixe ensuite la date, l&apos;heure et le lieu, et chacun
-          est prévenu.
+          Cochez tous les jours qui vous vont. La réunion se tient d&apos;habitude à {HEURE_HABITUELLE} GMT
+          <HeureChezVous instant={`${s.jours[0]}T21:00:00Z`} avant=" (" apres=" chez vous)" />. Le président fixe
+          ensuite la date, l&apos;heure et le lieu, et chacun est prévenu.
         </p>
         {participe ? (
           <ReponseSondage sondageId={s.id} jours={jours} miens={miens} total={total} />

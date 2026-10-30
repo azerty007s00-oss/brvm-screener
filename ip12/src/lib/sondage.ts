@@ -1,9 +1,11 @@
 import "server-only";
 import { db } from "./db";
-import { estTableAbsente } from "./erreurs";
+import { avecTables as avecTablesAuto } from "./tables-auto";
 import { envoyerAlertes } from "./alertes";
 import { adresseDuCompte, envoyerCourriel, type Courriel } from "./courriel";
-import { fichierIcs, type Invitation, type Personne } from "./agenda";
+import { bornes, fichierIcs, type Invitation, type Personne } from "./agenda";
+import { fuseauxDesMembres } from "./fuseau-membres";
+import { estGmt, fuseauValide, heureChezSoi, heurePour } from "./fuseaux";
 import { listerMembres, type MembreListe } from "./queries";
 import { CLUB, lienDuSite } from "./settings";
 import {
@@ -28,6 +30,7 @@ import {
   type Reponse,
   type Rythme,
   type StatutSondage,
+  type TexteAlerte,
 } from "./calendrier-reunions";
 
 /**
@@ -70,19 +73,9 @@ const TABLES = [
   )`,
 ];
 
-async function creerTables(): Promise<void> {
-  for (const t of TABLES) await db().query(t);
-}
-
-/** Execute `f`, en creant les tables si elles manquent encore. */
-async function avecTables<T>(f: () => Promise<T>): Promise<T> {
-  try {
-    return await f();
-  } catch (e) {
-    if (!estTableAbsente(e)) throw e;
-    await creerTables();
-    return f();
-  }
+/** Execute `f`, en creant les tables du sondage si elles manquent encore. */
+function avecTables<T>(f: () => Promise<T>): Promise<T> {
+  return avecTablesAuto(TABLES, f);
 }
 
 /* ------------------------------------------------------------------ lecture */
@@ -216,7 +209,7 @@ export async function enregistrerReponse(sondageId: string, membreId: string, jo
 async function ecrireATous(
   destinataires: MembreListe[],
   sujet: string,
-  corps: (nom: string) => string[],
+  corps: (m: MembreListe) => string[],
   agenda?: (m: MembreListe) => Courriel["agenda"],
 ): Promise<number> {
   let partis = 0;
@@ -225,7 +218,7 @@ async function ecrireATous(
     const { ok } = await envoyerCourriel({
       destinataire: m.email,
       sujet,
-      texte: [...corps(m.nom), "", `Le suivi du club ${CLUB.nom}`].join("\n"),
+      texte: [...corps(m), "", `Le suivi du club ${CLUB.nom}`].join("\n"),
       ...(agenda ? { agenda: agenda(m) } : {}),
     }).catch(() => ({ ok: false }));
     if (ok) partis++;
@@ -239,8 +232,8 @@ function lienReunions(): string {
 }
 
 export async function courrielOuverture(destinataires: MembreListe[], mois: string, cloture: Date): Promise<number> {
-  return ecrireATous(destinataires, `${CLUB.sigle} : quels jours pour la réunion ${duMois(mois)} ?`, (nom) => [
-    `Bonjour ${nom},`,
+  return ecrireATous(destinataires, `${CLUB.sigle} : quels jours pour la réunion ${duMois(mois)} ?`, (m) => [
+    `Bonjour ${m.nom},`,
     "",
     `La réunion ${duMois(mois)} se tiendra entre le 10 et le 17. Cochez sur le site tous les jours qui vous conviennent, ` +
       `avant le ${momentEnClair(cloture)} : ${lienReunions()}`,
@@ -254,8 +247,8 @@ export async function courrielAuPresident(
   mois: string,
   texte: string,
 ): Promise<number> {
-  return ecrireATous(presidents, `${CLUB.sigle} : la date de la réunion ${duMois(mois)} attend votre validation`, (nom) => [
-    `Bonjour ${nom},`,
+  return ecrireATous(presidents, `${CLUB.sigle} : la date de la réunion ${duMois(mois)} attend votre validation`, (m) => [
+    `Bonjour ${m.nom},`,
     "",
     texte,
     "",
@@ -291,19 +284,23 @@ export async function courrielConvocation(destinataires: MembreListe[], s: Sonda
   const jour = s.jourChoisi;
   if (!jour) return 0;
   const heure = s.heure ?? "l'heure prévue";
+  const debut = s.heure ? (bornes({ jour, heure: s.heure, dureeMinutes: 120 })?.debut ?? null) : null;
+  const fuseaux = await fuseauxDesMembres();
   const emisLe = new Date();
   return ecrireATous(
     destinataires,
-    `${CLUB.sigle} : réunion le ${jourEnClair(jour)} à ${heure}`,
-    (nom) => [
-      `Bonjour ${nom},`,
+    `${CLUB.sigle} : réunion le ${jourEnClair(jour)} à ${debut ? `${heure} GMT` : heure}`,
+    (m) => [
+      `Bonjour ${m.nom},`,
       "",
-      `La réunion ${duMois(s.mois)} aura lieu le ${jourEnClair(jour)} à ${heure}${s.lieu ? `, ${s.lieu}` : ""}.`,
+      `La réunion ${duMois(s.mois)} aura lieu le ${jourEnClair(jour)} à ${heurePour(heure, debut, fuseaux.get(m.id) ?? null)}` +
+        `${s.lieu ? `, ${s.lieu}` : ""}.`,
       disponibles > 0
         ? `${disponibles} ${disponibles > 1 ? "membres s'étaient déclarés disponibles" : "membre s'était déclaré disponible"} ce jour-là.`
         : "Le président a fixé ce jour.",
       "",
-      "L'invitation jointe l'inscrit dans votre agenda : répondez « Oui » pour l'y ajouter. Si la date change, votre agenda suit.",
+      "L'invitation jointe l'inscrit dans votre agenda, à l'heure de chez vous : répondez « Oui » pour l'y ajouter. " +
+        "Si la date change, votre agenda suit.",
       "",
       "Si vous ne pouvez pas venir, prévenez le secrétaire avant la séance : une absence excusée ne compte pas pour les pénalités.",
       "",
@@ -314,6 +311,33 @@ export async function courrielConvocation(destinataires: MembreListe[], s: Sonda
       return inv ? { methode: inv.methode, contenu: fichierIcs(inv) } : undefined;
     },
   );
+}
+
+/**
+ * Une alerte par membre, a son heure : « 21 h » a Abidjan, « 21 h GMT » et
+ * « chez toi, ça fait 22 h » a Paris. Les membres de meme fuseau partagent
+ * le meme texte.
+ */
+export async function alerterAvecHeure(
+  membres: string[],
+  s: Sondage,
+  texte: (heure: string, chezToi: string | null) => TexteAlerte,
+  etiquette: string,
+): Promise<void> {
+  if (!s.jourChoisi) return;
+  const debut = s.heure ? (bornes({ jour: s.jourChoisi, heure: s.heure, dureeMinutes: 120 })?.debut ?? null) : null;
+  const fuseaux = await fuseauxDesMembres();
+  const groupes = new Map<string, string[]>();
+  for (const id of membres) {
+    const f = fuseaux.get(id) ?? "";
+    groupes.set(f, [...(groupes.get(f) ?? []), id]);
+  }
+  for (const [fuseau, ids] of groupes) {
+    const heure = s.heure ?? "l'heure prévue";
+    const gmt = !debut || (fuseau !== "" && fuseauValide(fuseau) && estGmt(debut, fuseau));
+    const chezToi = debut && fuseau ? heureChezSoi(debut, fuseau) : null;
+    await envoyerAlertes(ids, { ...texte(gmt ? heure : `${heure} GMT`, chezToi), url: "/reunions", etiquette });
+  }
 }
 
 /* ------------------------------------------------------- passage quotidien */
@@ -424,7 +448,7 @@ export async function passageQuotidien(maintenant: Date): Promise<BilanPassage> 
       `;
       if (pris.length === 0) continue;
       bilan.veilles = ids.length;
-      await envoyerAlertes(ids, { ...alerteVeille(s.heure ?? "l'heure prévue", s.lieu), url: "/reunions", etiquette: `reunion-${s.jourChoisi}` });
+      await alerterAvecHeure(ids, s, (heure, chezToi) => alerteVeille(heure, s.lieu, chezToi), `reunion-${s.jourChoisi}`);
     }
   }
   return bilan;
@@ -432,7 +456,13 @@ export async function passageQuotidien(maintenant: Date): Promise<BilanPassage> 
 
 /* ------------------------------------------------------------------ accueil */
 
-export type AppelSondage = { titre: string; texte: string; bouton: string };
+export type AppelSondage = {
+  titre: string;
+  texte: string;
+  bouton: string;
+  /** L'instant de la reunion, pour dire au membre l'heure de chez lui. */
+  instant?: string;
+};
 
 /**
  * Ce que l'accueil dit du sondage a ce membre, s'il a quelque chose a faire
@@ -448,7 +478,13 @@ export async function appelDuSondage(membreId: string, fixeLaDate: boolean, main
     const dans = (Date.parse(`${s.jourChoisi}T00:00:00Z`) - Date.parse(`${maintenant.toISOString().slice(0, 10)}T00:00:00Z`)) / 86_400_000;
     if (dans > 7) return null;
     const quand = dans === 0 ? "Aujourd'hui" : dans === 1 ? "Demain" : `Le ${jourEnClair(s.jourChoisi)}`;
-    return { titre, texte: `${quand} à ${s.heure}${s.lieu ? `, ${s.lieu}` : ""}.`, bouton: "Voir la réunion" };
+    const debut = s.heure ? (bornes({ jour: s.jourChoisi, heure: s.heure, dureeMinutes: 120 })?.debut ?? null) : null;
+    return {
+      titre,
+      texte: `${quand} à ${s.heure}${debut ? " GMT" : ""}${s.lieu ? `, ${s.lieu}` : ""}.`,
+      bouton: "Voir la réunion",
+      instant: debut?.toISOString(),
+    };
   }
 
   const ouvert = s.statut === STATUT_SONDAGE.ouvert && maintenant < s.cloture;

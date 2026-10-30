@@ -4,6 +4,7 @@ import { baseConfiguree } from "@/lib/db";
 import { ROLES } from "@/lib/settings";
 import { peut, type Droit } from "@/lib/droits";
 import { Bienvenue } from "@/components/bienvenue";
+import { FuseauAuto } from "@/components/fuseau";
 import { Coque, type Rubrique } from "@/components/coque";
 import type { NomIcone } from "@/components/icones";
 import { versionDeployee } from "@/lib/version";
@@ -107,6 +108,7 @@ export default async function CoquilleApplication({ children }: { children: Reac
         * n'est atteignable par l'adresse directe.
         */}
       {membre.must_change_password ? <Bienvenue membre={membre} /> : children}
+      <FuseauAuto membreId={membre.id} />
     </Coque>
   );
 }

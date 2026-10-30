@@ -9,14 +9,18 @@
  * monde. Il valide d'un toucher ; tout le monde est prevenu, et rappele la
  * veille.
  *
- * Le site passe une fois par jour, a 21 h : apres la cloture du 9, pour que
- * le president ait le resultat le soir meme, et la veille d'une seance, pour
- * que le rappel tombe quand on prepare sa journee du lendemain.
+ * Le site passe deux fois par jour. A 12 h GMT, l'heure qui ne reveille
+ * personne d'Abidjan a Pekin en passant par Paris et le Canada, il ouvre,
+ * relance et rappelle la veille. A 21 h, apres la cloture du 9, il donne au
+ * president le resultat le soir meme.
  *
  * Tout ce qui suit est un calcul pur, sans base ni horloge : les dates
  * arrivent en arguments, pour que la verification puisse le rejouer. Les
  * heures sont celles d'Abidjan, qui vit a l'heure UTC toute l'annee.
  */
+
+/** L'heure habituelle des reunions, en GMT : celle que le president n'a pas a retaper. */
+export const HEURE_HABITUELLE = "21 h";
 
 /** L'etat d'un sondage, colonne `meeting_polls.status`. Des codes : sans accent. */
 export const STATUT_SONDAGE = {
@@ -38,7 +42,7 @@ export const CLE_RYTHME = "reunions_rythme";
 
 /** Les jours du mois qui bornent le sondage, et l'heure de sa cloture. */
 export const FENETRE = {
-  /** Le sondage s'ouvre ce jour-la, au passage du soir. */
+  /** Le sondage s'ouvre ce jour-la, au passage de midi. */
   ouverture: 3,
   /** ... et ferme ce jour-la, a `heureCloture` heures : la veille du premier jour propose. */
   cloture: 9,
@@ -50,7 +54,7 @@ export const FENETRE = {
 
 /**
  * La relance des retardataires part quand il reste moins de 36 heures : le
- * passage du soir, la veille de la cloture.
+ * passage de midi, la veille de la cloture.
  */
 export const RELANCE_AVANT_CLOTURE_MS = 36 * 3_600_000;
 
@@ -179,12 +183,12 @@ export function duMois(mois: string): string {
   return /^[aeiou]/.test(nom) ? `d'${nom}` : `de ${nom}`;
 }
 
-/** « samedi 7/11 à 20 h ». */
+/** « lundi 9/11 à 20 h GMT » : les membres vivent sur quatre fuseaux, l'heure dit lequel. */
 export function momentEnClair(d: Date): string {
   const iso = d.toISOString();
   const heure = d.getUTCHours();
   const minutes = d.getUTCMinutes();
-  return `${JOURS[d.getUTCDay()]} ${Number(iso.slice(8, 10))}/${iso.slice(5, 7)} à ${heure} h${minutes ? String(minutes).padStart(2, "0") : ""}`;
+  return `${JOURS[d.getUTCDay()]} ${Number(iso.slice(8, 10))}/${iso.slice(5, 7)} à ${heure} h${minutes ? ` ${String(minutes).padStart(2, "0")}` : ""} GMT`;
 }
 
 /** « ce soir », « demain soir », « samedi soir » : la cloture vue du moment de l'alerte. */
@@ -246,18 +250,26 @@ export function alerteRappelPresident(mois: string, retenu: CompteDuJour | null)
   };
 }
 
-export function alerteCalee(jour: string, heure: string, choixDeLaMajorite: boolean): TexteAlerte {
+/*
+ * `heure` est l'heure GMT telle qu'on l'affiche au membre (« 21 h » a
+ * Abidjan, « 21 h GMT » ailleurs) ; `chezToi`, son heure a lui quand elle
+ * differe (« 22 h », « 5 h le lendemain »).
+ */
+export function alerteCalee(jour: string, heure: string, choixDeLaMajorite: boolean, chezToi: string | null = null): TexteAlerte {
   return {
     titre: `C'est calé : ${jourEnClair(jour)} à ${heure}`,
-    corps: choixDeLaMajorite
-      ? "La majorité a parlé. Mets ça dans ton agenda : pas de chaise vide, et pas de pénalité d'absence dêh."
-      : "Le président a tranché. Mets ça dans ton agenda : pas de chaise vide, et pas de pénalité d'absence dêh.",
+    corps:
+      (chezToi ? `Chez toi, ça fait ${chezToi}. ` : "") +
+      (choixDeLaMajorite ? "La majorité a parlé." : "Le président a tranché.") +
+      " Mets ça dans ton agenda : pas de chaise vide, et pas de pénalité d'absence dêh.",
   };
 }
 
-export function alerteVeille(heure: string, lieu: string | null): TexteAlerte {
+export function alerteVeille(heure: string, lieu: string | null, chezToi: string | null = null): TexteAlerte {
   return {
     titre: `C'est demain : réunion à ${heure}`,
-    corps: `${lieu ? `Rendez-vous : ${lieu}. ` : ""}Viens avec tes idées, pas avec tes excuses.`,
+    corps:
+      (chezToi ? `Chez toi, ça fait ${chezToi}. ` : "") +
+      `${lieu ? `Rendez-vous : ${lieu}. ` : ""}Viens avec tes idées, pas avec tes excuses.`,
   };
 }
