@@ -24,6 +24,7 @@ import {
   momentEnClair,
   nomDuMois,
 } from "@/lib/calendrier-reunions";
+import { heureEnClair } from "@/lib/agenda";
 import type { EtatFormulaire } from "./auth";
 
 /** Un membre coche ses jours, ou dit qu'aucun ne lui va. */
@@ -72,7 +73,8 @@ export async function validerDateReunion(_precedent: EtatFormulaire, donnees: Fo
 
   const jour = String(donnees.get("jour") ?? "");
   if (!sondage.jours.includes(jour)) return { ok: false, erreur: "Choisissez un jour entre le 10 et le 17." };
-  const heure = String(donnees.get("heure") ?? "").trim().slice(0, 20);
+  /* « 19h », « 19:00 » ou « 19 h » s'ecrivent tous « 19 h » : l'agenda sait alors a quelle heure. */
+  const heure = heureEnClair(String(donnees.get("heure") ?? "").slice(0, 20));
   if (heure === "") return { ok: false, erreur: "Indiquez l'heure de la réunion." };
   const lieu = String(donnees.get("lieu") ?? "").trim().slice(0, 160) || null;
 
@@ -138,7 +140,9 @@ export async function validerDateReunion(_precedent: EtatFormulaire, donnees: Fo
             etiquette: `sondage-${sondage.mois}`,
           },
         );
-        await courrielConvocation(gens, sondage.mois, jour, heure, lieu, disponibles);
+        /* Relu apres l'ecriture : la convocation porte la nouvelle version de l'invitation. */
+        const fixe = await sondageParId(sondage.id);
+        if (fixe) await courrielConvocation(gens, fixe, disponibles);
       } catch {
         // La seance est inscrite ; un avis perdu se rattrape par la page Reunions.
       }

@@ -2706,6 +2706,57 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   }
 }
 
+{
+  /* La reunion dans l'agenda : une invitation iCalendar que Gmail et l'iPhone acceptent. */
+  const A = await import("../.verif/agenda.mjs");
+  assert.deepEqual(A.lireHeure("19 h"), { h: 19, m: 0 });
+  assert.deepEqual(A.lireHeure("19h30"), { h: 19, m: 30 });
+  assert.deepEqual(A.lireHeure("19:30"), { h: 19, m: 30 });
+  assert.deepEqual(A.lireHeure("19 h 30"), { h: 19, m: 30 });
+  assert.deepEqual(A.lireHeure("8"), { h: 8, m: 0 });
+  assert.equal(A.lireHeure("après la prière"), null);
+  assert.equal(A.lireHeure("25 h"), null);
+  assert.equal(A.heureEnClair("19h"), "19 h");
+  assert.equal(A.heureEnClair("19:05"), "19 h 05");
+  assert.equal(A.heureEnClair(" après la prière "), "après la prière");
+
+  const inv = {
+    uid: "reunion-abc@ip12", sequence: 1793377866, jour: "2026-11-15", heure: "19 h", dureeMinutes: 120,
+    titre: "Réunion IP12", lieu: "chez Khalil, Cocody Angré; portail bleu",
+    description: "Réunion de novembre du club Investment Pioneers. Détails : https://ip12-alpha.vercel.app/reunions",
+    methode: "REQUEST", organisateur: { nom: "Investment Pioneers", email: "club@ip12.ci" },
+    invite: { nom: "SORO Tiélina Aboudramane", email: "tielina@ip12.ci" }, emisLe: new Date("2026-11-09T21:30:00Z"),
+  };
+  const ics = A.fichierIcs(inv);
+  assert.ok(ics.startsWith("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"));
+  assert.ok(ics.endsWith("END:VCALENDAR\r\n"));
+  assert.ok(!/[^\r]\n/.test(ics), "toutes les lignes finissent par CRLF");
+  assert.ok(ics.includes("METHOD:REQUEST\r\n"));
+  assert.ok(ics.includes("DTSTART:20261115T190000Z\r\n"), "19 h a Abidjan, c'est 19 h UTC");
+  assert.ok(ics.includes("DTEND:20261115T210000Z\r\n"));
+  assert.ok(ics.includes("SEQUENCE:1793377866\r\n"));
+  assert.ok(ics.includes("LOCATION:chez Khalil\\, Cocody Angré\\; portail bleu"), "virgule et point-virgule echappes");
+  assert.ok(ics.includes("ORGANIZER;CN=\"Investment Pioneers\":mailto:club@ip12.ci"));
+  assert.ok(ics.includes("TRIGGER:-PT1H"));
+  const enc = new TextEncoder();
+  for (const ligne of ics.split("\r\n")) assert.ok(enc.encode(ligne).length <= 75, `ligne trop longue : ${ligne}`);
+  // Deplier rend le texte d'origine, accents compris.
+  const deplie = ics.replace(/\r\n /g, "");
+  assert.ok(deplie.includes("DESCRIPTION:Réunion de novembre du club Investment Pioneers. Détails : https://ip12-alpha.vercel.app/reunions"));
+  assert.ok(deplie.includes("ATTENDEE;CN=\"SORO Tiélina Aboudramane\";ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:tielina@ip12.ci"));
+
+  // Sans heure lisible : la journee entiere, et pas d'alarme a une heure inventee.
+  const journee = A.fichierIcs({ ...inv, heure: "après la prière", methode: "PUBLISH", organisateur: null, invite: null });
+  assert.ok(journee.includes("DTSTART;VALUE=DATE:20261115\r\nDTEND;VALUE=DATE:20261116"));
+  assert.ok(!journee.includes("VALARM") && !journee.includes("ATTENDEE") && journee.includes("METHOD:PUBLISH"));
+
+  const g = new URL(A.lienGoogleAgenda(inv));
+  assert.equal(g.hostname, "calendar.google.com");
+  assert.equal(g.searchParams.get("dates"), "20261115T190000Z/20261115T210000Z");
+  assert.equal(g.searchParams.get("location"), inv.lieu);
+  assert.equal(new URL(A.lienGoogleAgenda({ ...inv, heure: null })).searchParams.get("dates"), "20261115/20261116");
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2714,5 +2765,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda",
 );

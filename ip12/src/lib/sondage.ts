@@ -2,7 +2,8 @@ import "server-only";
 import { db } from "./db";
 import { estTableAbsente } from "./erreurs";
 import { envoyerAlertes } from "./alertes";
-import { envoyerCourriel } from "./courriel";
+import { adresseDuCompte, envoyerCourriel, type Courriel } from "./courriel";
+import { fichierIcs, type Invitation, type Personne } from "./agenda";
 import { listerMembres, type MembreListe } from "./queries";
 import { CLUB, lienDuSite } from "./settings";
 import {
@@ -98,6 +99,12 @@ export type Sondage = {
   heure: string | null;
   lieu: string | null;
   demandeLe: Date | null;
+  /**
+   * Le numero de version de l'invitation d'agenda : l'instant de la derniere
+   * validation, en secondes. Il croit a chaque deplacement, sans compteur a
+   * tenir, et l'agenda remplace l'ancienne date par la nouvelle.
+   */
+  sequence: number;
 };
 
 type Ligne = Record<string, unknown>;
@@ -115,6 +122,7 @@ function versSondage(r: Ligne): Sondage {
     heure: (r.heure as string | null) ?? null,
     lieu: (r.lieu as string | null) ?? null,
     demandeLe: r.demande ? new Date(String(r.demande)) : null,
+    sequence: Number(r.sequence ?? 0),
   };
 }
 
@@ -132,7 +140,8 @@ const CHAMPS_SONDAGE = `
   meeting_id::text as reunion,
   meeting_time as heure,
   place as lieu,
-  to_char(asked_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as demande
+  to_char(asked_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as demande,
+  coalesce(extract(epoch from validated_at), 0)::bigint as sequence
 `;
 
 export async function lireRythmeReunions(): Promise<Rythme> {
@@ -204,7 +213,12 @@ export async function enregistrerReponse(sondageId: string, membreId: string, jo
 
 /* ----------------------------------------------------------------- courrier */
 
-async function ecrireATous(destinataires: MembreListe[], sujet: string, corps: (nom: string) => string[]): Promise<number> {
+async function ecrireATous(
+  destinataires: MembreListe[],
+  sujet: string,
+  corps: (nom: string) => string[],
+  agenda?: (m: MembreListe) => Courriel["agenda"],
+): Promise<number> {
   let partis = 0;
   for (const m of destinataires) {
     if (!m.email) continue;
@@ -212,6 +226,7 @@ async function ecrireATous(destinataires: MembreListe[], sujet: string, corps: (
       destinataire: m.email,
       sujet,
       texte: [...corps(m.nom), "", `Le suivi du club ${CLUB.nom}`].join("\n"),
+      ...(agenda ? { agenda: agenda(m) } : {}),
     }).catch(() => ({ ok: false }));
     if (ok) partis++;
   }
@@ -248,26 +263,57 @@ export async function courrielAuPresident(
   ]);
 }
 
-export async function courrielConvocation(
-  destinataires: MembreListe[],
-  mois: string,
-  jour: string,
-  heure: string,
-  lieu: string | null,
-  disponibles: number,
-): Promise<number> {
-  return ecrireATous(destinataires, `${CLUB.sigle} : réunion le ${jourEnClair(jour)} à ${heure}`, (nom) => [
-    `Bonjour ${nom},`,
-    "",
-    `La réunion ${duMois(mois)} aura lieu le ${jourEnClair(jour)} à ${heure}${lieu ? `, ${lieu}` : ""}.`,
-    disponibles > 0
-      ? `${disponibles} ${disponibles > 1 ? "membres s'étaient déclarés disponibles" : "membre s'était déclaré disponible"} ce jour-là.`
-      : "Le président a fixé ce jour.",
-    "",
-    "Si vous ne pouvez pas venir, prévenez le secrétaire avant la séance : une absence excusée ne compte pas pour les pénalités.",
-    "",
-    `Détails : ${lienReunions()}`,
-  ]);
+/**
+ * L'evenement d'agenda d'une reunion fixee. Avec un invite, c'est une
+ * invitation a laquelle il repond (le courriel) ; sans, un evenement a
+ * ajouter (le bouton de la page Reunions).
+ */
+export function invitationReunion(s: Sondage, invite: Personne | null, emisLe: Date): Invitation | null {
+  if (!s.jourChoisi) return null;
+  const organisateur = adresseDuCompte();
+  return {
+    uid: `reunion-${s.id}@ip12`,
+    sequence: s.sequence,
+    jour: s.jourChoisi,
+    heure: s.heure,
+    dureeMinutes: 120,
+    titre: `Réunion ${CLUB.sigle}`,
+    lieu: s.lieu,
+    description: `Réunion ${duMois(s.mois)} du club ${CLUB.nom}. Détails : ${lienReunions()}`,
+    methode: invite && organisateur ? "REQUEST" : "PUBLISH",
+    organisateur: invite && organisateur ? { nom: CLUB.nom, email: organisateur } : null,
+    invite: invite && organisateur ? invite : null,
+    emisLe,
+  };
+}
+
+export async function courrielConvocation(destinataires: MembreListe[], s: Sondage, disponibles: number): Promise<number> {
+  const jour = s.jourChoisi;
+  if (!jour) return 0;
+  const heure = s.heure ?? "l'heure prévue";
+  const emisLe = new Date();
+  return ecrireATous(
+    destinataires,
+    `${CLUB.sigle} : réunion le ${jourEnClair(jour)} à ${heure}`,
+    (nom) => [
+      `Bonjour ${nom},`,
+      "",
+      `La réunion ${duMois(s.mois)} aura lieu le ${jourEnClair(jour)} à ${heure}${s.lieu ? `, ${s.lieu}` : ""}.`,
+      disponibles > 0
+        ? `${disponibles} ${disponibles > 1 ? "membres s'étaient déclarés disponibles" : "membre s'était déclaré disponible"} ce jour-là.`
+        : "Le président a fixé ce jour.",
+      "",
+      "L'invitation jointe l'inscrit dans votre agenda : répondez « Oui » pour l'y ajouter. Si la date change, votre agenda suit.",
+      "",
+      "Si vous ne pouvez pas venir, prévenez le secrétaire avant la séance : une absence excusée ne compte pas pour les pénalités.",
+      "",
+      `Détails : ${lienReunions()}`,
+    ],
+    (m) => {
+      const inv = invitationReunion(s, { nom: m.nom, email: m.email }, emisLe);
+      return inv ? { methode: inv.methode, contenu: fichierIcs(inv) } : undefined;
+    },
+  );
 }
 
 /* ------------------------------------------------------- passage quotidien */

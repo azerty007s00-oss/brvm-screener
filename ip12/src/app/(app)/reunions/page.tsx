@@ -3,7 +3,17 @@ import { peut } from "@/lib/droits";
 import { listerMembres, listerReunions, presencesParReunion } from "@/lib/queries";
 import { creerReunion, enregistrerPresences, supprimerReunion } from "@/app/actions/reunions";
 import { accorde, dateCourte, debutMois, decalerMois, jourIso } from "@/lib/settings";
-import { derniersHeureLieu, lireRythmeReunions, participants, reponsesDu, sondageEnCours, type Sondage } from "@/lib/sondage";
+import {
+  derniersHeureLieu,
+  invitationReunion,
+  lireRythmeReunions,
+  participants,
+  reponsesDu,
+  sondageEnCours,
+  type Sondage,
+} from "@/lib/sondage";
+import { lienGoogleAgenda } from "@/lib/agenda";
+import { styleBouton } from "@/components/boutons";
 import {
   FENETRE,
   STATUT_SONDAGE,
@@ -210,6 +220,9 @@ export default async function PageReunions() {
 
 const premiereMajuscule = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
 
+const classeBouton =
+  "tapable inline-flex h-11 items-center justify-center gap-2 rounded-lg px-4 text-[14px] font-medium whitespace-nowrap lg:h-8 lg:px-3.5 lg:text-[13px]";
+
 /**
  * Le sondage de date, en tete de page tant qu'il a quelque chose a dire :
  * ouvert, il demande ses jours au membre ; clos, il attend le president ;
@@ -261,6 +274,7 @@ async function sectionSondage({ membre }: { membre: Membre }): Promise<{ section
 
   let corps: ReactNode;
   if (s.statut === STATUT_SONDAGE.valide && s.jourChoisi) {
+    const invitation = invitationReunion(s, null, maintenant);
     const dispo = comptes.find((c) => c.jour === s.jourChoisi)?.n ?? 0;
     corps = (
       <>
@@ -275,6 +289,23 @@ async function sectionSondage({ membre }: { membre: Membre }): Promise<{ section
             : ""}
           Tout le monde a été prévenu ; un rappel part la veille.
         </p>
+        {invitation && (
+          <>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {/* Un lien ordinaire : un Link de Next prechargerait le fichier a l'affichage. */}
+              <a href={`/reunions/agenda?s=${s.id}`} className={classeBouton} style={styleBouton("principal")}>
+                Ajouter à mon agenda
+              </a>
+              <a href={lienGoogleAgenda(invitation)} target="_blank" rel="noopener noreferrer" className={classeBouton} style={styleBouton("secondaire")}>
+                Google Agenda
+              </a>
+            </div>
+            <p className="mt-2 text-[12.5px] leading-relaxed" style={{ color: "var(--ink-3)" }}>
+              Sur iPhone, « Ajouter à mon agenda » ; sur Android, « Google Agenda ». L&apos;invitation reçue par courriel fait la
+              même chose, et suit la réunion si elle est déplacée.
+            </p>
+          </>
+        )}
         {president && (
           <div className="mt-3">
             <Depliant titre="Changer le jour, l'heure ou le lieu">

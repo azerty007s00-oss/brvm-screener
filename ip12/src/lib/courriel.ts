@@ -28,6 +28,13 @@ export type Courriel = {
   texte: string;
   /** Pieces jointes : le releve d'un membre, joint a sa relance. */
   pieces?: { nom: string; contenu: Buffer; type: string }[];
+  /**
+   * Une invitation d'agenda (iCalendar). Elle voyage comme une partie
+   * `text/calendar` du message, et non comme une piece jointe ordinaire :
+   * c'est a cette forme que Gmail, l'iPhone et Outlook reconnaissent une
+   * invitation, et affichent « Oui / Non » au lieu d'un fichier a ouvrir.
+   */
+  agenda?: { methode: "REQUEST" | "PUBLISH"; contenu: string };
 };
 
 export type Transport = "smtp" | "resend" | "aucun";
@@ -377,6 +384,9 @@ export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi
               })),
             }
           : {}),
+        ...(courriel.agenda
+          ? { icalEvent: { method: courriel.agenda.methode, filename: "reunion.ics", content: courriel.agenda.contenu } }
+          : {}),
       });
       /*
        * `accepted` porte les destinataires que le serveur a pris en charge. Une
@@ -400,13 +410,23 @@ export async function envoyerCourriel(courriel: Courriel): Promise<ResultatEnvoi
         subject: courriel.sujet,
         text: courriel.texte,
         html: enHtml(courriel.texte),
-        ...(courriel.pieces?.length
+        ...(courriel.pieces?.length || courriel.agenda
           ? {
-              attachments: courriel.pieces.map((p) => ({
-                filename: p.nom,
-                content: p.contenu,
-                contentType: p.type,
-              })),
+              attachments: [
+                ...(courriel.pieces ?? []).map((p) => ({
+                  filename: p.nom,
+                  content: p.contenu,
+                  contentType: p.type,
+                })),
+                /* Resend n'a pas de partie d'agenda : l'invitation part en piece jointe typee. */
+                ...(courriel.agenda
+                  ? [{
+                      filename: "reunion.ics",
+                      content: Buffer.from(courriel.agenda.contenu, "utf8"),
+                      contentType: `text/calendar; method=${courriel.agenda.methode}; charset=UTF-8`,
+                    }]
+                  : []),
+              ],
             }
           : {}),
       });
