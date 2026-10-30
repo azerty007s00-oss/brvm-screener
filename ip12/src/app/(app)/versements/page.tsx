@@ -52,6 +52,9 @@ import {
   statutLigne,
 } from "@/components/glyphe-etat";
 import { MODES_AFFICHES, STATUT_VERSEMENT, libelleMode } from "@/lib/valeurs";
+import { WAVE_CLUB, numeroACopier, numeroEnClair } from "@/lib/wave";
+import { numeroWaveDe } from "@/lib/wave-membres";
+import { PayerWave } from "@/components/wave";
 import { Chiffre } from "@/components/chiffre";
 import { Voilable, avecMontants } from "@/components/voilable";
 
@@ -146,6 +149,9 @@ export default async function PageVersements({
     const texte = q.toString();
     return texte ? `/versements?${texte}` : "/versements";
   };
+
+  /* Le numero Wave du membre, pour « J'ai paye » : jamais de quoi faire tomber la page. */
+  const monNumeroWaveP = numeroWaveDe(membre.id).catch(() => null);
 
   let situations, enAttente, membres, pieces, valides, reglages;
   try {
@@ -252,6 +258,32 @@ export default async function PageVersements({
   const aRegler = maSituation?.prochainReglement ?? null;
   /* Passe le mois courant, c'est qu'il n'y a plus de retard : le ton change. */
   const enAvance = aRegler !== null && aRegler.mois > aujourdhui;
+
+  /*
+   * PAYER PAR WAVE : la cotisation due maintenant, ou en retard. Une avance
+   * n'a rien d'urgent, et un mois deja declare attend le tresorier : la carte
+   * se tait dans les deux cas.
+   */
+  const monNumeroWave = await monNumeroWaveP;
+  const celluleDue = aRegler ? maSituation?.cellules.find((c) => c.mois === aRegler.mois) : undefined;
+  const payerWave = aRegler !== null && !enAvance && aRegler.reste > 0 && celluleDue?.statut !== "en_attente" ? aRegler : null;
+  /* Deja declaree : la carte le dit, au lieu de disparaitre sans un mot apres « J'ai paye ». */
+  const declareeWave = payerWave
+    ? null
+    : ([...(maSituation?.cellules ?? [])].reverse().find((c) => c.mois <= aujourdhui && c.statut === "en_attente") ?? null);
+  const tresorier = membres.find((m) => m.role === "tresorier" && m.actif && !m.titulaireId);
+  const jourDuMois = new Date().getUTCDate();
+  const moisEcheance = `${String(reglages.jourEcheance)}/${aujourdhui.slice(5, 7)}`;
+  const resteJours = reglages.jourEcheance - jourDuMois;
+  const echeanceWave = !payerWave
+    ? ""
+    : payerWave.mois < aujourdhui
+      ? `En retard depuis le ${reglages.jourEcheance}/${payerWave.mois.slice(5, 7)} : à envoyer au plus vite.`
+      : resteJours > 0
+        ? `À envoyer au plus tard le ${moisEcheance}, dans ${resteJours} ${accorde(resteJours, "jour")}.`
+        : resteJours === 0
+          ? "À envoyer aujourd'hui : c'est le dernier jour."
+          : `Échéance du ${moisEcheance} passée : à envoyer au plus vite.`;
 
   /*
    * Sur combien : ceux a qui le mois est du. Une part rachetee qui ne cotise
@@ -517,6 +549,35 @@ export default async function PageVersements({
           </Panneau>
         </div>
       </div>
+
+      {payerWave && (
+        <Carte titre="Payer par Wave">
+          <PayerWave
+            montant={payerWave.reste}
+            moisLibelle={moisLong(payerWave.mois)}
+            deMoisLibelle={deMois(payerWave.mois)}
+            echeance={echeanceWave}
+            numeroClub={numeroEnClair(WAVE_CLUB)}
+            numeroCopie={numeroACopier(WAVE_CLUB)}
+            titulaire={tresorier ? `au nom du trésorier, ${tresorier.nom}` : "au nom du trésorier"}
+            numeroMembre={monNumeroWave ? numeroEnClair(monNumeroWave) : ""}
+          />
+        </Carte>
+      )}
+
+      {declareeWave && (
+        <Carte titre="Payer par Wave">
+          <p className="flex items-start gap-2.5 text-[14px] leading-relaxed">
+            <span className="mt-0.5 flex-none">
+              <GlypheEtat statut="en_attente" taille={18} />
+            </span>
+            <span>
+              Votre cotisation {deMois(declareeWave.mois)} est déclarée : elle attend la validation du trésorier. Vous
+              êtes prévenu dès qu&apos;elle est validée.
+            </span>
+          </p>
+        </Carte>
+      )}
 
       {/*
         * Vide, elle occupait le premier ecran du telephone pour dire « rien a

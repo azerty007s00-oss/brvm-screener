@@ -2564,7 +2564,7 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(titres.filter((t) => t === "Versement déclaré").length, 1, "deux mois d'un meme lot font une seule declaration");
   const attente = fil.find((e) => e.titre === "Versement déclaré");
   assert.equal(attente.montant, 15000);
-  assert.ok(attente.detail.startsWith("Décembre 2026 à janvier 2027 (2 mois), payé d'avance · Mobile Money."), attente.detail);
+  assert.ok(attente.detail.startsWith("Décembre 2026 à janvier 2027 (2 mois), payé d'avance · Wave."), attente.detail);
   assert.equal(fil[0], attente, "le plus recent d'abord");
   const valide = fil.find((e) => e.cle === "v:m1:L1");
   assert.equal(valide.titre, "Versement validé");
@@ -2592,7 +2592,7 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   // Deux mois declares a part le meme soir, valides ensemble : une seule ligne.
   const deux = filDuMembre(moi, { versements: [v({ lot: "A" }), v({ lot: "B", mois: "2026-12-01" }), v({ lot: "C", mois: "2027-01-01", vise_le: "2026-10-23T08:00:00" })], penalites: [], reglements: [], rappels: [], rachats: [] });
   assert.equal(deux.length, 2, "A et B fusionnes, C valide un autre jour");
-  assert.equal(deux.find((e) => e.montant === 15000).detail.split(".")[0], "Novembre 2026 à décembre 2026 (2 mois), payé d'avance · Mobile Money");
+  assert.equal(deux.find((e) => e.montant === 15000).detail.split(".")[0], "Novembre 2026 à décembre 2026 (2 mois), payé d'avance · Wave");
 }
 
 {
@@ -2798,6 +2798,35 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(C.HEURE_HABITUELLE, "21 h");
 }
 
+{
+  /* Payer par Wave : le numero du club, celui du membre, la reference du versement. */
+  const W = await import("../.verif/wave.mjs");
+  assert.equal(W.WAVE_CLUB, "+2250758101989");
+  assert.equal(W.numeroEnClair(W.WAVE_CLUB), "+225 07 58 10 19 89");
+  assert.equal(W.numeroACopier(W.WAVE_CLUB), "0758101989", "dans Wave, le numero ivoirien se tape a dix chiffres");
+  for (const saisie of ["07 08 12 34 56", "0708123456", "+225 07 08 12 34 56", "00225 0708123456", "225-07-08-12-34-56", "07.08.12.34.56"]) {
+    assert.equal(W.lireNumero(saisie), "+2250708123456", saisie);
+  }
+  assert.equal(W.lireNumero("+33 6 12 34 56 78"), "+33612345678");
+  assert.equal(W.numeroEnClair("+33612345678"), "+33 6 12 34 56 78");
+  assert.equal(W.numeroEnClair("+14165550123"), "+1 416 555 0123");
+  assert.equal(W.lireNumero("0708"), null);
+  assert.equal(W.lireNumero("7 08 12 34 56"), null, "neuf chiffres : il en manque un");
+  assert.equal(W.lireNumero(""), null);
+  assert.equal(W.lireNumero("bonjour"), null);
+  assert.equal(W.referenceWave("+2250708123456"), "Wave +225 07 08 12 34 56");
+  assert.equal(W.numeroDeReference("Wave +225 07 08 12 34 56"), "+2250708123456", "la reference se relit");
+  assert.equal(W.numeroDeReference("TX-88213"), null);
+  assert.equal(W.numeroDeReference(null), null);
+  assert.equal(W.appareilDe("Mozilla/5.0 (Linux; Android 14; SM-A546B)"), "android");
+  assert.equal(W.appareilDe("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)"), "ios");
+  assert.equal(W.appareilDe("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"), "autre");
+  assert.ok(W.lienOuvrirWave("android").includes("package=com.wave.personal"));
+  assert.ok(W.lienOuvrirWave("android").includes("S.browser_fallback_url=https%3A%2F%2Fplay.google.com"));
+  assert.equal(W.lienOuvrirWave("ios"), "https://apps.apple.com/app/id1523884528");
+  assert.equal(W.lienOuvrirWave("autre"), null);
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2806,5 +2835,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave",
 );

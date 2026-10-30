@@ -24,6 +24,9 @@ import { Chiffre } from "@/components/chiffre";
 import { Voilable } from "@/components/voilable";
 import { appelDuSondage } from "@/lib/sondage";
 import { HeureChezVous } from "@/components/fuseau";
+import { lireNumero, numeroEnClair } from "@/lib/wave";
+import { numeroWaveDe } from "@/lib/wave-membres";
+import { NumeroWave } from "@/components/wave";
 import { peut } from "@/lib/droits";
 
 export const dynamic = "force-dynamic";
@@ -158,6 +161,8 @@ export default async function TableauDeBord() {
 
   /* Le sondage de date ne fait jamais tomber l'accueil : il se tait. */
   const sondage = appelDuSondage(membre.id, peut(membre, "fixerDateReunion"), new Date()).catch(() => null);
+  /* Le numero Wave manquant se demande sur l'accueil ; une lecture en echec ne demande rien. */
+  const numeroWave = numeroWaveDe(membre.id).catch(() => "inconnu");
 
   let s, situations, objectif;
   try {
@@ -167,7 +172,7 @@ export default async function TableauDeBord() {
     throw e;
   }
   /* Apres `situations`, dont elle a besoin. Rend `null` si le registre resiste. */
-  const [courues, appel] = await Promise.all([penalitesNonInscrites(situations), sondage]);
+  const [courues, appel, monNumeroWave] = await Promise.all([penalitesNonInscrites(situations), sondage, numeroWave]);
 
   const maPart = s.parts.find((p) => p.membreId === membre.id);
   const maSituation = situations.find((x) => x.membreId === membre.id);
@@ -406,6 +411,13 @@ export default async function TableauDeBord() {
                 <LienBouton href="/reunions">{appel.bouton}</LienBouton>
               </div>
             </Carte>
+          )}
+          {monNumeroWave === null && (
+            <NumeroWave
+              numero=""
+              repli={membre.telephone ? numeroEnClair(lireNumero(membre.telephone) ?? membre.telephone) : ""}
+              cleRepos={`ip12-wave-plus-tard:${membre.id}`}
+            />
           )}
           {maSituation && (
             <Carte titre={aFaire || aCompleter.length > 0 ? "À faire" : "Rien à faire"}>

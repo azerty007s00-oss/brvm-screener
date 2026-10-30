@@ -2,6 +2,7 @@ import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import {
+  listerMembres,
   listerMouvementsCaisse,
   reglagesEffectifs,
   reglementsPenalite,
@@ -13,6 +14,8 @@ import { rejeterReglementPenalite, validerReglementPenalite } from "@/app/action
 import { rejeterMouvement, validerMouvement } from "@/app/actions/caisse";
 import { accorde, dateCourte, debutMois, fcfa, joursDepuis } from "@/lib/settings";
 import { listeDesMois } from "@/lib/sortie";
+import { numeroDeReference, numeroEnClair } from "@/lib/wave";
+import { numerosWave } from "@/lib/wave-membres";
 import {
   KIND_PENALITE,
   METHODE,
@@ -55,6 +58,11 @@ type Ligne = {
   quand: string;
   pieces: Justificatif[];
   alerte: string | null;
+  /**
+   * Un versement Wave : vient-il du numero du membre ? Le tresorier le
+   * retrouve alors dans son historique Wave, sans capture.
+   */
+  marque?: { texte: string; sien: boolean } | null;
   /** Le jour ou la declaration est arrivee : ce qui mesure l'attente. */
   depuis: string;
   decision: React.ReactNode;
@@ -95,9 +103,9 @@ export default async function PageAValider({
   const filtre = FILTRES.find((f) => f.cle === type)?.cle ?? null;
   const voitCaisse = peut(membre, "gererReglages");
 
-  let versements, reglements, mouvements, pieces, reglages;
+  let versements, reglements, mouvements, pieces, reglages, numeros, membres;
   try {
-    [versements, reglements, mouvements, pieces, reglages] = await Promise.all([
+    [versements, reglements, mouvements, pieces, reglages, numeros, membres] = await Promise.all([
       versementsEnAttente(),
       /* La table des reglements nait d'une migration : sans elle, le groupe se tait. */
       reglementsPenalite({ statut: STATUT_REGLEMENT.enAttente }).catch(() => []),
@@ -106,6 +114,8 @@ export default async function PageAValider({
         : Promise.resolve([]),
       justificatifsParLot(),
       reglagesEffectifs(),
+      numerosWave(),
+      listerMembres().catch(() => []),
     ]);
   } catch (e) {
     if (estTableAbsente(e)) return <EcranInitialisation detail={String(e)} />;
@@ -139,11 +149,22 @@ export default async function PageAValider({
      * reste, et au membre de l'apprendre par la relance suivante.
      */
     const tardif = !reprise && mois.find((m) => v.date_versement > `${m.slice(0, 8)}${jour}`);
+    /* Une part rachetee paie depuis le Wave de son detenteur. */
+    const depuis = numeroDeReference(v.reference);
+    const personne = membres.find((m) => m.id === v.membre_id)?.titulaireId ?? v.membre_id;
+    const sien = numeros.get(personne) ?? null;
+    const marque = depuis
+      ? sien === depuis
+        ? { texte: "Son numéro Wave", sien: true }
+        : { texte: sien ? "Autre numéro que le sien" : "Numéro Wave pas encore enregistré", sien: false }
+      : null;
     const alerte = tardif
       ? `Versé le ${dateCourte(v.date_versement)}, après l'échéance du ${reglages.jourEcheance} : ` +
         "la pénalité de l'art. 9 reste due."
       : pj.length === 0 && !reprise
-        ? sansPiece(v.mode)
+        ? depuis
+          ? `Sans capture : retrouvez l'envoi de ${numeroEnClair(depuis)} dans l'historique Wave du club avant de valider.`
+          : sansPiece(v.mode)
         : null;
     const autre = v.saisi_par_nom && v.saisi_par_nom !== v.membre_nom ? `, saisi par ${v.saisi_par_nom}` : "";
     return {
@@ -156,6 +177,7 @@ export default async function PageAValider({
         (v.date_versement !== v.declare_le && !reprise ? ` · versé le ${dateCourte(v.date_versement)}` : ""),
       pieces: pj,
       alerte,
+      marque,
       depuis: v.declare_le,
       decision: <Decision valider={validerDeclaration} rejeter={rejeterDeclaration} champs={{ lot: v.lot }} />,
     };
@@ -303,6 +325,18 @@ export default async function PageAValider({
                       </p>
                     )}
                     <div className="flex flex-wrap items-center gap-2.5">
+                      {l.marque && (
+                        <span
+                          className="rounded-full px-2 py-0.5 text-[12px] font-semibold"
+                          style={
+                            l.marque.sien
+                              ? { background: "var(--etat-ok-fond)", color: "var(--etat-ok)" }
+                              : { background: "var(--etat-attente-fond)", color: "var(--etat-attente)" }
+                          }
+                        >
+                          {l.marque.texte}
+                        </span>
+                      )}
                       {l.pieces.map((j) => (
                         <a
                           key={j.id}

@@ -71,7 +71,8 @@ export const REGLE_MEMBRE = {
 } as const;
 
 export const MODES_AFFICHES: { valeur: string; libelle: string }[] = [
-  { valeur: METHODE.mobileMoney, libelle: "Mobile Money" },
+  /* Le club n'encaisse que par Wave : le code reste generique, le libelle dit ce qu'il en est. */
+  { valeur: METHODE.mobileMoney, libelle: "Wave" },
   { valeur: METHODE.especes, libelle: "Espèces" },
   { valeur: METHODE.virement, libelle: "Virement" },
   { valeur: METHODE.cheque, libelle: "Chèque" },

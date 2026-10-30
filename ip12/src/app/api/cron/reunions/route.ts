@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { variable } from "@/lib/settings";
 import { passageQuotidien } from "@/lib/sondage";
+import { demanderNumerosWave } from "@/lib/wave-membres";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -16,6 +17,9 @@ export const maxDuration = 60;
  * Pekin, personne n'est reveille. Le soir clot le sondage le 9 apres 20 h et
  * sollicite le president le soir meme, puis le rappelle une fois s'il n'a pas
  * valide. Les autres jours, rien.
+ *
+ * Midi demande aussi, une seule fois, son numero Wave a chaque membre qui ne
+ * l'a pas donne.
  */
 export async function GET(requete: Request) {
   /* Meme garde que la relance : sans secret, personne ne declenche rien. */
@@ -37,5 +41,9 @@ export async function GET(requete: Request) {
   const maintenant = horloge ? new Date(horloge) : new Date();
   if (Number.isNaN(maintenant.getTime())) return NextResponse.json({ erreur: "Horloge invalide" }, { status: 400 });
 
-  return NextResponse.json(await passageQuotidien(maintenant));
+  const bilan = await passageQuotidien(maintenant);
+  /* A midi seulement : la demande du numero Wave, une fois par membre, a une heure qui ne reveille personne. */
+  const midi = new URL(requete.url).pathname.endsWith("/midi");
+  const numerosWaveDemandes = midi ? await demanderNumerosWave(maintenant).catch(() => 0) : 0;
+  return NextResponse.json({ ...bilan, numerosWaveDemandes });
 }

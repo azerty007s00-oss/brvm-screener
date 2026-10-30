@@ -135,6 +135,14 @@ Phoenix Capital Management.
   signale au président combien de destinataires avaient déjà reçu le courrier du jour. L'envoi
   passe par le SMTP du club (Gmail, Brevo) ou par Resend ; sans transport, seules les alertes du
   site subsistent.
+- **Payer par Wave** : le club n'encaisse que par Wave, sur le numéro du trésorier
+  (+225 07 58 10 19 89). La page Versements montre la cotisation due, copie le numéro du club
+  et ouvre Wave (Android : l'application ; iPhone : sa page de l'App Store, « Ouvrir »). Au
+  retour, « J'ai payé » déclare le versement déjà rempli, avec le numéro Wave d'où l'argent
+  est parti ; la capture devient facultative. Chaque membre donne son numéro Wave une fois
+  (accueil, Mon compte, ou au premier « J'ai payé ») ; une alerte le lui demande une seule
+  fois, au passage de midi. Dans « À valider », le trésorier lit « Son numéro Wave » quand
+  l'envoi vient du numéro du membre. Table `member_wave`, créée par le site.
 - **Sondage de date de réunion** : le club se réunit tous les deux mois (novembre, janvier,
   mars...), entre le 10 et le 17. Le 3 du mois de réunion, un passage quotidien de 12 h GMT
   (`/api/cron/reunions/midi`, doublé à 21 h par `/api/cron/reunions`) ouvre un sondage : chaque membre coche les jours qui lui vont, par
@@ -241,6 +249,8 @@ Des migrations la complètent, toutes purement additives :
 | `scripts/migration-frais.sql` | `securities_transfers.fees`, la part d'un virement retenue en frais de dépôt |
 | `scripts/migration-alertes.sql` | `push_subscriptions`, les téléphones où un membre a activé les alertes. Sans elle, la carte des alertes ne s'affiche pas |
 | `scripts/migration-sondages.sql` | `meeting_polls` et `meeting_poll_answers`, le sondage de date. **Inutile de l'exécuter** : le site crée ces deux tables lui-même au premier besoin |
+| `scripts/migration-fuseaux.sql` | `member_time_zones`, le fuseau de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
+| `scripts/migration-wave.sql` | `member_wave`, le numéro Wave de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
 
 Tant que `migration-frais.sql` n'a pas été exécutée, la lecture des mouvements retombe sur une
 projection sans `fees` : le site continue de fonctionner, les frais s'affichent à zéro.

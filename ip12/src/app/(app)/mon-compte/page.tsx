@@ -26,6 +26,9 @@ import { CarteAlertes } from "@/components/alertes";
 import { abonnerAlertes, desabonnerAlertes, essayerAlerte } from "@/app/actions/alertes";
 import { alertesPretes, appareilsDe, clesAlertes } from "@/lib/alertes";
 import { peut } from "@/lib/droits";
+import { lireNumero, numeroEnClair } from "@/lib/wave";
+import { numeroWaveDe } from "@/lib/wave-membres";
+import { NumeroWave } from "@/components/wave";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Mon compte" };
@@ -49,7 +52,11 @@ export default async function PageMonCompte() {
     throw e;
   }
   /* Apres `situations`, dont elle a besoin. Elle rend `null` si le registre resiste. */
-  const [courues, pretes] = await Promise.all([penalitesNonInscrites(situations), alertesPretes()]);
+  const [courues, pretes, monNumeroWave] = await Promise.all([
+    penalitesNonInscrites(situations),
+    alertesPretes(),
+    numeroWaveDe(membre.id).catch(() => null),
+  ]);
   /* La carte des alertes n'apparait qu'une fois la table en place et les cles pretes. */
   const [cles, appareils] = pretes ? await Promise.all([clesAlertes(), appareilsDe(membre.id)]) : [null, []];
 
@@ -235,6 +242,13 @@ export default async function PageMonCompte() {
             <dd>{dateCourte(membre.date_adhesion)}</dd>
           </div>
         </dl>
+      </Carte>
+
+      <Carte titre="Mon numéro Wave">
+        <NumeroWave
+          numero={monNumeroWave ? numeroEnClair(monNumeroWave) : ""}
+          repli={membre.telephone ? numeroEnClair(lireNumero(membre.telephone) ?? membre.telephone) : ""}
+        />
       </Carte>
 
       <Carte titre="Changer mon mot de passe">
