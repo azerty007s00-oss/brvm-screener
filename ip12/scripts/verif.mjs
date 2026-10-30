@@ -2827,6 +2827,61 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(W.lienOuvrirWave("autre"), null);
 }
 
+{
+  /* Le vote pondere par les parts : majorites, abstentions et silence, R2, membre vise. */
+  const V = await import("../.verif/scrutin.mjs");
+  const neuf = Array.from({ length: 9 }, (_, i) => ({ id: `m${i}`, nom: `Membre ${i}` }));
+  const egaux = new Map(neuf.map((p) => [p.id, 1 / 9]));
+  const liste = V.electeurs(neuf, egaux, new Set(), null);
+  const b = (choix) => choix.map((c, i) => ({ membreId: `m${i}`, choix: c })).filter((x) => x.choix);
+  // Le cas des maquettes : 7 pour, 1 contre, 1 abstention.
+  const r = V.depouiller(liste, b(["pour", "pour", "pour", "pour", "pour", "pour", "pour", "contre", "abstention"]), "trois_quarts");
+  assert.equal(V.pourcent(r.tauxPour), "77,8 %");
+  assert.equal(r.adopte, true);
+  assert.equal(V.phraseResultat(r, "trois_quarts"), "77,8 % des voix pour, au-dessus des 75 % exigés.");
+  // Le silence compte contre : 6 pour, 3 sans vote, c'est 66,7 %.
+  const silence = V.depouiller(liste, b(["pour", "pour", "pour", "pour", "pour", "pour"]), "trois_quarts");
+  assert.equal(silence.adopte, false);
+  assert.equal(V.pourcent(silence.silence), "33,3 %");
+  assert.equal(silence.votants, 6);
+  // Majorite simple : strictement plus de la moitie.
+  const deux = V.electeurs([{ id: "a", nom: "A" }, { id: "b", nom: "B" }], new Map([["a", 0.5], ["b", 0.5]]), new Set(), null);
+  assert.equal(V.depouiller(deux, [{ membreId: "a", choix: "pour" }, { membreId: "b", choix: "contre" }], "simple").adopte, false, "50 % ne suffit pas");
+  assert.equal(V.depouiller(liste, b(["pour", "pour", "pour", "pour", "pour", "contre"]), "simple").adopte, true, "5 sur 9");
+  // Trois quarts exactement : adopte.
+  const quatre = V.electeurs(["a", "b", "c", "d"].map((id) => ({ id, nom: id })), new Map(["a", "b", "c", "d"].map((id) => [id, 0.25])), new Set(), null);
+  assert.equal(V.depouiller(quatre, ["a", "b", "c"].map((id) => ({ membreId: id, choix: "pour" })), "trois_quarts").adopte, true);
+  // Unanimite : une seule abstention la rompt.
+  assert.equal(V.depouiller(quatre, ["a", "b", "c", "d"].map((id) => ({ membreId: id, choix: "pour" })), "unanimite").adopte, true);
+  assert.equal(
+    V.depouiller(quatre, [...["a", "b", "c"].map((id) => ({ membreId: id, choix: "pour" })), { membreId: "d", choix: "abstention" }], "unanimite").adopte,
+    false,
+  );
+  // Les voix suivent les parts : 15,1 % contre 9,6 %.
+  const poids = V.poidsDesPersonnes(
+    [{ membreId: "soro", part: 0.151 }, { membreId: "kouadio", part: 0.096 }, { membreId: "partX", part: 0.05 }, { membreId: "bla", part: 0.1 }],
+    new Map([["partX", "soro"], ["soro", null], ["kouadio", null], ["bla", null]]),
+  );
+  assert.ok(Math.abs(poids.get("soro") - 0.201) < 1e-9, "la part rachetee non fusionnee vote avec son detenteur");
+  // R2 et membre vise : ils ne votent pas, et sortent de la base.
+  const gens = [{ id: "soro", nom: "SORO" }, { id: "kouadio", nom: "KOUADIO" }, { id: "bla", nom: "BLA" }];
+  const l2 = V.electeurs(gens, poids, new Set(["kouadio"]), "bla");
+  assert.deepEqual(l2.map((e) => e.exclu), [null, "suspendu", "vise"]);
+  const r2 = V.depouiller(l2, [{ membreId: "soro", choix: "pour" }, { membreId: "kouadio", choix: "contre" }, { membreId: "bla", choix: "contre" }], "trois_quarts");
+  assert.equal(r2.adopte, true, "les bulletins du suspendu et du membre vise ne comptent pas");
+  assert.equal(r2.admis, 1);
+  assert.equal(V.depouiller(V.electeurs([], new Map(), new Set(), null), [], "simple").adopte, false, "sans electeur, rien n'est adopte");
+  assert.equal(V.estMajorite("trois_quarts"), true);
+  assert.equal(V.estMajorite("deux_tiers"), false);
+  assert.equal(V.estChoix("pour"), true);
+  assert.equal(V.estChoix("peut-etre"), false);
+  for (const t of [V.alerteInvitation("Q ?", "dimanche 15/11 à 20 h GMT", { heure: "21 h", lieu: "France" }), V.alerteRelanceVote("Q ?", "x"),
+    V.alerteResultat("Q ?", r, "trois_quarts"), V.alerteAnnulation("Q ?", "doublon")]) {
+    assert.ok(!/[—]|--/.test(t.titre + t.corps), t.titre);
+  }
+  assert.equal(V.alerteResultat("Q ?", r, "trois_quarts").titre, "Adopté !");
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2835,5 +2890,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts",
 );

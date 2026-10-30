@@ -56,6 +56,12 @@ export const DROITS = {
    */
   fixerDateReunion: ["president"],
 
+  /**
+   * Annuler un vote ouvert, motif a l'appui. Son auteur le peut aussi : il
+   * retire sa propre question. Tout membre, lui, peut en proposer un.
+   */
+  annulerVote: ["president"],
+
   /** Journal de caisse : depenses et recettes hors cotisations. */
   gererCaisse: ["tresorier", "president"],
 

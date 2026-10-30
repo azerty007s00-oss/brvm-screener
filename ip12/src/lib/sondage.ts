@@ -324,6 +324,7 @@ export async function alerterParFuseau(
   instant: Date | null,
   texte: (local: HeureLocale | null) => TexteAlerte,
   etiquette: string,
+  url = "/reunions",
 ): Promise<void> {
   const fuseaux = instant ? await fuseauxDesMembres() : new Map<string, string>();
   const groupes = new Map<string, string[]>();
@@ -333,7 +334,7 @@ export async function alerterParFuseau(
   }
   for (const [fuseau, ids] of groupes) {
     const local = instant && fuseau ? chezSoi(instant, fuseau) : null;
-    await envoyerAlertes(ids, { ...texte(local), url: "/reunions", etiquette });
+    await envoyerAlertes(ids, { ...texte(local), url, etiquette });
   }
 }
 

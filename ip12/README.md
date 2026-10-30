@@ -135,6 +135,15 @@ Phoenix Capital Management.
   signale au président combien de destinataires avaient déjà reçu le courrier du jour. L'envoi
   passe par le SMTP du club (Gmail, Brevo) ou par Resend ; sans transport, seules les alertes du
   site subsistent.
+- **Vote en ligne, pondéré par les parts** (Club › Votes) : tout membre soumet une question,
+  avec la majorité requise (simple, 3/4, unanimité) et une clôture à 20 h GMT. Chacun vote pour,
+  contre ou s'abstient, et peut changer d'avis jusqu'à la clôture ; le vote est public. Les voix
+  suivent la part de chacun dans le club (art. 12), parts rachetées comprises ; la base est
+  l'ensemble des voix qui peuvent voter, abstentions et silences compris. Ne votent pas : un
+  membre suspendu (R2) et le membre visé par une exclusion. Invitation par alerte et courriel,
+  relance la veille, puis à la clôture les poids sont figés et le résultat part à tous. L'auteur
+  ou le président peut annuler, motif à l'appui. Tables `votes` et `vote_ballots`, créées par
+  le site.
 - **Payer par Wave** : le club n'encaisse que par Wave, sur le numéro du trésorier
   (+225 07 58 10 19 89). La page Versements montre la cotisation due, copie le numéro du club
   et ouvre Wave (Android : l'application ; iPhone : sa page de l'App Store, « Ouvrir »). Au
@@ -251,6 +260,7 @@ Des migrations la complètent, toutes purement additives :
 | `scripts/migration-sondages.sql` | `meeting_polls` et `meeting_poll_answers`, le sondage de date. **Inutile de l'exécuter** : le site crée ces deux tables lui-même au premier besoin |
 | `scripts/migration-fuseaux.sql` | `member_time_zones`, le fuseau de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
 | `scripts/migration-wave.sql` | `member_wave`, le numéro Wave de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
+| `scripts/migration-votes.sql` | `votes` et `vote_ballots`, le vote en ligne. **Inutile de l'exécuter** : le site les crée lui-même |
 
 Tant que `migration-frais.sql` n'a pas été exécutée, la lecture des mouvements retombe sur une
 projection sans `fees` : le site continue de fonctionner, les frais s'affichent à zéro.

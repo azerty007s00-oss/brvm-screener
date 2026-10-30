@@ -177,6 +177,14 @@ export const Icone = {
       <circle cx="12" cy="12" r="0.8" />
     </Trait>
   ),
+  /* Les votes : un bulletin qui entre dans l'urne. */
+  urne: (p: Props) => (
+    <Trait {...p}>
+      <path d="M4 12.5 H20 V20 H4 Z" />
+      <path d="M9 12.5 V5 H15 V12.5" />
+      <path d="M8 16.2 H16" />
+    </Trait>
+  ),
   /* Les alertes sur le telephone : une cloche, barree quand le telephone les refuse. */
   cloche: (p: Props) => (
     <Trait {...p}>

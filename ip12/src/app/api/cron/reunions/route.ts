@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { variable } from "@/lib/settings";
 import { passageQuotidien } from "@/lib/sondage";
 import { demanderNumerosWave } from "@/lib/wave-membres";
+import { passageVotes } from "@/lib/votes";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -19,7 +20,8 @@ export const maxDuration = 60;
  * valide. Les autres jours, rien.
  *
  * Midi demande aussi, une seule fois, son numero Wave a chaque membre qui ne
- * l'a pas donne.
+ * l'a pas donne. Les deux passages tiennent les votes : relance la veille de
+ * la cloture (midi), cloture et resultat (le soir, apres 20 h GMT).
  */
 export async function GET(requete: Request) {
   /* Meme garde que la relance : sans secret, personne ne declenche rien. */
@@ -42,8 +44,10 @@ export async function GET(requete: Request) {
   if (Number.isNaN(maintenant.getTime())) return NextResponse.json({ erreur: "Horloge invalide" }, { status: 400 });
 
   const bilan = await passageQuotidien(maintenant);
+  /* Les votes : relance la veille de la cloture, puis cloture et resultat, aux deux passages. */
+  const votes = await passageVotes(maintenant).catch(() => ({ relances: 0, clos: 0, erreur: true }));
   /* A midi seulement : la demande du numero Wave, une fois par membre, a une heure qui ne reveille personne. */
   const midi = new URL(requete.url).pathname.endsWith("/midi");
   const numerosWaveDemandes = midi ? await demanderNumerosWave(maintenant).catch(() => 0) : 0;
-  return NextResponse.json({ ...bilan, numerosWaveDemandes });
+  return NextResponse.json({ ...bilan, numerosWaveDemandes, votes });
 }

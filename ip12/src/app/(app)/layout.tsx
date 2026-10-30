@@ -58,6 +58,7 @@ const RUBRIQUES: Modele[] = [
     icone: "personnes",
     pages: [
       { href: "/reunions", libelle: "Réunions", icone: "calendrier" },
+      { href: "/votes", libelle: "Votes", icone: "urne" },
       { href: "/membres", libelle: "Membres", icone: "personnes" },
     ],
   },

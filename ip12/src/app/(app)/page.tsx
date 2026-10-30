@@ -27,6 +27,7 @@ import { HeureChezVous } from "@/components/fuseau";
 import { lireNumero, numeroEnClair } from "@/lib/wave";
 import { numeroWaveDe } from "@/lib/wave-membres";
 import { NumeroWave } from "@/components/wave";
+import { clotureEnClair, votesEnAttenteDe } from "@/lib/votes";
 import { peut } from "@/lib/droits";
 
 export const dynamic = "force-dynamic";
@@ -163,6 +164,7 @@ export default async function TableauDeBord() {
   const sondage = appelDuSondage(membre.id, peut(membre, "fixerDateReunion"), new Date()).catch(() => null);
   /* Le numero Wave manquant se demande sur l'accueil ; une lecture en echec ne demande rien. */
   const numeroWave = numeroWaveDe(membre.id).catch(() => "inconnu");
+  const votesP = votesEnAttenteDe(membre.id, new Date()).catch(() => []);
 
   let s, situations, objectif;
   try {
@@ -172,7 +174,12 @@ export default async function TableauDeBord() {
     throw e;
   }
   /* Apres `situations`, dont elle a besoin. Rend `null` si le registre resiste. */
-  const [courues, appel, monNumeroWave] = await Promise.all([penalitesNonInscrites(situations), sondage, numeroWave]);
+  const [courues, appel, monNumeroWave, votesAFaire] = await Promise.all([
+    penalitesNonInscrites(situations),
+    sondage,
+    numeroWave,
+    votesP,
+  ]);
 
   const maPart = s.parts.find((p) => p.membreId === membre.id);
   const maSituation = situations.find((x) => x.membreId === membre.id);
@@ -412,6 +419,18 @@ export default async function TableauDeBord() {
               </div>
             </Carte>
           )}
+          {votesAFaire.map((v) => (
+            <Carte key={v.id} titre="Vote en cours">
+              <p className="text-[14px] font-medium leading-snug">{v.question}</p>
+              <p className="mt-1 text-[13px]" style={{ color: "var(--ink-2)" }}>
+                Clôture le {clotureEnClair(v.cloture)}
+                <HeureChezVous instant={v.cloture.toISOString()} />.
+              </p>
+              <div className="mt-4">
+                <LienBouton href={`/votes/${v.id}`}>Voter</LienBouton>
+              </div>
+            </Carte>
+          ))}
           {monNumeroWave === null && (
             <NumeroWave
               numero=""
