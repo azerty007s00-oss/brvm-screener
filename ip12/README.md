@@ -135,6 +135,14 @@ Phoenix Capital Management.
   signale au président combien de destinataires avaient déjà reçu le courrier du jour. L'envoi
   passe par le SMTP du club (Gmail, Brevo) ou par Resend ; sans transport, seules les alertes du
   site subsistent.
+- **Sondage de date de réunion** : le club se réunit tous les deux mois (novembre, janvier,
+  mars...), entre le 10 et le 17. Le 3 du mois de réunion, un passage quotidien de 9 h
+  (`/api/cron/reunions`) ouvre un sondage : chaque membre coche les jours qui lui vont, par
+  alerte et par courriel. La veille de la clôture, ceux qui n'ont pas répondu sont relancés ;
+  le 7 à 20 h le sondage ferme, et le 8 au matin le président reçoit le jour qui réunit le plus
+  de monde. Il le valide (ou en choisit un autre) avec l'heure et le lieu : la séance s'inscrit
+  dans Réunions, tout le monde est convoqué, et rappelé la veille. Le rythme se règle par la clé
+  `reunions_rythme` de `settings` (« 2:2026-11-01 » par défaut).
 - **Une seule boîte « À valider » pour le bureau** — versements, règlements de pénalités et
   mouvements de caisse attendaient chacun sur leur page. Ils arrivent maintenant dans une file
   unique, sous Versements : une déclaration se valide d'un geste, quel que soit le nombre de mois
@@ -223,13 +231,14 @@ répercute partout en modifiant ce seul fichier.
 L'application se branche sur la base Neon **existante** du club, dont la structure est décrite
 dans `src/lib/schema-cible.md`. Les dix membres y sont déjà enregistrés.
 
-Deux migrations la complètent, toutes deux purement additives :
+Des migrations la complètent, toutes purement additives :
 
 | Script | Ce qu'il ajoute |
 |---|---|
 | `scripts/migration-r3.sql` | La table des déclarations de retard exigées par R3, absente du schéma d'origine |
 | `scripts/migration-frais.sql` | `securities_transfers.fees`, la part d'un virement retenue en frais de dépôt |
 | `scripts/migration-alertes.sql` | `push_subscriptions`, les téléphones où un membre a activé les alertes. Sans elle, la carte des alertes ne s'affiche pas |
+| `scripts/migration-sondages.sql` | `meeting_polls` et `meeting_poll_answers`, le sondage de date. **Inutile de l'exécuter** : le site crée ces deux tables lui-même au premier besoin |
 
 Tant que `migration-frais.sql` n'a pas été exécutée, la lecture des mouvements retombe sur une
 projection sans `fees` : le site continue de fonctionner, les frais s'affichent à zéro.

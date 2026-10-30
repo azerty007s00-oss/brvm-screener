@@ -48,6 +48,14 @@ export const DROITS = {
   /** Reunions et feuille de presence. */
   gererReunions: ["secretaire", "president"],
 
+  /**
+   * Fixer la date d'une reunion a l'issue du sondage.
+   *
+   * Le sondage dit ce que veut la majorite ; le president dit oui, ou tranche
+   * autrement. Rien ne part aux membres sans lui.
+   */
+  fixerDateReunion: ["president"],
+
   /** Journal de caisse : depenses et recettes hors cotisations. */
   gererCaisse: ["tresorier", "president"],
 

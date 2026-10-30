@@ -2632,6 +2632,80 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(lendemain.nbMoisRetard, 0, "les cotisations, elles, sont a jour");
 }
 
+{
+  /* Le sondage de date : novembre 2026 puis tous les deux mois, du 10 au 17. */
+  const C = await import("../.verif/calendrier-reunions.mjs");
+  const r = C.RYTHME_PAR_DEFAUT;
+  assert.equal(C.estMoisDeReunion("2026-11-01", r), true);
+  assert.equal(C.estMoisDeReunion("2026-12-01", r), false);
+  assert.equal(C.estMoisDeReunion("2027-01-01", r), true);
+  assert.equal(C.estMoisDeReunion("2026-09-01", r), false, "avant le depart du rythme, aucune reunion");
+  assert.equal(C.prochainMoisDeReunion("2026-10-01", r), "2026-11-01");
+  assert.equal(C.prochainMoisDeReunion("2026-12-01", r), "2027-01-01");
+  assert.equal(C.prochainMoisDeReunion("2027-01-01", r), "2027-01-01");
+  assert.equal(C.prochainMoisDeReunion("2027-12-01", r), "2028-01-01", "le rythme passe le changement d'annee");
+  assert.deepEqual(C.lireRythme("3:2027-01-01"), { intervalle: 3, depart: "2027-01-01" });
+  assert.deepEqual(C.lireRythme("n'importe quoi"), r);
+  assert.deepEqual(C.lireRythme(C.ecrireRythme({ intervalle: 1, depart: "2027-02-01" })), { intervalle: 1, depart: "2027-02-01" });
+
+  // Ouverture : du 3 au 9 du mois de reunion, au passage du matin.
+  assert.equal(C.moisAOuvrir(new Date("2026-11-03T09:00:00Z"), r), "2026-11-01");
+  assert.equal(C.moisAOuvrir(new Date("2026-11-02T09:00:00Z"), r), null);
+  assert.equal(C.moisAOuvrir(new Date("2026-11-04T09:00:00Z"), r), "2026-11-01", "un passage manque se rattrape");
+  assert.equal(C.moisAOuvrir(new Date("2026-11-10T09:00:00Z"), r), null, "trop tard pour demander");
+  assert.equal(C.moisAOuvrir(new Date("2026-12-03T09:00:00Z"), r), null, "decembre n'a pas de reunion");
+
+  // Cloture le samedi 7 a 20 h ; ouvert trop tard, il laisse 24 heures.
+  const cloture = C.clotureDuSondage("2026-11-01");
+  assert.equal(cloture.toISOString(), "2026-11-07T20:00:00.000Z");
+  assert.equal(C.momentEnClair(cloture), "samedi 7/11 à 20 h");
+  assert.equal(C.clotureEffective("2026-11-01", new Date("2026-11-03T09:00:00Z")).toISOString(), "2026-11-07T20:00:00.000Z");
+  assert.equal(C.clotureEffective("2026-11-01", new Date("2026-11-07T09:00:00Z")).toISOString(), "2026-11-08T09:00:00.000Z");
+  assert.equal(C.clotureEffective("2026-11-01", new Date("2026-11-09T09:00:00Z")).toISOString(), "2026-11-09T20:00:00.000Z",
+    "jamais au-dela de la veille du premier jour propose");
+  assert.equal(C.clotureRelative(cloture, new Date("2026-11-03T09:00:00Z")), "samedi soir");
+  assert.equal(C.clotureRelative(cloture, new Date("2026-11-06T09:00:00Z")), "demain soir");
+  assert.equal(C.clotureRelative(cloture, new Date("2026-11-07T09:00:00Z")), "ce soir");
+  // La relance part au passage du vendredi 6, pas avant.
+  assert.ok(cloture - new Date("2026-11-06T09:00:00Z") <= C.RELANCE_AVANT_CLOTURE_MS);
+  assert.ok(cloture - new Date("2026-11-05T09:00:00Z") > C.RELANCE_AVANT_CLOTURE_MS);
+
+  // Le decompte des maquettes, et l'egalite tranchee au plus tot.
+  const jours = C.joursDuSondage("2026-11-01");
+  assert.equal(jours.length, 8);
+  assert.equal(jours[0], "2026-11-10");
+  assert.equal(jours[7], "2026-11-17");
+  const reponses = [
+    { membreId: "a", jours: [14, 15] },
+    { membreId: "b", jours: [15] },
+    { membreId: "c", jours: [14, 15, 16] },
+    { membreId: "d", jours: [] },
+  ];
+  const comptes = C.decompte(jours, reponses);
+  assert.equal(comptes.find((c) => c.jour === "2026-11-15").n, 3);
+  assert.deepEqual(C.jourRetenu(comptes).membres, ["a", "b", "c"]);
+  assert.equal(C.jourRetenu(comptes).jour, "2026-11-15");
+  const egalite = C.decompte(jours, [{ membreId: "a", jours: [12, 16] }, { membreId: "b", jours: [16, 12] }]);
+  assert.equal(C.jourRetenu(egalite).jour, "2026-11-12", "a egalite, le plus tot");
+  assert.equal(C.jourRetenu(C.decompte(jours, [{ membreId: "d", jours: [] }])), null, "personne de disponible");
+  assert.deepEqual(C.joursSaisis(["15", "10", "10", "9", "18", "x", "12.5"]), [10, 15]);
+
+  // Les libelles.
+  assert.equal(C.jourEnClair("2026-11-15"), "dimanche 15/11");
+  assert.equal(C.jourCourt("2026-11-10"), "mar. 10/11");
+  assert.equal(C.duMois("2026-11-01"), "de novembre");
+  assert.equal(C.duMois("2027-08-01"), "d'août");
+  assert.equal(C.duMois("2027-04-01"), "d'avril");
+  assert.equal(C.alertePresident(C.jourRetenu(comptes), 9).corps, "3 membres sur 9 sont dispo le dimanche 15/11. On cale ça ? Un toucher pour valider.");
+  assert.equal(C.alertePresident({ jour: "2026-11-15", n: 1, membres: ["a"] }, 9).corps.startsWith("1 membre sur 9 est dispo"), true);
+  assert.equal(C.alerteCalee("2026-11-15", "19 h", true).titre, "C'est calé : dimanche 15/11 à 19 h");
+  // Aucun tiret cadratin dans ce que lit un membre.
+  for (const t of [C.alerteOuverture(cloture, new Date("2026-11-03T09:00:00Z")), C.alerteRelance(cloture, new Date("2026-11-06T09:00:00Z")),
+    C.alertePresident(null, 9), C.alerteRappelPresident("2026-11-01", null), C.alerteCalee("2026-11-15", "19 h", false), C.alerteVeille("19 h", "Cocody")]) {
+    assert.ok(!/[—]|--/.test(t.titre + t.corps), t.titre);
+  }
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2640,5 +2714,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion",
 );

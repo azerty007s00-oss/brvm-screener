@@ -2,7 +2,23 @@ import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { listerMembres, listerReunions, presencesParReunion } from "@/lib/queries";
 import { creerReunion, enregistrerPresences, supprimerReunion } from "@/app/actions/reunions";
-import { accorde, dateCourte } from "@/lib/settings";
+import { accorde, dateCourte, debutMois, decalerMois, jourIso } from "@/lib/settings";
+import { derniersHeureLieu, lireRythmeReunions, participants, reponsesDu, sondageEnCours, type Sondage } from "@/lib/sondage";
+import {
+  FENETRE,
+  STATUT_SONDAGE,
+  decompte,
+  duMois,
+  jourCourt,
+  jourEnClair,
+  jourRetenu,
+  momentEnClair,
+  nomDuMois,
+  prochainMoisDeReunion,
+} from "@/lib/calendrier-reunions";
+import { DecompteSondage, ReponseSondage, ValidationDate, type JourSondage } from "@/components/sondage-reunion";
+import type { Membre } from "@/lib/auth";
+import type { ReactNode } from "react";
 import { Champ, ChampCache, Depliant, FormulaireAction, Selection } from "@/components/formulaires";
 import { Badge, Carte, EnTeteEcran, Vide } from "@/components/ui";
 import { Panneau } from "@/components/panneau";
@@ -22,6 +38,9 @@ export default async function PageReunions() {
   const membre = await exigerMembre();
   const gere = peut(membre, "gererReunions");
 
+  /* Le sondage se lit en meme temps que les seances, et ne fait jamais tomber la page. */
+  const enCours = sectionSondage({ membre }).catch(() => ({ section: null, prochain: null }));
+
   let reunions, membres, presences;
   try {
     [reunions, membres, presences] = await Promise.all([
@@ -35,6 +54,7 @@ export default async function PageReunions() {
     throw e;
   }
 
+  const sondage = await enCours;
   const derniere = reunions[0] ?? null;
   const pointesDerniere = derniere
     ? derniere.presents + derniere.absents + derniere.excuses
@@ -80,6 +100,8 @@ export default async function PageReunions() {
         />
         <div className="sans-impression">{saisie}</div>
       </div>
+
+      {sondage.section}
 
       <Carte titre={`Séances (${reunions.length})`}>
         {reunions.length === 0 ? (
@@ -177,8 +199,156 @@ export default async function PageReunions() {
         <p className="mt-4 text-[11px]" style={{ color: "var(--discret)" }}>
           Les réunions et la feuille de présence sont tenues par le secrétaire. Une absence peut
           être sanctionnée depuis la page Pénalités.
+          {sondage.prochain && ` ${sondage.prochain}`}
         </p>
       </Carte>
     </>
   );
+}
+
+/* ------------------------------------------------------------------ sondage */
+
+const premiereMajuscule = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/**
+ * Le sondage de date, en tete de page tant qu'il a quelque chose a dire :
+ * ouvert, il demande ses jours au membre ; clos, il attend le president ;
+ * valide, il annonce la prochaine seance jusqu'a ce qu'elle ait eu lieu.
+ *
+ * Une panne de lecture n'empeche pas d'afficher les seances : la section se
+ * tait, et la page reste ce qu'elle etait avant le sondage.
+ */
+async function sectionSondage({ membre }: { membre: Membre }): Promise<{ section: ReactNode; prochain: string | null }> {
+  const maintenant = new Date();
+  const aujourdhui = jourIso(maintenant);
+  let s: Sondage | null;
+  try {
+    s = await sondageEnCours(aujourdhui);
+  } catch {
+    return { section: null, prochain: null };
+  }
+
+  if (!s) {
+    const rythme = await lireRythmeReunions();
+    /* Passe le 9, le sondage du mois en cours n'aura plus lieu : on regarde plus loin. */
+    const depuis = maintenant.getUTCDate() < FENETRE.premier ? debutMois(maintenant) : decalerMois(debutMois(maintenant), 1);
+    const mois = prochainMoisDeReunion(depuis, rythme);
+    return {
+      section: null,
+      prochain: `Prochaine réunion en ${nomDuMois(mois)} : le sondage de date s'ouvrira le ${FENETRE.ouverture}/${mois.slice(5, 7)}.`,
+    };
+  }
+
+  const [reponses, gens, derniers] = await Promise.all([reponsesDu(s.id), participants(), derniersHeureLieu()]);
+  const total = gens.length;
+  const comptes = decompte(s.jours, reponses);
+  const retenu = jourRetenu(comptes);
+  const jours: JourSondage[] = comptes.map((c) => ({ iso: c.jour, court: jourCourt(c.jour), clair: jourEnClair(c.jour), n: c.n }));
+  const ontRepondu = new Set(reponses.map((r) => r.membreId));
+  const muets = gens.filter((m) => !ontRepondu.has(m.id));
+  const president = peut(membre, "fixerDateReunion");
+  const participe = gens.some((m) => m.id === membre.id);
+  const miens = reponses.find((r) => r.membreId === membre.id)?.jours ?? null;
+  const ouvert = s.statut === STATUT_SONDAGE.ouvert && maintenant < s.cloture;
+  const heure = s.heure ?? derniers.heure ?? "";
+  const lieu = s.lieu ?? derniers.lieu ?? "";
+  const titre = `Réunion ${duMois(s.mois)}`;
+
+  const discret = { color: "var(--ink-2)" };
+  const reponsesTexte =
+    `${reponses.length} ${accorde(reponses.length, "réponse")} sur ${total}.` +
+    (muets.length > 0 && muets.length < total ? ` Pas encore répondu : ${muets.map((m) => m.nom).join(", ")}.` : "");
+
+  let corps: ReactNode;
+  if (s.statut === STATUT_SONDAGE.valide && s.jourChoisi) {
+    const dispo = comptes.find((c) => c.jour === s.jourChoisi)?.n ?? 0;
+    corps = (
+      <>
+        <p className="text-[13px]" style={discret}>Prochaine réunion</p>
+        <p className="mt-1 text-[24px] font-semibold leading-tight">
+          {premiereMajuscule(jourEnClair(s.jourChoisi))} à {s.heure}
+        </p>
+        {s.lieu && <p className="mt-1 text-[15px]">{s.lieu}</p>}
+        <p className="mt-2 text-[13px] leading-relaxed" style={discret}>
+          {dispo > 0
+            ? `${dispo} ${dispo > 1 ? "membres s'étaient déclarés disponibles" : "membre s'était déclaré disponible"} ce jour-là. `
+            : ""}
+          Tout le monde a été prévenu ; un rappel part la veille.
+        </p>
+        {president && (
+          <div className="mt-3">
+            <Depliant titre="Changer le jour, l'heure ou le lieu">
+              <ValidationDate sondageId={s.id} jours={jours} defaut={s.jourChoisi} heure={heure} lieu={lieu} correction />
+            </Depliant>
+          </div>
+        )}
+      </>
+    );
+  } else if (ouvert) {
+    corps = (
+      <>
+        <p className="text-[13px]" style={discret}>Sondage ouvert jusqu&apos;au {momentEnClair(s.cloture)}</p>
+        <h3 className="mt-1 text-[19px] font-semibold leading-snug">Quels jours pouvez-vous venir ?</h3>
+        <p className="mt-1 mb-4 text-[14px] leading-relaxed" style={discret}>
+          Cochez tous les jours qui vous vont. Le président fixe ensuite la date, l&apos;heure et le lieu, et chacun
+          est prévenu.
+        </p>
+        {participe ? (
+          <ReponseSondage sondageId={s.id} jours={jours} miens={miens} total={total} />
+        ) : (
+          <DecompteSondage jours={jours} total={total} retenu={retenu?.jour ?? null} />
+        )}
+        <p className="mt-3 text-[12.5px] leading-relaxed" style={{ color: "var(--ink-3)" }}>
+          {reponsesTexte}
+        </p>
+        {president && (
+          <div className="mt-3">
+            <Depliant titre="Fixer la date sans attendre la clôture">
+              <ValidationDate sondageId={s.id} jours={jours} defaut={retenu?.jour ?? s.jours[0]} heure={heure} lieu={lieu} correction={false} />
+            </Depliant>
+          </div>
+        )}
+      </>
+    );
+  } else {
+    const absents = retenu ? gens.filter((m) => ontRepondu.has(m.id) && !retenu.membres.includes(m.id)) : [];
+    corps = (
+      <>
+        <p className="text-[13px]" style={discret}>
+          Sondage clos · {reponses.length} {accorde(reponses.length, "réponse")} sur {total}
+        </p>
+        {retenu ? (
+          <>
+            <p className="mt-2 text-[13px]" style={discret}>Le jour qui réunit le plus de monde</p>
+            <p className="text-[24px] font-semibold leading-tight">{premiereMajuscule(jourEnClair(retenu.jour))}</p>
+            <p className="mt-1 text-[14px]" style={discret}>
+              {retenu.n} {retenu.n > 1 ? "disponibles" : "disponible"} sur {total}
+              {absents.length > 0 && ` · pas disponible : ${absents.map((m) => m.nom).join(", ")}`}
+              {muets.length > 0 && ` · sans réponse : ${muets.map((m) => m.nom).join(", ")}`}
+            </p>
+          </>
+        ) : (
+          <p className="mt-2 text-[14px]">Aucun jour n&apos;a été coché.</p>
+        )}
+        <div className="mt-3">
+          <DecompteSondage jours={jours} total={total} retenu={retenu?.jour ?? null} />
+        </div>
+        {president ? (
+          <div className="mt-4">
+            <ValidationDate sondageId={s.id} jours={jours} defaut={retenu?.jour ?? s.jours[0]} heure={heure} lieu={lieu} correction={false} />
+            <p className="mt-2 text-[12.5px] leading-relaxed" style={{ color: "var(--ink-3)" }}>
+              Rien ne part aux membres tant que vous n&apos;avez pas validé. Vous pouvez choisir un autre jour que celui de la
+              majorité.
+            </p>
+          </div>
+        ) : (
+          <p className="mt-3 text-[13px] leading-relaxed" style={discret}>
+            Le président fixe la date ; vous serez prévenu par alerte et par courriel.
+          </p>
+        )}
+      </>
+    );
+  }
+
+  return { section: <Carte titre={titre}>{corps}</Carte>, prochain: null };
 }

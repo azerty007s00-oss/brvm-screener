@@ -22,6 +22,8 @@ import type { ReactNode } from "react";
 import { cotisationsARegler, type StatutMois } from "@/lib/penalites";
 import { Chiffre } from "@/components/chiffre";
 import { Voilable } from "@/components/voilable";
+import { appelDuSondage } from "@/lib/sondage";
+import { peut } from "@/lib/droits";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Accueil" };
@@ -153,6 +155,9 @@ function LigneATraiter({
 export default async function TableauDeBord() {
   const membre = await exigerMembre();
 
+  /* Le sondage de date ne fait jamais tomber l'accueil : il se tait. */
+  const sondage = appelDuSondage(membre.id, peut(membre, "fixerDateReunion"), new Date()).catch(() => null);
+
   let s, situations, objectif;
   try {
     [s, situations, objectif] = await Promise.all([synthese(), situationsClub(), objectifDuClub()]);
@@ -161,7 +166,7 @@ export default async function TableauDeBord() {
     throw e;
   }
   /* Apres `situations`, dont elle a besoin. Rend `null` si le registre resiste. */
-  const courues = await penalitesNonInscrites(situations);
+  const [courues, appel] = await Promise.all([penalitesNonInscrites(situations), sondage]);
 
   const maPart = s.parts.find((p) => p.membreId === membre.id);
   const maSituation = situations.find((x) => x.membreId === membre.id);
@@ -389,6 +394,14 @@ export default async function TableauDeBord() {
           * la seule chose de la page qui reclame un geste. Le reste se lit.
           */}
         <div className="flex flex-col gap-11 xl:order-2">
+          {appel && (
+            <Carte titre={appel.titre}>
+              <p className="text-[14px] leading-relaxed">{appel.texte}</p>
+              <div className="mt-5">
+                <LienBouton href="/reunions">{appel.bouton}</LienBouton>
+              </div>
+            </Carte>
+          )}
           {maSituation && (
             <Carte titre={aFaire || aCompleter.length > 0 ? "À faire" : "Rien à faire"}>
               {!aFaireMoi && aCompleter.length > 0 ? (
