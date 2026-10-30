@@ -13,6 +13,7 @@ import { listeDesMois } from "@/lib/sortie";
 import { KIND_VERSEMENT, METHODE, STATUT_VERSEMENT } from "@/lib/valeurs";
 import { enregistrerJustificatif } from "@/lib/justificatifs";
 import { avertirDeclaration, avertirRejet } from "@/lib/avis";
+import { alerterValidation } from "@/lib/serie-alertes";
 import { alerter, alerterAValider } from "@/lib/alertes";
 import { declarerReglementPenalite } from "./penalites";
 import type { EtatFormulaire } from "./auth";
@@ -340,7 +341,8 @@ export async function validerDeclaration(
   const membreVise = String(faites[0].member_id);
   if (membreVise !== auteur.id) {
     const periode = listeDesMois(faites.map((f) => f.mois));
-    alerter([membreVise], {
+    /* Paye a l'heure, c'est la serie de ponctualite qui le lui annonce. */
+    alerterValidation(membreVise, faites.map((f) => f.mois), {
       titre: "Versement validé",
       corps: `${fcfa(total)} pour ${periode}, visé par ${nomCourt(auteur.nom)}.`,
       corpsVoile: `Votre versement pour ${periode} est validé.`,

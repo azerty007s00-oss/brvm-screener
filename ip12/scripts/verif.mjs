@@ -2937,6 +2937,45 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.ok(pdf.length > 1200);
 }
 
+{
+  /* La serie de ponctualite : mois payes a l'heure d'affilee, record, frise, alertes. */
+  const S = await import("../.verif/serie.mjs");
+  const c = (mois, statut) => ({ mois, statut });
+  // Le cas de la maquette : fevrier en retard, puis huit mois a l'heure, novembre pas encore echu.
+  const cellules = [
+    c("2025-11-01", "paye"), c("2025-12-01", "paye"), c("2026-01-01", "paye"), c("2026-02-01", "paye_en_retard"),
+    c("2026-03-01", "paye"), c("2026-04-01", "paye"), c("2026-05-01", "paye"), c("2026-06-01", "paye"),
+    c("2026-07-01", "paye"), c("2026-08-01", "paye"), c("2026-09-01", "paye"), c("2026-10-01", "paye"),
+    c("2026-11-01", "a_venir"), c("2026-12-01", "paye"),
+  ];
+  assert.equal(S.serieEnCours(cellules, "2026-11-01"), 8, "novembre pas encore echu ne casse rien");
+  assert.equal(S.record(cellules, "2026-11-01"), 8);
+  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2026-11-01" ? c(x.mois, "paye") : x)), "2026-11-01"), 9);
+  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2026-11-01" ? c(x.mois, "en_attente") : x)), "2026-11-01"), 8, "declare, en attente de visa");
+  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2026-11-01" ? c(x.mois, "retard") : x)), "2026-11-01"), 0, "le 11, la serie tombe");
+  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2026-10-01" ? c(x.mois, "paye_en_retard") : x)), "2026-11-01"), 0);
+  assert.equal(S.serieEnCours([c("2026-10-01", "hors_periode"), c("2026-11-01", "paye")], "2026-11-01"), 1, "un nouveau membre commence a 1");
+  assert.equal(S.serieEnCours([], "2026-11-01"), 0);
+  const frise = S.frise(cellules, "2026-11-01");
+  assert.equal(frise.length, 12);
+  assert.equal(frise[0].mois, "2025-12-01");
+  assert.equal(frise[1].etat, "ok");
+  assert.equal(frise.find((x) => x.mois === "2026-02-01").etat, "retard");
+  assert.equal(frise.at(-1).etat, "attente");
+  // Les alertes.
+  assert.equal(S.alerteSerieValidee(9, 8, "2026-11-01", 10).titre, "Nouveau record : 9 mois !");
+  const monte = S.alerteSerieValidee(9, 11, "2026-11-01", 10);
+  assert.equal(monte.titre, "Tu as gâté, môgô ! 9 mois d'affilée");
+  assert.equal(monte.corps, "Novembre payé avant le 10, c'est doux. Encore 3 mois et ton record est dans le sac. Atalaku pour toi !");
+  assert.equal(S.alerteSerieValidee(1, 0, "2026-11-01", 10).titre, "C'est parti : 1 mois à l'heure");
+  assert.equal(S.alerteSerieValidee(2, 2, "2026-11-01", 10).titre, "Tu as gâté, môgô ! 2 mois d'affilée", "egaler son record n'est pas le battre");
+  assert.equal(S.alerteSerieTombee(8, "2026-12-01", 10).corps, "Tes 8 mois d'affilée sont partis. Ça va aller ! On repart propre en décembre. Le 10, on t'attend dêh.");
+  assert.equal(S.phraseSerie(8, "2026-11-01", "a_venir", 10), "Le 10 approche : règle novembre d'ici là et passe à 9 mois, môgô.");
+  for (const t of [S.alerteSerieJ3(8, 10), S.alerteSerieJourJ(8), S.alerteClubAJour(9, 10), monte]) {
+    assert.ok(!/[—]|--/.test(t.titre + t.corps), t.titre);
+  }
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2945,5 +2984,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts, rapport de reunion",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts, rapport de reunion, serie de ponctualite",
 );

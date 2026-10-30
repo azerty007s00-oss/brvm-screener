@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { debutMois, deMois, fcfa, variable } from "@/lib/settings";
 import { reglagesEffectifs, situationsClub } from "@/lib/queries";
 import { envoyerAlertes } from "@/lib/alertes";
+import { passageSerie } from "@/lib/serie-alertes";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
@@ -31,11 +32,15 @@ export async function GET(requete: Request) {
     return NextResponse.json({ erreur: "Non autorisé" }, { status: 401 });
   }
 
-  const maintenant = new Date();
+  /* Une horloge choisie, pour les essais seulement : la variable n'existe pas en production. */
+  const horloge = variable("HORLOGE_DE_TEST", "") === "1" ? requete.headers.get("x-horloge") : null;
+  const maintenant = horloge ? new Date(horloge) : new Date();
+  /* La serie de ponctualite : trois jours avant, le jour meme, et le lendemain de l'echeance. */
+  const serie = await passageSerie(maintenant).catch(() => null);
   const demain = new Date(maintenant.getTime() + 86_400_000);
   const reglages = await reglagesEffectifs();
   if (demain.getUTCDate() !== reglages.jourEcheance) {
-    return NextResponse.json({ rien: true, echeance: reglages.jourEcheance, demain: demain.getUTCDate() });
+    return NextResponse.json({ rien: true, echeance: reglages.jourEcheance, demain: demain.getUTCDate(), serie });
   }
 
   const mois = debutMois(maintenant);
@@ -58,5 +63,5 @@ export async function GET(requete: Request) {
     });
     envoyees += bilan.envoyees;
   }
-  return NextResponse.json({ mois, concernes, envoyees });
+  return NextResponse.json({ mois, concernes, envoyees, serie });
 }

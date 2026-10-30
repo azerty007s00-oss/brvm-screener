@@ -135,6 +135,13 @@ Phoenix Capital Management.
   signale au président combien de destinataires avaient déjà reçu le courrier du jour. L'envoi
   passe par le SMTP du club (Gmail, Brevo) ou par Resend ; sans transport, seules les alertes du
   site subsistent.
+- **Série de ponctualité** : l'accueil montre à chacun ses mois payés avant l'échéance,
+  d'affilée (une avance compte, un retard la remet à zéro), son record, ses douze derniers mois,
+  et combien de membres du club ont une série en cours (rien de plus n'est public). Des alertes
+  au ton ivoirien l'accompagnent : à la validation d'un versement à l'heure (la série monte, ou
+  le record tombe), trois jours avant l'échéance et le jour même à 18 h pour qui a une série en
+  jeu, le lendemain pour qui l'a perdue, et à tous une fois par mois quand tout le club a payé à
+  l'heure.
 - **Préparer la réunion, et son rapport** (Réunions › une séance) : les chiffres du club depuis la
   séance précédente (portefeuille et sa variation hors apports, versements reçus, membres à jour,
   objectif), l'ordre du jour posé d'office (chaque retard avec R2 et R3, chaque vote en cours,

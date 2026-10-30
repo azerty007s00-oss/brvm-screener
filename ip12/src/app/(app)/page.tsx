@@ -27,6 +27,8 @@ import { HeureChezVous } from "@/components/fuseau";
 import { lireNumero, numeroEnClair } from "@/lib/wave";
 import { numeroWaveDe } from "@/lib/wave-membres";
 import { NumeroWave } from "@/components/wave";
+import { TuileSerie } from "@/components/serie";
+import { serieEnCours } from "@/lib/serie";
 import { clotureEnClair, votesEnAttenteDe } from "@/lib/votes";
 import { peut } from "@/lib/droits";
 
@@ -431,6 +433,15 @@ export default async function TableauDeBord() {
               </div>
             </Carte>
           ))}
+          {maSituation && !maSituation.titulaireId && (
+            <TuileSerie
+              cellules={maSituation.cellules}
+              moisCourant={moisCourant}
+              jourEcheance={REGLES.jourEcheance}
+              enSerie={situations.filter((x) => !x.titulaireId && serieEnCours(x.cellules, moisCourant) > 0).length}
+              membres={nbMembres}
+            />
+          )}
           {monNumeroWave === null && (
             <NumeroWave
               numero=""
