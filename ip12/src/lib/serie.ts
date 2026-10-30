@@ -134,9 +134,34 @@ export function alerteClubAJour(nbMembres: number, jourEcheance: number): TexteS
   };
 }
 
+/**
+ * L'avance : les mois a venir deja payes, d'affilee, a partir du mois
+ * suivant. Ils entreront dans la serie d'eux-memes, mois apres mois.
+ */
+export function avanceDe(avances: MoisSerie[], moisCourant: string): { n: number; jusqua: string | null } {
+  let n = 0;
+  let jusqua: string | null = null;
+  for (const c of [...avances].filter((x) => x.mois > moisCourant).sort((a, b) => a.mois.localeCompare(b.mois))) {
+    if (c.statut !== "paye") break;
+    n++;
+    jusqua = c.mois;
+  }
+  return { n, jusqua };
+}
+
 /** La phrase de l'accueil, sous la frise. */
-export function phraseSerie(n: number, moisCourant: string, statutCourant: StatutMois | null, jourEcheance: number): string {
+export function phraseSerie(
+  n: number,
+  moisCourant: string,
+  statutCourant: StatutMois | null,
+  jourEcheance: number,
+  avance: { n: number; jusqua: string | null } = { n: 0, jusqua: null },
+): string {
   const nom = nomMois(moisCourant);
+  if (statutCourant === "paye" && avance.n > 0 && avance.jusqua) {
+    const annee = avance.jusqua.slice(0, 4) !== moisCourant.slice(0, 4) ? ` ${avance.jusqua.slice(0, 4)}` : "";
+    return `Tu es en avance, môgô : tout est payé jusqu'à ${nomMois(avance.jusqua)}${annee}. Ta série montera toute seule jusqu'à ${mois(n + avance.n)}.`;
+  }
   if (statutCourant === "paye") return `${majuscule(nom)} est réglé à l'heure : rendez-vous le mois prochain pour passer à ${mois(n + 1)}.`;
   if (statutCourant === "en_attente") return `${majuscule(nom)} est déclaré : dès la validation du trésorier, tu passes à ${mois(n + 1)}.`;
   if (statutCourant === "a_venir") return `Le ${jourEcheance} approche : règle ${nom} d'ici là et passe à ${mois(n + 1)}, môgô.`;

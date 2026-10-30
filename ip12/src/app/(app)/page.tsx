@@ -436,6 +436,7 @@ export default async function TableauDeBord() {
           {maSituation && !maSituation.titulaireId && (
             <TuileSerie
               cellules={maSituation.cellules}
+              avances={maSituation.avances}
               moisCourant={moisCourant}
               jourEcheance={REGLES.jourEcheance}
               enSerie={situations.filter((x) => !x.titulaireId && serieEnCours(x.cellules, moisCourant) > 0).length}

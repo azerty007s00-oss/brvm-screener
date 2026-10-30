@@ -1,4 +1,4 @@
-import { frise, phraseSerie, record, serieEnCours, type MoisSerie } from "@/lib/serie";
+import { avanceDe, frise, phraseSerie, record, serieEnCours, type MoisSerie } from "@/lib/serie";
 import type { StatutMois } from "@/lib/penalites";
 
 const INITIALES = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
@@ -20,12 +20,15 @@ function Flamme({ allumee }: { allumee: boolean }) {
  */
 export function TuileSerie({
   cellules,
+  avances = [],
   moisCourant,
   jourEcheance,
   enSerie,
   membres,
 }: {
   cellules: MoisSerie[];
+  /** Les mois a venir, pour dire l'avance de qui a paye plus loin. */
+  avances?: MoisSerie[];
   moisCourant: string;
   jourEcheance: number;
   enSerie: number;
@@ -36,6 +39,7 @@ export function TuileSerie({
   const cases = frise(cellules, moisCourant);
   const statutCourant: StatutMois | null = cellules.find((c) => c.mois === moisCourant)?.statut ?? null;
   const recent = new Set(cases.slice(-n).filter((c) => c.etat === "ok").map((c) => c.mois));
+  const avance = statutCourant === "paye" ? avanceDe(avances, moisCourant) : { n: 0, jusqua: null };
 
   return (
     <section className="revele rounded-xl border p-4" style={{ borderColor: "var(--line-2)" }}>
@@ -55,6 +59,14 @@ export function TuileSerie({
           <b className="text-[15px]" style={{ color: "var(--ink)" }}>
             {meilleur} mois
           </b>
+          {avance.n > 0 && (
+            <>
+              <br />
+              <span className="mt-1 inline-block rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ background: "var(--etat-ok-fond)", color: "var(--etat-ok)" }}>
+                +{avance.n} d&apos;avance
+              </span>
+            </>
+          )}
         </p>
       </div>
       <div
@@ -83,7 +95,7 @@ export function TuileSerie({
         ))}
       </div>
       <p className="mt-3 text-[13px] leading-relaxed" style={{ color: "var(--ink-2)" }}>
-        {phraseSerie(n, moisCourant, statutCourant, jourEcheance)}
+        {phraseSerie(n, moisCourant, statutCourant, jourEcheance, avance)}
       </p>
       <p className="mt-3 border-t pt-2.5 text-[12.5px]" style={{ borderColor: "var(--line)", color: "var(--ink-3)" }}>
         Dans le club : {enSerie} {enSerie > 1 ? "membres" : "membre"} sur {membres} {enSerie > 1 ? "ont" : "a"} une série en cours.
