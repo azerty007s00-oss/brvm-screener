@@ -210,19 +210,28 @@ export function clotureRelative(cloture: Date, maintenant: Date): string {
  */
 export type TexteAlerte = { titre: string; corps: string };
 
-export function alerteOuverture(cloture: Date, maintenant: Date): TexteAlerte {
+/*
+ * Les alertes qui disent une heure la donnent en GMT, heure d'Abidjan, puis
+ * a l'heure du membre quand elle differe : `local` (« France : 22 h »).
+ */
+type Local = { heure: string; lieu: string } | null;
+const precision = (local: Local) => (local ? ` (${local.lieu} : ${local.heure})` : "");
+
+export function alerteOuverture(cloture: Date, maintenant: Date, local: Local = null): TexteAlerte {
   return {
     titre: "On dit quoi pour la réunion ?",
     corps:
-      `Coche tes jours entre le ${FENETRE.premier} et le ${FENETRE.dernier} avant ${clotureRelative(cloture, maintenant)}. ` +
-      "Sinon on choisit sans toi, faut pas venir pleurer après.",
+      `Coche tes jours entre le ${FENETRE.premier} et le ${FENETRE.dernier} avant ${clotureRelative(cloture, maintenant)}, ` +
+      `${cloture.getUTCHours()} h GMT${precision(local)}. Sinon on choisit sans toi, faut pas venir pleurer après.`,
   };
 }
 
-export function alerteRelance(cloture: Date, maintenant: Date): TexteAlerte {
+export function alerteRelance(cloture: Date, maintenant: Date, local: Local = null): TexteAlerte {
   return {
     titre: "Ton avis manque, môgô",
-    corps: `Le sondage de la réunion ferme ${clotureRelative(cloture, maintenant)}. Coche tes jours, c'est 10 secondes chrono.`,
+    corps:
+      `Le sondage de la réunion ferme ${clotureRelative(cloture, maintenant)}, ${cloture.getUTCHours()} h GMT${precision(local)}. ` +
+      "Coche tes jours, c'est 10 secondes chrono.",
   };
 }
 
@@ -251,25 +260,24 @@ export function alerteRappelPresident(mois: string, retenu: CompteDuJour | null)
 }
 
 /*
- * `heure` est l'heure GMT telle qu'on l'affiche au membre (« 21 h » a
- * Abidjan, « 21 h GMT » ailleurs) ; `chezToi`, son heure a lui quand elle
- * differe (« 22 h », « 5 h le lendemain »).
+ * `heure` est l'heure saisie par le president, en GMT ; `gmt` dit si elle se
+ * lit comme une heure (sinon, « après la prière », elle passe telle quelle).
  */
-export function alerteCalee(jour: string, heure: string, choixDeLaMajorite: boolean, chezToi: string | null = null): TexteAlerte {
+export function alerteCalee(jour: string, heure: string, choixDeLaMajorite: boolean, gmt = true, local: Local = null): TexteAlerte {
   return {
-    titre: `C'est calé : ${jourEnClair(jour)} à ${heure}`,
+    titre: `C'est calé : ${jourEnClair(jour)} à ${heure}${gmt ? " GMT" : ""}`,
     corps:
-      (chezToi ? `Chez toi, ça fait ${chezToi}. ` : "") +
+      (gmt ? `Heure d'Abidjan${local ? `, soit ${local.heure} chez toi (${local.lieu})` : ""}. ` : "") +
       (choixDeLaMajorite ? "La majorité a parlé." : "Le président a tranché.") +
       " Mets ça dans ton agenda : pas de chaise vide, et pas de pénalité d'absence dêh.",
   };
 }
 
-export function alerteVeille(heure: string, lieu: string | null, chezToi: string | null = null): TexteAlerte {
+export function alerteVeille(heure: string, lieu: string | null, gmt = true, local: Local = null): TexteAlerte {
   return {
-    titre: `C'est demain : réunion à ${heure}`,
+    titre: `C'est demain : réunion à ${heure}${gmt ? " GMT" : ""}`,
     corps:
-      (chezToi ? `Chez toi, ça fait ${chezToi}. ` : "") +
+      (gmt ? `Heure d'Abidjan${local ? `, soit ${local.heure} chez toi (${local.lieu})` : ""}. ` : "") +
       `${lieu ? `Rendez-vous : ${lieu}. ` : ""}Viens avec tes idées, pas avec tes excuses.`,
   };
 }

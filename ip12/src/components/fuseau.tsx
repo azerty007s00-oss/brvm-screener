@@ -2,7 +2,7 @@
 
 import { useEffect, useSyncExternalStore } from "react";
 import { noterFuseau } from "@/app/actions/fuseau";
-import { heureChezSoi } from "@/lib/fuseaux";
+import { chezSoi } from "@/lib/fuseaux";
 
 /**
  * Releve le fuseau du navigateur, une fois par appareil et par membre, et a
@@ -32,18 +32,19 @@ const sansAbonnement = () => () => {};
 
 function chezCeNavigateur(instant: string): string | null {
   try {
-    return heureChezSoi(new Date(instant), Intl.DateTimeFormat().resolvedOptions().timeZone);
+    const local = chezSoi(new Date(instant), Intl.DateTimeFormat().resolvedOptions().timeZone);
+    return local ? `${local.lieu} : ${local.heure}` : null;
   } catch {
     return null;
   }
 }
 
 /**
- * « soit 22 h chez vous » sous une heure GMT, calcule par le navigateur : rien
+ * « France : 22 h » a cote d'une heure GMT, calcule par le navigateur : rien
  * a l'heure d'Abidjan. Le serveur, qui ne connait pas le fuseau du lecteur,
  * rend un vide, et le navigateur complete apres l'hydratation.
  */
-export function HeureChezVous({ instant, avant = "soit ", apres = " chez vous" }: { instant: string; avant?: string; apres?: string }) {
+export function HeureChezVous({ instant, avant = " (", apres = ")" }: { instant: string; avant?: string; apres?: string }) {
   const texte = useSyncExternalStore(sansAbonnement, () => chezCeNavigateur(instant), () => null);
   return texte ? <>{`${avant}${texte}${apres}`}</> : null;
 }

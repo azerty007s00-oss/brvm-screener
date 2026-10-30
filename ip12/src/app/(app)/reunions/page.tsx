@@ -288,7 +288,8 @@ async function sectionSondage({ membre }: { membre: Membre }): Promise<{ section
         </p>
         {debut && (
           <p className="text-[14px]" style={discret}>
-            <HeureChezVous instant={debut.toISOString()} avant="Soit " apres=" chez vous." />
+            Heure d&apos;Abidjan
+            <HeureChezVous instant={debut.toISOString()} avant=" · " apres="" />
           </p>
         )}
         {s.lieu && <p className="mt-1 text-[15px]">{s.lieu}</p>}
@@ -327,12 +328,16 @@ async function sectionSondage({ membre }: { membre: Membre }): Promise<{ section
   } else if (ouvert) {
     corps = (
       <>
-        <p className="text-[13px]" style={discret}>Sondage ouvert jusqu&apos;au {momentEnClair(s.cloture)}</p>
+        <p className="text-[13px]" style={discret}>
+          Sondage ouvert jusqu&apos;au {momentEnClair(s.cloture)}, heure d&apos;Abidjan
+          <HeureChezVous instant={s.cloture.toISOString()} />
+        </p>
         <h3 className="mt-1 text-[19px] font-semibold leading-snug">Quels jours pouvez-vous venir ?</h3>
         <p className="mt-1 mb-4 text-[14px] leading-relaxed" style={discret}>
-          Cochez tous les jours qui vous vont. La réunion se tient d&apos;habitude à {HEURE_HABITUELLE} GMT
-          <HeureChezVous instant={`${s.jours[0]}T21:00:00Z`} avant=" (" apres=" chez vous)" />. Le président fixe
-          ensuite la date, l&apos;heure et le lieu, et chacun est prévenu.
+          Cochez tous les jours qui vous vont. La réunion se tient d&apos;habitude à {HEURE_HABITUELLE} GMT, heure
+          d&apos;Abidjan
+          <HeureChezVous instant={`${s.jours[0]}T21:00:00Z`} />. Le président fixe ensuite la date, l&apos;heure et le
+          lieu, et chacun est prévenu.
         </p>
         {participe ? (
           <ReponseSondage sondageId={s.id} jours={jours} miens={miens} total={total} />

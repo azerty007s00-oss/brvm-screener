@@ -399,7 +399,8 @@ export default async function TableauDeBord() {
             <Carte titre={appel.titre}>
               <p className="text-[14px] leading-relaxed">
                 {appel.texte}
-                {appel.instant && <HeureChezVous instant={appel.instant} avant=" Soit " apres=" chez vous." />}
+                {appel.instant && <HeureChezVous instant={appel.instant} />}
+                {appel.suite}
               </p>
               <div className="mt-5">
                 <LienBouton href="/reunions">{appel.bouton}</LienBouton>

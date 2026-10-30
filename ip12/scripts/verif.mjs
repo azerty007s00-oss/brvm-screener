@@ -2700,7 +2700,7 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(C.duMois("2027-04-01"), "d'avril");
   assert.equal(C.alertePresident(C.jourRetenu(comptes), 9).corps, "3 membres sur 9 sont dispo le dimanche 15/11. On cale ça ? Un toucher pour valider.");
   assert.equal(C.alertePresident({ jour: "2026-11-15", n: 1, membres: ["a"] }, 9).corps.startsWith("1 membre sur 9 est dispo"), true);
-  assert.equal(C.alerteCalee("2026-11-15", "19 h", true).titre, "C'est calé : dimanche 15/11 à 19 h");
+  assert.equal(C.alerteCalee("2026-11-15", "19 h", true).titre, "C'est calé : dimanche 15/11 à 19 h GMT");
   // Aucun tiret cadratin dans ce que lit un membre.
   for (const t of [C.alerteOuverture(cloture, new Date("2026-11-03T21:00:00Z")), C.alerteRelance(cloture, new Date("2026-11-08T21:00:00Z")),
     C.alertePresident(null, 9), C.alerteRappelPresident("2026-11-01", null), C.alerteCalee("2026-11-15", "19 h", false), C.alerteVeille("19 h", "Cocody")]) {
@@ -2772,19 +2772,29 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(F.heureChezSoi(new Date("2026-11-15T21:30:00Z"), "Asia/Kolkata"), "3 h le lendemain");
   assert.equal(F.heureChezSoi(new Date("2026-11-15T02:00:00Z"), "America/Vancouver"), "18 h la veille");
   assert.equal(F.heureChezSoi(hiver, null), null);
-  assert.equal(F.heurePour("21 h", hiver, "Europe/Paris"), "21 h GMT (22 h chez vous)");
-  assert.equal(F.heurePour("21 h", hiver, "Asia/Shanghai", "chez toi"), "21 h GMT (5 h le lendemain chez toi)");
-  assert.equal(F.heurePour("21 h", hiver, "Africa/Abidjan"), "21 h");
-  assert.equal(F.heurePour("21 h", hiver, null), "21 h GMT", "fuseau inconnu : l'heure dit au moins lequel");
+  // L'heure GMT d'Abidjan fait foi et se lit toujours ; celle du membre la suit, nommee.
+  assert.equal(F.heurePour("21 h", hiver, "Europe/Paris"), "21 h GMT, heure d'Abidjan (France : 22 h)");
+  assert.equal(F.heurePour("21 h", hiver, "Asia/Shanghai"), "21 h GMT, heure d'Abidjan (Chine : 5 h le lendemain)");
+  assert.equal(F.heurePour("21 h", hiver, "America/Toronto"), "21 h GMT, heure d'Abidjan (Toronto : 16 h)");
+  assert.equal(F.heurePour("21 h", hiver, "Africa/Abidjan"), "21 h GMT, heure d'Abidjan");
+  assert.equal(F.heurePour("21 h", hiver, null), "21 h GMT, heure d'Abidjan");
+  assert.equal(F.lieuDuFuseau("Africa/Abidjan"), "Côte d’Ivoire");
+  assert.equal(F.lieuDuFuseau("America/Argentina/Buenos_Aires").length > 0, true);
+  assert.deepEqual(F.chezSoi(hiver, "Europe/Paris"), { heure: "22 h", lieu: "France" });
+  assert.equal(F.chezSoi(hiver, "Africa/Abidjan"), null);
   assert.equal(F.heurePour("après la prière", null, "Europe/Paris"), "après la prière");
   assert.equal(F.fuseauValide("Europe/Paris"), true);
   assert.equal(F.fuseauValide("America/Argentina/Buenos_Aires"), true);
   assert.equal(F.fuseauValide("Mars/Olympus"), false);
   assert.equal(F.fuseauValide("Europe/Paris'; drop table members"), false);
-  const calee = C.alerteCalee("2026-11-15", "21 h GMT", true, "22 h");
+  const calee = C.alerteCalee("2026-11-15", "21 h", true, true, { heure: "22 h", lieu: "France" });
   assert.equal(calee.titre, "C'est calé : dimanche 15/11 à 21 h GMT");
-  assert.ok(calee.corps.startsWith("Chez toi, ça fait 22 h. La majorité a parlé."));
-  assert.equal(C.alerteVeille("21 h", null).corps, "Viens avec tes idées, pas avec tes excuses.");
+  assert.ok(calee.corps.startsWith("Heure d'Abidjan, soit 22 h chez toi (France). La majorité a parlé."));
+  assert.ok(C.alerteCalee("2026-11-15", "21 h", false).corps.startsWith("Heure d'Abidjan. Le président a tranché."));
+  assert.equal(C.alerteCalee("2026-11-15", "après la prière", true, false).titre, "C'est calé : dimanche 15/11 à après la prière");
+  assert.equal(C.alerteVeille("21 h", null).corps, "Heure d'Abidjan. Viens avec tes idées, pas avec tes excuses.");
+  const ouverture = C.alerteOuverture(new Date("2026-11-09T20:00:00Z"), new Date("2026-11-03T12:00:00Z"), { heure: "4 h le lendemain", lieu: "Chine" });
+  assert.equal(ouverture.corps, "Coche tes jours entre le 10 et le 17 avant lundi soir, 20 h GMT (Chine : 4 h le lendemain). Sinon on choisit sans toi, faut pas venir pleurer après.");
   assert.equal(C.HEURE_HABITUELLE, "21 h");
 }
 

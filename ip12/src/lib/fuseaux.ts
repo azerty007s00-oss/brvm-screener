@@ -69,18 +69,44 @@ export function heureChezSoi(instant: Date, fuseau: string | null): string | nul
   return `${heure} le ${JOURS[jour.getUTCDay()]} ${t.jour.slice(8, 10)}/${t.jour.slice(5, 7)}`;
 }
 
+/** L'heure du membre et le nom de son fuseau : { heure: "22 h", lieu: "France" }. */
+export type HeureLocale = { heure: string; lieu: string };
+
 /**
- * « 21 h » pour qui vit a l'heure GMT, « 21 h GMT (22 h chez vous) » pour
- * les autres, « 21 h GMT » quand le fuseau du membre n'est pas connu.
+ * Le nom court d'un fuseau, tel que le moteur le donne en francais : « France »,
+ * « Chine », « Toronto », « Côte d’Ivoire ». A defaut, la ville du nom IANA.
  */
-export function heurePour(
-  heureGmt: string,
-  instant: Date | null,
-  fuseau: string | null,
-  chezSoi: "chez vous" | "chez toi" = "chez vous",
-): string {
+export function lieuDuFuseau(fuseau: string, instant: Date = new Date()): string {
+  try {
+    const nom =
+      new Intl.DateTimeFormat("fr-FR", { timeZone: fuseau, timeZoneName: "shortGeneric" })
+        .formatToParts(instant)
+        .find((p) => p.type === "timeZoneName")?.value ?? "";
+    const m = /^heure\s*:\s*(.+)$/.exec(nom);
+    if (m) return m[1];
+  } catch {
+    // Fuseau inconnu du moteur : la ville du nom suffit.
+  }
+  return (fuseau.split("/").pop() ?? fuseau).replace(/_/g, " ");
+}
+
+/** L'heure du membre a cet instant, nommee ; null a l'heure GMT ou fuseau inconnu. */
+export function chezSoi(instant: Date, fuseau: string | null): HeureLocale | null {
+  const heure = heureChezSoi(instant, fuseau);
+  return heure && fuseau ? { heure, lieu: lieuDuFuseau(fuseau, instant) } : null;
+}
+
+/** « (France : 22 h) », ou rien. */
+export function precisionLocale(local: HeureLocale | null): string {
+  return local ? ` (${local.lieu} : ${local.heure})` : "";
+}
+
+/**
+ * Une heure de reunion pour un membre : toujours l'heure GMT d'Abidjan, qui
+ * fait foi, suivie de la sienne quand elle differe. « 21 h GMT, heure
+ * d'Abidjan (France : 22 h) ». Sans heure lisible, le texte tel quel.
+ */
+export function heurePour(heureGmt: string, instant: Date | null, fuseau: string | null): string {
   if (!instant) return heureGmt;
-  if (fuseau && fuseauValide(fuseau) && estGmt(instant, fuseau)) return heureGmt;
-  const local = heureChezSoi(instant, fuseau);
-  return local ? `${heureGmt} GMT (${local} ${chezSoi})` : `${heureGmt} GMT`;
+  return `${heureGmt} GMT, heure d'Abidjan${precisionLocale(chezSoi(instant, fuseau))}`;
 }

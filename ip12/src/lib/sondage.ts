@@ -5,7 +5,7 @@ import { envoyerAlertes } from "./alertes";
 import { adresseDuCompte, envoyerCourriel, type Courriel } from "./courriel";
 import { bornes, fichierIcs, type Invitation, type Personne } from "./agenda";
 import { fuseauxDesMembres } from "./fuseau-membres";
-import { estGmt, fuseauValide, heureChezSoi, heurePour } from "./fuseaux";
+import { chezSoi, heurePour, precisionLocale, type HeureLocale } from "./fuseaux";
 import { listerMembres, type MembreListe } from "./queries";
 import { CLUB, lienDuSite } from "./settings";
 import {
@@ -232,11 +232,12 @@ function lienReunions(): string {
 }
 
 export async function courrielOuverture(destinataires: MembreListe[], mois: string, cloture: Date): Promise<number> {
+  const fuseaux = await fuseauxDesMembres();
   return ecrireATous(destinataires, `${CLUB.sigle} : quels jours pour la réunion ${duMois(mois)} ?`, (m) => [
     `Bonjour ${m.nom},`,
     "",
     `La réunion ${duMois(mois)} se tiendra entre le 10 et le 17. Cochez sur le site tous les jours qui vous conviennent, ` +
-      `avant le ${momentEnClair(cloture)} : ${lienReunions()}`,
+      `avant le ${momentEnClair(cloture)}, heure d'Abidjan${precisionLocale(chezSoi(cloture, fuseaux.get(m.id) ?? null))} : ${lienReunions()}`,
     "",
     "Le président retiendra le jour qui réunit le plus de monde, et chacun en sera prévenu.",
   ]);
@@ -284,7 +285,7 @@ export async function courrielConvocation(destinataires: MembreListe[], s: Sonda
   const jour = s.jourChoisi;
   if (!jour) return 0;
   const heure = s.heure ?? "l'heure prévue";
-  const debut = s.heure ? (bornes({ jour, heure: s.heure, dureeMinutes: 120 })?.debut ?? null) : null;
+  const debut = debutReunion(s);
   const fuseaux = await fuseauxDesMembres();
   const emisLe = new Date();
   return ecrireATous(
@@ -314,30 +315,31 @@ export async function courrielConvocation(destinataires: MembreListe[], s: Sonda
 }
 
 /**
- * Une alerte par membre, a son heure : « 21 h » a Abidjan, « 21 h GMT » et
- * « chez toi, ça fait 22 h » a Paris. Les membres de meme fuseau partagent
- * le meme texte.
+ * Une alerte par membre, a son heure : l'heure GMT d'Abidjan pour tous, et
+ * « soit 22 h chez toi (France) » pour qui vit ailleurs. Les membres de meme
+ * fuseau partagent le meme texte.
  */
-export async function alerterAvecHeure(
+export async function alerterParFuseau(
   membres: string[],
-  s: Sondage,
-  texte: (heure: string, chezToi: string | null) => TexteAlerte,
+  instant: Date | null,
+  texte: (local: HeureLocale | null) => TexteAlerte,
   etiquette: string,
 ): Promise<void> {
-  if (!s.jourChoisi) return;
-  const debut = s.heure ? (bornes({ jour: s.jourChoisi, heure: s.heure, dureeMinutes: 120 })?.debut ?? null) : null;
-  const fuseaux = await fuseauxDesMembres();
+  const fuseaux = instant ? await fuseauxDesMembres() : new Map<string, string>();
   const groupes = new Map<string, string[]>();
   for (const id of membres) {
     const f = fuseaux.get(id) ?? "";
     groupes.set(f, [...(groupes.get(f) ?? []), id]);
   }
   for (const [fuseau, ids] of groupes) {
-    const heure = s.heure ?? "l'heure prévue";
-    const gmt = !debut || (fuseau !== "" && fuseauValide(fuseau) && estGmt(debut, fuseau));
-    const chezToi = debut && fuseau ? heureChezSoi(debut, fuseau) : null;
-    await envoyerAlertes(ids, { ...texte(gmt ? heure : `${heure} GMT`, chezToi), url: "/reunions", etiquette });
+    const local = instant && fuseau ? chezSoi(instant, fuseau) : null;
+    await envoyerAlertes(ids, { ...texte(local), url: "/reunions", etiquette });
   }
+}
+
+/** Le debut d'une reunion fixee, ou null si son heure ne se lit pas. */
+export function debutReunion(s: Sondage): Date | null {
+  return s.jourChoisi && s.heure ? (bornes({ jour: s.jourChoisi, heure: s.heure, dureeMinutes: 120 })?.debut ?? null) : null;
 }
 
 /* ------------------------------------------------------- passage quotidien */
@@ -379,7 +381,7 @@ export async function passageQuotidien(maintenant: Date): Promise<BilanPassage> 
     `);
     if (cree.length > 0) {
       bilan.ouvert = aOuvrir;
-      await envoyerAlertes(ids, { ...alerteOuverture(cloture, maintenant), url: "/reunions", etiquette: `sondage-${aOuvrir}` });
+      await alerterParFuseau(ids, cloture, (local) => alerteOuverture(cloture, maintenant, local), `sondage-${aOuvrir}`);
       await courrielOuverture(gens, aOuvrir, cloture);
     }
   }
@@ -423,7 +425,7 @@ export async function passageQuotidien(maintenant: Date): Promise<BilanPassage> 
         const ontRepondu = new Set((await reponsesDu(s.id)).map((x) => x.membreId));
         const muets = ids.filter((id) => !ontRepondu.has(id));
         bilan.relances = muets.length;
-        await envoyerAlertes(muets, { ...alerteRelance(s.cloture, maintenant), url: "/reunions", etiquette: `sondage-${s.mois}` });
+        await alerterParFuseau(muets, s.cloture, (local) => alerteRelance(s.cloture, maintenant, local), `sondage-${s.mois}`);
       }
     } else if (s.statut === STATUT_SONDAGE.aValider) {
       if (!r.rappele && s.demandeLe && maintenant.getTime() - s.demandeLe.getTime() >= RAPPEL_PRESIDENT_APRES_MS) {
@@ -448,7 +450,13 @@ export async function passageQuotidien(maintenant: Date): Promise<BilanPassage> 
       `;
       if (pris.length === 0) continue;
       bilan.veilles = ids.length;
-      await alerterAvecHeure(ids, s, (heure, chezToi) => alerteVeille(heure, s.lieu, chezToi), `reunion-${s.jourChoisi}`);
+      const debut = debutReunion(s);
+      await alerterParFuseau(
+        ids,
+        debut,
+        (local) => alerteVeille(s.heure ?? "l'heure prévue", s.lieu, debut !== null, local),
+        `reunion-${s.jourChoisi}`,
+      );
     }
   }
   return bilan;
@@ -458,9 +466,12 @@ export async function passageQuotidien(maintenant: Date): Promise<BilanPassage> 
 
 export type AppelSondage = {
   titre: string;
+  /** Le texte jusqu'a l'heure dite, que la page complete par l'heure du membre. */
   texte: string;
+  /** La fin de la phrase, apres l'heure du membre. */
+  suite: string;
   bouton: string;
-  /** L'instant de la reunion, pour dire au membre l'heure de chez lui. */
+  /** L'instant dont l'heure est dite, pour donner au membre la sienne. */
   instant?: string;
 };
 
@@ -478,10 +489,11 @@ export async function appelDuSondage(membreId: string, fixeLaDate: boolean, main
     const dans = (Date.parse(`${s.jourChoisi}T00:00:00Z`) - Date.parse(`${maintenant.toISOString().slice(0, 10)}T00:00:00Z`)) / 86_400_000;
     if (dans > 7) return null;
     const quand = dans === 0 ? "Aujourd'hui" : dans === 1 ? "Demain" : `Le ${jourEnClair(s.jourChoisi)}`;
-    const debut = s.heure ? (bornes({ jour: s.jourChoisi, heure: s.heure, dureeMinutes: 120 })?.debut ?? null) : null;
+    const debut = debutReunion(s);
     return {
       titre,
-      texte: `${quand} à ${s.heure}${debut ? " GMT" : ""}${s.lieu ? `, ${s.lieu}` : ""}.`,
+      texte: `${quand} à ${s.heure}${debut ? " GMT, heure d'Abidjan" : ""}`,
+      suite: `${s.lieu ? `, ${s.lieu}` : ""}.`,
       bouton: "Voir la réunion",
       instant: debut?.toISOString(),
     };
@@ -493,8 +505,10 @@ export async function appelDuSondage(membreId: string, fixeLaDate: boolean, main
     if (reponses.some((r) => r.membreId === membreId)) return null;
     return {
       titre,
-      texte: `Quels jours, entre le 10 et le 17, pouvez-vous venir ? Le sondage ferme le ${momentEnClair(s.cloture)}.`,
+      texte: `Quels jours, entre le 10 et le 17, pouvez-vous venir ? Le sondage ferme le ${momentEnClair(s.cloture)}, heure d'Abidjan`,
+      suite: ".",
       bouton: "Cocher mes jours",
+      instant: s.cloture.toISOString(),
     };
   }
 
@@ -505,6 +519,7 @@ export async function appelDuSondage(membreId: string, fixeLaDate: boolean, main
     texte: retenu
       ? `Le sondage est clos : le ${jourEnClair(retenu.jour)} réunit ${retenu.n} ${retenu.n > 1 ? "membres" : "membre"}. La date attend votre validation.`
       : "Le sondage est clos sans qu'aucun jour ait été coché. Fixez la date.",
+    suite: "",
     bouton: "Fixer la date",
   };
 }

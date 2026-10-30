@@ -6,8 +6,9 @@ import { db } from "@/lib/db";
 import { exigerDroit, exigerMembre } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import {
-  alerterAvecHeure,
+  alerterParFuseau,
   courrielConvocation,
+  debutReunion,
   enregistrerReponse,
   participants,
   reponsesDu,
@@ -54,7 +55,7 @@ export async function repondreSondage(_precedent: EtatFormulaire, donnees: FormD
         ? "Noté : aucun jour ne vous va."
         : `${jours.length > 1 ? "Vos jours sont enregistrés" : "Votre jour est enregistré"} : ${jours
             .map((j) => jourCourt(`${mois}${String(j).padStart(2, "0")}`))
-            .join(", ")}.`) + ` Vous pouvez changer d'avis jusqu'au ${momentEnClair(sondage.cloture)}.`,
+            .join(", ")}.`) + ` Vous pouvez changer d'avis jusqu'au ${momentEnClair(sondage.cloture)}, heure d'Abidjan.`,
   };
 }
 
@@ -136,10 +137,11 @@ export async function validerDateReunion(_precedent: EtatFormulaire, donnees: Fo
         const fixe = await sondageParId(sondage.id);
         if (!fixe) return;
         const majorite = retenu !== null && retenu.n === disponibles;
-        await alerterAvecHeure(
+        const debut = debutReunion(fixe);
+        await alerterParFuseau(
           gens.map((m) => m.id),
-          fixe,
-          (h, chezToi) => alerteCalee(jour, h, majorite, chezToi),
+          debut,
+          (local) => alerteCalee(jour, heure, majorite, debut !== null, local),
           `sondage-${sondage.mois}`,
         );
         await courrielConvocation(gens, fixe, disponibles);
