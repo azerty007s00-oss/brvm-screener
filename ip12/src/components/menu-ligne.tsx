@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, type ReactNode } from "react";
+import { useActionState, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import type { EtatFormulaire } from "@/app/actions/auth";
 import { styleBouton } from "@/components/boutons";
 
@@ -36,6 +37,7 @@ export function MenuLigne({ etiquette, actions }: { etiquette: string; actions: 
   const boite = useRef<HTMLDivElement>(null);
   const menu = useRef<HTMLDivElement>(null);
   const declencheur = useRef<HTMLButtonElement>(null);
+  const [place, setPlace] = useState<{ left: number; top?: number; bottom?: number; width: number } | null>(null);
 
   /* Fermer, c'est aussi oublier la question posee : on ne la retrouve pas ouverte. */
   const fermer = () => {
@@ -46,7 +48,8 @@ export function MenuLigne({ etiquette, actions }: { etiquette: string; actions: 
   useEffect(() => {
     if (!ouvert) return;
     const dehors = (e: MouseEvent) => {
-      if (!boite.current?.contains(e.target as Node)) fermer();
+      const cible = e.target as Node;
+      if (!boite.current?.contains(cible) && !menu.current?.contains(cible)) fermer();
     };
     const touche = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
@@ -61,6 +64,43 @@ export function MenuLigne({ etiquette, actions }: { etiquette: string; actions: 
       document.removeEventListener("keydown", touche);
     };
   }, [ouvert]);
+
+  /*
+   * LA BULLE SE POSE SUR LA PAGE, ET RESTE DANS L'ECRAN.
+   *
+   * Accrochee sous le bouton et alignee sur sa droite, elle sortait de
+   * l'ecran sur telephone quand le bouton passait a gauche d'une ligne
+   * etroite, et une liste depliee la coupait. Elle est desormais rendue a la
+   * racine de la page, placee d'apres le bouton, tenue a 16 px des bords, et
+   * ouverte au-dessus quand la place manque en dessous. Elle suit le
+   * defilement et la rotation, sans se fermer : un champ a remplir fait
+   * monter le clavier, qui redimensionne l'ecran.
+   */
+  useLayoutEffect(() => {
+    if (!ouvert) return;
+    const placer = () => {
+      const b = declencheur.current?.getBoundingClientRect();
+      if (!b) return;
+      const largeurEcran = document.documentElement.clientWidth;
+      const hauteurEcran = window.innerHeight;
+      const width = Math.min(window.matchMedia("(min-width: 1024px)").matches ? 260 : 270, largeurEcran - 32);
+      const left = Math.min(Math.max(16, b.right - width), largeurEcran - 16 - width);
+      const hauteur = menu.current?.offsetHeight ?? 0;
+      const dessous = hauteurEcran - b.bottom - 16;
+      setPlace(
+        hauteur > dessous && b.top - 16 > dessous
+          ? { left, width, bottom: hauteurEcran - b.top + 4 }
+          : { left, width, top: b.bottom + 4 },
+      );
+    };
+    placer();
+    window.addEventListener("scroll", placer, true);
+    window.addEventListener("resize", placer);
+    return () => {
+      window.removeEventListener("scroll", placer, true);
+      window.removeEventListener("resize", placer);
+    };
+  }, [ouvert, aConfirmer]);
 
   /* A l'ouverture, le premier element prend le focus : c'est ce qu'un menu fait. */
   useEffect(() => {
@@ -110,7 +150,8 @@ export function MenuLigne({ etiquette, actions }: { etiquette: string; actions: 
         </svg>
       </button>
 
-      {ouvert && (
+      {ouvert &&
+        createPortal(
         <div
           role={aConfirmer ? "group" : "menu"}
           aria-label={etiquette}
@@ -124,8 +165,18 @@ export function MenuLigne({ etiquette, actions }: { etiquette: string; actions: 
            * la tabulation. Debut et Fin sautent aux extremites, comme partout.
            */
           onKeyDown={surFleche}
-          className="menu-ligne absolute top-11 right-0 z-10 w-[270px] p-1.5 lg:top-10 lg:w-[260px]"
-          style={{ background: "var(--page)", borderRadius: 12, boxShadow: "var(--pop)" }}
+          className="menu-ligne fixed z-50 p-1.5"
+          style={{
+            background: "var(--page)",
+            borderRadius: 12,
+            boxShadow: "var(--pop)",
+            left: place?.left ?? 16,
+            top: place?.top,
+            bottom: place?.bottom,
+            width: place?.width ?? 270,
+            /* Le premier rendu sert a mesurer la bulle : elle n'apparait qu'une fois placee. */
+            visibility: place ? "visible" : "hidden",
+          }}
         >
           {aConfirmer ? (
             <Confirmation
@@ -143,8 +194,9 @@ export function MenuLigne({ etiquette, actions }: { etiquette: string; actions: 
               />
             ))
           )}
-        </div>
-      )}
+        </div>,
+          document.body,
+        )}
     </div>
   );
 }
