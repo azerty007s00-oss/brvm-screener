@@ -173,7 +173,7 @@ export function PayerWave({
       <ol className="mt-5 flex flex-col gap-2.5">
         {[
           lien ? "Le bouton copie le numéro du club et ouvre Wave." : "Le bouton copie le numéro du club.",
-          `Dans Wave, envoyez ${montantTexte} F depuis votre numéro habituel.`,
+          `Dans Wave, envoyez ${montantTexte} F depuis votre numéro habituel. Les frais Wave sont à votre charge : le club doit recevoir ${montantTexte} F tout rond.`,
           "Revenez ici et touchez « J'ai payé ». C'est tout.",
         ].map((t, i) => (
           <li key={i} className="flex gap-3 text-[14px] leading-snug">
