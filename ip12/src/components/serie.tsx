@@ -50,7 +50,7 @@ export function TuileSerie({
         <div className="flex-1">
           <p className="text-[26px] font-semibold leading-none tabular-nums">{n} mois</p>
           <p className="mt-1 text-[13px]" style={{ color: "var(--ink-2)" }}>
-            payés à l&apos;heure, d&apos;affilée
+            payés à l&apos;heure, d&apos;affilée, depuis août 2026
           </p>
         </div>
         <p className="flex-none text-right text-[12px]" style={{ color: "var(--ink-3)" }}>

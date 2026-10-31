@@ -2943,25 +2943,31 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   const c = (mois, statut) => ({ mois, statut });
   // Le cas de la maquette : fevrier en retard, puis huit mois a l'heure, novembre pas encore echu.
   const cellules = [
-    c("2025-11-01", "paye"), c("2025-12-01", "paye"), c("2026-01-01", "paye"), c("2026-02-01", "paye_en_retard"),
-    c("2026-03-01", "paye"), c("2026-04-01", "paye"), c("2026-05-01", "paye"), c("2026-06-01", "paye"),
-    c("2026-07-01", "paye"), c("2026-08-01", "paye"), c("2026-09-01", "paye"), c("2026-10-01", "paye"),
-    c("2026-11-01", "a_venir"), c("2026-12-01", "paye"),
+    c("2026-11-01", "paye"), c("2026-12-01", "paye"), c("2027-01-01", "paye"), c("2027-02-01", "paye_en_retard"),
+    c("2027-03-01", "paye"), c("2027-04-01", "paye"), c("2027-05-01", "paye"), c("2027-06-01", "paye"),
+    c("2027-07-01", "paye"), c("2027-08-01", "paye"), c("2027-09-01", "paye"), c("2027-10-01", "paye"),
+    c("2027-11-01", "a_venir"), c("2027-12-01", "paye"),
   ];
-  assert.equal(S.serieEnCours(cellules, "2026-11-01"), 8, "novembre pas encore echu ne casse rien");
-  assert.equal(S.record(cellules, "2026-11-01"), 8);
-  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2026-11-01" ? c(x.mois, "paye") : x)), "2026-11-01"), 9);
-  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2026-11-01" ? c(x.mois, "en_attente") : x)), "2026-11-01"), 8, "declare, en attente de visa");
-  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2026-11-01" ? c(x.mois, "retard") : x)), "2026-11-01"), 0, "le 11, la serie tombe");
-  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2026-10-01" ? c(x.mois, "paye_en_retard") : x)), "2026-11-01"), 0);
-  assert.equal(S.serieEnCours([c("2026-10-01", "hors_periode"), c("2026-11-01", "paye")], "2026-11-01"), 1, "un nouveau membre commence a 1");
-  assert.equal(S.serieEnCours([], "2026-11-01"), 0);
-  const frise = S.frise(cellules, "2026-11-01");
+  assert.equal(S.serieEnCours(cellules, "2027-11-01"), 8, "novembre pas encore echu ne casse rien");
+  assert.equal(S.record(cellules, "2027-11-01"), 8);
+  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2027-11-01" ? c(x.mois, "paye") : x)), "2027-11-01"), 9);
+  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2027-11-01" ? c(x.mois, "en_attente") : x)), "2027-11-01"), 8, "declare, en attente de visa");
+  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2027-11-01" ? c(x.mois, "retard") : x)), "2027-11-01"), 0, "le 11, la serie tombe");
+  assert.equal(S.serieEnCours(cellules.map((x) => (x.mois === "2027-10-01" ? c(x.mois, "paye_en_retard") : x)), "2027-11-01"), 0);
+  assert.equal(S.serieEnCours([c("2027-10-01", "hors_periode"), c("2027-11-01", "paye")], "2027-11-01"), 1, "un nouveau membre commence a 1");
+  assert.equal(S.serieEnCours([], "2027-11-01"), 0);
+  const frise = S.frise(cellules, "2027-11-01");
   assert.equal(frise.length, 12);
-  assert.equal(frise[0].mois, "2025-12-01");
+  assert.equal(frise[0].mois, "2026-12-01");
   assert.equal(frise[1].etat, "ok");
-  assert.equal(frise.find((x) => x.mois === "2026-02-01").etat, "retard");
+  assert.equal(frise.find((x) => x.mois === "2027-02-01").etat, "retard");
   assert.equal(frise.at(-1).etat, "attente");
+  // Le depart commun : les mois repris d'avant aout 2026 ne comptent pas.
+  const reprise = [c("2026-06-01", "paye"), c("2026-07-01", "paye"), c("2026-08-01", "paye"), c("2026-09-01", "paye"), c("2026-10-01", "a_venir")];
+  assert.equal(S.SERIE_DEPUIS, "2026-08-01");
+  assert.equal(S.serieEnCours(reprise, "2026-10-01"), 2, "juin et juillet, repris, ne comptent pas");
+  assert.equal(S.record(reprise, "2026-10-01"), 2);
+  assert.equal(S.frise(reprise, "2026-10-01").find((x) => x.mois === "2026-07-01").etat, "vide", "la frise laisse vides les mois d'avant le suivi");
   // Les alertes.
   assert.equal(S.alerteSerieValidee(9, 8, "2026-11-01", 10).titre, "Nouveau record : 9 mois !");
   const monte = S.alerteSerieValidee(9, 11, "2026-11-01", 10);

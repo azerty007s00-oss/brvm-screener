@@ -19,12 +19,25 @@ import type { StatutMois } from "./penalites";
 export type MoisSerie = { mois: string; statut: StatutMois };
 
 /**
+ * LE DEPART COMMUN : AOUT 2026.
+ *
+ * L'historique d'avant le site a ete repris d'un coup, chaque mois date de son
+ * echeance : il dit qui a paye, pas qui a paye a l'heure. Le compter aurait
+ * donne des series de quarante mois a qui payait en retard. Tout le monde part
+ * donc du premier mois suivi par le site ; les mois d'avant ne comptent ni pour
+ * la serie, ni pour le record, et la frise les laisse vides.
+ */
+export const SERIE_DEPUIS = "2026-08-01";
+
+const suivi = (c: MoisSerie) => c.mois >= SERIE_DEPUIS;
+
+/**
  * La serie en cours au mois `moisCourant` (AAAA-MM-01). Le mois courant compte
  * s'il est deja paye a l'heure ; non encore echu ou en attente de visa, il ne
  * compte pas encore, mais ne casse rien.
  */
 export function serieEnCours(cellules: MoisSerie[], moisCourant: string): number {
-  const passes = cellules.filter((c) => c.mois <= moisCourant && c.statut !== "hors_periode").sort((a, b) => b.mois.localeCompare(a.mois));
+  const passes = cellules.filter((c) => suivi(c) && c.mois <= moisCourant && c.statut !== "hors_periode").sort((a, b) => b.mois.localeCompare(a.mois));
   let n = 0;
   for (const c of passes) {
     if (c.statut === "paye") n++;
@@ -38,7 +51,7 @@ export function serieEnCours(cellules: MoisSerie[], moisCourant: string): number
 export function record(cellules: MoisSerie[], moisCourant: string): number {
   let meilleur = 0;
   let courant = 0;
-  for (const c of [...cellules].filter((x) => x.mois <= moisCourant && x.statut !== "hors_periode").sort((a, b) => a.mois.localeCompare(b.mois))) {
+  for (const c of [...cellules].filter((x) => suivi(x) && x.mois <= moisCourant && x.statut !== "hors_periode").sort((a, b) => a.mois.localeCompare(b.mois))) {
     if (c.statut === "paye") {
       courant++;
       meilleur = Math.max(meilleur, courant);
@@ -60,7 +73,7 @@ export function frise(cellules: MoisSerie[], moisCourant: string, n = 12): CaseF
     const mois = d.toISOString().slice(0, 10);
     const c = cellules.find((x) => x.mois === mois);
     const etat: CaseFrise["etat"] =
-      !c || c.statut === "hors_periode"
+      !c || c.statut === "hors_periode" || !suivi(c)
         ? "vide"
         : c.statut === "paye"
           ? "ok"
