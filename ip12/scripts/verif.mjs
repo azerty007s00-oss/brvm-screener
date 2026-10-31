@@ -3115,6 +3115,33 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(B.quantiteALaVeille("NTLC", "2026-11-15", rel, mv), 0);
 }
 
+/* -------------------------------------------------------------------- recus */
+{
+  const R = await import("../.verif/recu.mjs");
+  assert.equal(R.numeroRecu(2026, 142), "2026-0142");
+  assert.equal(R.numeroRecu("2027", 3), "2027-0003");
+  assert.equal(R.objetRecu(["2026-10-01"]), "Cotisation d'octobre 2026");
+  assert.equal(R.objetRecu(["2026-08-01"]), "Cotisation d'août 2026");
+  assert.equal(R.objetRecu(["2026-11-01", "2026-12-01", "2027-01-01"]), "Cotisations : novembre 2026 à janvier 2027 (3 mois)");
+  assert.equal(R.parMode("mobile_money"), "par Wave");
+  assert.equal(R.parMode("especes"), "en espèces");
+  assert.equal(R.parMode("cheque"), "par chèque");
+  assert.ok(R.payeALHeure(["2026-10-01"], "2026-10-10", 10), "le jour de l'echeance est a l'heure");
+  assert.ok(!R.payeALHeure(["2026-10-01"], "2026-10-11", 10));
+  assert.ok(R.payeALHeure(["2026-11-01", "2026-12-01"], "2026-10-08", 10), "d'avance");
+  assert.ok(!R.payeALHeure(["2026-09-01", "2026-10-01"], "2026-10-08", 10), "septembre en retard");
+  const pdf = R.recuPdf({
+    numero: "2026-0142", valideLe: "2026-10-22", membre: "BLA Aimé Ange David", mois: ["2026-10-01"], montant: 5000,
+    payeLe: "2026-10-08", mode: "mobile_money", reference: "WV261008.0912", aLHeure: true,
+    validePar: "TRAORÉ Awa", qualite: "Trésorier", detenteur: null,
+  });
+  const texte = pdf.toString("latin1");
+  assert.ok(texte.startsWith("%PDF-1.4"));
+  for (const bout of ["2026-0142", "Re\xe7u de versement", "5 000 FCFA", "Cotisation d'octobre 2026", "par Wave, r\xe9f. WV261008.0912", "\xe0 l'heure", "TRAOR\xc9 Awa,", "tr\xe9sorier.", "menu Moi"]) {
+    assert.ok(texte.includes(bout), bout);
+  }
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -3123,5 +3150,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts, rapport de reunion, serie de ponctualite, bourse, releve SGI et dividendes",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts, rapport de reunion, serie de ponctualite, bourse, releve SGI et dividendes, recus de versement",
 );

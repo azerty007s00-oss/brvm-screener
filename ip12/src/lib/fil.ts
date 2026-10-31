@@ -29,6 +29,8 @@ export type Evenement = {
   /** « declare le 21/10 · valide le 22/10 » */
   quand: string;
   motif: string | null;
+  /** Un versement valide : ses lots, pour son recu PDF. */
+  recu?: string[];
 };
 
 export type LigneVersement = {
@@ -238,6 +240,7 @@ export function filDuMembre(
           ? `déclaré le ${jour(v.cree_le)} · validé le ${jour(v.vise_le ?? v.cree_le)}`
           : `saisi${v.declare_par_nom ? ` par ${nomCourt(v.declare_par_nom)}` : ""} le ${jour(v.vise_le ?? v.cree_le)}`,
         motif: null,
+        recu: [...new Set(lignes.map((l) => l.lot))].sort(),
       });
     }
   }

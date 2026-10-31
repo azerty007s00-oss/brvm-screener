@@ -251,6 +251,11 @@ Phoenix Capital Management.
   club, apports de l'année retirés, à la BRVM Composite depuis le 1er janvier, liste les titres au
   dernier cours et totalise les dividendes de l'année.
 
+- **Reçus de versement** — chaque versement validé a son reçu PDF (`/recus/<lot>`), numéroté
+  dans l'année de sa validation (2026-0142) : le numéro est attribué une fois pour toutes, dans
+  l'ordre des validations, et ne bouge plus. Le lien est dans *Moi › Historique*, à côté du
+  versement. Seuls le membre, le détenteur de sa part et le bureau qui valide peuvent l'ouvrir.
+
 ## Règles appliquées
 
 | Source | Règle |
@@ -288,6 +293,7 @@ Des migrations la complètent, toutes purement additives :
 | `scripts/migration-sondages.sql` | `meeting_polls` et `meeting_poll_answers`, le sondage de date. **Inutile de l'exécuter** : le site crée ces deux tables lui-même au premier besoin |
 | `scripts/migration-fuseaux.sql` | `member_time_zones`, le fuseau de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
 | `scripts/migration-wave.sql` | `member_wave`, le numéro Wave de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
+| `scripts/migration-recus.sql` | Les numéros des reçus de versement. **Inutile de l'exécuter** : le site la crée lui-même |
 | `scripts/migration-bourse.sql` | Cours, indice, relevés SGI, mouvements et valeur du soir. **Inutile de l'exécuter** : le site les crée lui-même |
 | `scripts/migration-votes.sql` | `votes` et `vote_ballots`, le vote en ligne. **Inutile de l'exécuter** : le site les crée lui-même |
 | `scripts/migration-rapports.sql` | `meeting_points`, les points du bureau à l'ordre du jour. **Inutile de l'exécuter** : le site la crée lui-même |

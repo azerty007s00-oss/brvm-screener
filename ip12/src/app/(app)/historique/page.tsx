@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { exigerMembre } from "@/lib/auth";
 import { faitsDuMembre } from "@/lib/historique";
+import { numerosRecus } from "@/lib/recus";
 import { filDuMembre, parMois, type Famille, type Genre } from "@/lib/fil";
 import { fcfa, moisLong } from "@/lib/settings";
 import { EnTeteEcran, Vide } from "@/components/ui";
@@ -90,6 +91,11 @@ export default async function PageHistorique({
   const groupes = parMois(choisis);
   const affiches = groupes.slice(0, nbMois);
   const suivant = groupes[nbMois]?.mois ?? null;
+  /* Le numero de chaque recu affiche : il se lit ici, et se verifie avec celui du PDF. */
+  const numeros = await numerosRecus(affiches.flatMap((g) => g.evenements.flatMap((e) => e.recu ?? []))).catch(
+    () => new Map<string, string>(),
+  );
+  const numeroDe = (lots: string[]) => lots.map((l) => numeros.get(l)).filter(Boolean).sort()[0] ?? null;
 
   const lien = (cle: Famille | null, n: number) => {
     const q = new URLSearchParams();
@@ -170,6 +176,17 @@ export default async function PageHistorique({
                       <span className="text-[12px]" style={{ color: "var(--ink-3)" }}>
                         {e.quand}
                       </span>
+                      {e.recu && numeroDe(e.recu) && (
+                        <a
+                          href={`/recus/${e.recu.join(",")}`}
+                          target="_blank"
+                          rel="noopener"
+                          className="tapable mt-0.5 inline-flex min-h-9 w-fit items-center gap-1.5 text-[12.5px] font-semibold underline underline-offset-2"
+                          style={{ color: "var(--accent)" }}
+                        >
+                          Reçu n° {numeroDe(e.recu)} (PDF)
+                        </a>
+                      )}
                     </div>
                   </li>
                 ))}
