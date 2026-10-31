@@ -40,17 +40,11 @@ jobs:
           if git diff --cached --quiet; then
             echo "Aucune mise a jour des fondamentaux detectee."
           else
-            TICKERS=$(python - <<'EOF'
-import json, sys
-try:
-    d = json.load(open("data/fundamentals_history.json"))
-    stocks = d.get("stocks", {})
-    n = len([t for t in stocks if stocks[t].get("history")])
-    print(f"{n}/{len(stocks)} tickers")
-except Exception as e:
-    print("?")
-EOF
-)
+            # Comptage en une ligne, sans document imbrique : un heredoc dont le
+            # corps commence en colonne 0 ferme le bloc « run: | » de YAML, et
+            # GitHub ne sait alors plus lire le fichier. Le run echoue au
+            # demarrage a chaque poussee, sur toutes les branches.
+            TICKERS=$(python -c 'import json; d = json.load(open("data/fundamentals_history.json")); s = d.get("stocks", {}); n = len([t for t in s if s[t].get("history")]); print(f"{n}/{len(s)} tickers")' 2>/dev/null || echo "?")
             git commit -m "data: mise a jour fondamentaux BRVM $(date -u '+%Y-%m-%d') — ${TICKERS}"
             git pull --rebase origin main
             git push

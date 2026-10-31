@@ -1,0 +1,278 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <style>
+    body { margin: 0;
+           font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+           -webkit-font-smoothing: antialiased; }
+
+    @keyframes apparait { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+    @keyframes deplie   { from { opacity: 0; transform: translateY(-4px) } to { opacity: 1; transform: none } }
+    @keyframes tourne   { to { transform: rotate(360deg) } }
+
+    @media (prefers-reduced-motion: no-preference) {
+      .apparait { animation: apparait 340ms cubic-bezier(.22,.61,.36,1) both;
+                  animation-delay: calc(var(--rang, 0) * 55ms); }
+      .tapable  { transition: transform 130ms ease, background-color 130ms ease; }
+      .tapable:active { transform: scale(.985); }
+      details[open] > .corps { animation: deplie 240ms cubic-bezier(.22,.61,.36,1) both; }
+    }
+
+    .chevron { transition: transform 180ms cubic-bezier(.22,.61,.36,1); }
+    details[open] > summary .chevron { transform: rotate(90deg); }
+
+    .relief      { box-shadow: 0 1px 2px rgba(42,26,16,.05), 0 10px 20px -16px rgba(42,26,16,.35); }
+    .relief-fort { box-shadow: 0 2px 4px rgba(42,26,16,.06), 0 18px 30px -22px rgba(42,26,16,.5); }
+
+    .tuile { border-radius: 16px; background: #fff; border: 1px solid #f1e8dc; }
+    .tuile > summary { display: flex; gap: 12px; align-items: flex-start; padding: 14px;
+                       list-style: none; cursor: pointer; border-radius: 16px; }
+    .tuile > summary::-webkit-details-marker { display: none; }
+    .chip { flex: none; width: 38px; height: 38px; border-radius: 12px; background: #f0dfa4;
+            display: grid; place-items: center; color: #a8861d; }
+    .titre  { font-size: 14px; font-weight: 600; letter-spacing: -.01em; }
+    .resume { display: block; margin-top: 2px; font-size: 11.5px; line-height: 1.45; color: #6b5a4a; }
+    .corps  { border-top: 1px solid #f1e8dc; padding: 14px; font-size: 12px; color: #6b5a4a; line-height: 1.5; }
+    .rub { margin: 4px 0 8px; font-size: 11px; font-weight: 600; letter-spacing: .1em;
+           text-transform: uppercase; color: #6b472f; }
+    .num { font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+    .pastille { font-size: 10px; font-weight: 600; border-radius: 999px; padding: 4px 8px; white-space: nowrap; }
+    .bouton { display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+              width: 100%; margin-top: 10px; padding: 10px; border-radius: 10px;
+              background: #2a1a10; color: #faf6ef; font-size: 13px; font-weight: 500; }
+    .rouet { width: 13px; height: 13px; border-radius: 999px; border: 2px solid currentColor;
+             border-right-color: transparent; opacity: .85; animation: tourne 620ms linear infinite; }
+  </style>
+</helmet>
+
+<div style="width: 390px; background: #faf6ef; color: #2a1a10; padding-bottom: 28px">
+
+  <div class="apparait" style="background: #2a1a10; border-radius: 0 0 26px 26px; padding: 16px 18px 44px">
+    <div style="display: flex; align-items: center; justify-content: space-between">
+      <div style="display: flex; align-items: center; gap: 10px">
+        <span style="width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px;
+                     background: #c9a227; color: #2a1a10; font-size: 12px; font-weight: 800">IP</span>
+        <span>
+          <span style="display: block; font-size: 16px; font-weight: 600; color: #faf6ef; letter-spacing: -.01em">Administration</span>
+          <span style="display: block; font-size: 11px; color: #b99c82">SORO Tiélina &middot; président</span>
+        </span>
+      </div>
+      <span style="font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase;
+                   color: #f0dfa4; background: rgba(201,162,39,.16); border: 1px solid rgba(201,162,39,.35);
+                   border-radius: 999px; padding: 5px 9px">Accès total</span>
+    </div>
+  </div>
+
+  <div style="padding: 0 16px; margin-top: -32px; display: flex; flex-direction: column; gap: 14px">
+
+    <div class="apparait relief-fort" style="--rang: 1; border-radius: 18px; background: #fff; border: 1px solid #f1e8dc;
+                padding: 14px 4px; display: grid; grid-template-columns: repeat(3, 1fr)">
+      <div style="text-align: center">
+        <div class="num" style="font-size: 22px; font-weight: 700">10</div>
+        <div style="font-size: 10.5px; color: #6b5a4a; margin-top: 2px">membres</div>
+      </div>
+      <div style="text-align: center; border-left: 1px solid #f1e8dc; border-right: 1px solid #f1e8dc">
+        <div class="num" style="font-size: 22px; font-weight: 700; color: #a8322c">7</div>
+        <div style="font-size: 10.5px; color: #6b5a4a; margin-top: 2px">mois découverts</div>
+      </div>
+      <div style="text-align: center">
+        <div class="num" style="font-size: 22px; font-weight: 700; color: #a8861d">4</div>
+        <div style="font-size: 10.5px; color: #6b5a4a; margin-top: 2px">pénalités dues</div>
+      </div>
+    </div>
+
+    <div class="apparait" style="--rang: 2; border-radius: 16px; background: #f6dedc; border: 1px solid #a8322c; overflow: hidden">
+      <div style="display: flex; gap: 8px; padding: 12px 14px 10px; align-items: center">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#a8322c" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 9v4"/><path d="M12 17h.01"/>
+          <path d="M10.3 3.9 2.4 17.6a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/>
+        </svg>
+        <span style="font-size: 13px; font-weight: 600; color: #a8322c">2 points à régler</span>
+      </div>
+      <div style="border-top: 1px solid #a8322c; padding: 10px 14px; font-size: 12px; line-height: 1.5">
+        <b style="font-size: 13px">CRON_SECRET</b><br>
+        <span style="color: #4d3120">Absente : la porte des relances automatiques reste fermée. Aucun rappel ne partira le 7, le 9 ni le 10.</span>
+      </div>
+      <div style="border-top: 1px solid #a8322c; padding: 10px 14px; font-size: 12px; line-height: 1.5">
+        <b style="font-size: 13px">SETUP_TOKEN</b><br>
+        <span style="color: #4d3120">Encore présente : la reprise en main des mots de passe reste ouverte. À supprimer avant de partager le lien.</span>
+      </div>
+    </div>
+
+    <div>
+      <h2 class="rub apparait" style="--rang: 3">Le club</h2>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+
+        <details class="tuile relief apparait" style="--rang: 3">
+          <summary class="tapable">
+            <span class="chip">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1"/>
+              </svg>
+            </span>
+            <span style="flex: 1; min-width: 0">
+              <span class="titre">Réglages du club</span>
+              <span class="resume">Cotisation, échéance, taux, doublement.</span>
+            </span>
+            <span class="chevron" style="align-self: center; color: #b99c82">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+            </span>
+          </summary>
+          <div class="corps">
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 10px">
+              <div><div class="num" style="font-size: 17px; font-weight: 700; color: #a8861d">5 000</div><div style="font-size: 10.5px">cotisation</div></div>
+              <div><div class="num" style="font-size: 17px; font-weight: 700; color: #2a1a10">le 10</div><div style="font-size: 10.5px">échéance</div></div>
+              <div><div class="num" style="font-size: 17px; font-weight: 700; color: #2a1a10">10 %</div><div style="font-size: 10.5px">pénalité</div></div>
+            </div>
+            Le formulaire de modification s'ouvre ici, sans quitter la page.
+            <span class="bouton tapable"><span class="rouet"></span>Envoi en cours</span>
+          </div>
+        </details>
+
+        <details class="tuile relief apparait" style="--rang: 4">
+          <summary class="tapable">
+            <span class="chip">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="9" cy="8" r="3.2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 5.3a3.2 3.2 0 0 1 0 5.4M17.5 14.2A6.5 6.5 0 0 1 21.5 20"/>
+              </svg>
+            </span>
+            <span style="flex: 1; min-width: 0">
+              <span class="titre">Règles individuelles</span>
+              <span class="resume">Dérogations au régime commun, votées en assemblée.</span>
+            </span>
+            <span class="pastille" style="align-self: center; color: #4d3120; background: #ede2d5">2</span>
+            <span class="chevron" style="align-self: center; color: #b99c82">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+            </span>
+          </summary>
+          <div class="corps">Bla Ange David — avance de 3 mois exigée jusqu'en décembre 2027.</div>
+        </details>
+
+      </div>
+    </div>
+
+    <div>
+      <h2 class="rub apparait" style="--rang: 5">Au quotidien</h2>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+
+        <details class="tuile relief apparait" style="--rang: 5" open>
+          <summary class="tapable">
+            <span class="chip">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M22 6 12 13 2 6"/><rect x="2" y="4" width="20" height="16" rx="2.5"/>
+              </svg>
+            </span>
+            <span style="flex: 1; min-width: 0">
+              <span class="titre">Relances</span>
+              <span class="resume">Départ automatique le 7, le 9 et le 10, après vérification des paiements.</span>
+            </span>
+            <span class="pastille" style="align-self: center; color: #a8322c; background: #f6dedc">à l'arrêt</span>
+            <span class="chevron" style="align-self: center; color: #b99c82">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+            </span>
+          </summary>
+          <div class="corps">Transport, état des variables, essai d'envoi et résultat du dernier essai.</div>
+        </details>
+
+        <details class="tuile relief apparait" style="--rang: 6">
+          <summary class="tapable">
+            <span class="chip">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+            </span>
+            <span style="flex: 1; min-width: 0">
+              <span class="titre">Reprise de l'historique</span>
+              <span class="resume">Marquer payés, en une fois, les mois antérieurs à l'outil.</span>
+            </span>
+            <span class="chevron" style="align-self: center; color: #b99c82">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+            </span>
+          </summary>
+          <div class="corps">Bornes communes ou par membre, montant mensuel, antidatage au 10.</div>
+        </details>
+
+        <details class="tuile relief apparait" style="--rang: 6">
+          <summary class="tapable">
+            <span class="chip">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            </span>
+            <span style="flex: 1; min-width: 0">
+              <span class="titre">Reprise des pénalités</span>
+              <span class="resume">Le décompte que le trésorier tenait à la main.</span>
+            </span>
+            <span class="chevron" style="align-self: center; color: #b99c82">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+            </span>
+          </summary>
+          <div class="corps">Nombre de mois de pénalité par membre, à la saisie.</div>
+        </details>
+
+      </div>
+    </div>
+
+    <div>
+      <h2 class="rub apparait" style="--rang: 6">Contrôle</h2>
+      <div style="display: flex; flex-direction: column; gap: 10px">
+
+        <details class="tuile relief apparait" style="--rang: 6">
+          <summary class="tapable">
+            <span class="chip">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5M9 13h7M9 17h5"/></svg>
+            </span>
+            <span style="flex: 1; min-width: 0">
+              <span class="titre">Journal (30)</span>
+              <span class="resume">Chaque validation y laisse une trace nominative.</span>
+            </span>
+            <span class="chevron" style="align-self: center; color: #b99c82">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+            </span>
+          </summary>
+          <div class="corps">Trente dernières opérations, auteur et date.</div>
+        </details>
+
+        <details class="tuile relief apparait" style="--rang: 6">
+          <summary class="tapable">
+            <span class="chip">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/><path d="M10 17l-5-5 5-5M5 12h11"/></svg>
+            </span>
+            <span style="flex: 1; min-width: 0">
+              <span class="titre">Sorties et exclusions</span>
+              <span class="resume">Ce que chaque membre emporterait en partant aujourd'hui.</span>
+            </span>
+            <span class="chevron" style="align-self: center; color: #b99c82">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+            </span>
+          </summary>
+          <div class="corps">Décompte article 20, frais de cession de 2 %.</div>
+        </details>
+
+        <details class="tuile relief apparait" style="--rang: 6">
+          <summary class="tapable">
+            <span class="chip">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.7 4.5 6v5.4c0 4.6 3.1 8.4 7.5 9.9 4.4-1.5 7.5-5.3 7.5-9.9V6z"/><path d="m9 12 2.2 2.2L15.5 10"/></svg>
+            </span>
+            <span style="flex: 1; min-width: 0">
+              <span class="titre">Sécurité</span>
+              <span class="resume">Les clés qui ouvrent le site sur l'extérieur.</span>
+            </span>
+            <span class="pastille" style="align-self: center; color: #a8322c; background: #f6dedc">2 alertes</span>
+            <span class="chevron" style="align-self: center; color: #b99c82">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>
+            </span>
+          </summary>
+          <div class="corps">État de chaque clé et marche à suivre dans Vercel.</div>
+        </details>
+
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

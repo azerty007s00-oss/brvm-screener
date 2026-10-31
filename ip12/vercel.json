@@ -1,0 +1,25 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/cron/relance",
+      "schedule": "0 8 7,9,10,11 * *"
+    },
+    {
+      "path": "/api/cron/alertes",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/reunions/midi",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/reunions",
+      "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/cron/bourse",
+      "schedule": "0 19 * * *"
+    }
+  ]
+}
