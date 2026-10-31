@@ -93,7 +93,7 @@ export default async function PageResolutions({ searchParams }: { searchParams: 
 
       {resolutions.length === 0 ? (
         <Vide>
-          Aucune résolution inscrite. {peutGerer ? "Importez le recensement ou inscrivez-les une à une ci-dessous." : ""}
+          Aucune résolution inscrite. {peutGerer ? "Inscrivez-les une à une, ou importez un fichier de résolutions, ci-dessous." : ""}
         </Vide>
       ) : (
         <div className="flex flex-col gap-6">
@@ -230,14 +230,14 @@ export default async function PageResolutions({ searchParams }: { searchParams: 
               <Champ nom="precision" libelle="Précision (facultatif)" requis={false} />
             </FormulaireAction>
           </Panneau>
-          <Panneau libelle="Importer un recensement" titre="Importer un recensement" variante="secondaire">
+          <Panneau libelle="Importer un fichier de résolutions" titre="Importer un fichier de résolutions" variante="secondaire">
             <FormulaireAction action={importerResolutions} libelle="Importer">
               <Champ
                 nom="recensement"
                 libelle="Fichier Markdown (.md)"
                 type="file"
                 accept=".md,text/markdown,text/plain"
-                aide="Seules les lignes du tableau dont la première colonne porte un code (S1, R4) sont reprises. Les décisions de fonctionnement et d'investissement ne le sont pas."
+                aide="Un tableau dont chaque ligne commence par un code (S9, R4), puis la date, la résolution, le vote, les articles et le statut. Un code déjà inscrit est remplacé."
               />
             </FormulaireAction>
           </Panneau>

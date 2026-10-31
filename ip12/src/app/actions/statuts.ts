@@ -30,7 +30,7 @@ export async function importerStatuts(_p: EtatFormulaire, donnees: FormData): Pr
 export async function importerResolutions(_p: EtatFormulaire, donnees: FormData): Promise<EtatFormulaire> {
   const auteur = await exigerDroit("gererStatuts");
   const fichier = donnees.get("recensement");
-  if (!(fichier instanceof File) || fichier.size === 0) return { ok: false, erreur: "Choisissez le fichier du recensement." };
+  if (!(fichier instanceof File) || fichier.size === 0) return { ok: false, erreur: "Choisissez le fichier des résolutions." };
   if (fichier.size > 1_000_000) return { ok: false, erreur: "Ce fichier dépasse 1 Mo." };
   const resolutions = lireRecensement(await fichier.text());
   if (resolutions.length === 0) return { ok: false, erreur: "Aucune résolution lue : il faut un tableau dont la première colonne porte le code (S1, R4)." };
