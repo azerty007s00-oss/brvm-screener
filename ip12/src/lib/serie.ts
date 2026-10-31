@@ -89,7 +89,7 @@ export function alerteSerieValidee(n: number, recordAvant: number, moisPaye: str
   if (n >= 2) {
     const ecart = recordAvant - n + 1;
     return {
-      titre: `Tu as gâté, môgô ! ${mois(n)} d'affilée`,
+      titre: `Tu as gâté mal même, man ! ${mois(n)} d'affilée`,
       corps:
         `${majuscule(nomMois(moisPaye))} payé avant le ${jourEcheance}, c'est doux.` +
         (ecart > 0 && ecart <= 3 ? ` Encore ${mois(ecart)} et ton record est dans le sac.` : "") +
@@ -98,7 +98,7 @@ export function alerteSerieValidee(n: number, recordAvant: number, moisPaye: str
   }
   return {
     titre: "C'est parti : 1 mois à l'heure",
-    corps: `${majuscule(nomMois(moisPaye))} payé avant le ${jourEcheance}. Garde le rythme, môgô, et la série va monter.`,
+    corps: `${majuscule(nomMois(moisPaye))} payé avant le ${jourEcheance}. Garde le rythme, frérot, et la série va monter.`,
   };
 }
 
@@ -122,7 +122,7 @@ export function alerteSerieJourJ(n: number): TexteSerie {
 export function alerteSerieTombee(n: number, moisSuivant: string, jourEcheance: number): TexteSerie {
   return {
     titre: "Yako, la série est tombée à 0",
-    corps: `Tes ${mois(n)} d'affilée sont partis. Ça va aller ! On repart propre en ${nomMois(moisSuivant)}. Le ${jourEcheance}, on t'attend dêh.`,
+    corps: `Tes ${mois(n)} d'affilée sont partis. Ça va aller molo molo. On repart propre en ${nomMois(moisSuivant)}. Le ${jourEcheance}, on t'attend dêh.`,
   };
 }
 
@@ -160,10 +160,10 @@ export function phraseSerie(
   const nom = nomMois(moisCourant);
   if (statutCourant === "paye" && avance.n > 0 && avance.jusqua) {
     const annee = avance.jusqua.slice(0, 4) !== moisCourant.slice(0, 4) ? ` ${avance.jusqua.slice(0, 4)}` : "";
-    return `Tu es en avance, môgô : tout est payé jusqu'à ${nomMois(avance.jusqua)}${annee}. Ta série montera toute seule jusqu'à ${mois(n + avance.n)}.`;
+    return `Tu es en avance, frérot : tout est payé jusqu'à ${nomMois(avance.jusqua)}${annee}. Ta série montera toute seule jusqu'à ${mois(n + avance.n)}.`;
   }
   if (statutCourant === "paye") return `${majuscule(nom)} est réglé à l'heure : rendez-vous le mois prochain pour passer à ${mois(n + 1)}.`;
   if (statutCourant === "en_attente") return `${majuscule(nom)} est déclaré : dès la validation du trésorier, tu passes à ${mois(n + 1)}.`;
-  if (statutCourant === "a_venir") return `Le ${jourEcheance} approche : règle ${nom} d'ici là et passe à ${mois(n + 1)}, môgô.`;
+  if (statutCourant === "a_venir") return `Le ${jourEcheance} approche : règle ${nom} d'ici là et passe à ${mois(n + 1)}.`;
   return n === 0 ? `Paie avant le ${jourEcheance} et ta série démarre.` : `Garde le rythme : le ${jourEcheance}, c'est sacré.`;
 }

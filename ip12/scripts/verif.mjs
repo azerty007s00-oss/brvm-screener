@@ -2965,19 +2965,19 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   // Les alertes.
   assert.equal(S.alerteSerieValidee(9, 8, "2026-11-01", 10).titre, "Nouveau record : 9 mois !");
   const monte = S.alerteSerieValidee(9, 11, "2026-11-01", 10);
-  assert.equal(monte.titre, "Tu as gâté, môgô ! 9 mois d'affilée");
+  assert.equal(monte.titre, "Tu as gâté mal même, man ! 9 mois d'affilée");
   assert.equal(monte.corps, "Novembre payé avant le 10, c'est doux. Encore 3 mois et ton record est dans le sac. Atalaku pour toi !");
   assert.equal(S.alerteSerieValidee(1, 0, "2026-11-01", 10).titre, "C'est parti : 1 mois à l'heure");
-  assert.equal(S.alerteSerieValidee(2, 2, "2026-11-01", 10).titre, "Tu as gâté, môgô ! 2 mois d'affilée", "egaler son record n'est pas le battre");
-  assert.equal(S.alerteSerieTombee(8, "2026-12-01", 10).corps, "Tes 8 mois d'affilée sont partis. Ça va aller ! On repart propre en décembre. Le 10, on t'attend dêh.");
-  assert.equal(S.phraseSerie(8, "2026-11-01", "a_venir", 10), "Le 10 approche : règle novembre d'ici là et passe à 9 mois, môgô.");
+  assert.equal(S.alerteSerieValidee(2, 2, "2026-11-01", 10).titre, "Tu as gâté mal même, man ! 2 mois d'affilée", "egaler son record n'est pas le battre");
+  assert.equal(S.alerteSerieTombee(8, "2026-12-01", 10).corps, "Tes 8 mois d'affilée sont partis. Ça va aller molo molo. On repart propre en décembre. Le 10, on t'attend dêh.");
+  assert.equal(S.phraseSerie(8, "2026-11-01", "a_venir", 10), "Le 10 approche : règle novembre d'ici là et passe à 9 mois.");
   // L'avance : decembre, janvier et fevrier deja payes, mars non.
   const avances = [c("2026-11-01", "paye"), c("2026-12-01", "paye"), c("2027-01-01", "paye"), c("2027-02-01", "paye"), c("2027-03-01", "a_venir")];
   assert.deepEqual(S.avanceDe(avances, "2026-11-01"), { n: 3, jusqua: "2027-02-01" });
   assert.deepEqual(S.avanceDe([c("2026-12-01", "en_attente"), c("2027-01-01", "paye")], "2026-11-01"), { n: 0, jusqua: null }, "l'avance s'arrete au premier trou");
   assert.equal(
     S.phraseSerie(42, "2026-10-01", "paye", 10, { n: 3, jusqua: "2027-01-01" }),
-    "Tu es en avance, môgô : tout est payé jusqu'à janvier 2027. Ta série montera toute seule jusqu'à 45 mois.",
+    "Tu es en avance, frérot : tout est payé jusqu'à janvier 2027. Ta série montera toute seule jusqu'à 45 mois.",
   );
   for (const t of [S.alerteSerieJ3(8, 10), S.alerteSerieJourJ(8), S.alerteClubAJour(9, 10), monte]) {
     assert.ok(!/[—]|--/.test(t.titre + t.corps), t.titre);

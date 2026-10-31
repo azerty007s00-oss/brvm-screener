@@ -228,7 +228,7 @@ export function alerteOuverture(cloture: Date, maintenant: Date, local: Local = 
 
 export function alerteRelance(cloture: Date, maintenant: Date, local: Local = null): TexteAlerte {
   return {
-    titre: "Ton avis manque, môgô",
+    titre: "Ton avis manque, frérot",
     corps:
       `Le sondage de la réunion ferme ${clotureRelative(cloture, maintenant)}, ${cloture.getUTCHours()} h GMT${precision(local)}. ` +
       "Coche tes jours, c'est 10 secondes chrono.",

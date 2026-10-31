@@ -48,7 +48,7 @@ export async function envoyerOrdreDuJour(_precedent: EtatFormulaire, donnees: Fo
         gens.map((m) => m.id),
         {
           titre: `Ordre du jour : réunion du ${dateCourte(d.date)}`,
-          corps: `${points.length} ${points.length > 1 ? "points" : "point"} au programme. Les chiffres du club sont prêts : viens préparé, môgô.`,
+          corps: `${points.length} ${points.length > 1 ? "points" : "point"} au programme. Les chiffres du club sont prêts : viens préparé, frérot.`,
           url: `/reunions/${reunionId}`,
           etiquette: `odj-${reunionId}`,
         },
