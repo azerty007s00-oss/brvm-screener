@@ -79,8 +79,8 @@ function Courbes({ annee, points }: { annee: number; points: { date: string; clu
 
 export default async function PageBourse() {
   const membre = await exigerMembre();
-  const peutSaisir = peut(membre, "gererCompteTitres");
-  const peutImporter = peut(membre, "importerReleveSgi");
+  const peutSaisir = peut(membre, "opererEnBourse");
+  const peutImporter = peutSaisir;
   const maintenant = new Date();
   const annee = maintenant.getUTCFullYear();
   const [etat, points] = await Promise.all([etatBourse(maintenant), pointsDuSoir(annee)]);
@@ -289,9 +289,9 @@ export default async function PageBourse() {
             </Panneau>
           )}
           <p className="text-[12.5px] leading-normal" style={{ color: "var(--ink-3)" }}>
-            Les cours, l&apos;indice et les dividendes se lisent seuls chaque soir sur brvm.org. Le bureau
-            n&apos;inscrit que ce que seul le club sait : ses achats et ses ventes. Le relevé de la SGI, importé par le
-            président ou le vice-président, sert de contrôle : chaque nouveau relevé devient le point de départ.
+            Les cours, l&apos;indice et les dividendes se lisent seuls chaque soir sur brvm.org. Le président et le
+            vice-président n&apos;inscrivent que ce que seul le club sait : ses achats et ses ventes. Le relevé de la
+            SGI sert de contrôle : chaque nouveau relevé importé devient le point de départ.
           </p>
         </section>
       )}

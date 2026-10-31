@@ -474,7 +474,7 @@ export async function passageDividendes(jour: string) {
   }
 
   if (inscrits.length + douteux.length > 0) {
-    const bureau = (await listerMembres()).filter((m) => m.actif && peut(m, "gererCompteTitres")).map((m) => m.id);
+    const bureau = (await listerMembres()).filter((m) => m.actif && peut(m, "opererEnBourse")).map((m) => m.id);
     if (inscrits.length > 0) {
       await envoyerAlertes(bureau, {
         titre: inscrits.length > 1 ? "Dividendes encaissés" : "Dividende encaissé",
