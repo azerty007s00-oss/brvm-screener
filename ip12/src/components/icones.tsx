@@ -148,6 +148,15 @@ export const Icone = {
       <path d="m7.5 15 3.5-4 3 2.5L20 7" />
     </Trait>
   ),
+  /* La bourse : des bougies de cotation. */
+  bourse: (p: Props) => (
+    <Trait {...p}>
+      <path d="M7 4v16M12 7v12M17 3v14" />
+      <rect x="5.5" y="8" width="3" height="7" rx="0.6" />
+      <rect x="10.5" y="10" width="3" height="5" rx="0.6" />
+      <rect x="15.5" y="6" width="3" height="6" rx="0.6" />
+    </Trait>
+  ),
   calendrier: (p: Props) => (
     <Trait {...p}>
       <rect x="3" y="5" width="18" height="16" rx="2.5" />

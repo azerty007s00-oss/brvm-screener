@@ -47,6 +47,7 @@ const RUBRIQUES: Modele[] = [
     icone: "graphique",
     pages: [
       { href: "/portefeuille", libelle: "Portefeuille", icone: "graphique" },
+      { href: "/bourse", libelle: "Bourse", icone: "bourse" },
       { href: "/caisse", libelle: "Caisse", icone: "coffre" },
       { href: "/compte-titres", libelle: "Titres", icone: "echange" },
       { href: "/penalites", libelle: "Pénalités", icone: "alerte" },

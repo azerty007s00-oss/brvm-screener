@@ -236,6 +236,15 @@ Phoenix Capital Management.
   s'il doit encore le mois ; le bureau l'est de chaque déclaration à valider. Avec le voile des
   montants, l'alerte ne montre aucun montant. Le courriel reste le canal de référence : une alerte
   perdue ne fait jamais échouer le geste qui l'a déclenchée.
+- **Comptes › Bourse** — chaque soir de semaine à 19 h GMT, `/api/cron/bourse` lit sur brvm.org
+  les cours de clôture et l'indice BRVM Composite, puis valorise le portefeuille. Le point de
+  départ est le relevé PDF de la SGI, importé par le bureau (`gererCompteTitres`) : le site en lit
+  les titres, les quantités, les prix moyens et les liquidités, refuse un relevé dont les lignes ne
+  retombent pas sur le total, et l'inscrit aussi comme relevé du portefeuille (les parts se
+  recalculent). Le bureau n'inscrit ensuite que les achats, les ventes (frais de l'ordre compris)
+  et les dividendes ; les virements vers le compte-titres viennent de *Titres*. La page compare le
+  club, apports de l'année retirés, à la BRVM Composite depuis le 1er janvier, liste les titres au
+  dernier cours et totalise les dividendes de l'année.
 
 ## Règles appliquées
 
@@ -274,6 +283,7 @@ Des migrations la complètent, toutes purement additives :
 | `scripts/migration-sondages.sql` | `meeting_polls` et `meeting_poll_answers`, le sondage de date. **Inutile de l'exécuter** : le site crée ces deux tables lui-même au premier besoin |
 | `scripts/migration-fuseaux.sql` | `member_time_zones`, le fuseau de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
 | `scripts/migration-wave.sql` | `member_wave`, le numéro Wave de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
+| `scripts/migration-bourse.sql` | Cours, indice, relevés SGI, mouvements et valeur du soir. **Inutile de l'exécuter** : le site les crée lui-même |
 | `scripts/migration-votes.sql` | `votes` et `vote_ballots`, le vote en ligne. **Inutile de l'exécuter** : le site les crée lui-même |
 | `scripts/migration-rapports.sql` | `meeting_points`, les points du bureau à l'ordre du jour. **Inutile de l'exécuter** : le site la crée lui-même |
 

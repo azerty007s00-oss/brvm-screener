@@ -2984,6 +2984,92 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   }
 }
 
+/* ------------------------------------------------------------------ bourse */
+{
+  const B = await import("../.verif/bourse.mjs");
+  assert.equal(B.lireNombre("11 213.616"), 11213.616);
+  assert.equal(B.lireNombre("-56 232.999"), -56232.999);
+  assert.equal(B.lireNombre("2,13"), 2.13);
+  assert.equal(B.lireNombre("NSIA"), null);
+  assert.equal(B.lireDateEnLettres("Veuillez trouver ci-jointe la situation au 30 octobre 2026"), "2026-10-30");
+  assert.equal(B.lireDateEnLettres("Vendredi, 3 février, 2027"), "2027-02-03");
+
+  const page = `<p>Dernière mise à jour : Vendredi, 30 octobre, 2026 - 18:15</p><table>
+    <tr><th>Symbole</th><th>Nom</th></tr>
+    <tr><td>SNTS</td><td>SONATEL SENEGAL</td><td>1 234</td><td>4 150</td><td>4 200</td><td>4 350</td><td>4,82</td></tr>
+    <tr><td>ABJC</td><td>SERVAIR ABIDJAN COTE D&#039;IVOIRE</td><td>10</td><td>3 280</td><td>3 280</td><td>3 350</td><td>2,13</td></tr>
+    <tr><td>NTLC</td><td>NESTLE</td><td>3</td><td>13 400</td><td>13 400</td><td>13 400</td><td>-1,5</td></tr>
+  </table>`;
+  const cours = B.lireCoursBrvm(page);
+  assert.equal(cours.length, 3);
+  assert.deepEqual(cours[1], { symbole: "ABJC", nom: "SERVAIR ABIDJAN COTE D'IVOIRE", cloture: 3350, variation: 0.0213 });
+  assert.equal(cours[2].variation, -0.015);
+  assert.equal(B.dateDeSeance(page), "2026-10-30");
+  const indice = B.lireIndiceComposite("<tr><td>BRVM - COMPOSITE</td><td>528,25</td><td>534,71</td><td>1,22</td><td>1,70</td></tr>");
+  assert.equal(indice.cloture, 534.71);
+  assert.ok(Math.abs(indice.variationAnnee - 0.017) < 1e-12);
+
+  const releve = B.lireReleve(
+    [
+      ["Veuillez trouver ci-jointe la situation au 30 octobre 2026"],
+      ["Libellé", "Quantité", "CMP", "Cours", "+/- value", "Pondération", "Valorisation"],
+      ["SONATEL SN", "80", "2 513.800", "4 350.000", "146 896.000", "9.13", "348 000.000"],
+      ["NESTLE CI", "24", "10 951.252", "13 400.000", "58 769.952", "8.44", "321 600.000"],
+      ["TITRE NOUVEAU", "10", "3 000.000", "3 350.000", "3 500.000", "0.88", "33 500.000"],
+      ["Liquidité Disponible", "1 249 216.016"],
+      ["Liquidité Réservée", "13 195.114"],
+      ["TOTAL", "1 965 511.130"],
+    ],
+    cours,
+  );
+  assert.equal(releve.date, "2026-10-30");
+  assert.equal(releve.liquidites, 1262411.13);
+  assert.equal(releve.total, 1965511.13);
+  assert.deepEqual(releve.lignes.map((l) => l.symbole), ["SNTS", "NTLC", "ABJC"], "un nom inconnu se retrouve par son cours");
+  assert.equal(B.symboleDe("INCONNU", 4350.2, [...cours, { symbole: "XXXX", nom: "", cloture: 4350, variation: 0 }]), null, "deux cours egaux : pas de devinette");
+
+  const mvt = (date, nature, symbole, quantite, prix, frais = 0, montant = 0) => ({ date, nature, symbole, quantite, prix, frais, montant });
+  const mouvements = [
+    mvt("2026-11-03", "achat", "SNTS", 20, 4400, 1000),
+    mvt("2026-11-05", "vente", "NTLC", 24, 13500, 500),
+    mvt("2026-11-06", "dividende", "SNTS", 0, 0, 0, 30000),
+    mvt("2026-11-07", "achat", "ORAC", 10, 15000, 0),
+  ];
+  const pos = B.positionsApres(releve, mouvements);
+  const snts = pos.find((p) => p.symbole === "SNTS");
+  assert.equal(snts.quantite, 100);
+  assert.ok(Math.abs(snts.cmp - (80 * 2513.8 + 20 * 4400 + 1000) / 100) < 1e-9, "le prix moyen s'ajuste, frais compris");
+  assert.ok(!pos.some((p) => p.symbole === "NTLC"), "une ligne vendue en entier disparait");
+  assert.equal(pos.find((p) => p.symbole === "ORAC").quantite, 10);
+
+  const liq = B.liquiditesApres(
+    { date: releve.date, liquidites: releve.liquidites },
+    [{ date: "2026-10-15", net: 50000, frais: 0 }, { date: "2026-11-02", net: 100000, frais: 1500 }],
+    mouvements,
+  );
+  assert.ok(Math.abs(liq - (1262411.13 + 98500 - 89000 + 323500 + 30000 - 150000)) < 1e-6, "virement apres le releve, frais de la SGI deduits");
+
+  const v = B.valoriser(pos, new Map([["SNTS", { cloture: 4500, variation: 0.01 }]]), new Map([["ABJC", 3350]]), 1000);
+  assert.equal(v.lignes[0].symbole, "SNTS");
+  assert.equal(v.lignes[0].valeur, 450000);
+  assert.equal(v.lignes.find((l) => l.symbole === "ABJC").variation, null, "sans cours du soir, celui du releve");
+  assert.equal(v.lignes.find((l) => l.symbole === "ORAC").cours, 15000, "a defaut, le prix moyen");
+  assert.equal(v.total, 450000 + 33500 + 150000 + 1000);
+
+  assert.ok(Math.abs(B.performance(1000, 1210, 100) - 110 / 1050) < 1e-12, "apports retires");
+  assert.equal(B.performance(0, 0, 0), null);
+  assert.deepEqual(
+    B.departDeLAnnee([{ date: "2025-12-15", total: 1 }, { date: "2026-02-10", total: 2 }], 2026),
+    { date: "2025-12-15", total: 1 },
+  );
+  assert.deepEqual(B.departDeLAnnee([{ date: "2026-02-10", total: 2 }], 2026), { date: "2026-02-10", total: 2 });
+  const base = B.indiceBase100([
+    { date: "2026-01-02", valeur: 100, apports: 0 },
+    { date: "2026-01-03", valeur: 160, apports: 50 },
+  ]);
+  assert.ok(Math.abs(base[1].indice - 110) < 1e-9, "un apport ne se lit pas comme un gain");
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -2992,5 +3078,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts, rapport de reunion, serie de ponctualite",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts, rapport de reunion, serie de ponctualite, bourse et releve SGI",
 );
