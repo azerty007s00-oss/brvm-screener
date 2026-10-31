@@ -2,7 +2,7 @@ import { exigerMembre } from "@/lib/auth";
 import { peut } from "@/lib/droits";
 import { NOMS } from "@/lib/bourse";
 import { etatBourse, pointsDuSoir } from "@/lib/bourse-base";
-import { importerReleveSgi, inscrireMouvement, retirerMouvement } from "@/app/actions/bourse";
+import { corrigerMontantDividende, importerReleveSgi, inscrireMouvement, retirerMouvement } from "@/app/actions/bourse";
 import { couleurSigne, pourcent } from "@/lib/perf";
 import { dateCourte, nombre } from "@/lib/settings";
 import { Champ, ChampCache, FormulaireAction, Selection } from "@/components/formulaires";
@@ -80,13 +80,14 @@ function Courbes({ annee, points }: { annee: number; points: { date: string; clu
 export default async function PageBourse() {
   const membre = await exigerMembre();
   const peutSaisir = peut(membre, "gererCompteTitres");
+  const peutImporter = peut(membre, "importerReleveSgi");
   const maintenant = new Date();
   const annee = maintenant.getUTCFullYear();
   const [etat, points] = await Promise.all([etatBourse(maintenant), pointsDuSoir(annee)]);
 
   const symboles = [...new Set([...(etat.seance?.cours ?? []).map((c) => c.symbole), ...Object.keys(NOMS)])].sort();
 
-  const importer = peutSaisir ? (
+  const importer = peutImporter ? (
     <FormulaireAction action={importerReleveSgi} libelle="Lire le relevé">
       <Champ
         nom="releve"
@@ -107,7 +108,9 @@ export default async function PageBourse() {
         <Carte titre="Point de départ">
           <Vide>
             Le portefeuille se calcule à partir du dernier relevé de la SGI.{" "}
-            {peutSaisir ? "Importez-le ci-dessous pour commencer." : "Le bureau doit d'abord l'importer."}
+            {peutImporter
+              ? "Importez-le ci-dessous pour commencer."
+              : "Le président ou le vice-président, qui ont accès au site de la SGI, doit d'abord l'importer."}
           </Vide>
           {importer && <div className="mt-4">{importer}</div>}
         </Carte>
@@ -280,13 +283,15 @@ export default async function PageBourse() {
               <Champ nom="note" libelle="Note (facultatif)" requis={false} />
             </FormulaireAction>
           </Panneau>
-          <Panneau libelle="Importer un nouveau relevé SGI" titre="Nouveau relevé SGI" variante="secondaire">
-            {importer}
-          </Panneau>
+          {importer && (
+            <Panneau libelle="Importer un nouveau relevé SGI" titre="Nouveau relevé SGI" variante="secondaire">
+              {importer}
+            </Panneau>
+          )}
           <p className="text-[12.5px] leading-normal" style={{ color: "var(--ink-3)" }}>
-            Les cours et l&apos;indice se lisent seuls chaque soir sur brvm.org. Le bureau n&apos;inscrit que ce que seul
-            le club sait : ses achats, ses ventes et ses dividendes. Le relevé de la SGI sert de contrôle : chaque
-            nouveau relevé importé devient le point de départ.
+            Les cours, l&apos;indice et les dividendes se lisent seuls chaque soir sur brvm.org. Le bureau
+            n&apos;inscrit que ce que seul le club sait : ses achats et ses ventes. Le relevé de la SGI, importé par le
+            président ou le vice-président, sert de contrôle : chaque nouveau relevé devient le point de départ.
           </p>
         </section>
       )}
@@ -295,7 +300,7 @@ export default async function PageBourse() {
         <Carte titre="Mouvements inscrits" className="mt-8">
           <ul>
             {etat.mouvements.map((m) => (
-              <li key={m.id} className="flex items-center gap-3 py-2 text-[13.5px]" style={{ borderTop: "1px solid var(--line)" }}>
+              <li key={m.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[13.5px]" style={{ borderTop: "1px solid var(--line)" }}>
                 <span className="w-20 flex-none tabular-nums">{dateCourte(m.date)}</span>
                 <span className="min-w-0 flex-1 truncate">
                   {m.nature === "achat" ? "Achat" : m.nature === "vente" ? "Vente" : "Dividende"} {m.symbole}
@@ -304,6 +309,9 @@ export default async function PageBourse() {
                       {" "}
                       {nombre(m.quantite)} × {nombre(m.prix)}
                     </span>
+                  )}
+                  {m.note?.startsWith("Automatique") && (
+                    <span className="ml-1.5 text-[12px]" style={{ color: "var(--ink-3)" }}>(avis BRVM, {nombre(m.quantite)} actions)</span>
                   )}
                   {m.date <= etat.releve.date && (
                     <span className="ml-1.5 text-[12px]" style={{ color: "var(--ink-3)" }}>(dans le relevé)</span>
@@ -314,6 +322,17 @@ export default async function PageBourse() {
                     {nombre(m.nature === "achat" ? m.quantite * m.prix + m.frais : m.nature === "vente" ? m.quantite * m.prix - m.frais : m.montant)}
                   </Voilable>
                 </span>
+                {peutSaisir && m.nature === "dividende" && m.quantite > 0 && (
+                  <details className="order-last basis-full open:pb-2 sm:order-none sm:basis-auto">
+                    <summary className="tapable cursor-pointer list-none rounded-lg px-2 py-1 text-[12.5px]" style={{ color: "var(--ink-2)" }}>
+                      Corriger
+                    </summary>
+                    <FormulaireAction action={corrigerMontantDividende} libelle="Corriger" compact className="mt-2">
+                      <ChampCache nom="id" valeur={m.id} />
+                      <Champ nom="montant" libelle="Net reçu de la SGI (FCFA)" type="number" min={1} valeur={m.montant} />
+                    </FormulaireAction>
+                  </details>
+                )}
                 {peutSaisir && (
                   <MenuLigne
                     etiquette={`Actions sur le mouvement du ${dateCourte(m.date)}`}

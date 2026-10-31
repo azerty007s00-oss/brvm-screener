@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { lireReleve, type NatureMouvement } from "@/lib/bourse";
-import { ajouterMouvement, derniereSeance, importerReleve, lignesDuPdf, supprimerMouvement } from "@/lib/bourse-base";
+import { ajouterMouvement, corrigerDividende, derniereSeance, importerReleve, lignesDuPdf, supprimerMouvement } from "@/lib/bourse-base";
 import { dateCourte, fcfa } from "@/lib/settings";
 import type { EtatFormulaire } from "./auth";
 
@@ -14,7 +14,7 @@ import type { EtatFormulaire } from "./auth";
  * depart du portefeuille, et un releve de la page Portefeuille.
  */
 export async function importerReleveSgi(_p: EtatFormulaire, donnees: FormData): Promise<EtatFormulaire> {
-  const auteur = await exigerDroit("gererCompteTitres");
+  const auteur = await exigerDroit("importerReleveSgi");
   const fichier = donnees.get("releve");
   if (!(fichier instanceof File) || fichier.size === 0) return { ok: false, erreur: "Choisissez le relevé PDF de la SGI." };
   if (fichier.size > 5_000_000) return { ok: false, erreur: "Ce fichier dépasse 5 Mo : est-ce bien le relevé ?" };
@@ -112,4 +112,18 @@ export async function retirerMouvement(_p: EtatFormulaire, donnees: FormData): P
   await journaliser({ id: auteur.id, nom: auteur.nom }, "suppression_mouvement_bourse", { entite: "stock_movements", id }, efface);
   revalidatePath("/", "layout");
   return { ok: true, message: "Mouvement supprimé." };
+}
+
+/** Le net d'un dividende, tel que la SGI l'a reellement verse. */
+export async function corrigerMontantDividende(_p: EtatFormulaire, donnees: FormData): Promise<EtatFormulaire> {
+  const auteur = await exigerDroit("gererCompteTitres");
+  const id = String(donnees.get("id") ?? "");
+  const montant = Number(String(donnees.get("montant") ?? "").replace(/\s/g, "").replace(",", "."));
+  if (!/^[0-9a-f-]{36}$/i.test(id)) return { ok: false, erreur: "Dividende introuvable." };
+  if (!Number.isFinite(montant) || montant <= 0) return { ok: false, erreur: "Indiquez le montant net reçu." };
+  const corrige = await corrigerDividende(id, Math.round(montant));
+  if (!corrige) return { ok: false, erreur: "Dividende introuvable." };
+  await journaliser({ id: auteur.id, nom: auteur.nom }, "correction_dividende", { entite: "stock_movements", id }, corrige);
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Dividende corrigé : ${fcfa(Math.round(montant))}.` };
 }

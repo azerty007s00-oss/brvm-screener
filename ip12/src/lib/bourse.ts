@@ -322,3 +322,124 @@ export function departDeLAnnee(releves: { date: string; total: number }[], annee
   const tries = [...releves].sort((a, b) => a.date.localeCompare(b.date));
   return tries.filter((r) => r.date <= premier).at(-1) ?? tries.find((r) => r.date.startsWith(String(annee))) ?? null;
 }
+
+/* --------------------------------------------------------------- dividendes */
+
+/**
+ * Un avis de paiement de dividende, tel que brvm.org le publie
+ * (brvm.org/fr/esv/paiement-de-dividendes) : la societe, l'exercice, la date
+ * de paiement, la date ex-dividende, le montant net par action, et l'avis.
+ */
+export type AvisDividende = {
+  emetteur: string;
+  exercice: string;
+  paiement: string;
+  ex: string;
+  /** Net par action, en FCFA ; null si l'avis le donne dans une autre monnaie. */
+  montant: number | null;
+  avis: string | null;
+};
+
+export function lireDividendesBrvm(html: string): AvisDividende[] {
+  const debut = html.search(/Date ex-dividende/i);
+  if (debut < 0) return [];
+  const avis: AvisDividende[] = [];
+  for (const ligne of html.slice(debut).split(/<tr[\s>]/i).slice(1)) {
+    const corps = ligne.split(/<\/tr>/i)[0];
+    const c = [...corps.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map((m) => texteDe(m[1]));
+    if (c.length < 7) continue;
+    const paiement = lireDateEnLettres(c[4]);
+    const ex = lireDateEnLettres(c[5]);
+    if (!c[0] || !paiement || !ex) continue;
+    const m = /^(?:XOF\s*)?([\d\s.,]+?)\s*(?:F\s*CFA|FCFA|XOF)?$/i.exec(c[6]);
+    const enFcfa = /F\s*CFA|XOF/i.test(c[6]);
+    avis.push({
+      emetteur: c[0],
+      exercice: c[3],
+      paiement,
+      ex,
+      montant: m && enFcfa ? lireNombre(m[1]) : null,
+      avis: /href="([^"]+)"/i.exec(corps)?.[1] ?? null,
+    });
+  }
+  return avis;
+}
+
+/**
+ * Le titre d'un avis. brvm.org nomme les societes a sa facon (« SGCI »,
+ * « TOTAL », « BANK OF AFRICA BN ») ; le nom du fichier de l'avis, plus
+ * regulier, depart les cas douteux (« TOTAL » : Cote d'Ivoire ou Senegal).
+ * Un avis qui designe zero ou plusieurs titres n'en designe aucun : le site
+ * ne devine pas.
+ */
+const mot = (m: string) => new RegExp(`(^|[^a-z])${m}([^a-z]|$)`);
+const EMETTEURS: [RegExp, string][] = [
+  [/agl_ci|bollore/, "SDSC"],
+  [/tractafric/, "PRSC"],
+  [mot("smb"), "SMBC"],
+  [/sodeci|sode_ci/, "SDCC"],
+  [/nei-ceda/, "NEIC"],
+  [/vivo/, "SHEC"],
+  [/totalenergies_marketing_ci/, "TTLC"],
+  [/totalenergies_marketing_sn|total senegal/, "TTLS"],
+  [/saph/, "SPHC"],
+  [/sgci|societe_generale/, "SGBC"],
+  [/nestle/, "NTLC"],
+  [/cfao/, "CFAC"],
+  [/sitab/, "STBC"],
+  [/sogb/, "SOGC"],
+  [/nsbc|nsia/, "NSBC"],
+  [mot("lnb"), "LNBB"],
+  [/loterie/, "LNBB"],
+  [/solibra/, "SLBC"],
+  [/cie[ _]ci/, "CIEC"],
+  [/biic/, "BICB"],
+  [/servair/, "ABJC"],
+  [/eti_tg|ecobank tg/, "ETIT"],
+  [mot("sib"), "SIBC"],
+  [/bici/, "BICC"],
+  [/palm/, "PALC"],
+  [/coris/, "CBIBF"],
+  [/orange[ _]ci/, "ORAC"],
+  [mot("onatel"), "ONTBF"],
+  [/sicable/, "CABC"],
+  [/boam|bank of africa ml/, "BOAM"],
+  [/ecobank[ _]ci/, "ECOC"],
+  [/boa_sn|bank of africa sn/, "BOAS"],
+  [/boab([^a-z]|$)|bank of africa bn/, "BOAB"],
+  [/boa_ci|bank of africa ci/, "BOAC"],
+  [/boa_bf|bank of africa bf/, "BOABF"],
+  [/boa_ne|bank of africa ne/, "BOAN"],
+  [/sonatel/, "SNTS"],
+  [/filtisac/, "FTSC"],
+  [/setao/, "STAC"],
+  [/uniwax/, "UNXC"],
+  [/oragroup/, "ORGT"],
+  [/bridge/, "BBGC"],
+  [/sucrivoire/, "SCRC"],
+  [/unilever/, "UNLC"],
+  [/safca/, "SAFC"],
+];
+
+export function symboleDuDividende(a: Pick<AvisDividende, "emetteur" | "avis">): string | null {
+  const texte = `${a.emetteur} ${(a.avis ?? "").split("/").at(-1) ?? ""}`.toLowerCase();
+  const trouves = new Set(EMETTEURS.filter(([r]) => r.test(texte)).map(([, s]) => s));
+  return trouves.size === 1 ? [...trouves][0] : null;
+}
+
+/**
+ * Les actions detenues a la veille de la date ex-dividende : seules elles
+ * touchent le dividende. A partir du releve, en avancant (mouvements entre le
+ * releve et la veille) ou en reculant (mouvements entre la date ex et le
+ * releve, qui y sont deja comptes).
+ */
+export function quantiteALaVeille(symbole: string, ex: string, releve: { date: string; lignes: LigneReleve[] }, mouvements: Mouvement[]): number {
+  let q = releve.lignes.filter((l) => l.symbole === symbole).reduce((t, l) => t + l.quantite, 0);
+  for (const m of mouvements) {
+    if (m.symbole !== symbole || m.nature === "dividende") continue;
+    const signe = m.nature === "achat" ? 1 : -1;
+    if (ex > releve.date && m.date > releve.date && m.date < ex) q += signe * m.quantite;
+    if (ex <= releve.date && m.date >= ex && m.date <= releve.date) q -= signe * m.quantite;
+  }
+  return Math.max(0, q);
+}

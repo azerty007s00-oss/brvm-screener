@@ -3068,6 +3068,51 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
     { date: "2026-01-03", valeur: 160, apports: 50 },
   ]);
   assert.ok(Math.abs(base[1].indice - 110) < 1e-9, "un apport ne se lit pas comme un gain");
+  /* Les dividendes, d'apres les avis de brvm.org. */
+  const avisHtml = `<table><tr><th>Emetteur</th><th>Date ex-dividende</th></tr>
+    <tr><td>SMB</td><td></td><td></td><td>2025</td><td>18 septembre 2026</td><td>17 septembre 2026</td><td>800 FCFA</td><td><a href="https://www.brvm.org/x_-_smb_ci.pdf">Télécharger</a></td></tr>
+    <tr><td>ECOBANK TG</td><td></td><td></td><td>2025</td><td>30 juin 2026</td><td>26 juin 2026</td><td>0,16 cents de dollars</td><td></td></tr>
+    <tr><td>SITAB</td><td></td><td></td><td>2025</td><td>13 août 2026</td><td>12 août 2026</td><td>1 707,2 FCFA</td><td></td></tr>
+    <tr><td>CFAO MOTORS CI</td><td></td><td></td><td>2024</td><td>19 août 2025</td><td>18 août 2025</td><td>XOF 8</td><td></td></tr>
+  </table>`;
+  const lus = B.lireDividendesBrvm(avisHtml.replace("<table>", "<p>Date ex-dividende</p><table>"));
+  assert.equal(lus.length, 4);
+  assert.deepEqual(lus[0], { emetteur: "SMB", exercice: "2025", paiement: "2026-09-18", ex: "2026-09-17", montant: 800, avis: "https://www.brvm.org/x_-_smb_ci.pdf" });
+  assert.equal(lus[1].montant, null, "un montant en dollars ne s'inscrit pas");
+  assert.equal(lus[2].montant, 1707.2);
+  assert.equal(lus[3].montant, 8);
+  const pdf = (slug) => `https://www.brvm.org/sites/default/files/avis_-_paiement_de_dividendes_-_${slug}.pdf`;
+  for (const [emetteur, slug, attendu] of [
+    ["BOLLORE TRANSPORT & LOGISTICS", "agl_ci", "SDSC"],
+    ["TOTAL", "totalenergies_marketing_ci", "TTLC"],
+    ["TOTAL SENEGAL S.A.", "totalenergies_marketing_sn", "TTLS"],
+    ["SGCI", "societe_generale_ci", "SGBC"],
+    ["SIB", "sib_ci", "SIBC"],
+    ["BICI CI", "bicici", "BICC"],
+    ["CIE CI", "cie_ci", "CIEC"],
+    ["BANK OF AFRICA BN", "boab", "BOAB"],
+    ["BANK OF AFRICA CI", "boa_ci", "BOAC"],
+    ["BANK OF AFRICA BF", "boa_bf", "BOABF"],
+    ["ECOBANK CI", "ecobank_ci", "ECOC"],
+    ["ECOBANK TG", "eti_tg", "ETIT"],
+    ["SONATEL", "sonatel_sn", "SNTS"],
+    ["NSBC", "nsia_banque_ci", "NSBC"],
+    ["LNB", "loterie_nationale_du_benin", "LNBB"],
+    ["SERVAIR ABIDJAN CI", "servair_abidjan_ci", "ABJC"],
+    ["ONATEL BF", "onatel_bf", "ONTBF"],
+    ["SMB", "smb_ci", "SMBC"],
+  ]) {
+    assert.equal(B.symboleDuDividende({ emetteur, avis: pdf(slug) }), attendu, emetteur);
+  }
+  assert.equal(B.symboleDuDividende({ emetteur: "TOTAL", avis: null }), null, "« TOTAL » seul : Côte d'Ivoire ou Sénégal, le site ne devine pas");
+  assert.equal(B.symboleDuDividende({ emetteur: "SOCIETE INCONNUE", avis: null }), null);
+
+  const rel = { date: "2026-10-30", lignes: [{ nom: "SMB CI", symbole: "SMBC", quantite: 16, cmp: 1, cours: 1, valeur: 1 }] };
+  const mv = [mvt("2026-11-10", "achat", "SMBC", 4, 14000), mvt("2026-11-20", "vente", "SMBC", 10, 15000), mvt("2026-10-20", "achat", "SMBC", 6, 14000)];
+  assert.equal(B.quantiteALaVeille("SMBC", "2026-11-15", rel, mv), 20, "l'achat d'avant la date ex compte");
+  assert.equal(B.quantiteALaVeille("SMBC", "2026-11-10", rel, mv), 16, "l'achat du jour ex ne touche pas le dividende");
+  assert.equal(B.quantiteALaVeille("SMBC", "2026-10-15", rel, mv), 10, "avant le releve : on recule");
+  assert.equal(B.quantiteALaVeille("NTLC", "2026-11-15", rel, mv), 0);
 }
 
 console.log(
@@ -3078,5 +3123,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts, rapport de reunion, serie de ponctualite, bourse et releve SGI",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts, rapport de reunion, serie de ponctualite, bourse, releve SGI et dividendes",
 );

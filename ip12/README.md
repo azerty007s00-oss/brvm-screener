@@ -238,11 +238,16 @@ Phoenix Capital Management.
   perdue ne fait jamais échouer le geste qui l'a déclenchée.
 - **Comptes › Bourse** — chaque soir de semaine à 19 h GMT, `/api/cron/bourse` lit sur brvm.org
   les cours de clôture et l'indice BRVM Composite, puis valorise le portefeuille. Le point de
-  départ est le relevé PDF de la SGI, importé par le bureau (`gererCompteTitres`) : le site en lit
+  départ est le relevé PDF de la SGI, importé par le président ou le vice-président, seuls à avoir
+  accès au site de la SGI (`importerReleveSgi`) : le site en lit
   les titres, les quantités, les prix moyens et les liquidités, refuse un relevé dont les lignes ne
   retombent pas sur le total, et l'inscrit aussi comme relevé du portefeuille (les parts se
-  recalculent). Le bureau n'inscrit ensuite que les achats, les ventes (frais de l'ordre compris)
-  et les dividendes ; les virements vers le compte-titres viennent de *Titres*. La page compare le
+  recalculent). Le bureau (`gererCompteTitres`) n'inscrit ensuite que les achats et les ventes
+  (frais de l'ordre compris) ; les virements vers le compte-titres viennent de *Titres*. Les
+  dividendes s'inscrivent seuls : le même passage lit les avis de paiement de brvm.org et, le jour
+  du paiement, inscrit les actions détenues à la veille de la date ex fois le net par action, puis
+  prévient le bureau, qui corrige le montant si la SGI a versé autre chose. Un avis dont la société
+  n'est pas reconnue n'est pas deviné : le bureau est prévenu. La page compare le
   club, apports de l'année retirés, à la BRVM Composite depuis le 1er janvier, liste les titres au
   dernier cours et totalise les dividendes de l'année.
 

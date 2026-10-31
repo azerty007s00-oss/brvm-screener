@@ -1,7 +1,10 @@
 import "server-only";
 import { db } from "./db";
 import { avecTables } from "./tables-auto";
-import { listerApports, listerValorisations, netApport } from "./queries";
+import { listerApports, listerMembres, listerValorisations, netApport } from "./queries";
+import { envoyerAlertes } from "./alertes";
+import { peut } from "./droits";
+import { nombre } from "./settings";
 import {
   type Cours,
   type LigneReleve,
@@ -9,6 +12,9 @@ import {
   type NatureMouvement,
   type Releve,
   departDeLAnnee,
+  lireDividendesBrvm,
+  quantiteALaVeille,
+  symboleDuDividende,
   lireCoursBrvm,
   lireIndiceComposite,
   liquiditesApres,
@@ -65,6 +71,19 @@ const TABLES = [
     note       text,
     created_by uuid references members(id) on delete set null,
     created_at timestamptz not null default now()
+  )`,
+  `create table if not exists brvm_dividends (
+    issuer      text not null,
+    pay_date    date not null,
+    ex_date     date not null,
+    fiscal_year text,
+    net_amount  numeric,
+    notice_url  text,
+    symbol      text,
+    handled_at  timestamptz,
+    quantity    numeric,
+    movement_id uuid,
+    primary key (issuer, pay_date)
   )`,
   `create table if not exists portfolio_daily (
     trade_date date primary key,
@@ -340,6 +359,7 @@ export async function etatBourse(aujourdhui: Date = new Date()) {
 
 const PAGES = {
   cours: "https://www.brvm.org/fr/cours-actions/0",
+  dividendes: "https://www.brvm.org/fr/esv/paiement-de-dividendes",
   indices: "https://www.brvm.org/fr/indices",
 };
 
@@ -378,6 +398,8 @@ export async function passageBourse(maintenant: Date = new Date()) {
     `;
   }
 
+  /* Les dividendes d'abord : ceux du jour entrent dans les liquidites du soir. */
+  const dividendes = await passageDividendes(jour).catch((e) => ({ erreur: String(e) }));
   const etat = await etatBourse(new Date(`${jour}T12:00:00Z`));
   if (etat.releve) {
     await sql`
@@ -387,5 +409,101 @@ export async function passageBourse(maintenant: Date = new Date()) {
         set value = excluded.value, cash = excluded.cash, club_ytd = excluded.club_ytd, index_ytd = excluded.index_ytd
     `;
   }
-  return { jour, cours: cours.length, indice: indice?.cloture ?? null, valeur: etat.releve ? Math.round(etat.total) : null };
+  return { jour, cours: cours.length, indice: indice?.cloture ?? null, valeur: etat.releve ? Math.round(etat.total) : null, dividendes };
+}
+
+/**
+ * Les dividendes, sans saisie : les avis de brvm.org entrent en base ; le
+ * jour du paiement venu, le site inscrit ce que le club touche (actions
+ * detenues a la veille de la date ex, fois le net par action) et previent le
+ * bureau, qui corrige si la SGI a verse autre chose. Un avis n'est traite
+ * qu'une fois, meme supprime ensuite : le bureau garde le dernier mot.
+ *
+ * Seuls comptent les paiements posterieurs au releve : les autres y sont deja,
+ * dans les liquidites.
+ */
+export async function passageDividendes(jour: string) {
+  const avis = lireDividendesBrvm(await pageBrvm(PAGES.dividendes));
+  const sql = db();
+  if (avis.length > 0) {
+    await avecTables(TABLES, () => sql`
+      insert into brvm_dividends (issuer, pay_date, ex_date, fiscal_year, net_amount, notice_url, symbol)
+      select i, p, e, f, m, u, s
+      from unnest(${avis.map((a) => a.emetteur)}::text[], ${avis.map((a) => a.paiement)}::date[], ${avis.map((a) => a.ex)}::date[],
+                  ${avis.map((a) => a.exercice)}::text[], ${avis.map((a) => a.montant)}::numeric[], ${avis.map((a) => a.avis)}::text[],
+                  ${avis.map((a) => symboleDuDividende(a))}::text[]) as t(i, p, e, f, m, u, s)
+      on conflict (issuer, pay_date) do nothing
+    `);
+  }
+  const releve = await dernierReleve();
+  if (!releve) return { avis: avis.length, inscrits: 0 };
+
+  /* Chaque avis echu est reserve par ce passage avant d'etre traite : deux passages ne l'inscrivent pas deux fois. */
+  const echus = await avecTables(TABLES, () => sql`
+    update brvm_dividends set handled_at = now()
+    where handled_at is null and pay_date <= ${jour}::date and pay_date > ${releve.date}::date
+    returning issuer, to_char(pay_date, 'YYYY-MM-DD') as paiement, to_char(ex_date, 'YYYY-MM-DD') as ex,
+              net_amount, symbol, notice_url
+  `);
+  if (echus.length === 0) return { avis: avis.length, inscrits: 0 };
+
+  const mouvements = await listerMouvements();
+  const inscrits: string[] = [];
+  const douteux: string[] = [];
+  for (const d of echus) {
+    const symbole = d.symbol === null ? null : String(d.symbol);
+    const net = d.net_amount === null ? null : Number(d.net_amount);
+    if (!symbole || net === null) {
+      douteux.push(String(d.issuer));
+      continue;
+    }
+    const q = quantiteALaVeille(symbole, String(d.ex), releve, mouvements);
+    if (q <= 0) continue;
+    const montant = Math.round(q * net);
+    const [m] = await sql`
+      insert into stock_movements (trade_date, kind, symbol, quantity, unit_price, fees, amount, note)
+      values (${String(d.paiement)}::date, 'dividende', ${symbole}, ${q}, ${net}, 0, ${montant},
+              ${`Automatique : ${q} actions × ${String(net).replace(".", ",")} FCFA net, avis BRVM`})
+      returning id::text as id
+    `;
+    await sql`
+      update brvm_dividends set quantity = ${q}, movement_id = ${m.id}::uuid
+      where issuer = ${String(d.issuer)} and pay_date = ${String(d.paiement)}::date
+    `;
+    inscrits.push(`${symbole} : ${nombre(montant)} FCFA`);
+  }
+
+  if (inscrits.length + douteux.length > 0) {
+    const bureau = (await listerMembres()).filter((m) => m.actif && peut(m, "gererCompteTitres")).map((m) => m.id);
+    if (inscrits.length > 0) {
+      await envoyerAlertes(bureau, {
+        titre: inscrits.length > 1 ? "Dividendes encaissés" : "Dividende encaissé",
+        corps: `${inscrits.join(", ")}. Inscrit d'après l'avis de la BRVM : corrige-le si la SGI a versé autre chose.`,
+        corpsVoile: "Inscrit d'après l'avis de la BRVM : corrige-le si la SGI a versé autre chose.",
+        url: "/bourse",
+        etiquette: `dividendes-${jour}`,
+      });
+    }
+    if (douteux.length > 0) {
+      await envoyerAlertes(bureau, {
+        titre: "Dividende à vérifier",
+        corps: `${douteux.join(", ")} : le site ne sait pas à quel titre le rattacher. Si le club le détient, inscris-le à la main.`,
+        url: "/bourse",
+        etiquette: `dividendes-douteux-${jour}`,
+      });
+    }
+  }
+  return { avis: avis.length, inscrits: inscrits.length, douteux: douteux.length };
+}
+
+/** Corrige le net recu d'un dividende ; la ligne doit etre un dividende. */
+export async function corrigerDividende(id: string, montant: number): Promise<Record<string, unknown> | null> {
+  const sql = db();
+  const rows = await avecTables(TABLES, () => sql`
+    update stock_movements m set amount = ${montant}
+    from (select id, amount as avant from stock_movements where id = ${id}::uuid and kind = 'dividende') a
+    where m.id = a.id
+    returning m.symbol, to_char(m.trade_date, 'YYYY-MM-DD') as date, a.avant, m.amount
+  `);
+  return rows[0] ?? null;
 }

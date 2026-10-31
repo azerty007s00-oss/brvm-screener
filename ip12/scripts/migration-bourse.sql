@@ -52,6 +52,20 @@ create table if not exists stock_movements (
     created_at timestamptz not null default now()
   );
 
+create table if not exists brvm_dividends (
+    issuer      text not null,
+    pay_date    date not null,
+    ex_date     date not null,
+    fiscal_year text,
+    net_amount  numeric,
+    notice_url  text,
+    symbol      text,
+    handled_at  timestamptz,
+    quantity    numeric,
+    movement_id uuid,
+    primary key (issuer, pay_date)
+  );
+
 create table if not exists portfolio_daily (
     trade_date date primary key,
     value      numeric not null,

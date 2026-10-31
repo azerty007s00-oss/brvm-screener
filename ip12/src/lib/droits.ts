@@ -45,6 +45,12 @@ export const DROITS = {
    */
   gererCompteTitres: ["president", "vice_president", "tresorier"],
 
+  /**
+   * Importer le releve de la SGI : seuls le president et le vice-president
+   * ont l'acces au site de la SGI qui le delivre.
+   */
+  importerReleveSgi: ["president", "vice_president"],
+
   /** Reunions et feuille de presence. */
   gererReunions: ["secretaire", "president"],
 
