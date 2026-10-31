@@ -46,8 +46,8 @@ export const DROITS = {
   gererCompteTitres: ["president", "vice_president", "tresorier"],
 
   /**
-   * La bourse : importer le releve de la SGI, inscrire les achats et les
-   * ventes, corriger un dividende. Seuls le president et le vice-president
+   * La bourse : importer le releve de la SGI, saisir ou supprimer un releve
+   * du portefeuille, inscrire les achats et les ventes, corriger un dividende. Seuls le president et le vice-president
    * ont l'acces au site de la SGI ; le tresorier ne s'occupe que de la caisse.
    */
   opererEnBourse: ["president", "vice_president"],

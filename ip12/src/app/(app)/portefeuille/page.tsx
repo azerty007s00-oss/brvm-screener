@@ -33,7 +33,7 @@ export default async function PagePortefeuille() {
 
   const derniere = valos.at(-1) ?? null;
   const precedente = valos.at(-2) ?? null;
-  const peutSaisir = peut(membre, "gererCompteTitres");
+  const peutSaisir = peut(membre, "opererEnBourse");
 
   /*
    * Le net place a la date de chaque releve : la somme des virements vers le

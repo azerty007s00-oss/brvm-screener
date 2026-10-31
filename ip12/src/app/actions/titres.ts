@@ -96,7 +96,7 @@ export async function enregistrerValorisation(
   _precedent: EtatFormulaire,
   donnees: FormData,
 ): Promise<EtatFormulaire> {
-  const auteur = await exigerDroit("gererCompteTitres");
+  const auteur = await exigerDroit("opererEnBourse");
   const dateValo = String(donnees.get("dateValo") ?? "").slice(0, 10);
   const total = Number(donnees.get("total") ?? 0);
   const liquidites = Number(donnees.get("liquidites") ?? 0);
@@ -148,7 +148,7 @@ export async function supprimerValorisation(
   _precedent: EtatFormulaire,
   donnees: FormData,
 ): Promise<EtatFormulaire> {
-  const auteur = await exigerDroit("gererCompteTitres");
+  const auteur = await exigerDroit("opererEnBourse");
   const id = String(donnees.get("id") ?? "");
   const sql = db();
   await sql`delete from portfolio_valuations where id = ${id}::uuid`;
