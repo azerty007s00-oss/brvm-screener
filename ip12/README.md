@@ -256,6 +256,16 @@ Phoenix Capital Management.
   l'ordre des validations, et ne bouge plus. Le lien est dans *Moi › Historique*, à côté du
   versement. Seuls le membre, le détenteur de sa part et le bureau qui valide peuvent l'ouvrir.
 
+- **Club › Statuts** — le texte signé, article par article, avec une recherche sans accents ni
+  casse, le PDF signé à télécharger, et sous chaque article les résolutions qui le précisent. Le
+  texte n'est pas dans le code (le dépôt est public, art. 5) : le président ou le secrétaire
+  (`gererStatuts`) importe le PDF depuis le site, qui en lit les articles et le garde en base ; une
+  version re-signée remplace la précédente, et les notes sur les renvois faux disparaissent
+  d'elles-mêmes. *Résolutions* : importées d'un recensement Markdown (lignes codées S1, R4) ou
+  inscrites une à une, avec leur statut (adoptée, à confirmer, remplacée) ; une résolution à
+  confirmer propose un vote en ligne, et les votes clos du site s'y ajoutent avec leur
+  procès-verbal.
+
 ## Règles appliquées
 
 | Source | Règle |
@@ -293,6 +303,7 @@ Des migrations la complètent, toutes purement additives :
 | `scripts/migration-sondages.sql` | `meeting_polls` et `meeting_poll_answers`, le sondage de date. **Inutile de l'exécuter** : le site crée ces deux tables lui-même au premier besoin |
 | `scripts/migration-fuseaux.sql` | `member_time_zones`, le fuseau de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
 | `scripts/migration-wave.sql` | `member_wave`, le numéro Wave de chaque membre. **Inutile de l'exécuter** : le site la crée lui-même |
+| `scripts/migration-statuts.sql` | Les statuts importés et les résolutions. **Inutile de l'exécuter** : le site les crée lui-même |
 | `scripts/migration-recus.sql` | Les numéros des reçus de versement. **Inutile de l'exécuter** : le site la crée lui-même |
 | `scripts/migration-bourse.sql` | Cours, indice, relevés SGI, mouvements et valeur du soir. **Inutile de l'exécuter** : le site les crée lui-même |
 | `scripts/migration-votes.sql` | `votes` et `vote_ballots`, le vote en ligne. **Inutile de l'exécuter** : le site les crée lui-même |

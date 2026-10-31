@@ -157,6 +157,13 @@ export const Icone = {
       <rect x="15.5" y="6" width="3" height="6" rx="0.6" />
     </Trait>
   ),
+  /* Les statuts : un document et ses lignes. */
+  statuts: (p: Props) => (
+    <Trait {...p}>
+      <path d="M7 3.5 H14 L18 7.5 V20.5 H7 Z" />
+      <path d="M14 3.5 V7.5 H18 M10 12 H15 M10 15.5 H15" />
+    </Trait>
+  ),
   calendrier: (p: Props) => (
     <Trait {...p}>
       <rect x="3" y="5" width="18" height="16" rx="2.5" />

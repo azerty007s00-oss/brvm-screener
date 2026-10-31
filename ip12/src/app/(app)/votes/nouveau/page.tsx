@@ -15,8 +15,10 @@ const styleChamp =
   "focus:outline-2 focus:outline-offset-1 focus:outline-[var(--gold)] focus:border-transparent lg:rounded-lg lg:px-3 lg:text-[14px]";
 const couleursChamp = { background: "var(--page)", borderColor: "var(--line-2)", color: "var(--ink)" };
 
-export default async function PageProposerVote() {
+export default async function PageProposerVote({ searchParams }: { searchParams: Promise<{ question?: string }> }) {
   const membre = await exigerMembre();
+  /* Une question deja redigee : celle d'une resolution a confirmer, depuis Club › Statuts. */
+  const questionProposee = String((await searchParams).question ?? "").slice(0, 240);
   const [liste, gens] = await Promise.all([electeursActuels(null).catch(() => []), personnes()]);
   const suspendus = liste.filter((e) => e.exclu === "suspendu");
   const admis = liste.length - suspendus.length;
@@ -45,6 +47,7 @@ export default async function PageProposerVote() {
               required
               rows={2}
               maxLength={240}
+              defaultValue={questionProposee || undefined}
               placeholder="Passer la cotisation à 7 500 FCFA à partir de janvier 2027"
               className={styleChamp}
               style={couleursChamp}

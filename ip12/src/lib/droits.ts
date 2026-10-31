@@ -52,6 +52,13 @@ export const DROITS = {
    */
   opererEnBourse: ["president", "vice_president"],
 
+  /**
+   * Les statuts et les resolutions : importer le PDF signe, inscrire une
+   * resolution. Le secretaire, qui redige les proces-verbaux (art. 14), y
+   * tient la plume avec le president.
+   */
+  gererStatuts: ["president", "secretaire"],
+
   /** Reunions et feuille de presence. */
   gererReunions: ["secretaire", "president"],
 

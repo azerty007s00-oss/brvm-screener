@@ -3142,6 +3142,60 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   }
 }
 
+/* ------------------------------------------------------------------ statuts */
+{
+  /* Un texte invente : les vrais statuts ne vont pas dans le depot (art. 5). */
+  const T = await import("../.verif/statuts.mjs");
+  const art = T.decouperStatuts([
+    "STATUTS DU CLUB",
+    "CREATION ET OBJET",
+    "Art. 1 : Le club est constitué pour une durée de dix ans, sauf dissolution prévue par l'article 25 ci-",
+    "après.",
+    "Art. 2 : Il a pour objet l'éducation de ses membres.",
+    "RESSOURCES DU CLUB",
+    "Art 9 : Tout retard entraîne une pénalité, après délibération dans les conditions prévues à l'article 22.",
+    "Art. 14 : Le bureau comprend :",
+    "• Président qui dirige les débats.",
+    "• Trésorier qui tient les comptes.",
+    "Membres fondateurs :",
+    "Art. 99 : jamais lu",
+  ]);
+  assert.deepEqual(art.map((a) => a.numero), [1, 2, 9, 14], "le texte s'arrete aux signatures");
+  assert.equal(art[0].chapitre, "Création et objet");
+  assert.equal(art[2].chapitre, "Ressources du club");
+  assert.ok(art[0].texte.endsWith("l'article 25 ci-après."), "un mot coupe en fin de ligne se recolle");
+  assert.equal(art[3].texte, "Le bureau comprend :\n• Président qui dirige les débats.\n• Trésorier qui tient les comptes.");
+  assert.equal(T.noteDe(art[0]), "La dissolution anticipée est prévue à l'art. 23, et non à l'art. 25.");
+  assert.equal(T.noteDe(art[2]), "L'exclusion relève de l'art. 20, et non de l'art. 22.");
+  assert.equal(T.noteDe({ numero: 9, texte: "… prévues à l'article 20." }), null, "un texte corrige n'a plus de note");
+  assert.ok(T.correspond({ numero: 9, texte: "Tout retard entraîne une pénalité" }, "penalite"), "sans accents");
+  assert.ok(T.correspond({ numero: 9, texte: "x" }, "9") && !T.correspond({ numero: 19, texte: "x" }, "9"), "un numero va droit a l'article");
+  assert.ok(T.correspond({ numero: 9, texte: "x" }, "Art. 9"));
+
+  const md = [
+    "| N° | Date | Résolution | Vote / origine | Article concerné | Statut |",
+    "|---|---|---|---|---|---|",
+    "| S1 | 08-09/11/2025 | Désignation d'un **second mandataire** : il transmet les ordres. | Sondage 5 voix | Art. 14 (bureau) | Adoptée |",
+    "| S2 | 21/12/2025 | **Pause des versements** jusqu'à régularisation. | Pour 4, Contre 3 | Art. 6 et 8 | Adoptée, puis reprise (voir S3) |",
+    "| R4 | 16/07/2026 | **Doublement des pénalités** à 3 mois de retard. | Pour 4, Contre 3 | Art. 9 | À confirmer (majorité courte, voir points de vigilance) |",
+    "| S8 | 14/04/2026 | **Tolérance** de deux mois. | Annonce | Art. 9 | À confirmer (remplacée par R2 à R5) |",
+    "| 06/11/2025 | Décision sans code | Déclaration | Remplacée |",
+  ].join("\n");
+  const res = T.lireRecensement(md);
+  assert.deepEqual(res.map((r) => r.code), ["S1", "S2", "R4", "S8"], "seules les lignes codees");
+  assert.deepEqual(
+    { titre: res[0].titre, detail: res[0].detail, decideeLe: res[0].decideeLe, articles: res[0].articles, statut: res[0].statut, precision: res[0].precision },
+    { titre: "Second mandataire", detail: "Désignation d'un second mandataire : il transmet les ordres.", decideeLe: "2025-11-08", articles: [14], statut: "adoptee", precision: null },
+  );
+  assert.equal(res[1].detail, "Jusqu'à régularisation.", "le titre ouvre la phrase : le detail en est la suite");
+  assert.deepEqual(res[1].articles, [6, 8]);
+  assert.equal(res[1].precision, "Puis reprise (voir S3)");
+  assert.equal(res[2].statut, "a_confirmer");
+  assert.equal(res[2].precision, "Majorité courte");
+  assert.equal(res[3].statut, "remplacee");
+  assert.deepEqual(T.resolutionsDe(9, res).map((r) => r.code), ["R4", "S8"], "la plus recente d'abord");
+}
+
 console.log(
   `OK - ${verifications} verifications : performance, parts et avances, ` +
     "penalites art. 9, R4 et indissociabilite, versements partiels, regles " +
@@ -3150,5 +3204,5 @@ console.log(
     + "cumul, gain de periode et marches, etat de l'echeance, seuil R5, "
     + "ordre de reglement des mois, imputation d'un versement et des penalites, "
     + "total des cotisations a regler, avance obligatoire, sortie en side pocket, caisse et sorties, "
-    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts, rapport de reunion, serie de ponctualite, bourse, releve SGI et dividendes, recus de versement",
+    + "courrier de sortie, rachat des parts par des membres, parts rachetees distinctes, valorisation avant la sortie, releve PDF joint a une relance, objectif du club, fil d'un membre, R4 et penalites indissociables, sondage de date de reunion, invitation d'agenda, fuseaux des membres, paiement par Wave, vote pondere par les parts, rapport de reunion, serie de ponctualite, bourse, releve SGI et dividendes, recus de versement, statuts et resolutions",
 );
