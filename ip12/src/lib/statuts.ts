@@ -47,12 +47,18 @@ export function decouperStatuts(lignes: string[]): Article[] {
   const articles: Article[] = [];
   let chapitre = "";
   let courant: Article | null = null;
+  /* Une ligne vide, dans un texte saisi, ouvre un nouveau paragraphe du meme article. */
+  let paragraphe = false;
   for (const brute of lignes) {
     const ligne = brute.replace(/\s+/g, " ").trim();
-    if (!ligne) continue;
+    if (!ligne) {
+      paragraphe = courant !== null;
+      continue;
+    }
     if (/^Membres fondateurs/i.test(ligne)) break;
     const debut = /^Art\.?\s*(\d+)\s*:\s*(.*)$/i.exec(ligne);
     if (debut) {
+      paragraphe = false;
       courant = { numero: Number(debut[1]), chapitre, texte: debut[2] };
       articles.push(courant);
       continue;
@@ -63,13 +69,16 @@ export function decouperStatuts(lignes: string[]): Article[] {
       continue;
     }
     if (!courant) continue;
-    if (/^[•·▪-]\s/.test(ligne)) {
+    if (paragraphe) {
+      courant.texte += `\n${ligne}`;
+    } else if (/^[•·▪-]\s/.test(ligne)) {
       courant.texte += `\n• ${ligne.replace(/^[•·▪-]\s*/, "")}`;
     } else if (/[a-zà-ÿ]-$/i.test(courant.texte)) {
       courant.texte += ligne;
     } else {
       courant.texte += ` ${ligne}`;
     }
+    paragraphe = false;
   }
   return articles.map((a) => ({ ...a, texte: a.texte.replace(/ +\n/g, "\n").trim() }));
 }

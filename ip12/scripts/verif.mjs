@@ -3165,6 +3165,8 @@ assert.equal(nomCourt("Dépense : autre dépense"), "Dépense : autre dépense",
   assert.equal(art[2].chapitre, "Ressources du club");
   assert.ok(art[0].texte.endsWith("l'article 25 ci-après."), "un mot coupe en fin de ligne se recolle");
   assert.equal(art[3].texte, "Le bureau comprend :\n• Président qui dirige les débats.\n• Trésorier qui tient les comptes.");
+  const saisi = T.decouperStatuts(["Art. 18 : Retrait sous préavis.", "", "Ses droits lui sont remboursés.", "Art. 19 : Suite."]);
+  assert.equal(saisi[0].texte, "Retrait sous préavis.\nSes droits lui sont remboursés.", "une ligne vide ouvre un paragraphe");
   assert.equal(T.noteDe(art[0]), "La dissolution anticipée est prévue à l'art. 23, et non à l'art. 25.");
   assert.equal(T.noteDe(art[2]), "L'exclusion relève de l'art. 20, et non de l'art. 22.");
   assert.equal(T.noteDe({ numero: 9, texte: "… prévues à l'article 20." }), null, "un texte corrige n'a plus de note");

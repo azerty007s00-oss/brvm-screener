@@ -60,10 +60,15 @@ export async function pdfDesStatuts(): Promise<{ fichier: string; octets: Buffer
   }, null);
 }
 
-/** Lit le PDF ; null s'il n'a pas la forme de statuts (au moins dix articles numerotes). */
+/** Lit le PDF ; null s'il n'a pas la forme de statuts (au moins dix articles numerotes), ou s'il n'est qu'une image. */
 export async function lireStatutsPdf(octets: Uint8Array): Promise<Article[] | null> {
   const lignes = (await lignesDuPdf(octets)).map((cellules) => cellules.join(" "));
-  const articles = decouperStatuts(lignes);
+  return lireStatutsTexte(lignes.join("\n"));
+}
+
+/** Le texte des statuts saisi a part, pour un PDF scanne que le site ne sait pas lire. */
+export function lireStatutsTexte(texte: string): Article[] | null {
+  const articles = decouperStatuts(texte.split(/\r?\n/));
   return articles.length >= 10 ? articles : null;
 }
 

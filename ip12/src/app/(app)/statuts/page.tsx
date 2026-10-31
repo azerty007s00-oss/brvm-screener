@@ -32,6 +32,14 @@ export default async function PageStatuts() {
         accept="application/pdf"
         aide="Le site lit chaque article (« Art. 1 : … ») et garde le PDF. Une nouvelle version signée remplace la précédente."
       />
+      <Champ
+        nom="texte"
+        libelle="Texte des statuts (facultatif)"
+        type="file"
+        accept=".txt,text/plain"
+        requis={false}
+        aide="Pour un PDF scanné, dont le site ne peut pas lire le texte : le même texte, en fichier .txt, chaque article commençant par « Art. 1 : »."
+      />
     </FormulaireAction>
   ) : null;
 

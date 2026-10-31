@@ -4,10 +4,14 @@ import { revalidatePath } from "next/cache";
 import { exigerDroit } from "@/lib/auth";
 import { journaliser } from "@/lib/journal";
 import { STATUT_RESOLUTION, lireRecensement, type Resolution, type StatutResolution } from "@/lib/statuts";
-import { enregistrerResolutions, enregistrerStatuts, lireStatutsPdf, supprimerResolution } from "@/lib/statuts-base";
+import { enregistrerResolutions, enregistrerStatuts, lireStatutsPdf, lireStatutsTexte, supprimerResolution } from "@/lib/statuts-base";
 import type { EtatFormulaire } from "./auth";
 
-/** Le PDF signe des statuts : le site en lit les articles et le garde. Il remplace la version precedente. */
+/**
+ * Le PDF signe des statuts : le site en lit les articles et le garde. Il
+ * remplace la version precedente. Un PDF scanne n'est qu'une suite d'images :
+ * son texte vient alors d'un fichier joint, et le scan reste le document signe.
+ */
 export async function importerStatuts(_p: EtatFormulaire, donnees: FormData): Promise<EtatFormulaire> {
   const auteur = await exigerDroit("gererStatuts");
   const fichier = donnees.get("statuts");
@@ -15,8 +19,18 @@ export async function importerStatuts(_p: EtatFormulaire, donnees: FormData): Pr
   if (fichier.size > 5_000_000) return { ok: false, erreur: "Ce fichier dépasse 5 Mo." };
   const octets = new Uint8Array(await fichier.arrayBuffer());
   /* Une copie a la lecture : pdf.js garde le tampon qu'on lui donne, et le PDF a conserver serait vide. */
-  const articles = await lireStatutsPdf(octets.slice()).catch(() => null);
-  if (!articles) return { ok: false, erreur: "Aucun article lu : ce PDF n'a pas la forme des statuts (« Art. 1 : … »)." };
+  const texte = donnees.get("texte");
+  const avecTexte = texte instanceof File && texte.size > 0;
+  if (avecTexte && texte.size > 500_000) return { ok: false, erreur: "Le fichier texte dépasse 500 Ko." };
+  const articles = avecTexte ? lireStatutsTexte(await texte.text()) : await lireStatutsPdf(octets.slice()).catch(() => null);
+  if (!articles) {
+    return {
+      ok: false,
+      erreur: avecTexte
+        ? "Aucun article lu dans le fichier texte : chaque article doit commencer par « Art. 1 : »."
+        : "Aucun article lu : ce PDF est sans doute un scan. Joignez aussi le texte des statuts (.txt).",
+    };
+  }
   await enregistrerStatuts(fichier.name, octets, articles, auteur.id);
   await journaliser({ id: auteur.id, nom: auteur.nom }, "import_statuts", { entite: "club_statutes" }, {
     fichier: fichier.name,
