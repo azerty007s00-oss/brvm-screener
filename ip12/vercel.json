@@ -19,7 +19,7 @@
     },
     {
       "path": "/api/cron/bourse",
-      "schedule": "0 19 * * 1-5"
+      "schedule": "0 19 * * *"
     }
   ]
 }

@@ -502,20 +502,24 @@ export function CourbePortefeuille({
             opacity={0}
           />
 
-          {traces.map((p, i) => (
-            <circle
-              key={`${actif}-${p.date}`}
-              className="point"
-              style={tempo}
-              cx={x(p.date)}
-              cy={y(p.valeur)}
-              r={i === traces.length - 1 ? 4 : 2.5}
-              fill={i === traces.length - 1 ? "var(--gold)" : "var(--page)"}
-              stroke="var(--gold)"
-              strokeWidth={i === traces.length - 1 ? 2 : 1.5}
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
+          {/*
+           * Seul le dernier releve porte un point. Un rond par releve se
+           * tassait la ou les releves se pressent (une dizaine en octobre
+           * 2026, un seul en mai) : la courbe suffit, et le doigt pose dessus
+           * donne la date et la valeur du releve le plus proche.
+           */}
+          <circle
+            key={`${actif}-${dernier.date}`}
+            className="point"
+            style={tempo}
+            cx={x(dernier.date)}
+            cy={y(dernier.valeur)}
+            r={4}
+            fill="var(--gold)"
+            stroke="var(--gold)"
+            strokeWidth={2}
+            vectorEffect="non-scaling-stroke"
+          />
 
           {/*
            * LE SURVOL.

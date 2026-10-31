@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 /**
- * Les cours de la BRVM, chaque soir de semaine a 19 h GMT : brvm.org publie
+ * Les cours de la BRVM, chaque soir a 19 h GMT : brvm.org publie
  * la seance vers 18 h 15. Le portefeuille du club est valorise dans la foulee.
  */
 export async function GET(requete: Request) {

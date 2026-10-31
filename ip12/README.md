@@ -236,7 +236,7 @@ Phoenix Capital Management.
   s'il doit encore le mois ; le bureau l'est de chaque déclaration à valider. Avec le voile des
   montants, l'alerte ne montre aucun montant. Le courriel reste le canal de référence : une alerte
   perdue ne fait jamais échouer le geste qui l'a déclenchée.
-- **Comptes › Bourse** — chaque soir de semaine à 19 h GMT, `/api/cron/bourse` lit sur brvm.org
+- **Comptes › Bourse** — chaque soir à 19 h GMT, `/api/cron/bourse` lit sur brvm.org
   les cours de clôture et l'indice BRVM Composite, puis valorise le portefeuille. Le point de
   départ est le relevé PDF de la SGI, importé par le président ou le vice-président, seuls à avoir
   accès au site de la SGI (`opererEnBourse`) : le site en lit

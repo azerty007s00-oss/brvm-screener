@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "./db";
+import { dietzModifie } from "./perf";
 import { avecTables } from "./tables-auto";
 import { listerApports, listerMembres, listerValorisations, netApport } from "./queries";
 import { envoyerAlertes } from "./alertes";
@@ -19,7 +20,6 @@ import {
   lireIndiceComposite,
   liquiditesApres,
   dateDeSeance,
-  performance,
   positionsApres,
   valoriser,
 } from "./bourse";
@@ -332,11 +332,22 @@ export async function etatBourse(aujourdhui: Date = new Date()) {
     valos.map((v) => ({ date: v.date_valo, total: v.total })),
     annee,
   );
-  const fin = `${annee}-12-31`;
-  const apportsAnnee = depart
-    ? apports.filter((a) => a.date_transfert > depart.date && a.date_transfert <= fin).reduce((t, a) => t + netApport(a), 0)
-    : 0;
-  const clubAnnee = depart ? performance(depart.total, valeur.total, apportsAnnee) : null;
+  /*
+   * Le meme calcul que l'« Exercice en cours » de la page Portefeuille (Dietz
+   * modifie : chaque apport pese au prorata du temps passe en bourse), pour
+   * qu'un seul chiffre de l'annee circule sur le site.
+   */
+  const dateCours = seance && seance.date >= releve.date ? seance.date : releve.date;
+  const clubAnnee =
+    depart && depart.date < dateCours
+      ? dietzModifie(
+          depart.total,
+          valeur.total,
+          apports.map((a) => ({ date: a.date_transfert, montant: netApport(a) })),
+          depart.date,
+          dateCours,
+        ).rendement
+      : null;
   const dividendes = mouvements.filter((m) => m.nature === "dividende" && m.date.startsWith(String(annee)));
 
   return {
@@ -347,7 +358,7 @@ export async function etatBourse(aujourdhui: Date = new Date()) {
     liquidites,
     titres: valeur.titres,
     total: valeur.total,
-    dateCours: seance && seance.date >= releve.date ? seance.date : releve.date,
+    dateCours,
     depart,
     clubAnnee,
     indiceAnnee: seance?.indice?.variationAnnee ?? null,
